@@ -1,5 +1,8 @@
 import { ChakraProvider } from '@chakra-ui/react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';";
+import Home from "./pages/Home";
+import Generate from "./pages/Generate";
+import Vote from "./pages/Vote"
 import SchedulePost from "./pages/SchedulePost";
 import { AuthProvider } from './context/AuthProvider';
 import Login from './Login';
@@ -19,7 +22,10 @@ export default function App() {
           <Route path="/dashboard" element={<PrivateRoute><Dashboard/></PrivateRoute>} />
   <Route path="/schedule" element={<PrivateRoute><SchedulePost/></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+          <Route path="/" element={<Home />} />
+  <Route path="/generate" element={<Generate />} />
+  <Route path="/vote" element={<Vote />} />
+</Routes>
       </AuthProvider>
     </ChakraProvider>
   );
