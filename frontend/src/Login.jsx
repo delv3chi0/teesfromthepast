@@ -18,7 +18,7 @@ export default function Login() {
     try {
       const backendUrl = import.meta.env.DEV
         ? 'http://localhost:5000'
-        : 'https://postpup-backend.onrender.com';
+        : 'https://teesfromthepast-backend.onrender.com';
       const response = await fetch(backendUrl + '/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
