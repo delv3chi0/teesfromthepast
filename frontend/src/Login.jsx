@@ -12,34 +12,32 @@ export default function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      const backendUrl = import.meta.env.DEV
-        ? 'http://localhost:5000'
-        : 'https://teesfromthepast-backend.onrender.com';
-      const response = await fetch(backendUrl + '/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await response.json();
-      if (response.ok && data.token) {
-        localStorage.setItem('token', data.token);
-    console.log('Your JWT token:', data.token);
-        setUser(jwtDecode(data.token));
-        toast({ title: 'Login successful', status: 'success', isClosable: true });
-        navigate('/dashboard');
-      } else {
-        setError(data.error || 'Login failed');
-        toast({ title: 'Login failed', description: data.error, status: 'error', isClosable: true });
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-      toast({ title: 'Server error', description: 'Could not reach backend', status: 'error', isClosable: true });
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  try {
+    const backendUrl = import.meta.env.VITE_API_URL;
+    const response = await fetch(`${backendUrl}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await response.json();
+    if (response.ok && data.token) {
+      localStorage.setItem('token', data.token);
+      console.log('Your JWT token:', data.token);
+      setUser(jwtDecode(data.token));
+      toast({ title: 'Login successful', status: 'success', isClosable: true });
+      navigate('/dashboard');
+    } else {
+      setError(data.error || 'Login failed');
+      toast({ title: 'Login failed', description: data.error, status: 'error', isClosable: true });
     }
-  };
+  } catch (err) {
+    console.error('Login error:', err);
+    toast({ title: 'Server error', description: 'Could not reach backend', status: 'error', isClosable: true });
+  }
+};
 
   return (
     <Box maxW="md" borderWidth="1px" borderRadius="md" p={4} mx="auto" mt={8}>
