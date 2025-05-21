@@ -1,5 +1,5 @@
 import { ChakraProvider } from '@chakra-ui/react';
-import { Routes, Route, Navigate } from 'react-router-dom';";
+import { Routes, Route, Navigate } from '
 import Home from "./pages/Home";
 import Generate from "./pages/Generate";
 import Vote from "./pages/Vote"
