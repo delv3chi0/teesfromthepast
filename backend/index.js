@@ -13,25 +13,29 @@ const { OpenAI }    = require('openai');
 
 // Init Express
 const app = express();
-app.use(cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
 
-app.options('*', cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
-app.use(cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
-app.options('*', cors());
+// ✅ CORS setup
+const corsOptions = {
+  origin: 'https://teesfromthepast.vercel.app',
+  credentials: true,
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handles preflight for all routes
+
+// ✅ Core middleware
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
 
-// MongoDB
+// ✅ MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// Auth routes
+// ✅ Auth routes
 console.log('🔌 Mounting auth routes at /api');
 app.use('/api', require('./routes/auth'));
 
-// Bull queue
+// ✅ Bull queue for post scheduling
 const scheduleQueue = new Bull('scheduleQueue', process.env.REDIS_URL || 'redis://127.0.0.1:6379');
 scheduleQueue.on('error', err => console.error('🚨 Bull Error:', err));
 scheduleQueue.process(job => {
@@ -39,13 +43,13 @@ scheduleQueue.process(job => {
   // TODO: actually send/schedule the post here
 });
 
-// Ping
+// ✅ Ping test route
 app.get('/ping', (_req, res) => {
   console.log('🔔  /ping hit');
   res.send('pong');
 });
 
-// Caption generator
+// ✅ Caption generator route
 app.post('/api/generate-caption', async (req, res) => {
   try {
     const { draftText, tone, platform } = req.body;
@@ -63,7 +67,7 @@ app.post('/api/generate-caption', async (req, res) => {
   }
 });
 
-// Schedule post endpoint (adds to queue)
+// ✅ Schedule post API
 app.post('/api/schedule-post', async (req, res) => {
   try {
     const { draftId, dateTimeUTC, timeZone, repeatRule, platform } = req.body;
@@ -78,19 +82,23 @@ app.post('/api/schedule-post', async (req, res) => {
   }
 });
 
-// Analytics
+// ✅ Analytics route
 app.get('/api/analytics', (_req, res) => {
   console.log('📊  /api/analytics hit');
   res.json({ data: [] });
 });
 
-// Start server
+// ✅ Custom routes
+app.use('/api/generate', require('./routes/generateImage').default);
+app.use('/api/stripe', require('./routes/stripeWebhook').default);
+
+// ✅ Start server
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🐶 Backend running at http://localhost:${PORT}`);
 });
 
-// Graceful shutdown
+// ✅ Graceful shutdown
 async function gracefulShutdown() {
   console.log('🛑 Shutting down...');
   await server.close();
@@ -101,7 +109,3 @@ async function gracefulShutdown() {
 }
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
-
-// TeesFromThePast: New Routes
-app.use('/api/generate', require('./routes/generateImage').default);
-app.use('/api/stripe', require('./routes/stripeWebhook').default);
