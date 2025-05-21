@@ -13,6 +13,8 @@ const { OpenAI }    = require('openai');
 
 // Init Express
 const app = express();
+app.use(cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
+app.options('*', cors());
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
