@@ -98,5 +98,5 @@ process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
 // TeesFromThePast: New Routes
-app.use('/api/generate', require('./routes/generateImage'));
-app.use('/api/stripe', require('./routes/stripe'));
+app.use('/api/generate', require('./routes/generateImage').default);
+app.use('/api/stripe', require('./routes/stripeWebhook').default);
