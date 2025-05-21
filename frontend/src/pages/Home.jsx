@@ -7,6 +7,8 @@ export default function Home() {
       <Heading size="2xl">Tees From The Past</Heading>
       <Button as={Link} to="/generate" colorScheme="teal">Create Your Own Design</Button>
       <Button as={Link} to="/vote" colorScheme="orange">Vote on This Month’s Designs</Button>
+      <Button as={Link} to="/login" colorScheme="blue">Login</Button>
+      <Button as={Link} to="/register" colorScheme="green">Register</Button>
     </VStack>
   );
 }
