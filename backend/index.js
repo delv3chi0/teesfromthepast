@@ -15,7 +15,7 @@ const { OpenAI }    = require('openai');
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ origin: 'https://postpup-frontend.vercel.app', credentials: true }));
+app.use(cors({ origin: 'https://teesfromthepast.vercel.app', credentials: true }));
 
 // MongoDB
 mongoose.connect(process.env.MONGO_URI)
