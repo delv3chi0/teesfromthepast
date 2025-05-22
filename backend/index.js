@@ -13,6 +13,10 @@ const { OpenAI }    = require('openai');
 
 // Init Express
 const app = express();
+const corsOptions = {
+  origin: 'https://teesfromthepast.vercel.app',
+  credentials: true
+};
 app.options('*', cors(corsOptions));
 
 // ✅ CORS setup
