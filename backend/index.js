@@ -1,90 +1,50 @@
-// Load env and libs
-require('dotenv').config();
-console.log('✅ .env loaded, JWT_SECRET is:', process.env.JWT_SECRET);
+// backend/index.js
+import express from 'express';
+import mongoose from 'mongoose';
+import 'dotenv/config'; // Loads .env variables
+import cookieParser from 'cookie-parser';
+import cors from 'cors'; // For handling cross-origin requests
 
-const express       = require('express');
-const mongoose      = require('mongoose');
-const bcrypt        = require('bcryptjs');
-const cookieParser  = require('cookie-parser');
-const cors          = require('cors');
-const Bull          = require('bull');
-const jwt           = require('jsonwebtoken');
-const { OpenAI }    = require('openai');
+// Import your routes
+import authRoutes from './routes/auth.js';
+import generateImageRoutes from './routes/generateImage.js'; // Ensure this matches your file name
+import stripeWebhookRoutes from './routes/stripeWebhook.js'; // New import for webhook
+import checkoutRoutes from './routes/checkout.js'; // Assuming you'll have a checkout route
 
-// Init Express
 const app = express();
-const corsOptions = {
-  origin: 'https://teesfromthepast.vercel.app',
-  credentials: true
-};
-app.options('*', cors(corsOptions));
+const PORT = process.env.PORT || 5000;
 
-// ✅ CORS setup
-app.options('*', cors(corsOptions)); // Handles preflight for all routes
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log('MongoDB connected successfully'))
+    .catch(err => console.error('MongoDB connection error:', err));
 
-// ✅ Core middleware
-app.use(express.json());
+// Middleware
+// CORS configuration - adjust as needed for your frontend URL
+app.use(cors({
+    origin: 'http://localhost:5173', // Your frontend URL during local dev (Vite default)
+    credentials: true, // Allow cookies to be sent
+}));
 app.use(cookieParser());
 
-// ✅ MongoDB
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
+// ONLY for Stripe webhook, we need the raw body. It MUST come before express.json()
+// It's crucial this webhook route is processed with raw body
+app.use('/api/webhook', stripeWebhookRoutes);
 
-// ✅ Auth routes
-console.log('🔌 Mounting auth routes at /api');
-app.use('/api', require('./routes/auth'));
+// Regular express.json() for other routes
+app.use(express.json());
 
-// ✅ Bull queue for post scheduling
-const scheduleQueue = new Bull('scheduleQueue', process.env.REDIS_URL || 'redis://127.0.0.1:6379');
-scheduleQueue.on('error', err => console.error('🚨 Bull Error:', err));
-scheduleQueue.process(job => {
-  console.log('🕒 Processing job:', job.data);
-  // TODO: actually send/schedule the post here
+
+// Routes
+app.get('/', (req, res) => {
+    res.send('Tees From The Past Backend API');
 });
 
-// ✅ Ping test route
-app.get('/ping', (_req, res) => {
-  console.log('🔔  /ping hit');
-  res.send('pong');
+app.use('/api/auth', authRoutes);
+app.use('/api', generateImageRoutes); // Your generateImage route
+app.use('/api', checkoutRoutes); // Your checkout route
+
+// Start the server
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
-
-// ✅ Caption generator route
-app.post('/api/generate-caption', async (req, res) => {
-  try {
-    const { draftText, tone, platform } = req.body;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const prompt = `${tone} caption for ${platform}: ${draftText}`;
-    const response = await openai.completions.create({
-      model: 'text-davinci-003',
-      prompt,
-      max_tokens: 60
-    });
-    res.json({ caption: response.choices[0].text.trim() });
-  } catch (error) {
-    console.error('❌ Error generating caption:', error);
-    res.status(500).json({ error: 'Failed to generate caption' });
-  }
-});
-
-// ✅ Analytics route
-app.get('/api/analytics', (_req, res) => {
-  console.log('📊  /api/analytics hit');
-  res.json({ data: [] });
-});
-
-// ✅ Custom routes
-app.use('/api/generate', require('./routes/generateImage'));
-app.use('/api/stripe', require('./routes/stripeWebhook'));
-
-// ✅ Graceful shutdown
-async function gracefulShutdown() {
-  console.log('🛑 Shutting down...');
-  await server.close();
-  await mongoose.disconnect();
-  await scheduleQueue.close();
-  console.log('✅ Shutdown complete');
-  process.exit(0);
-}
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
