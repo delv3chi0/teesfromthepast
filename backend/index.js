@@ -7,9 +7,9 @@ import cors from 'cors'; // For handling cross-origin requests
 
 // Import your routes
 import authRoutes from './routes/auth.js';
-import generateImageRoutes from './routes/generateImage.js'; // Ensure this matches your file name
-import stripeWebhookRoutes from './routes/stripeWebhook.js'; // New import for webhook
-import checkoutRoutes from './routes/checkout.js'; // Assuming you'll have a checkout route
+import generateImageRoutes from './routes/generateImage.js';
+import stripeWebhookRoutes from './routes/stripeWebhook.js';
+import checkoutRoutes from './routes/checkout.js'; // Assuming you have this now
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -20,9 +20,9 @@ mongoose.connect(process.env.MONGO_URI)
     .catch(err => console.error('MongoDB connection error:', err));
 
 // Middleware
-// CORS configuration - adjust as needed for your frontend URL
+// CORS configuration - THIS IS THE IMPORTANT CHANGE!
 app.use(cors({
-    origin: 'http://localhost:5173', // Your frontend URL during local dev (Vite default)
+    origin: 'https://teesfromthepast-frontend.vercel.app', // Your Vercel frontend URL
     credentials: true, // Allow cookies to be sent
 }));
 app.use(cookieParser());
@@ -40,9 +40,9 @@ app.get('/', (req, res) => {
     res.send('Tees From The Past Backend API');
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api', generateImageRoutes); // Your generateImage route
-app.use('/api', checkoutRoutes); // Your checkout route
+app.use('/api/auth', authRoutes); // Ensure this is correctly setup
+app.use('/api', generateImageRoutes);
+app.use('/api', checkoutRoutes);
 
 // Start the server
 app.listen(PORT, () => {
