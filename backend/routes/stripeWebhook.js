@@ -1,12 +1,12 @@
-import express from 'express';
-import Stripe from 'stripe';
-import bodyParser from 'body-parser';
+const express = require('express');
+const Stripe = require('stripe');
+const bodyParser = require('body-parser');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const router = express.Router();
 
 // Use raw body for webhook signature verification
-router.post('/', bodyParser.raw({ type: 'application/json' }), (req, res) => {
+router.post('/webhook', bodyParser.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
@@ -21,7 +21,6 @@ router.post('/', bodyParser.raw({ type: 'application/json' }), (req, res) => {
   switch (event.type) {
     case 'checkout.session.completed':
       console.log('✅ Checkout completed:', event.data.object);
-      // TODO: activate subscription in DB
       break;
     case 'invoice.paid':
       console.log('💰 Invoice paid:', event.data.object);
@@ -42,4 +41,4 @@ router.post('/', bodyParser.raw({ type: 'application/json' }), (req, res) => {
   res.status(200).json({ received: true });
 });
 
-export default router;
+module.exports = router;
