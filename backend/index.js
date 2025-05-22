@@ -67,21 +67,6 @@ app.post('/api/generate-caption', async (req, res) => {
   }
 });
 
-// ✅ Schedule post API
-app.post('/api/schedule-post', async (req, res) => {
-  try {
-    const { draftId, dateTimeUTC, timeZone, repeatRule, platform } = req.body;
-    const job = await scheduleQueue.add(
-      { draftId, dateTimeUTC, timeZone, repeatRule, platform },
-      { repeat: { cron: repeatRule } }
-    );
-    res.json({ jobId: job.id, status: 'scheduled' });
-  } catch (error) {
-    console.error('❌ Error in /api/schedule-post:', error);
-    res.status(500).json({ error: 'Failed to schedule post' });
-  }
-});
-
 // ✅ Analytics route
 app.get('/api/analytics', (_req, res) => {
   console.log('📊  /api/analytics hit');
