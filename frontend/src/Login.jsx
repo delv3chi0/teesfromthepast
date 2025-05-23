@@ -17,7 +17,7 @@ const handleSubmit = async (e) => {
   setError('');
   try {
     const backendUrl = import.meta.env.VITE_API_URL;
-    const response = await fetch(`${backendUrl}/login`, {
+    const response = await fetch(`${backendUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
