@@ -1,3 +1,20 @@
+// backend/index.js (Add these at the very top)
+
+process.on('uncaughtException', (err) => {
+  console.error('[Backend Log] Uncaught Exception:', err.stack);
+  // It's good practice to exit gracefully after an uncaught exception
+  // However, for debugging on Render, sometimes keeping it alive momentarily
+  // to log more can be helpful. For now, let's keep exit for severity.
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Backend Log] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
+  // Again, for debugging, we might not exit immediately, but in production,
+  // unhandled rejections often indicate critical flaws.
+  process.exit(1);
+});
+
 // backend/index.js
 import express from 'express';
 import mongoose from 'mongoose';
