@@ -17,7 +17,10 @@ const handleSubmit = async (e) => {
   setError('');
   try {
     const backendUrl = import.meta.env.VITE_API_URL;
-    const response = await fetch(`${backendUrl}/auth/login`, {
+    const fullLoginUrl = `${backendUrl}/auth/login`; // This is the calculated full URL
+    console.log('Attempting to fetch login from URL:', fullLoginUrl); // ADD THIS LINE RIGHT HERE!
+
+    const response = await fetch(fullLoginUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -54,4 +57,3 @@ const handleSubmit = async (e) => {
     </Box>
   );
 }
-// Temporary comment to trigger Vercel redeploy
