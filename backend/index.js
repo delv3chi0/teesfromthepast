@@ -71,6 +71,13 @@ app.get('/test', (req, res) => {
     res.status(200).send('Backend is running and test route works!');
 });
 
+// --- NEW ADDITION: Dedicated Health Check Endpoint ---
+app.get('/health', (req, res) => {
+    console.log('[Backend Log] Health path (/health) hit.');
+    res.status(200).json({ status: 'OK', message: 'Backend is healthy!' });
+});
+// --- END NEW ADDITION ---
+
 console.log('[Backend Log] Setting up /api/auth route...');
 app.use('/api/auth', authRoutes); // Ensure this is correctly setup
 app.use('/api', generateImageRoutes);
@@ -87,6 +94,9 @@ app.use((err, req, res, next) => {
 
 
 // Start the server
-app.listen(PORT, () => {
+// --- MODIFICATION: Explicitly bind to 0.0.0.0 for Render compatibility ---
+app.listen(PORT, '0.0.0.0', () => { // Added '0.0.0.0'
     console.log(`Server running on port ${PORT}`);
+    console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`); // New log to confirm binding
 });
+// --- END MODIFICATION ---
