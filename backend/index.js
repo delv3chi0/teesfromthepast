@@ -42,10 +42,10 @@ mongoose.connect(process.env.MONGO_URI)
 // Middleware Order - ADJUSTED FOR CORS/OPTIONS HANDLING
 console.log('[Backend Log] Applying CORS middleware...');
 app.use(cors({
-    origin: 'https://teesfromthepast-frontend.vercel.app', // Your Vercel frontend URL
+    origin: 'https://teesfromthepast.vercel.app', // Your Vercel frontend URL
     credentials: true, // Allow cookies to be sent
 }));
-console.log('[Backend Log] CORS middleware applied with origin:', 'https://teesfromthepast-frontend.vercel.app');
+console.log('[Backend Log] CORS middleware applied with origin:', 'https://teesfromthepast.vercel.app');
 
 app.use(cookieParser());
 
