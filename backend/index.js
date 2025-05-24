@@ -1,3 +1,5 @@
+// backend/index.js
+
 process.on('uncaughtException', (err) => {
   console.error('[Backend Log] Uncaught Exception:', err.stack);
   process.exit(1);
@@ -17,22 +19,19 @@ import cors from 'cors'; // For handling cross-origin requests
 import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
-import checkoutRoutes from './routes/checkout.js'; // Assuming you have this now
+import checkoutRoutes from './routes/checkout.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 console.log(`[Backend Log] Server starting with PORT: ${PORT}`);
 
+// --- Database Connection ---
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('MongoDB connected successfully'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-app.use((req, res, next) => {
-  console.log(`[Request Logger] Method: ${req.method}, Path: ${req.path}`);
-  next();
-});
-
+// --- Middleware ---
 console.log('[Backend Log] Applying CORS middleware...');
 app.use(cors({
     origin: 'https://teesfromthepast.vercel.app', // Your Vercel frontend URL
@@ -42,13 +41,16 @@ console.log('[Backend Log] CORS middleware applied with origin:', 'https://teesf
 
 app.use(cookieParser());
 
+// Stripe webhook needs raw body, so it MUST come before express.json()
 app.use('/api/webhook', stripeWebhookRoutes);
 
+// General JSON body parser for all other routes
 app.use(express.json());
 
 console.log('[Backend Log] Express JSON and other middleware applied.');
 
 
+// --- Basic & Health Routes ---
 app.get('/', (req, res) => {
     console.log('[Backend Log] Root path (/) hit.');
     res.send('Tees From The Past Backend API');
@@ -64,18 +66,24 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'OK', message: 'Backend is healthy!' });
 });
 
-console.log('[Backend Log] Setting up /api/auth route...');
-app.use('/api/auth', authRoutes); // Ensure this is correctly setup
+
+// --- API Routes ---
+console.log('[Backend Log] Setting up API routes...');
+app.use('/api/auth', authRoutes); // Handles /api/auth/register and /api/auth/login
 app.use('/api', generateImageRoutes);
 app.use('/api', checkoutRoutes);
 console.log('[Backend Log] All routes configured.');
 
+
+// --- Global Error Handler ---
 app.use((err, req, res, next) => {
-  console.error('[Backend Log] Global Server Error:', err.stack); // Use err.stack for full traceback
+  console.error('[Backend Log] Global Server Error:', err.stack);
   res.status(500).json({ error: 'An unexpected server error occurred!' });
 });
 
-app.listen(PORT, '0.0.0.0', () => { // Added '0.0.0.0'
+
+// --- Server Listener ---
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`); // New log to confirm binding
+    console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
 });
