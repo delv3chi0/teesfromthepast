@@ -20,7 +20,7 @@ export default function RegistrationPage() {
     try {
       const backendUrl = import.meta.env.DEV
         ? 'http://localhost:5000'
-        : 'https://teesfromthepast-backend.onrender.com';
+        : 'https://teesfromthepast.onrender.com';
       const res = await fetch(`${backendUrl}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

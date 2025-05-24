@@ -3,7 +3,7 @@ import axios from 'axios';
 export const client = axios.create({
   baseURL: import.meta.env.DEV
     ? 'http://localhost:5000/api'
-    : 'https://teesfromthepast-backend.onrender.com/api',
+    : 'https://teesfromthepast.onrender.com/api',
 });
 
 client.interceptors.request.use(cfg => {
