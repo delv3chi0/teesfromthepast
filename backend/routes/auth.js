@@ -2,43 +2,38 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js'; // Adjust path if your User model is elsewhere
-import 'dotenv/config'; // Make sure .env variables are loaded
-import { protect } from '../middleware/authMiddleware.js'; // Import the new middleware
+import User from '../models/User.js';
+import 'dotenv/config';
+import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // Register User (Signup)
 router.post('/register', async (req, res) => {
-    const { username, email, password, firstName, lastName } = req.body; // Added firstName, lastName
+    const { username, email, password, firstName, lastName } = req.body;
     try {
-        // Check if email already exists
         let existingUserByEmail = await User.findOne({ email });
         if (existingUserByEmail) {
             return res.status(400).json({ message: 'User with this email already exists' });
         }
-        // Check if username already exists
         let existingUserByUsername = await User.findOne({ username });
         if (existingUserByUsername) {
             return res.status(400).json({ message: 'Username already exists' });
         }
 
-        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Create new user
-        let newUser = new User({ // Renamed variable to avoid confusion
+        let newUser = new User({
             username,
             email,
             password: hashedPassword,
-            firstName: firstName || '', // Initialize with provided or empty string
-            lastName: lastName || '',   // Initialize with provided or empty string
+            firstName: firstName || '',
+            lastName: lastName || '',
         });
 
         await newUser.save();
 
-        // Generate JWT token
         const payload = {
             user: {
                 id: newUser.id,
@@ -48,18 +43,18 @@ router.post('/register', async (req, res) => {
         jwt.sign(
             payload,
             process.env.JWT_SECRET,
-            { expiresIn: '1h' }, // Token expires in 1 hour
+            { expiresIn: '1h' },
             (err, token) => {
                 if (err) throw err;
                 res.cookie('token', token, {
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-                    maxAge: 3600000 // 1 hour in milliseconds
+                    secure: process.env.NODE_ENV === 'production',
+                    maxAge: 3600000
                 }).status(201).json({ message: 'User registered successfully', token: token });
             }
         );
     } catch (err) {
-        console.error('Error during registration:', err.message); // Added more specific log
+        console.error('Error during registration:', err.message);
         res.status(500).send('Server Error');
     }
 });
@@ -68,19 +63,16 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     try {
-        // Check if user exists
         let user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
-        // Check password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
 
-        // Generate JWT token
         const payload = {
             user: {
                 id: user.id,
@@ -101,19 +93,16 @@ router.post('/login', async (req, res) => {
             }
         );
     } catch (err) {
-        console.error('Error during login:', err.message); // Added more specific log
+        console.error('Error during login:', err.message);
         res.status(500).send('Server Error');
     }
 });
 
 // GET User Profile (Protected Route)
 router.get('/profile', protect, (req, res) => {
-    // The 'protect' middleware has already found the user and attached it to req.user
-    // We just need to send it back.
     if (req.user) {
         res.status(200).json(req.user);
     } else {
-        // This case should ideally be handled by the protect middleware if user not found after token decode
         res.status(404).json({ message: 'User not found' });
     }
 });
@@ -125,40 +114,34 @@ router.put('/profile', protect, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
 
-        if (user) {
-            // Update fields based on what the frontend is sending
-            user.username = req.body.username || user.username;
-            user.email = req.body.email || user.email;
-            user.firstName = req.body.firstName || user.firstName;
-            user.lastName = req.body.lastName || user.lastName;
-            user.instagramHandle = req.body.instagramHandle || user.instagramHandle;
-            user.tiktokHandle = req.body.tiktokHandle || user.tiktokHandle;
-            
-            // If password is provided in the body, hash and update it
-            // Ensure to add checks if you want to validate old password first, or if password can be empty
-            if (req.body.password && req.body.password.length > 0) { // Check if password is provided and not empty
-                const salt = await bcrypt.genSalt(10);
-                user.password = await bcrypt.hash(req.body.password, salt);
-            }
-
-            const updatedUser = await user.save();
-
-            // Send back all relevant fields from the updated user
-            res.json({
-                _id: updatedUser.id,
-                username: updatedUser.username,
-                email: updatedUser.email,
-                firstName: updatedUser.firstName,
-                lastName: updatedUser.lastName,
-                instagramHandle: updatedUser.instagramHandle,
-                tiktokHandle: updatedUser.tiktokHandle,
-            });
-        } else {
-            res.status(404).json({ message: 'User not found' });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
         }
+
+        user.username = req.body.username || user.username;
+        user.email = req.body.email || user.email;
+        user.firstName = req.body.firstName || user.firstName;
+        user.lastName = req.body.lastName || user.lastName;
+        // instagramHandle and tiktokHandle updates removed
+
+        if (req.body.password && req.body.password.length > 0) {
+            const salt = await bcrypt.genSalt(10);
+            user.password = await bcrypt.hash(req.body.password, salt);
+        }
+
+        const updatedUser = await user.save();
+
+        res.json({
+            _id: updatedUser.id,
+            username: updatedUser.username,
+            email: updatedUser.email,
+            firstName: updatedUser.firstName,
+            lastName: updatedUser.lastName,
+            // instagramHandle and tiktokHandle removed from response
+        });
+
     } catch (error) {
         console.error('Error updating profile:', error);
-        // Send back the specific Mongoose validation error if present
         if (error.name === 'ValidationError') {
             return res.status(400).json({ message: 'Validation Error updating profile', errors: error.errors });
         }
@@ -166,13 +149,12 @@ router.put('/profile', protect, async (req, res) => {
     }
 });
 
-
 // Logout User
 router.post('/logout', (req, res) => {
     res.cookie('token', '', {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        expires: new Date(0) // Set expiry to past date to delete cookie
+        expires: new Date(0)
     }).json({ message: 'Logged out successfully' });
 });
 

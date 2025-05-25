@@ -1,4 +1,6 @@
 // frontend/src/pages/Dashboard.jsx
+// NO CHANGES NEEDED based on removing Instagram/TikTok fields,
+// as they were not displayed here.
 
 import { useState, useEffect } from 'react';
 import { client } from '../api/client';
@@ -11,10 +13,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     console.log("Fetching profile...");
-    // UPDATED the URL to the correct endpoint
     client.get('/auth/profile')
       .then(response => {
-        console.log("Profile data:", response.data);
+        console.log("Profile data:", response.data); // This will now log data without instagram/tiktok
         setProfile(response.data);
       })
       .catch(err => {
@@ -44,7 +45,6 @@ export default function Dashboard() {
         <LogoutButton />
       </Box>
 
-      {/* UPDATED to use profile.username to match backend data */}
       {profile && <Text mb={4}>Welcome, {profile.username}!</Text>}
 
       <Divider my={6} />
