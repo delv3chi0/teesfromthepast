@@ -112,6 +112,9 @@ router.get('/profile', protect, (req, res) => {
 
 // PUT Update User Profile (Protected Route)
 router.put('/profile', protect, async (req, res) => {
+    // ADDED THIS LINE FOR DIAGNOSTICS
+    console.log('[Update Profile] Received body:', req.body);
+    
     try {
         // The 'protect' middleware gives us the user on req.user
         const user = await User.findById(req.user.id);
