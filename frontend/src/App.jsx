@@ -1,9 +1,10 @@
+// frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
 import Home from "./pages/Home";
 import Generate from "./pages/Generate";
-import Vote from "./pages/Vote"
-import SchedulePost from "./pages/SchedulePost";
+import Vote from "./pages/Vote";
+// import SchedulePost from "./pages/SchedulePost"; // REMOVED import
 import { AuthProvider } from './context/AuthProvider';
 import Login from './Login';
 import RegistrationPage from './pages/RegistrationPage';
@@ -20,12 +21,11 @@ export default function App() {
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/profile" element={<PrivateRoute><Profile/></PrivateRoute>} />
           <Route path="/dashboard" element={<PrivateRoute><Dashboard/></PrivateRoute>} />
-  <Route path="/schedule" element={<PrivateRoute><SchedulePost/></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/login" replace />} />
           <Route path="/" element={<Home />} />
-  <Route path="/generate" element={<Generate />} />
-  <Route path="/vote" element={<Vote />} />
-</Routes>
+          <Route path="/generate" element={<Generate />} />
+          <Route path="/vote" element={<Vote />} />
+        </Routes>
       </AuthProvider>
     </ChakraProvider>
   );

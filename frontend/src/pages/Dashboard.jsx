@@ -1,6 +1,4 @@
 // frontend/src/pages/Dashboard.jsx
-// NO CHANGES NEEDED based on removing Instagram/TikTok fields,
-// as they were not displayed here.
 
 import { useState, useEffect } from 'react';
 import { client } from '../api/client';
@@ -15,7 +13,7 @@ export default function Dashboard() {
     console.log("Fetching profile...");
     client.get('/auth/profile')
       .then(response => {
-        console.log("Profile data:", response.data); // This will now log data without instagram/tiktok
+        console.log("Profile data:", response.data);
         setProfile(response.data);
       })
       .catch(err => {
@@ -50,10 +48,7 @@ export default function Dashboard() {
       <Divider my={6} />
 
       <VStack align="start" spacing={6}>
-        <Box>
-          <Heading size="md">Scheduled Posts</Heading>
-          <Text color="gray.600">You don’t have any posts scheduled yet.</Text>
-        </Box>
+        {/* "Scheduled Posts" Box REMOVED */}
 
         <Box>
           <Heading size="md">Analytics Summary</Heading>
@@ -62,7 +57,7 @@ export default function Dashboard() {
 
         <Box>
           <Heading size="md">AI Tools</Heading>
-        <Button mt={2} colorScheme="green" onClick={() => navigate("/schedule")}>Create & Schedule Post</Button>
+          {/* "Create & Schedule Post" Button REMOVED */}
           <Button mt={2} colorScheme="blue" onClick={handleGenerateCaption}>
             Try Caption Generator
           </Button>
