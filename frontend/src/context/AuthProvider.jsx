@@ -1,110 +1,110 @@
 // frontend/src/context/AuthProvider.jsx
 import { client } from '../api/client';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { jwtDecode } from 'jwt-decode'; // Ensure you have installed jwt-decode: npm install jwt-decode
+import { jwtDecode } from 'jwt-decode';
 
-export const AuthContext = createContext(null); // Initialize with null
+export const AuthContext = createContext(null);
 
-console.log("✅ AuthProvider rendered");
+console.log("✅ AuthProvider rendered (Top Level)");
 
 export function AuthProvider({ children }) {
-  // Initialize user to null, indicating no user is loaded/logged in yet.
-  // undefined can be used for a "loading" state if preferred.
-  const [user, setUser] = useState(null); 
+  const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('token');
+      const initialToken = localStorage.getItem('token');
+      console.log("🔑 AuthProvider: Initial token from localStorage on load:", initialToken);
+      return initialToken;
     }
     return null;
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    console.log("🔄 AuthProvider useEffect triggered. Current token state:", token);
+    if (typeof window === 'undefined') {
+      console.log("🚪 AuthProvider useEffect: Not in browser, exiting.");
+      return;
+    }
 
     if (token) {
       try {
+        console.log("🔍 AuthProvider useEffect: Attempting to decode token:", token);
         const decoded = jwtDecode(token);
+        console.log("📜 AuthProvider useEffect: Decoded token:", decoded);
         const isExpired = decoded.exp * 1000 < Date.now();
 
         if (isExpired) {
-          console.log("Token expired, removing.");
+          console.warn("⏳ AuthProvider useEffect: Token expired. Removing token.");
           localStorage.removeItem('token');
-          setToken(null); // Update token state
+          setToken(null);
           setUser(null);
           delete client.defaults.headers.common['Authorization'];
         } else {
-          console.log("Token valid, setting user and fetching profile.");
-          // Set user based on decoded token initially
-          // The 'user' object within the decoded token might just be { id: '...' }
-          // It's often better to fetch the full profile.
-          setUser(decoded.user); // Assuming your JWT payload has a 'user' object like { id: '...' }
-          
-          // Set Authorization header for future client requests
+          console.log("👍 AuthProvider useEffect: Token valid. Setting user and auth header.");
+          setUser(decoded.user); // Assuming payload is { user: { id: ... } }
           client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-
-          // Fetch full profile to get up-to-date user details
-          client.get('/auth/profile') // Corrected path
+          
+          console.log("👤 AuthProvider useEffect: Fetching profile...");
+          client.get('/auth/profile')
             .then(response => {
-              setUser(response.data); // Update user with full profile data
+              console.log("👤 AuthProvider useEffect: Profile fetched successfully:", response.data);
+              setUser(response.data);
             })
-            .catch(() => {
-              console.error("Failed to fetch profile with token, logging out.");
+            .catch((err) => {
+              console.error("❌ AuthProvider useEffect: Failed to fetch profile with token. Logging out.", err.response?.data || err.message);
               localStorage.removeItem('token');
-              setToken(null); // Update token state
+              setToken(null);
               setUser(null);
               delete client.defaults.headers.common['Authorization'];
             });
         }
       } catch (error) {
-        console.error("Error decoding token, removing.");
+        console.error("💥 AuthProvider useEffect: Error decoding token. Removing token.", error);
         localStorage.removeItem('token');
-        setToken(null); // Update token state
+        setToken(null);
         setUser(null);
         delete client.defaults.headers.common['Authorization'];
       }
     } else {
-      // No token found
+      console.log("🚫 AuthProvider useEffect: No token in state. Clearing user and auth header.");
       setUser(null);
       delete client.defaults.headers.common['Authorization'];
     }
-  }, [token]); // Re-run effect if token changes
+  }, [token]); // Re-run effect if token state changes
 
   const login = async (credentials) => {
+    console.log("🚀 AuthProvider: login function called");
     const { data } = await client.post('/auth/login', credentials);
     if (data.token) {
+      console.log("🔑 AuthProvider: Token received from login:", data.token);
       localStorage.setItem('token', data.token);
-      setToken(data.token); // This will trigger the useEffect above
-      // The useEffect will handle setting the user and auth header
+      setToken(data.token); // This will trigger the useEffect
+    } else {
+      console.error("❌ AuthProvider: No token received from login API.");
     }
-    return data; // Return full response for potential further handling
+    return data;
   };
 
   const register = async (userData) => {
+    console.log("🚀 AuthProvider: register function called");
     const { data } = await client.post('/auth/register', userData);
     if (data.token) {
+      console.log("🔑 AuthProvider: Token received from register:", data.token);
       localStorage.setItem('token', data.token);
-      setToken(data.token); // This will trigger the useEffect above
+      setToken(data.token); // This will trigger the useEffect
+    } else {
+      console.error("❌ AuthProvider: No token received from register API.");
     }
     return data;
   };
 
   const logout = () => {
-    console.log("Logging out.");
+    console.log("🚪 AuthProvider: logout function called");
     localStorage.removeItem('token');
-    setToken(null); // This will trigger the useEffect to clear user and auth header
-    // No need to call setUser(null) or delete header here, useEffect handles it
-    // Optionally, call a backend logout endpoint if you have one:
-    // client.post('/auth/logout').catch(err => console.error("Logout API call failed", err));
+    setToken(null); // This will trigger the useEffect
   };
 
-  // Initial loading state: if user is undefined, it means we haven't checked localStorage yet.
-  // Once checked, user will be an object or null.
-  // For simplicity, we can remove the explicit "Loading user..." and let the UI handle null user state.
-  // if (user === undefined && token === undefined) return <p>Loading auth state…</p>;
-
-
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, setUser /* if needed directly */ }}>
+    <AuthContext.Provider value={{ user, token, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
