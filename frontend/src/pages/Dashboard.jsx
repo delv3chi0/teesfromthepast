@@ -48,16 +48,10 @@ export default function Dashboard() {
       <Divider my={6} />
 
       <VStack align="start" spacing={6}>
-        {/* "Scheduled Posts" Box REMOVED */}
-
-        <Box>
-          <Heading size="md">Analytics Summary</Heading>
-          <Text color="gray.600">Analytics will appear here once you’ve posted content.</Text>
-        </Box>
+        {/* "Analytics Summary" Box REMOVED */}
 
         <Box>
           <Heading size="md">AI Tools</Heading>
-          {/* "Create & Schedule Post" Button REMOVED */}
           <Button mt={2} colorScheme="blue" onClick={handleGenerateCaption}>
             Try Caption Generator
           </Button>
