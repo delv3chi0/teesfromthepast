@@ -1,63 +1,71 @@
 // backend/routes/generateImage.js
 import express from 'express';
-import 'dotenv/config'; // Ensure environment variables are loaded
-import fetch from 'node-fetch'; // Import node-fetch for API calls
+import axios from 'axios';
+import 'dotenv/config'; // To load STABILITY_API_KEY from .env
+import { protect } from '../middleware/authMiddleware.js'; // To make sure only logged-in users can generate
 
 const router = express.Router();
 
-router.post('/generateImage', async (req, res) => {
-    const { prompt } = req.body;
+const STABILITY_API_ENGINE_ID = 'stable-diffusion-xl-1024-v1-0'; // Example for SDXL 1.0
+const STABILITY_API_HOST = 'https://api.stability.ai';
+const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
 
+if (!STABILITY_API_KEY) {
+    console.error("Stability AI API key is missing. Please check your .env file.");
+}
+
+// Let's make a route like POST /api/designs/create
+router.post('/designs/create', protect, async (req, res) => {
+    const { prompt } = req.body; // The user's idea for the picture
+
+    if (!STABILITY_API_KEY) {
+        return res.status(500).json({ message: "Image generation service is not configured." });
+    }
     if (!prompt) {
-        return res.status(400).json({ message: 'Prompt is required.' });
+        return res.status(400).json({ message: "A prompt is required to generate an image." });
     }
 
+    console.log(`[Design Engine] Received prompt: "${prompt}"`);
+
     try {
-        // Stability AI API endpoint (replace with specific model if needed)
-        const STABILITY_API_URL = 'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image';
-
-        const response = await fetch(STABILITY_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${process.env.STABILITY_AI_API_KEY}` // Use your env var
-            },
-            body: JSON.stringify({
+        const response = await axios.post(
+            `${STABILITY_API_HOST}/v1/generation/${STABILITY_API_ENGINE_ID}/text-to-image`,
+            {
                 text_prompts: [{ text: prompt }],
-                cfg_scale: 7,       // Controls how much the image adheres to the prompt (higher = more aligned)
-                height: 1024,
-                width: 1024,
-                samples: 1,         // Number of images to generate (keep at 1 for now)
-                steps: 30,          // Number of denoising steps (higher = more detailed, slower)
-            }),
-        });
+                cfg_scale: 7,       // How strictly the diffusion process adheres to the prompt text
+                height: 1024,       // Output height in pixels
+                width: 1024,        // Output width in pixels
+                steps: 30,          // Number of diffusion steps
+                samples: 1,         // Number of images to generate
+                // style_preset: "enhance", // Example style preset, check Stability AI docs for more
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'Authorization': `Bearer ${STABILITY_API_KEY}`
+                }
+            }
+        );
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Stability AI API error:', errorData);
-            // Return a more descriptive error if possible
-            return res.status(response.status).json({
-                message: 'Error generating image from Stability AI',
-                details: errorData.message || 'Unknown error from Stability AI'
+        // The image data is usually in response.data.artifacts[0].base64
+        const imageArtifact = response.data.artifacts[0];
+        if (imageArtifact && imageArtifact.base64) {
+            console.log("[Design Engine] Image generated successfully.");
+            // For now, we send back the base64 image data directly.
+            // Later, we might save this to a file or cloud storage and send a URL.
+            res.json({
+                message: "Image generated successfully!",
+                // Sending as a data URL for easy display in browser <img src="data:image/png;base64,..." />
+                imageDataUrl: `data:image/png;base64,${imageArtifact.base64}`
             });
-        }
-
-        const data = await response.json();
-
-        if (data.artifacts && data.artifacts.length > 0) {
-            // Stability AI returns base64 encoded images
-            const imageBase64 = data.artifacts[0].base64;
-            // Prepend data URI header for direct use in <img> tag
-            const imageUrl = `data:image/png;base64,${imageBase64}`;
-            return res.json({ imageUrl: imageUrl });
         } else {
-            return res.status(500).json({ message: 'No image artifacts received from Stability AI.' });
+            throw new Error("No image data found in Stability AI response.");
         }
 
     } catch (error) {
-        console.error('Server error during image generation:', error);
-        res.status(500).json({ message: 'Internal server error during image generation.' });
+        console.error("[Design Engine] Error calling Stability AI:", error.response ? error.response.data : error.message);
+        res.status(500).json({ message: "Failed to generate image.", error: error.response ? error.response.data : error.message });
     }
 });
 
