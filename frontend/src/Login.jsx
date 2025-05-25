@@ -72,5 +72,4 @@ export default function Login() {
       </Text>
     </Box>
   );
-}xy
-
+}
