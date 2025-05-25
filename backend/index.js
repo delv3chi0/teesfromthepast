@@ -1,6 +1,3 @@
-delv3chio@delv3chio-laptop:~/Desktop/tees$ cat backend/index.js
-// backend/index.js
-
 process.on('uncaughtException', (err) => {
   console.error('[Backend Log] Uncaught Exception:', err.stack);
   process.exit(1);
