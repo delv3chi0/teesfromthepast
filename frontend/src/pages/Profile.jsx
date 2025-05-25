@@ -35,7 +35,7 @@ export default function Profile() {
 
   // save or cancel
   const handleSave = async () => {
-    await client.put('/profile', form);
+    await client.put('/auth/profile', form);
     setProfile(p => ({ ...p, ...form }));
     setEditing(false);
   };
