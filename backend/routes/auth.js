@@ -10,13 +10,19 @@ const router = express.Router();
 
 // Register User (Signup)
 router.post('/register', async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password } = req.body; // Ensure username is being sent from frontend
     try {
         // Check if user already exists
         let user = await User.findOne({ email });
         if (user) {
             return res.status(400).json({ message: 'User already exists' });
         }
+        // Check if username already exists
+        user = await User.findOne({ username });
+        if (user) {
+            return res.status(400).json({ message: 'Username already exists' });
+        }
+
 
         // Hash password
         const salt = await bcrypt.genSalt(10);
@@ -27,6 +33,9 @@ router.post('/register', async (req, res) => {
             username,
             email,
             password: hashedPassword,
+            // Optional: Initialize other fields like firstName if provided during registration
+            firstName: req.body.firstName || '',
+            lastName: req.body.lastName || '',
         });
 
         await user.save();
@@ -112,29 +121,44 @@ router.get('/profile', protect, (req, res) => {
 
 // PUT Update User Profile (Protected Route)
 router.put('/profile', protect, async (req, res) => {
-    // ADDED THIS LINE FOR DIAGNOSTICS
     console.log('[Update Profile] Received body:', req.body);
     
     try {
-        // The 'protect' middleware gives us the user on req.user
         const user = await User.findById(req.user.id);
 
         if (user) {
+            // Update fields based on what the frontend is sending
             user.username = req.body.username || user.username;
             user.email = req.body.email || user.email;
+            user.firstName = req.body.firstName || user.firstName;
+            user.lastName = req.body.lastName || user.lastName;
+            user.instagramHandle = req.body.instagramHandle || user.instagramHandle;
+            user.tiktokHandle = req.body.tiktokHandle || user.tiktokHandle;
+            
+            // If password is provided in the body, hash and update it
+            if (req.body.password) {
+                const salt = await bcrypt.genSalt(10);
+                user.password = await bcrypt.hash(req.body.password, salt);
+            }
 
             const updatedUser = await user.save();
 
+            // Send back all relevant fields from the updated user
             res.json({
                 _id: updatedUser.id,
                 username: updatedUser.username,
                 email: updatedUser.email,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName,
+                instagramHandle: updatedUser.instagramHandle,
+                tiktokHandle: updatedUser.tiktokHandle,
             });
         } else {
             res.status(404).json({ message: 'User not found' });
         }
     } catch (error) {
-        res.status(400).json({ message: 'Error updating user profile' });
+        console.error('Error updating profile:', error);
+        res.status(400).json({ message: 'Error updating user profile', error: error.message });
     }
 });
 
