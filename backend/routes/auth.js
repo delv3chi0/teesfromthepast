@@ -110,6 +110,32 @@ router.get('/profile', protect, (req, res) => {
     }
 });
 
+// PUT Update User Profile (Protected Route)
+router.put('/profile', protect, async (req, res) => {
+    try {
+        // The 'protect' middleware gives us the user on req.user
+        const user = await User.findById(req.user.id);
+
+        if (user) {
+            user.username = req.body.username || user.username;
+            user.email = req.body.email || user.email;
+
+            const updatedUser = await user.save();
+
+            res.json({
+                _id: updatedUser.id,
+                username: updatedUser.username,
+                email: updatedUser.email,
+            });
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
+    } catch (error) {
+        res.status(400).json({ message: 'Error updating user profile' });
+    }
+});
+
+
 // Logout User
 router.post('/logout', (req, res) => {
     res.cookie('token', '', {
