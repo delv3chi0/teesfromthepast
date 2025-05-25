@@ -1,3 +1,5 @@
+// backend/index.js
+
 process.on('uncaughtException', (err) => {
   console.error('[Backend Log] Uncaught Exception:', err.stack);
   process.exit(1);
@@ -18,7 +20,7 @@ import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import checkoutRoutes from './routes/checkout.js';
-import designRoutes from './routes/designs.js'; // <-- ADDED THIS IMPORT
+import designRoutes from './routes/designs.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,20 +35,27 @@ mongoose.connect(process.env.MONGO_URI)
 // --- Middleware ---
 console.log('[Backend Log] Applying CORS middleware...');
 app.use(cors({
-    origin: 'https://teesfromthepast.vercel.app', // Your Vercel frontend URL
-    credentials: true, // Allow cookies to be sent
+    origin: [
+        'https://teesfromthepast.vercel.app', 
+        'https://teesfromthepast-git-main-delv3chios-projects.vercel.app', // Vercel branch URL
+        'http://localhost:5173' // Your local frontend development URL
+    ],
+    credentials: true, 
 }));
-console.log('[Backend Log] CORS middleware applied with origin:', 'https://teesfromthepast.vercel.app');
+console.log('[Backend Log] CORS middleware applied with updated origin list.');
 
 app.use(cookieParser());
 
 // Stripe webhook needs raw body, so it MUST come before express.json()
+// Ensure this is only for the webhook path if other paths need express.json() first.
 app.use('/api/webhook', stripeWebhookRoutes);
 
 // General JSON body parser for all other routes
-app.use(express.json());
+// INCREASE THE LIMIT for JSON payloads and URL-encoded data
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-console.log('[Backend Log] Express JSON and other middleware applied.');
+console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
 
 
 // --- Basic & Health Routes ---
@@ -71,13 +80,17 @@ console.log('[Backend Log] Setting up API routes...');
 app.use('/api/auth', authRoutes); 
 app.use('/api', generateImageRoutes); // Handles /api/designs/create for AI generation
 app.use('/api', checkoutRoutes);
-app.use('/api/mydesigns', designRoutes); // <-- ADDED THIS LINE for saving/viewing designs
+app.use('/api/mydesigns', designRoutes); // Handles saving/viewing user designs
 console.log('[Backend Log] All routes configured.');
 
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
   console.error('[Backend Log] Global Server Error:', err.stack);
+  // Check if the error is the PayloadTooLargeError and customize response
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'Request payload is too large. Please reduce data size.' });
+  }
   res.status(500).json({ error: 'An unexpected server error occurred!' });
 });
 
