@@ -1,3 +1,5 @@
+// frontend/src/pages/Dashboard.jsx
+
 import { useState, useEffect } from 'react';
 import { client } from '../api/client';
 import { Box, Heading, Text, VStack, Divider, Button, useToast } from '@chakra-ui/react';
@@ -9,7 +11,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     console.log("Fetching profile...");
-    client.get('/profile')
+    // UPDATED the URL to the correct endpoint
+    client.get('/auth/profile')
       .then(response => {
         console.log("Profile data:", response.data);
         setProfile(response.data);
@@ -41,7 +44,8 @@ export default function Dashboard() {
         <LogoutButton />
       </Box>
 
-      {profile && <Text mb={4}>Welcome, {profile.firstName}!</Text>}
+      {/* UPDATED to use profile.username to match backend data */}
+      {profile && <Text mb={4}>Welcome, {profile.username}!</Text>}
 
       <Divider my={6} />
 

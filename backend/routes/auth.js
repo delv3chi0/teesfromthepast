@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js'; // Adjust path if your User model is elsewhere
 import 'dotenv/config'; // Make sure .env variables are loaded
+import { protect } from '../middleware/authMiddleware.js'; // Import the new middleware
 
 const router = express.Router();
 
@@ -58,9 +59,6 @@ router.post('/register', async (req, res) => {
 
 // Login User
 router.post('/login', async (req, res) => {
-    // ADDED THIS LINE FOR DIAGNOSTICS
-    console.log('[Login Route] Request Body:', req.body);
-
     const { email, password } = req.body;
     try {
         // Check if user exists
@@ -98,6 +96,17 @@ router.post('/login', async (req, res) => {
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
+    }
+});
+
+// GET User Profile (Protected Route)
+router.get('/profile', protect, (req, res) => {
+    // The 'protect' middleware has already found the user and attached it to req.user
+    // We just need to send it back.
+    if (req.user) {
+        res.status(200).json(req.user);
+    } else {
+        res.status(404).json({ message: 'User not found' });
     }
 });
 
