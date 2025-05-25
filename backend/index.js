@@ -20,6 +20,7 @@ import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import checkoutRoutes from './routes/checkout.js';
+import designRoutes from './routes/designs.js'; // <-- ADDED THIS IMPORT
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -69,9 +70,10 @@ app.get('/health', (req, res) => {
 
 // --- API Routes ---
 console.log('[Backend Log] Setting up API routes...');
-app.use('/api/auth', authRoutes); // Handles /api/auth/register and /api/auth/login
-app.use('/api', generateImageRoutes);
+app.use('/api/auth', authRoutes); 
+app.use('/api', generateImageRoutes); // Handles /api/designs/create for AI generation
 app.use('/api', checkoutRoutes);
+app.use('/api/mydesigns', designRoutes); // <-- ADDED THIS LINE for saving/viewing designs
 console.log('[Backend Log] All routes configured.');
 
 
