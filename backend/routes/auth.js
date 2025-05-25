@@ -10,40 +10,38 @@ const router = express.Router();
 
 // Register User (Signup)
 router.post('/register', async (req, res) => {
-    const { username, email, password } = req.body; // Ensure username is being sent from frontend
+    const { username, email, password, firstName, lastName } = req.body; // Added firstName, lastName
     try {
-        // Check if user already exists
-        let user = await User.findOne({ email });
-        if (user) {
-            return res.status(400).json({ message: 'User already exists' });
+        // Check if email already exists
+        let existingUserByEmail = await User.findOne({ email });
+        if (existingUserByEmail) {
+            return res.status(400).json({ message: 'User with this email already exists' });
         }
         // Check if username already exists
-        user = await User.findOne({ username });
-        if (user) {
+        let existingUserByUsername = await User.findOne({ username });
+        if (existingUserByUsername) {
             return res.status(400).json({ message: 'Username already exists' });
         }
-
 
         // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         // Create new user
-        user = new User({
+        let newUser = new User({ // Renamed variable to avoid confusion
             username,
             email,
             password: hashedPassword,
-            // Optional: Initialize other fields like firstName if provided during registration
-            firstName: req.body.firstName || '',
-            lastName: req.body.lastName || '',
+            firstName: firstName || '', // Initialize with provided or empty string
+            lastName: lastName || '',   // Initialize with provided or empty string
         });
 
-        await user.save();
+        await newUser.save();
 
         // Generate JWT token
         const payload = {
             user: {
-                id: user.id,
+                id: newUser.id,
             },
         };
 
@@ -61,7 +59,7 @@ router.post('/register', async (req, res) => {
             }
         );
     } catch (err) {
-        console.error(err.message);
+        console.error('Error during registration:', err.message); // Added more specific log
         res.status(500).send('Server Error');
     }
 });
@@ -103,7 +101,7 @@ router.post('/login', async (req, res) => {
             }
         );
     } catch (err) {
-        console.error(err.message);
+        console.error('Error during login:', err.message); // Added more specific log
         res.status(500).send('Server Error');
     }
 });
@@ -115,6 +113,7 @@ router.get('/profile', protect, (req, res) => {
     if (req.user) {
         res.status(200).json(req.user);
     } else {
+        // This case should ideally be handled by the protect middleware if user not found after token decode
         res.status(404).json({ message: 'User not found' });
     }
 });
@@ -136,7 +135,8 @@ router.put('/profile', protect, async (req, res) => {
             user.tiktokHandle = req.body.tiktokHandle || user.tiktokHandle;
             
             // If password is provided in the body, hash and update it
-            if (req.body.password) {
+            // Ensure to add checks if you want to validate old password first, or if password can be empty
+            if (req.body.password && req.body.password.length > 0) { // Check if password is provided and not empty
                 const salt = await bcrypt.genSalt(10);
                 user.password = await bcrypt.hash(req.body.password, salt);
             }
@@ -158,6 +158,10 @@ router.put('/profile', protect, async (req, res) => {
         }
     } catch (error) {
         console.error('Error updating profile:', error);
+        // Send back the specific Mongoose validation error if present
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ message: 'Validation Error updating profile', errors: error.errors });
+        }
         res.status(400).json({ message: 'Error updating user profile', error: error.message });
     }
 });
