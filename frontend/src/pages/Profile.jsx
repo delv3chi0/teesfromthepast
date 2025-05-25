@@ -17,7 +17,7 @@ export default function Profile() {
 
   // load once
   useEffect(() => {
-    client.get('/profile').then(({ data }) => {
+    client.get('/auth/profile').then(({ data }) => {
       setProfile(data);
       setForm({
         firstName: data.firstName || '',
