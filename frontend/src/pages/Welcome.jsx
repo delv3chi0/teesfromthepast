@@ -2,7 +2,7 @@
 import { Box, Heading, Button, VStack, Text, Divider } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
-import LogoutButton from '../components/LogoutButton'; // Assuming you have this
+import LogoutButton from '../components/LogoutButton';
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -13,11 +13,7 @@ export default function Welcome() {
       <Heading as="h1" size="xl" fontWeight="bold" mb={2}>
         Welcome to Tees From The Past!
       </Heading>
-      {user && (
-        <Text fontSize="lg" color={'gray.600'} mb={6}>
-          Hello, {user.username || user.email}! What would you like to do?
-        </Text>
-      )}
+      {user && <Text fontSize="lg" color={'gray.600'} mb={6}>Hello, {user.username || user.email}!</Text>}
       
       <VStack spacing={5} align="stretch" maxW="md" mx="auto">
         <Button
@@ -26,7 +22,15 @@ export default function Welcome() {
           size="lg"
           onClick={() => navigate('/generate')}
         >
-          ✨ Create Your Own Retro Design
+          ✨ Create Your Own Retro Design!
+        </Button>
+        <Button // <-- ADD THIS BUTTON
+          colorScheme="orange" 
+          variant="solid"
+          size="lg"
+          onClick={() => navigate('/my-designs')}
+        >
+          🖼️ View My Saved Designs
         </Button>
         <Button
           colorScheme="teal"
