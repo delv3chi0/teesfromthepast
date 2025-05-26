@@ -27,31 +27,23 @@ export default function MainLayout({ children }) {
       pb="10"
       overflowX="hidden"
       overflowY="auto"
-      bg="gray.800"
-      borderColor="gray.700"
+      bg="brand.primary" // <-- UPDATED: Use primary brand color for sidebar background
+      borderColor="brand.primaryDark" // <-- UPDATED: Use a darker shade for border
       borderRightWidth="1px"
-      w="60" // width of the sidebar (15rem or 240px)
+      w="60" 
     >
-      {/* === LOGO IN SIDEBAR HEADER (IMAGE ONLY & LARGER) === */}
       <Flex 
         as={RouterLink} 
         to="/dashboard" 
-        px="4"        // Side padding for the logo area
-        py="6"        // Increased vertical padding to give logo more space
+        px="4" 
+        py="3" 
         align="center" 
-        justifyContent="center" 
-        _hover={{ bg: 'gray.700', textDecoration: 'none' }}
-        // Removed fixed height from this Flex, it will now size to its content + padding
+        justifyContent="center"
+        _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }} // <-- UPDATED: Hover state
+        h="14" 
       >
-        <Image 
-          src="/logo.png" 
-          alt="Tees From The Past Logo" 
-          maxH="100px" // << INCREASED max height for the logo, adjust as needed
-          // maxW="80%" // Optionally, constrain width too, e.g., 80% of sidebar padded width
-          objectFit="contain" // Ensures the entire logo is visible and scales proportionally
-        />
+        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" />
       </Flex>
-      {/* === END LOGO IN SIDEBAR HEADER === */}
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
           <ChakraLink
@@ -61,12 +53,13 @@ export default function MainLayout({ children }) {
             p={3}
             borderRadius="md"
             fontWeight="medium"
-            color={location.pathname === item.path ? "teal.300" : "gray.300"}
-            bg={location.pathname === item.path ? "teal.700" : "transparent"}
+            // UPDATED Link colors to use theme
+            color={location.pathname === item.path ? "brand.accentYellow" : "brand.textLight"}
+            bg={location.pathname === item.path ? "brand.primaryLight" : "transparent"}
             _hover={{
               textDecoration: 'none',
-              bg: 'gray.700',
-              color: 'white',
+              bg: 'brand.primaryLight', // Use a slightly lighter primary for hover
+              color: 'brand.accentYellow',    // Use an accent for hover text
             }}
             onClick={onClick}
           >
@@ -78,26 +71,27 @@ export default function MainLayout({ children }) {
   );
 
   return (
-    <Box as="section" bg="gray.50" _dark={{ bg: "gray.700" }} minH="100vh">
+    // Main outer box - its background will be whatever body inherits or is set globally by your theme
+    // The global style in theme.js sets body bg to brand.bgLight
+    <Box as="section" minH="100vh"> 
       <SidebarContent display={{ base: 'none', md: 'unset' }} />
       
       <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
         <DrawerOverlay />
-        <DrawerContent bg="gray.800" color="white">
+        <DrawerContent bg="brand.primary" color="brand.textLight"> {/* UPDATED Drawer background and text */}
           <DrawerCloseButton />
           <DrawerHeader 
             borderBottomWidth="1px" 
-            borderColor="gray.700" 
+            borderColor="brand.primaryDark" // UPDATED
             as={RouterLink} 
             to="/dashboard" 
             _hover={{textDecoration: 'none'}}
             display="flex"      
             alignItems="center" 
             justifyContent="center"
-            py="3" 
+            py="2.5" 
           >
-            {/* You might want to make this logo larger too if the sidebar one is now much larger */}
-            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain" /> 
+            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="35px" /> 
           </DrawerHeader>
           <DrawerBody>
             <SidebarContent onClick={onClose}/>
@@ -112,12 +106,11 @@ export default function MainLayout({ children }) {
           justify="space-between" 
           w="full"
           px="4"
-          bg="white"
-          _dark={{ bg: 'gray.800' }}
+          bg="brand.paper" // <-- UPDATED: Use paper/white for top bar background
           borderBottomWidth="1px"
-          borderColor="blackAlpha.300"
-          color="inherit"
-          h="14" // Top bar has a fixed height
+          borderColor="blackAlpha.200" // A subtle border, or use a brand color
+          color="brand.textDark"     // <-- UPDATED: Text color for top bar items
+          h="14"
         >
           <Flex align="center">
             <IconButton
@@ -130,22 +123,22 @@ export default function MainLayout({ children }) {
               mr={{ base: 2, md: 0 }} 
             />
             <ChakraLink as={RouterLink} to="/dashboard" display={{ base: 'none', md: 'flex' }} alignItems="center">
-              {/* This logo is constrained by the top bar's height of "14" (56px) */}
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="40px" // Max practical height here is around 40-45px with padding
+                h="35px" 
                 objectFit="contain"
               />
             </ChakraLink>
           </Flex>
           
           <Flex align="center">
-            <LogoutButton />
+            <LogoutButton /> {/* Ensure LogoutButton text/icon color contrasts with brand.paper */}
           </Flex>
         </Flex>
 
-        <Box as="main" p="4">
+        {/* The main content area will inherit body background unless children override it */}
+        <Box as="main" p="4"> 
           {children}
         </Box>
       </Box>
