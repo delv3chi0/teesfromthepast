@@ -1,33 +1,31 @@
 // frontend/src/pages/Profile.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Heading, Input, Button, Text, HStack, useToast } from '@chakra-ui/react'; // Added useToast
+import { Box, Heading, Input, Button, Text, HStack, useToast } from '@chakra-ui/react';
 import { client } from '../api/client';
-import LogoutButton from '../components/LogoutButton';
+// LogoutButton import is no longer needed if it's only used here and now removed
+// import LogoutButton from '../components/LogoutButton'; 
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({
-    username: '',      // ADDED username
-    email: '',         // ADDED email for display, but it won't be part of 'form' for submission unless editable
+    username: '',
+    email: '', 
     firstName: '',
     lastName: '',
-    // instagramHandle and tiktokHandle removed
   });
   const [editing, setEditing] = useState(false);
   const navigate = useNavigate();
-  const toast = useToast(); // Initialize useToast
+  const toast = useToast();
 
-  // Load profile data once
   useEffect(() => {
     client.get('/auth/profile').then(({ data }) => {
       setProfile(data);
       setForm({
-        username: data.username || '',         // ADDED username
-        email: data.email || '',               // Store email for display
+        username: data.username || '',
+        email: data.email || '',
         firstName: data.firstName || '',
         lastName: data.lastName || '',
-        // instagramHandle and tiktokHandle removed
       });
     }).catch(err => {
         console.error("Error fetching profile for edit:", err);
@@ -39,28 +37,23 @@ export default function Profile() {
             isClosable: true,
         });
     });
-  }, [toast]); // Added toast to dependency array
+  }, [toast]);
 
-  // Handle input change
   const handleChange = (e) => {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-  // Save or cancel
   const handleSave = async () => {
-    // Prepare only the data that should be updated
     const updateData = {
         username: form.username,
         firstName: form.firstName,
         lastName: form.lastName,
-        // Do not send email if it's not meant to be editable from this form
-        // If email IS editable, add it here: email: form.email
     };
 
     try {
         const { data: updatedProfile } = await client.put('/auth/profile', updateData);
-        setProfile(updatedProfile); // Update profile state with response from server
-        setForm({                   // Update form state as well
+        setProfile(updatedProfile); 
+        setForm({                   
             username: updatedProfile.username || '',
             email: updatedProfile.email || '',
             firstName: updatedProfile.firstName || '',
@@ -90,20 +83,21 @@ export default function Profile() {
   };
 
   const handleCancel = () => {
-    setForm({
-      username: profile.username || '',       // ADDED username
-      email: profile.email || '',             // Reset email for display
-      firstName: profile.firstName || '',
-      lastName: profile.lastName || '',
-      // instagramHandle and tiktokHandle removed
-    });
+    if (profile) {
+        setForm({
+          username: profile.username || '',
+          email: profile.email || '',
+          firstName: profile.firstName || '',
+          lastName: profile.lastName || '',
+        });
+    }
     setEditing(false);
   };
 
   if (!profile) return <Text>Loading…</Text>;
 
   return (
-    <Box maxW="md" mx="auto" mt={8} p={6} borderWidth="1px" borderRadius="md">
+    <Box maxW="md" /* mx="auto" removed for left alignment */ mt={8} p={6} borderWidth="1px" borderRadius="md">
       <Heading size="lg" mb={6}>Your Profile</Heading>
 
       <Text fontWeight="bold" mt={4}>Username:</Text>
@@ -118,14 +112,11 @@ export default function Profile() {
       
       <Text fontWeight="bold" mt={4}>Email:</Text>
       <Input
-        name="email" // Name added, though it's read-only for now
+        name="email"
         placeholder="Email"
-        mb={3} // Reduced margin for consistent spacing
-        value={form.email} // Display email from form state
-        isReadOnly // Email is not editable in this version
-        // If you want email to be editable:
-        // onChange={handleChange}
-        // isDisabled={!editing}
+        mb={3}
+        value={form.email}
+        isReadOnly 
       />
 
       <Text fontWeight="bold" mt={4}>First Name:</Text>
@@ -142,13 +133,11 @@ export default function Profile() {
       <Input
         name="lastName"
         placeholder="Last Name"
-        mb={6} // Keep last input margin for overall spacing
+        mb={6}
         value={form.lastName}
         onChange={handleChange}
         isDisabled={!editing}
       />
-
-      {/* Instagram and TikTok input fields removed */}
 
       <HStack spacing={4} mb={4}>
         {!editing ? (
@@ -162,7 +151,7 @@ export default function Profile() {
         <Button variant="ghost" onClick={() => navigate('/dashboard')}>Dashboard</Button>
       </HStack>
 
-      <LogoutButton />
+      {/* <LogoutButton /> REMOVED THIS LINE */}
     </Box>
   );
 }
