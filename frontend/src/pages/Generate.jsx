@@ -1,15 +1,15 @@
 // frontend/src/pages/Generate.jsx
 import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, HStack } from "@chakra-ui/react";
-import { useState, useEffect } from "react"; // useEffect might be used if you add more features
+import { useState } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // This holds the imageDataUrl
-  const [loading, setLoading] = useState(false);   // For image generation loading
-  const [isSaving, setIsSaving] = useState(false); // For save design loading
+  const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
   const { logout } = useAuth(); 
@@ -18,7 +18,7 @@ export default function Generate() {
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
     console.error(`Error during ${actionType}:`, err);
     const errorMessage = err.response?.data?.message || defaultMessage;
-    setError(errorMessage); // Set error message to display on page if needed
+    setError(errorMessage);
     toast({
       title: `${actionType.charAt(0).toUpperCase() + actionType.slice(1)} Failed`,
       description: errorMessage,
@@ -50,11 +50,7 @@ export default function Generate() {
       });
       return;
     }
-
-    setLoading(true);
-    setError("");
-    setImageUrl(""); 
-
+    setLoading(true); setError(""); setImageUrl("");
     try {
       console.log("[Generate.jsx] Calling /api/designs/create with prompt:", prompt);
       const res = await client.post("/designs/create", { prompt });
@@ -67,9 +63,7 @@ export default function Generate() {
           duration: 3000,
           isClosable: true,
         });
-      } else {
-        throw new Error("No image URL received from server.");
-      }
+      } else { throw new Error("No image URL received"); }
     } catch (err) {
       handleApiError(err, "Failed to generate image. Please try again.", "Image Generation");
     } finally {
@@ -88,19 +82,16 @@ export default function Generate() {
       });
       return;
     }
-
-    setIsSaving(true); 
-    setError(""); 
+    setIsSaving(true); setError(""); 
     try {
       console.log("[Generate.jsx] Calling /api/mydesigns to save. Prompt:", prompt);
       await client.post('/mydesigns', { 
         prompt: prompt, 
         imageDataUrl: imageUrl 
       });
-
       toast({
         title: "Design Saved!",
-        description: "Your masterpiece is now in your collection.",
+        description: "Your masterpiece is in your collection.",
         status: "success",
         duration: 3000,
         isClosable: true,
@@ -114,7 +105,7 @@ export default function Generate() {
 
   return (
     <VStack spacing={6} mt={10} px={4} pb={10}>
-      <Heading>AI Image Generator</Heading>
+      <Heading>AI Image Generator</Heading> {/* This heading should now be teal */}
       <Textarea 
         placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
         value={prompt} 
@@ -122,37 +113,32 @@ export default function Generate() {
         isDisabled={loading || isSaving}
         size="lg"
         minHeight="100px"
+        // Consider text color for textarea if default doesn't work on orange
+        // sx={{ '::placeholder': { color: 'brand.textMutedOnOrange' }, color: 'brand.textDark' }} 
       />
+      {/* HStack only contains the Generate Image button now */}
       <HStack spacing={4}> 
         <Button 
           onClick={handleGenerate} 
-          colorScheme="purple" 
+          colorScheme="purple" // You might want to use a brand colorScheme here later
           isLoading={loading}
           loadingText="Generating..."
-          isDisabled={isSaving || loading} // Also disable if saving
+          isDisabled={isSaving || loading}
           size="lg"
         >
           Generate Image
         </Button>
-        <Button 
-          onClick={() => navigate('/my-designs')}
-          colorScheme="teal" 
-          variant="outline"
-          isDisabled={loading || isSaving}
-          size="lg"
-        >
-          View My Saved Designs
-        </Button>
+        {/* "View My Saved Designs" Button REMOVED from here */}
       </HStack>
 
       {error && <Text color="red.500" mt={2}>Error: {error}</Text>}
       
       {imageUrl && !error && (
-        <VStack mt={4} spacing={4} p={4} borderWidth="1px" borderRadius="md" shadow="md">
+        <VStack mt={4} spacing={4} p={4} borderWidth="1px" borderRadius="lg" shadow="md" bg="brand.paper"> {/* Added bg for card effect */}
           <Image src={imageUrl} alt="Generated Tee Art" maxW="512px" maxH="512px" borderRadius="md" />
           <Button
             mt={2}
-            colorScheme="green"
+            colorScheme="green" // You might want to use a brand colorScheme here
             onClick={handleSaveDesign}
             isLoading={isSaving}
             loadingText="Saving..."
