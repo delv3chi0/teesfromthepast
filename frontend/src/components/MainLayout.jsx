@@ -27,8 +27,8 @@ export default function MainLayout({ children }) {
       pb="10"
       overflowX="hidden"
       overflowY="auto"
-      bg="brand.primary" // <-- UPDATED: Use primary brand color for sidebar background
-      borderColor="brand.primaryDark" // <-- UPDATED: Use a darker shade for border
+      bg="brand.primary" 
+      borderColor="brand.primaryDark" 
       borderRightWidth="1px"
       w="60" 
     >
@@ -39,7 +39,7 @@ export default function MainLayout({ children }) {
         py="3" 
         align="center" 
         justifyContent="center"
-        _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }} // <-- UPDATED: Hover state
+        _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }} 
         h="14" 
       >
         <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" />
@@ -53,13 +53,12 @@ export default function MainLayout({ children }) {
             p={3}
             borderRadius="md"
             fontWeight="medium"
-            // UPDATED Link colors to use theme
             color={location.pathname === item.path ? "brand.accentYellow" : "brand.textLight"}
             bg={location.pathname === item.path ? "brand.primaryLight" : "transparent"}
             _hover={{
               textDecoration: 'none',
-              bg: 'brand.primaryLight', // Use a slightly lighter primary for hover
-              color: 'brand.accentYellow',    // Use an accent for hover text
+              bg: 'brand.primaryLight', 
+              color: 'brand.accentYellow',    
             }}
             onClick={onClick}
           >
@@ -71,18 +70,16 @@ export default function MainLayout({ children }) {
   );
 
   return (
-    // Main outer box - its background will be whatever body inherits or is set globally by your theme
-    // The global style in theme.js sets body bg to brand.bgLight
     <Box as="section" minH="100vh"> 
       <SidebarContent display={{ base: 'none', md: 'unset' }} />
       
       <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
         <DrawerOverlay />
-        <DrawerContent bg="brand.primary" color="brand.textLight"> {/* UPDATED Drawer background and text */}
+        <DrawerContent bg="brand.primary" color="brand.textLight"> 
           <DrawerCloseButton />
           <DrawerHeader 
             borderBottomWidth="1px" 
-            borderColor="brand.primaryDark" // UPDATED
+            borderColor="brand.primaryDark" 
             as={RouterLink} 
             to="/dashboard" 
             _hover={{textDecoration: 'none'}}
@@ -106,10 +103,10 @@ export default function MainLayout({ children }) {
           justify="space-between" 
           w="full"
           px="4"
-          bg="brand.paper" // <-- UPDATED: Use paper/white for top bar background
+          bg="brand.paper" 
           borderBottomWidth="1px"
-          borderColor="blackAlpha.200" // A subtle border, or use a brand color
-          color="brand.textDark"     // <-- UPDATED: Text color for top bar items
+          borderColor="blackAlpha.200" 
+          color="brand.textDark"     
           h="14"
         >
           <Flex align="center">
@@ -133,14 +130,19 @@ export default function MainLayout({ children }) {
           </Flex>
           
           <Flex align="center">
-            <LogoutButton /> {/* Ensure LogoutButton text/icon color contrasts with brand.paper */}
+            <LogoutButton /> 
           </Flex>
         </Flex>
 
-        {/* The main content area will inherit body background unless children override it */}
-        <Box as="main" p="4"> 
+        {/* === MAIN CONTENT AREA === */}
+        <Box 
+          as="main" 
+          p="4" 
+          bg="brand.bgLight" // <-- THIS LINE IS THE PRIMARY UPDATE
+        > 
           {children}
         </Box>
+        {/* === END MAIN CONTENT AREA === */}
       </Box>
     </Box>
   );
