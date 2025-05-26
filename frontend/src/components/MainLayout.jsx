@@ -1,9 +1,8 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, Text, Spacer, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image } from '@chakra-ui/react'; // Ensure Image is imported
+import { Box, Flex, VStack, Link as ChakraLink, Text, Spacer, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
-
 
 // Navigation items
 const navItems = [
@@ -31,15 +30,22 @@ export default function MainLayout({ children }) {
       bg="gray.800"
       borderColor="gray.700"
       borderRightWidth="1px"
-      w="60"
+      w="60" // width of the sidebar
     >
-      {/* UPDATED Sidebar Header with Logo */}
-      <Flex as={RouterLink} to="/dashboard" px="4" py="3" align="center" _hover={{ bg: 'gray.700', textDecoration: 'none' }}>
-        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" mr="3" /> {/* LOGO ADDED HERE */}
-        <Text fontSize="xl" color="white" fontWeight="semibold">
-          TeesFT P(ast) {/* You can keep or remove this text based on your design preference */}
-        </Text>
+      {/* === LOGO IN SIDEBAR HEADER (IMAGE ONLY) === */}
+      <Flex 
+        as={RouterLink} 
+        to="/dashboard" 
+        px="4" 
+        py="3" 
+        align="center" 
+        justifyContent="center" // Center the logo
+        _hover={{ bg: 'gray.700', textDecoration: 'none' }}
+        h="14" // Give it a consistent height like the topbar
+      >
+        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" /> {/* Adjust height as needed */}
       </Flex>
+      {/* === END LOGO IN SIDEBAR HEADER === */}
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
           <ChakraLink
@@ -73,13 +79,21 @@ export default function MainLayout({ children }) {
         <DrawerOverlay />
         <DrawerContent bg="gray.800" color="white">
           <DrawerCloseButton />
-          {/* UPDATED Drawer Header with Logo */}
-          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" as={RouterLink} to="/dashboard" _hover={{textDecoration: 'none'}}>
-            <Flex align="center">
-              <Image src="/logo.png" alt="Tees From The Past Logo" h="30px" mr="3" /> {/* LOGO ADDED HERE */}
-              Tees From The Past
-            </Flex>
+          {/* === LOGO IN DRAWER HEADER (IMAGE ONLY) === */}
+          <DrawerHeader 
+            borderBottomWidth="1px" 
+            borderColor="gray.700" 
+            as={RouterLink} 
+            to="/dashboard" 
+            _hover={{textDecoration: 'none'}}
+            display="flex"       // Use Flex to center
+            alignItems="center"  // Align items vertically
+            justifyContent="center" // Center the logo horizontally
+            py="2.5" // Adjusted padding
+          >
+            <Image src="/logo.png" alt="Tees From The Past Logo" h="35px" /> {/* Adjust height */}
           </DrawerHeader>
+          {/* === END LOGO IN DRAWER HEADER === */}
           <DrawerBody>
             <SidebarContent onClick={onClose}/>
           </DrawerBody>
@@ -87,11 +101,10 @@ export default function MainLayout({ children }) {
       </Drawer>
 
       <Box ml={{ base: 0, md: 60 }} transition=".3s ease">
-        {/* UPDATED Top Bar with Logo */}
         <Flex
           as="header"
           align="center"
-          justify="space-between"
+          justify="space-between" 
           w="full"
           px="4"
           bg="white"
@@ -101,7 +114,6 @@ export default function MainLayout({ children }) {
           color="inherit"
           h="14"
         >
-          {/* Left Section: Hamburger for mobile, Logo for larger screens */}
           <Flex align="center">
             <IconButton
               aria-label="Open Menu"
@@ -110,18 +122,17 @@ export default function MainLayout({ children }) {
               icon={<HamburgerIcon />}
               size="sm"
               variant="ghost"
-              mr={2} // Margin between hamburger and logo if both were somehow visible
+              mr={{ base: 2, md: 0 }} 
             />
-            <ChakraLink as={RouterLink} to="/dashboard"> {/* Make logo clickable, goes to dashboard */}
+            <ChakraLink as={RouterLink} to="/dashboard" display={{ base: 'none', md: 'flex' }} alignItems="center">
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="35px" // Adjust height as needed
+                h="35px" 
               />
             </ChakraLink>
           </Flex>
           
-          {/* Right Section: Logout Button */}
           <Flex align="center">
             <LogoutButton />
           </Flex>
