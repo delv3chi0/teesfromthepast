@@ -1,4 +1,3 @@
-// frontend/src/components/MainLayout.jsx
 import { Box, Flex, VStack, Link as ChakraLink, Text, Spacer, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
@@ -42,7 +41,7 @@ export default function MainLayout({ children }) {
         _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }} 
         h="14" 
       >
-        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" />
+        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" objectFit="contain" />
       </Flex>
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
@@ -88,7 +87,7 @@ export default function MainLayout({ children }) {
             justifyContent="center"
             py="2.5" 
           >
-            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="35px" /> 
+            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="35px" objectFit="contain"/> 
           </DrawerHeader>
           <DrawerBody>
             <SidebarContent onClick={onClose}/>
@@ -134,15 +133,13 @@ export default function MainLayout({ children }) {
           </Flex>
         </Flex>
 
-        {/* === MAIN CONTENT AREA === */}
         <Box 
           as="main" 
           p="4" 
-          bg="brand.bgLight" // <-- THIS LINE IS THE PRIMARY UPDATE
+          bg="brand.bgLight"
         > 
           {children}
         </Box>
-        {/* === END MAIN CONTENT AREA === */}
       </Box>
     </Box>
   );
