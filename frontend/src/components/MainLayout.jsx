@@ -30,20 +30,26 @@ export default function MainLayout({ children }) {
       bg="gray.800"
       borderColor="gray.700"
       borderRightWidth="1px"
-      w="60" // width of the sidebar
+      w="60" // width of the sidebar (15rem or 240px)
     >
-      {/* === LOGO IN SIDEBAR HEADER (IMAGE ONLY) === */}
+      {/* === LOGO IN SIDEBAR HEADER (IMAGE ONLY & LARGER) === */}
       <Flex 
         as={RouterLink} 
         to="/dashboard" 
-        px="4" 
-        py="3" 
+        px="4"        // Side padding for the logo area
+        py="6"        // Increased vertical padding to give logo more space
         align="center" 
-        justifyContent="center" // Center the logo
+        justifyContent="center" 
         _hover={{ bg: 'gray.700', textDecoration: 'none' }}
-        h="14" // Give it a consistent height like the topbar
+        // Removed fixed height from this Flex, it will now size to its content + padding
       >
-        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" /> {/* Adjust height as needed */}
+        <Image 
+          src="/logo.png" 
+          alt="Tees From The Past Logo" 
+          maxH="100px" // << INCREASED max height for the logo, adjust as needed
+          // maxW="80%" // Optionally, constrain width too, e.g., 80% of sidebar padded width
+          objectFit="contain" // Ensures the entire logo is visible and scales proportionally
+        />
       </Flex>
       {/* === END LOGO IN SIDEBAR HEADER === */}
       <VStack spacing={3} align="stretch" px="4" mt={8}>
@@ -79,21 +85,20 @@ export default function MainLayout({ children }) {
         <DrawerOverlay />
         <DrawerContent bg="gray.800" color="white">
           <DrawerCloseButton />
-          {/* === LOGO IN DRAWER HEADER (IMAGE ONLY) === */}
           <DrawerHeader 
             borderBottomWidth="1px" 
             borderColor="gray.700" 
             as={RouterLink} 
             to="/dashboard" 
             _hover={{textDecoration: 'none'}}
-            display="flex"       // Use Flex to center
-            alignItems="center"  // Align items vertically
-            justifyContent="center" // Center the logo horizontally
-            py="2.5" // Adjusted padding
+            display="flex"      
+            alignItems="center" 
+            justifyContent="center"
+            py="3" 
           >
-            <Image src="/logo.png" alt="Tees From The Past Logo" h="35px" /> {/* Adjust height */}
+            {/* You might want to make this logo larger too if the sidebar one is now much larger */}
+            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain" /> 
           </DrawerHeader>
-          {/* === END LOGO IN DRAWER HEADER === */}
           <DrawerBody>
             <SidebarContent onClick={onClose}/>
           </DrawerBody>
@@ -112,7 +117,7 @@ export default function MainLayout({ children }) {
           borderBottomWidth="1px"
           borderColor="blackAlpha.300"
           color="inherit"
-          h="14"
+          h="14" // Top bar has a fixed height
         >
           <Flex align="center">
             <IconButton
@@ -125,10 +130,12 @@ export default function MainLayout({ children }) {
               mr={{ base: 2, md: 0 }} 
             />
             <ChakraLink as={RouterLink} to="/dashboard" display={{ base: 'none', md: 'flex' }} alignItems="center">
+              {/* This logo is constrained by the top bar's height of "14" (56px) */}
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="35px" 
+                h="40px" // Max practical height here is around 40-45px with padding
+                objectFit="contain"
               />
             </ChakraLink>
           </Flex>
