@@ -1,9 +1,8 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, Text, Spacer, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody } from '@chakra-ui/react';
+import { Box, Flex, VStack, Link as ChakraLink, Text, Spacer, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image } from '@chakra-ui/react'; // Ensure Image is imported
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import { HamburgerIcon } from '@chakra-ui/icons'; // For mobile menu
-import LogoutButton from './LogoutButton'; // Assuming LogoutButton is in components folder
-// If LogoutButton is elsewhere, adjust the import path, e.g., import LogoutButton from '../components/LogoutButton';
+import { HamburgerIcon } from '@chakra-ui/icons';
+import LogoutButton from './LogoutButton';
 
 
 // Navigation items
@@ -12,12 +11,11 @@ const navItems = [
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'My Profile', path: '/profile' },
-  // Add other main navigation links here later if needed
 ];
 
 export default function MainLayout({ children }) {
   const location = useLocation();
-  const { isOpen, onOpen, onClose } = useDisclosure(); // For mobile drawer
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const SidebarContent = ({onClick}) => (
     <Box
@@ -33,12 +31,13 @@ export default function MainLayout({ children }) {
       bg="gray.800"
       borderColor="gray.700"
       borderRightWidth="1px"
-      w="60" // width of the sidebar
+      w="60"
     >
-      <Flex px="4" py="5" align="center">
-        {/* We'll add the logo here later */}
-        <Text fontSize="2xl" ml="2" color="white" fontWeight="semibold">
-          TeesFT P(ast)
+      {/* UPDATED Sidebar Header with Logo */}
+      <Flex as={RouterLink} to="/dashboard" px="4" py="3" align="center" _hover={{ bg: 'gray.700', textDecoration: 'none' }}>
+        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" mr="3" /> {/* LOGO ADDED HERE */}
+        <Text fontSize="xl" color="white" fontWeight="semibold">
+          TeesFT P(ast) {/* You can keep or remove this text based on your design preference */}
         </Text>
       </Flex>
       <VStack spacing={3} align="stretch" px="4" mt={8}>
@@ -57,7 +56,7 @@ export default function MainLayout({ children }) {
               bg: 'gray.700',
               color: 'white',
             }}
-            onClick={onClick} // To close drawer on mobile after click
+            onClick={onClick}
           >
             {item.label}
           </ChakraLink>
@@ -68,16 +67,18 @@ export default function MainLayout({ children }) {
 
   return (
     <Box as="section" bg="gray.50" _dark={{ bg: "gray.700" }} minH="100vh">
-      {/* Sidebar for larger screens */}
       <SidebarContent display={{ base: 'none', md: 'unset' }} />
-
-      {/* Mobile Drawer */}
+      
       <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
         <DrawerOverlay />
         <DrawerContent bg="gray.800" color="white">
           <DrawerCloseButton />
-          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700">
-            Tees From The Past
+          {/* UPDATED Drawer Header with Logo */}
+          <DrawerHeader borderBottomWidth="1px" borderColor="gray.700" as={RouterLink} to="/dashboard" _hover={{textDecoration: 'none'}}>
+            <Flex align="center">
+              <Image src="/logo.png" alt="Tees From The Past Logo" h="30px" mr="3" /> {/* LOGO ADDED HERE */}
+              Tees From The Past
+            </Flex>
           </DrawerHeader>
           <DrawerBody>
             <SidebarContent onClick={onClose}/>
@@ -85,11 +86,12 @@ export default function MainLayout({ children }) {
         </DrawerContent>
       </Drawer>
 
-      <Box ml={{ base: 0, md: 60 }} transition=".3s ease"> {/* Adjust margin for sidebar width */}
+      <Box ml={{ base: 0, md: 60 }} transition=".3s ease">
+        {/* UPDATED Top Bar with Logo */}
         <Flex
           as="header"
           align="center"
-          justify="space-between" // Changed to space-between
+          justify="space-between"
           w="full"
           px="4"
           bg="white"
@@ -99,26 +101,33 @@ export default function MainLayout({ children }) {
           color="inherit"
           h="14"
         >
-          <IconButton
-            aria-label="Menu"
-            display={{ base: 'inline-flex', md: 'none' }} // Show only on mobile
-            onClick={onOpen}
-            icon={<HamburgerIcon />}
-            size="sm"
-          />
-          {/* Logo placeholder for larger screens (if different from sidebar) or other top bar content */}
-          <Box display={{ base: 'none', md: 'block' }}>
-            {/* You can put a smaller version of logo or title here if needed */}
-          </Box>
-
-          <Spacer display={{ base: 'none', md: 'block' }} /> {/* Pushes logout to the right on larger screens */}
-
+          {/* Left Section: Hamburger for mobile, Logo for larger screens */}
+          <Flex align="center">
+            <IconButton
+              aria-label="Open Menu"
+              display={{ base: 'inline-flex', md: 'none' }}
+              onClick={onOpen}
+              icon={<HamburgerIcon />}
+              size="sm"
+              variant="ghost"
+              mr={2} // Margin between hamburger and logo if both were somehow visible
+            />
+            <ChakraLink as={RouterLink} to="/dashboard"> {/* Make logo clickable, goes to dashboard */}
+              <Image 
+                src="/logo.png" 
+                alt="Tees From The Past Logo" 
+                h="35px" // Adjust height as needed
+              />
+            </ChakraLink>
+          </Flex>
+          
+          {/* Right Section: Logout Button */}
           <Flex align="center">
             <LogoutButton />
           </Flex>
         </Flex>
 
-        <Box as="main" p="4"> {/* This is where the page content will go */}
+        <Box as="main" p="4">
           {children}
         </Box>
       </Box>
