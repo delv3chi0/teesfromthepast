@@ -3,83 +3,84 @@ import { extendTheme } from '@chakra-ui/react';
 
 const colors = {
   brand: {
-    // Primary: Dark Brown
-    primary: '#5D4037',        // Main dark brown
-    primaryLight: '#795548',   // A bit lighter for hovers/accents
-    primaryDark: '#4E342E',    // A bit darker for active states
+    primary: '#5D4037',        // Dark Brown (for sidebar)
+    primaryLight: '#795548',   
+    primaryDark: '#4E342E',    
 
-    // Secondary: Light Brown / Warm Off-white
-    secondary: '#A1887F',      // Muted light brown
-    bgLight: '#F5F5F5',        // Very light warm gray/off-white for page backgrounds
-    paper: '#FFFFFF',          // For cards or distinct sections
+    secondary: '#A1887F',      // Light Brown (for top bar)
+    
+    accentOrange: '#FF7043',   // Vibrant retro orange (for main body background)
+    accentOrangeHover: '#F4511E', 
 
-    // Accents
-    accentOrange: '#FF7043',   // Vibrant retro orange
-    accentOrangeHover: '#F4511E', // Darker orange for hover
+    accentYellow: '#FFEE58',   // Warm retro yellow (for accents/active links)
+    accentYellowHover: '#FDD835', 
 
-    accentYellow: '#FFEE58',   // Warm retro yellow
-    accentYellowHover: '#FDD835', // Darker yellow for hover
+    paper: '#FFFFFF',          // White (for cards/sections on top of orange bg)
+    bgLight: '#F5F5F5',        // A very light warm gray/off-white (alternative panel color)
 
-    // Text
-    textDark: '#3E2723',       // Very dark brown for text on light backgrounds
-    textLight: '#EDE7F6',      // Light, slightly warm off-white for text on dark backgrounds
-    textMuted: '#757575',      // Muted gray for less important text
+    textDark: '#3E2723',       // Very dark brown (for text on light/paper backgrounds)
+    textLight: '#FFFFFF',      // White (for text on dark/orange backgrounds)
+    textMutedOnOrange: '#FFE0B2', // A light peach/orange for muted text on orange bg (example)
   },
+  darkBackground: '#2D2A26' // For potential dark mode later
 };
 
 const fonts = {
-  heading: `'Righteous', cursive`, // Specify 'cursive' or 'sans-serif' as fallback
+  heading: `'Righteous', cursive`,
   body: `'Montserrat', sans-serif`,
 };
 
 const components = {
   Button: {
-    // Example: Make default solid buttons use your accent orange
     variants: {
       solid: (props) => {
-        if (props.colorScheme === 'brandAccent') { // Define a custom colorScheme name
+        if (props.colorScheme === 'brandAccentOrange') { 
           return {
-            bg: 'brand.accentOrange',
-            color: 'white',
-            _hover: {
-              bg: 'brand.accentOrangeHover',
-            },
-            _active: {
-              bg: 'brand.accentOrangeHover',
-            }
+            bg: 'brand.accentOrange', 
+            color: 'brand.textLight', 
+            _hover: { bg: 'brand.accentOrangeHover', _disabled: { bg: 'brand.accentOrange' } }, // ensure hover has _disabled too
+            _active: { bg: 'brand.accentOrangeHover' }
           };
         }
-        // Let other colorSchemes (blue, green, etc.) use their defaults
+        if (props.colorScheme === 'brandAccentYellow') {
+            return {
+                bg: 'brand.accentYellow',
+                color: 'brand.textDark', 
+                _hover: {bg: 'brand.accentYellowHover', _disabled: { bg: 'brand.accentYellow' } },
+                _active: {bg: 'brand.accentYellowHover'}
+            }
+        }
         return {}; 
       },
     },
   },
   Heading: {
-    baseStyle: {
+    baseStyle: (props) => ({ 
       fontFamily: 'heading',
-      color: 'brand.textDark', // Default heading color
-    },
+      // Default color for headings will be white on orange body, dark on paper/light BGs
+      color: props.colorMode === 'dark' ? 'brand.textLight' : 'brand.textLight', 
+    }),
   },
   Text: {
-    baseStyle: {
+    baseStyle: (props) => ({
       fontFamily: 'body',
-      color: 'brand.textDark', // Default body text color
-    },
+      // Default color for text will be white on orange body
+      color: props.colorMode === 'dark' ? 'brand.textLight' : 'brand.textLight',
+    }),
   },
-  Link: { // Styling for Chakra's Link component
-    baseStyle: {
-      color: 'brand.accentOrange',
+  Link: { 
+    baseStyle: (props) => ({ // Links should contrast with the orange body
+      color: props.colorMode === 'dark' ? 'brand.accentYellow' : 'brand.accentYellow', 
       _hover: {
         textDecoration: 'underline',
-        color: 'brand.accentOrangeHover',
+        color: props.colorMode === 'dark' ? 'brand.accentYellowHover' : 'brand.accentYellowHover',
       },
-    },
+    }),
   },
 };
 
-// Theme configuration
 const config = {
-  initialColorMode: 'light', // You can set this to 'dark' or 'system'
+  initialColorMode: 'light',
   useSystemColorMode: false,
 };
 
@@ -88,11 +89,11 @@ const theme = extendTheme({
   colors,
   fonts,
   components,
-  styles: { // Global styles
+  styles: {
     global: (props) => ({
       body: {
-        bg: props.colorMode === 'dark' ? 'brand.backgroundDark' : 'brand.bgLight', // Use a light warm gray for body bg
-        color: props.colorMode === 'dark' ? 'brand.textLight' : 'brand.textDark',
+        bg: props.colorMode === 'dark' ? colors.darkBackground : colors.brand.accentOrange, 
+        color: props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textLight, // Default text white on orange
       },
     }),
   },

@@ -1,9 +1,9 @@
-import { Box, Flex, VStack, Link as ChakraLink, Text, Spacer, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image } from '@chakra-ui/react';
+// frontend/src/components/MainLayout.jsx
+import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 
-// Navigation items
 const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'AI Image Generator', path: '/generate' },
@@ -41,7 +41,7 @@ export default function MainLayout({ children }) {
         _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }} 
         h="14" 
       >
-        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" objectFit="contain" />
+        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" objectFit="contain"/>
       </Flex>
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
@@ -102,10 +102,10 @@ export default function MainLayout({ children }) {
           justify="space-between" 
           w="full"
           px="4"
-          bg="brand.paper" 
+          bg="brand.secondary" // <-- UPDATED to Light Brown
           borderBottomWidth="1px"
-          borderColor="blackAlpha.200" 
-          color="brand.textDark"     
+          borderColor="brand.primaryDark" // Contrasting border
+          color="brand.textDark"     // Dark text on light brown top bar
           h="14"
         >
           <Flex align="center">
@@ -122,7 +122,7 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="35px" 
+                h="44px" 
                 objectFit="contain"
               />
             </ChakraLink>
@@ -136,7 +136,7 @@ export default function MainLayout({ children }) {
         <Box 
           as="main" 
           p="4" 
-          bg="brand.bgLight"
+          bg="brand.accentOrange" // <-- UPDATED to Orange to match global body style
         > 
           {children}
         </Box>

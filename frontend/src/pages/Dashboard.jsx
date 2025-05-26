@@ -1,28 +1,34 @@
 // frontend/src/pages/Dashboard.jsx
 import { useState, useEffect } from 'react';
 import { client } from '../api/client';
-import { Box, Heading, Text, VStack, Divider, Button, useToast, SimpleGrid, Image, Spinner, Alert, AlertIcon } from '@chakra-ui/react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom'; // Added RouterLink
-import { useAuth } from '../context/AuthProvider'; // Added useAuth
+import { 
+    Box, Heading, Text, VStack, Divider, Button, useToast, 
+    SimpleGrid, Image, Spinner, Alert, AlertIcon,
+    Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure 
+} from '@chakra-ui/react'; // Added Modal components & useDisclosure
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthProvider';
 
 export default function Dashboard() {
-  const { user, logout } = useAuth(); // Get user for welcome message & logout for error handling
+  const { user, logout } = useAuth();
   const [recentDesigns, setRecentDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [designsError, setDesignsError] = useState('');
   
   const navigate = useNavigate();
-  const toast = useToast(); // Kept for potential future use, or remove if not needed
+  const toast = useToast();
+
+  // Modal state and handlers (copied from MyDesigns.jsx and adapted)
+  const { isOpen, onOpen, onClose } = useDisclosure(); 
+  const [selectedDesign, setSelectedDesign] = useState(null);
 
   useEffect(() => {
-    // Profile data is now primarily handled by AuthProvider and available via useAuth()
-    // We'll fetch designs here
-    if (user) { // Only fetch designs if the user context is loaded
+    if (user) {
       setLoadingDesigns(true);
       setDesignsError('');
-      client.get('/mydesigns') // Fetch all designs, sorted by newest first by backend
+      client.get('/mydesigns')
         .then(response => {
-          setRecentDesigns(response.data.slice(0, 3)); // Take the first 3 for "recent"
+          setRecentDesigns(response.data.slice(0, 3));
           setLoadingDesigns(false);
         })
         .catch(err => {
@@ -36,37 +42,32 @@ export default function Dashboard() {
           setLoadingDesigns(false);
         });
     }
-  }, [user, logout, navigate, toast]); // Depend on user to re-fetch if user logs in/out
+  }, [user, logout, navigate, toast]);
+
+  const handleRecentDesignClick = (design) => {
+    setSelectedDesign(design);
+    onOpen();
+  };
 
   return (
-    // REMOVED mx="auto" to make it left-aligned. Kept maxW for now.
     <Box maxW="6xl" /* Removed mx="auto" */ mt={8} px={4} pb={10}> 
-      {/* Header: Only "Dashboard" heading now */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={6}>
         <Heading size="lg">Dashboard</Heading>
-        {/* "My Profile" and "LogoutButton" removed from here - they are in MainLayout */}
       </Box>
 
       {user && <Text fontSize="xl" mb={6}>Welcome back, {user.username || user.email}!</Text>}
-
       <Divider my={6} />
 
-      <VStack align="stretch" spacing={8}> {/* Changed align to stretch for full width sections */}
-        
-        {/* Recent Designs Section */}
+      <VStack align="stretch" spacing={8}>
         <Box>
           <Heading size="md" mb={4}>Recent Designs</Heading>
           {loadingDesigns && (
             <Box textAlign="center" py={10}>
-              <Spinner size="xl" />
-              <Text mt={2}>Loading your masterpieces...</Text>
+              <Spinner size="xl" /><Text mt={2}>Loading your masterpieces...</Text>
             </Box>
           )}
           {!loadingDesigns && designsError && (
-            <Alert status="error">
-              <AlertIcon />
-              {designsError}
-            </Alert>
+            <Alert status="error"><AlertIcon />{designsError}</Alert>
           )}
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
             <Box textAlign="center" p={5} borderWidth="1px" borderRadius="md" shadow="sm">
@@ -81,12 +82,12 @@ export default function Dashboard() {
               {recentDesigns.map(design => (
                 <Box 
                   key={design._id} 
-                  as={RouterLink} 
-                  to={`/my-designs`} // Or later to a specific design detail page: /my-designs/${design._id}
                   borderWidth="1px" 
                   borderRadius="lg" 
                   overflow="hidden" 
                   shadow="md"
+                  cursor="pointer" // Make it look clickable
+                  onClick={() => handleRecentDesignClick(design)} // Open modal on click
                   _hover={{ shadow: "xl", transform: "translateY(-2px)", transitionDuration: "0.2s" }}
                 >
                   <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="200px" bg="gray.200" />
@@ -100,11 +101,27 @@ export default function Dashboard() {
             </SimpleGrid>
           )}
         </Box>
-
-        {/* "AI Tools" section removed as per your request (Caption Generator was the only item) */}
-        {/* If you want other tools here later, this is where they'd go */}
-
       </VStack>
+
+      {/* Modal for displaying the selected design */}
+      {selectedDesign && (
+        <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader noOfLines={2} fontSize="md">{selectedDesign.prompt}</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody display="flex" justifyContent="center" alignItems="center">
+              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="100%" objectFit="contain"/>
+            </ModalBody>
+            <ModalFooter>
+              <Button colorScheme="blue" mr={3} onClick={onClose}>
+                Close
+              </Button>
+              <Button variant="ghost" onClick={() => { navigate('/generate'); onClose(); }}>Create Similar</Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
     </Box>
   );
 }
