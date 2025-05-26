@@ -102,10 +102,10 @@ export default function MainLayout({ children }) {
           justify="space-between" 
           w="full"
           px="4"
-          bg="brand.secondary" // <-- UPDATED to Light Brown
+          bg="brand.secondary" 
           borderBottomWidth="1px"
-          borderColor="brand.primaryDark" // Contrasting border
-          color="brand.textDark"     // Dark text on light brown top bar
+          borderColor="brand.primaryDark" 
+          color="brand.textDark"     
           h="14"
         >
           <Flex align="center">
@@ -122,7 +122,7 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="44px" 
+                h="48px" // <-- UPDATED HEIGHT
                 objectFit="contain"
               />
             </ChakraLink>
@@ -136,7 +136,7 @@ export default function MainLayout({ children }) {
         <Box 
           as="main" 
           p="4" 
-          bg="brand.accentOrange" // <-- UPDATED to Orange to match global body style
+          bg="brand.accentOrange"
         > 
           {children}
         </Box>
