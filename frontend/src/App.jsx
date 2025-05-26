@@ -1,24 +1,24 @@
 // frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
+import theme from './theme'; // <-- ADDED THIS IMPORT
 
 import { AuthProvider } from './context/AuthProvider';
 import Login from './Login';
 import RegistrationPage from './pages/RegistrationPage';
 
-import MainLayout from './components/MainLayout'; // <-- ADD import for MainLayout
+import MainLayout from './components/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
 import Profile from './pages/Profile';
 import Vote from "./pages/Vote"; 
-// SchedulePost and old Home imports are already removed
 
 import PrivateRoute from './components/PrivateRoute';
 
 export default function App() {
   return (
-    <ChakraProvider>
+    <ChakraProvider theme={theme}> {/* <-- THEME PROP ADDED HERE */}
       <AuthProvider>
         <Routes>
           {/* Public routes - no MainLayout */}
@@ -47,7 +47,6 @@ export default function App() {
             path="/vote" 
             element={<PrivateRoute><MainLayout><Vote/></MainLayout></PrivateRoute>} 
           />
-          {/* We removed the /welcome route as Dashboard will be the main landing after login */}
 
           <Route path="*" element={<Navigate to="/" replace />} /> 
         </Routes>
