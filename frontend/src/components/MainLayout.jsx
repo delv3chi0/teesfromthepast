@@ -130,8 +130,9 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo-text.png" 
                 alt="Tees From The Past Title" 
-                h="500px" // <-- INCREASED HEIGHT SIGNIFICANTLY
-                objectFit="contain" // This will maintain aspect ratio
+                h="500px" 
+                maxH="40px" 
+                objectFit="contain" 
               />
             </ChakraLink>
           </Flex>          
