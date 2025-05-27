@@ -7,13 +7,19 @@ const UserSchema = new mongoose.Schema({
     password: { type: String, required: true },
     firstName: { type: String, default: '' },
     lastName: { type: String, default: '' },
-    // instagramHandle and tiktokHandle were removed
 
-    // --- NEW CONTEST FIELD ---
-    lastContestSubmissionMonth: { // To store 'YYYY-MM' e.g., '2025-06'
+    lastContestSubmissionMonth: { 
         type: String 
-    }
-    // --- END NEW CONTEST FIELD ---
+    },
+    // --- NEW FIELD FOR TRACKING VOTES ---
+    monthlyVoteRecord: [{
+        month: String, // 'YYYY-MM'
+        designsVotedFor: [{ // Array of Design ObjectIds the user voted for in that month
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Design'
+        }]
+    }]
+    // --- END NEW FIELD ---
 }, { timestamps: true });
 
 const User = mongoose.model('User', UserSchema);
