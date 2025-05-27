@@ -127,17 +127,14 @@ export default function MainLayout({ children }) {
               mr={{ base: 2, md: 0 }} 
             />
             <ChakraLink as={RouterLink} to="/dashboard" display={{ base: 'none', md: 'flex' }} alignItems="center">
-              {/* === UPDATED TOP BAR LOGO TO TEXT LOGO === */}
               <Image 
-                src="/logo-text.png"  // <-- CHANGED to your text logo
-                alt="Tees From The Past Title" // <-- Updated alt text
-		h="500px" // <-- INCREASED HEIGHT SIGNIFICANTLY
-                objectFit="contain"                
-		maxH="44px" // Max height to ensure it fits well within the 56px bar with padding
-              {/* === END UPDATED TOP BAR LOGO === */}
+                src="/logo-text.png" 
+                alt="Tees From The Past Title" 
+                h="500px" // <-- INCREASED HEIGHT SIGNIFICANTLY
+                objectFit="contain" // This will maintain aspect ratio
+              />
             </ChakraLink>
-          </Flex>
-          
+          </Flex>          
           <Flex align="center">
             <LogoutButton /> 
           </Flex>
