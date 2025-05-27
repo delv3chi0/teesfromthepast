@@ -6,8 +6,14 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     firstName: { type: String, default: '' },
-    lastName: { type: String, default: '' }
-    // instagramHandle and tiktokHandle have been removed
+    lastName: { type: String, default: '' },
+    // instagramHandle and tiktokHandle were removed
+
+    // --- NEW CONTEST FIELD ---
+    lastContestSubmissionMonth: { // To store 'YYYY-MM' e.g., '2025-06'
+        type: String 
+    }
+    // --- END NEW CONTEST FIELD ---
 }, { timestamps: true });
 
 const User = mongoose.model('User', UserSchema);
