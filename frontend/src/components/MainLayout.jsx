@@ -45,8 +45,12 @@ export default function MainLayout({ children }) {
         <Image 
           src="/logo.png" 
           alt="Tees From The Past Logo" 
-          maxH="100px" // Set a good max height (e.g., 100px, adjust to your liking)
-          // maxW="80%" // Optionally constrain width too if it gets too wide
+          w="100%"             // Make image take full available width of its parent Flex's content box
+          maxW="190px"         // Set a max width slightly less than full available (208px), for some spacing
+                               // You can adjust this value (e.g., "180px", "200px")
+          h="auto"             // Let height be determined by width and aspect ratio
+          maxH="150px"         // Set a max height to prevent it from getting too tall
+                               // Adjust this based on how tall you want it to be at max width
           objectFit="contain" 
         />
       </Flex>
