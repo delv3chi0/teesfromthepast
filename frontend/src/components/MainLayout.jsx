@@ -131,7 +131,7 @@ export default function MainLayout({ children }) {
                 src="/logo-text.png" 
                 alt="Tees From The Past Title" 
                 h="500px" 
-                maxH="40px" 
+                maxH="500px" 
                 objectFit="contain" 
               />
             </ChakraLink>
