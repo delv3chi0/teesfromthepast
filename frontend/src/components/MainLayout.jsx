@@ -131,10 +131,9 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo-text.png"  // <-- CHANGED to your text logo
                 alt="Tees From The Past Title" // <-- Updated alt text
-                w="750px" // You can change this to "350px" or your desired width
-                h="auto"  // Height will scale based on width and aspect ratio
-                maxH="44px" // Max height to ensure it fits well within the 56px bar with padding
-                objectFit="contain"              />
+		h="500px" // <-- INCREASED HEIGHT SIGNIFICANTLY
+                objectFit="contain"                
+		maxH="44px" // Max height to ensure it fits well within the 56px bar with padding
               {/* === END UPDATED TOP BAR LOGO === */}
             </ChakraLink>
           </Flex>
