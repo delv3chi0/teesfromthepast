@@ -108,7 +108,7 @@ export default function MainLayout({ children }) {
           color="brand.textDark"     
           h="14"
         >
-          <Flex align="center">
+          <Flex align="center"> {/* This Flex wraps Hamburger and Logo + Test Text */}
             <IconButton
               aria-label="Open Menu"
               display={{ base: 'inline-flex', md: 'none' }}
@@ -122,11 +122,19 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="48px"
-		w="72px"
                 objectFit="contain"
+                // REMOVED h and w props, using sx to force with !important
+                sx={{
+                  height: '50px !important', 
+                  width: 'auto'       // Let width adjust to maintain aspect ratio
+                }}
               />
             </ChakraLink>
+            {/* === ADDED THIS VERY OBVIOUS TEXT FOR TESTING === */}
+            <Text fontSize="lg" color="red.500" fontWeight="bold" ml={4} display={{ base: 'none', md: 'inline' }}>
+              DEPLOYMENT TEST TEXT
+            </Text>
+            {/* === END OF OBVIOUS TEXT === */}
           </Flex>
           
           <Flex align="center">
