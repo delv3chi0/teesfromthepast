@@ -8,7 +8,6 @@ import { useAuth } from '../context/AuthProvider';
 const productTypes = [
   { value: 'tee', label: 'T-Shirt', mockups: { white: '/images/mockups/white_tee.png', black: '/images/mockups/black_tee.png' } },
   { value: 'hoodie', label: 'Hoodie', mockups: { white: '/images/mockups/white_hoodie.png', black: '/images/mockups/black_hoodie.png' } },
-  // Add collared shirts here later if you get mockups for them
 ];
 
 const productColors = [
@@ -16,7 +15,7 @@ const productColors = [
   { value: 'black', label: 'Black' },
 ];
 
-const productSizes = ['S', 'M', 'L', 'XL', 'XXL']; // Example sizes
+const productSizes = ['S', 'M', 'L', 'XL', 'XXL'];
 
 export default function ProductStudio() {
   const { user, logout } = useAuth();
@@ -28,10 +27,9 @@ export default function ProductStudio() {
 
   const [selectedProductType, setSelectedProductType] = useState(productTypes[0].value);
   const [selectedProductColor, setSelectedProductColor] = useState(productColors[0].value);
-  const [selectedProductSize, setSelectedProductSize] = useState(productSizes[2]); // Default to L
-  const [selectedDesign, setSelectedDesign] = useState(null); // To hold the chosen AI design object
+  const [selectedProductSize, setSelectedProductSize] = useState(productSizes[2]);
+  const [selectedDesign, setSelectedDesign] = useState(null);
 
-  // Fetch user's saved designs
   useEffect(() => {
     if (user) {
       setLoadingDesigns(true);
@@ -73,7 +71,6 @@ export default function ProductStudio() {
           </Box>
         </Alert>
 
-        {/* Step 1: Choose Apparel Details */}
         <Box p={6} borderWidth="1px" borderRadius="md" shadow="md" bg="brand.paper">
           <Heading as="h2" size="lg" mb={4} color="brand.textDark">1. Choose Your Apparel</Heading>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
@@ -81,7 +78,7 @@ export default function ProductStudio() {
               <Text fontWeight="medium" color="brand.textDark">Product Type:</Text>
               <Select 
                 value={selectedProductType} 
-                onChange={(e) => { setSelectedProductType(e.target.value); setSelectedDesign(null); /* Clear preview */}}
+                onChange={(e) => { setSelectedProductType(e.target.value); setSelectedDesign(null);}}
                 bg="white"
               >
                 {productTypes.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
@@ -91,7 +88,7 @@ export default function ProductStudio() {
               <Text fontWeight="medium" color="brand.textDark">Color:</Text>
               <Select 
                 value={selectedProductColor} 
-                onChange={(e) => { setSelectedProductColor(e.target.value); setSelectedDesign(null); /* Clear preview */}}
+                onChange={(e) => { setSelectedProductColor(e.target.value); setSelectedDesign(null);}}
                 bg="white"
               >
                 {productColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}
@@ -112,7 +109,6 @@ export default function ProductStudio() {
 
         <Divider my={4} />
 
-        {/* Step 2: Choose Your Design */}
         <Box p={6} borderWidth="1px" borderRadius="md" shadow="md" bg="brand.paper">
           <Heading as="h2" size="lg" mb={4} color="brand.textDark">2. Choose Your Saved Design</Heading>
           {loadingDesigns && <Spinner color="brand.primary" />}
@@ -125,7 +121,7 @@ export default function ProductStudio() {
               {designs.map(design => (
                 <Box
                   key={design._id}
-                  borderWidth="1px"
+                  borderWidth="2px" // Added thicker border
                   borderRadius="md"
                   overflow="hidden"
                   onClick={() => setSelectedDesign(design)}
@@ -144,12 +140,19 @@ export default function ProductStudio() {
         
         <Divider my={4} />
 
-        {/* Step 3: Preview Your Masterpiece! */}
         <Box p={6} borderWidth="1px" borderRadius="md" shadow="md" bg="brand.paper">
             <Heading as="h2" size="lg" mb={4} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
             {selectedDesign ? (
                 <VStack spacing={4}>
-                    <Box position="relative" w="300px" h="300px" bg="gray.100" overflow="hidden" borderRadius="md"> {/* Adjust preview box size as needed */}
+                    <Box 
+                        position="relative" 
+                        w={{base: "280px", sm: "300px", md: "350px"}} // Responsive preview box width
+                        h={{base: "280px", sm: "300px", md: "350px"}} // Responsive preview box height
+                        bg="gray.100" // Light background for the mockup area
+                        overflow="hidden" 
+                        borderRadius="md"
+                        mx="auto" // Center the preview box
+                    >
                         <Image 
                             src={getCurrentMockupSrc()} 
                             alt={`${selectedProductColor} ${selectedProductType}`} 
@@ -162,23 +165,27 @@ export default function ProductStudio() {
                                 src={selectedDesign.imageDataUrl}
                                 alt="AI Design"
                                 position="absolute"
-                                top="25%" // Example placement - adjust as needed
-                                left="25%"// Example placement
-                                width="50%"// Example size
-                                height="50%"// Example size
+                                // Centered and scaled down by 30% (original was 50% width/height, top/left 25%)
+                                // New size is 35% width/height. New top/left is (100-35)/2 = 32.5%
+                                top="32.5%" 
+                                left="32.5%"
+                                width="35%" 
+                                height="35%"
                                 objectFit="contain"
-                                // You might need more sophisticated placement logic here
+                                mixBlendMode="multiply" // <-- ADDED for a more 'realistic' blend. Experiment!
+                                // Other blend modes to try: "overlay", "darken", "screen"
                             />
                         )}
                     </Box>
-                    <Text color="brand.textDark">Displaying: "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}</Text>
-                    {/* Future: Add to Cart Button */}
+                    <Text color="brand.textDark" fontWeight="medium" textAlign="center">
+                        Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}
+                    </Text>
                      <Button colorScheme="brandAccentOrange" size="lg" mt={4}>
                         Looks Good! (Add to Cart - Coming Soon)
                     </Button>
                 </VStack>
             ) : (
-                <Text color="brand.textMutedOnOrange" fontStyle="italic">Select your apparel options and a design above to see a preview.</Text>
+                <Text color="brand.textMutedOnOrange" fontStyle="italic" textAlign="center">Select your apparel options and a design above to see a preview.</Text>
             )}
         </Box>
 
