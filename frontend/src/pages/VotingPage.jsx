@@ -1,10 +1,12 @@
 // frontend/src/pages/VotingPage.jsx
 import { useState, useEffect } from 'react';
 import {
-    Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack, useToast,
-    Stat, StatLabel, StatNumber, StatHelpText, Tooltip
+    Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack, 
+    HStack, // <-- HStack ADDED HERE
+    useToast,
+    Stat, StatLabel, StatNumber, Tooltip 
 } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // Removed RouterLink as it wasn't used directly
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 
@@ -12,9 +14,9 @@ export default function VotingPage() {
     const [contestDesigns, setContestDesigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const { user, logout, token } = useAuth(); // Assuming token might be useful for re-fetching user vote counts
-    const [userVotesLeft, setUserVotesLeft] = useState(3); // Start with 3 votes
-    const [votedDesignIds, setVotedDesignIds] = useState([]); // Track designs voted for in this session/fetch
+    const { user, logout } = useAuth(); // Removed token as it's not directly used here, user object has info
+    const [userVotesLeft, setUserVotesLeft] = useState(3);
+    const [votedDesignIds, setVotedDesignIds] = useState([]);
 
     const navigate = useNavigate();
     const toast = useToast();
@@ -22,7 +24,7 @@ export default function VotingPage() {
     const fetchContestDesigns = () => {
         setLoading(true);
         setError('');
-        client.get('/contest/designs') // Fetches designs for the current month's contest
+        client.get('/contest/designs')
             .then(response => {
                 setContestDesigns(response.data);
                 setLoading(false);
@@ -38,14 +40,15 @@ export default function VotingPage() {
             });
     };
 
-    // Fetch user's voting status for the current month
     const fetchUserVoteStatus = async () => {
-        if (!user) return;
+        if (!user || !user.monthlyVoteRecord) { // Check if user and monthlyVoteRecord exist
+            setUserVotesLeft(3); // Default to 3 if no record or user not fully loaded
+            setVotedDesignIds([]);
+            return;
+        }
         try {
-            // We need to get the user's profile data which now contains monthlyVoteRecord
-            // The `user` object from useAuth() should already be the full profile.
             const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-            const monthRecord = user.monthlyVoteRecord?.find(record => record.month === currentMonth);
+            const monthRecord = user.monthlyVoteRecord.find(record => record.month === currentMonth);
             
             if (monthRecord) {
                 setUserVotesLeft(3 - monthRecord.designsVotedFor.length);
@@ -55,8 +58,8 @@ export default function VotingPage() {
                 setVotedDesignIds([]);
             }
         } catch (err) {
-            console.error("Error fetching user vote status:", err);
-            // Handle error, maybe show a toast
+            console.error("Error processing user vote status:", err);
+            toast({ title: "Error", description: "Could not fetch your voting status.", status: "error", duration: 3000, isClosable: true });
         }
     };
     
@@ -65,7 +68,8 @@ export default function VotingPage() {
             fetchContestDesigns();
             fetchUserVoteStatus();
         }
-    }, [user]); // Re-fetch if user changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps 
+    }, [user]); // Rerun when user object changes (e.g., after login or profile update from AuthProvider)
 
     const handleVote = async (designId) => {
         try {
@@ -77,13 +81,22 @@ export default function VotingPage() {
                 duration: 3000,
                 isClosable: true,
             });
-            // Refresh designs to show updated vote counts & update user's vote status
-            fetchContestDesigns();
-            fetchUserVoteStatus(); 
-            // Also, update the user object in AuthContext if the backend doesn't send it back
-            // For simplicity, re-fetching profile via AuthProvider might be needed or manually updating user context
-            // One way: auth.setUser(prevUser => ({...prevUser, monthlyVoteRecord: updatedRecord})) - complex here.
-            // Simpler: let AuthProvider's profile fetch on next load update it, or trigger a specific profile refresh.
+            
+            // Optimistically update UI or re-fetch
+            // For immediate feedback on vote counts and remaining votes:
+            const updatedDesigns = contestDesigns.map(d => 
+                d._id === designId ? { ...d, votes: (d.votes || 0) + 1 } : d
+            ).sort((a, b) => (b.votes || 0) - (a.votes || 0)); // Re-sort by votes
+            setContestDesigns(updatedDesigns);
+            
+            const newVotesLeft = userVotesLeft - 1;
+            setUserVotesLeft(newVotesLeft);
+            setVotedDesignIds(prevVoted => [...prevVoted, designId]);
+
+            // Ideally, the user object in AuthContext should also be updated with the new vote record.
+            // This might require a function in AuthContext to refresh the user or update it.
+            // For now, this provides immediate UI feedback. A page refresh would get updated user data.
+
         } catch (err) {
             console.error("Error casting vote:", err);
             const errorMessage = err.response?.data?.message || "Failed to cast your vote.";
@@ -101,6 +114,9 @@ export default function VotingPage() {
         }
     };
 
+    if (loading && !user) { // Don't show main loading if user is null (implies redirecting or logged out)
+        return <Box textAlign="center" mt={20}><Text>Please log in to view the contest.</Text></Box>;
+    }
     if (loading) {
         return (
             <Box textAlign="center" mt={20}>
@@ -122,7 +138,7 @@ export default function VotingPage() {
             <VStack spacing={4} align="center" mb={8}>
                 <Heading as="h1" size="xl">🏆 Monthly Design Contest 🏆</Heading>
                 <Text fontSize="lg" color="brand.textTeal">Vote for your favorite designs! You have <Text as="span" fontWeight="bold">{userVotesLeft}</Text> vote(s) left this month.</Text>
-                {userVotesLeft === 0 && <Text color="brand.accentOrange" fontWeight="bold">You've used all your votes for this month. Check back next month!</Text>}
+                {userVotesLeft <= 0 && <Text color="brand.accentOrange" fontWeight="bold">You've used all your votes for this month. Check back next month!</Text>}
             </VStack>
 
             {contestDesigns.length === 0 ? (
@@ -141,9 +157,17 @@ export default function VotingPage() {
                                 <HStack justifyContent="space-between" mt={3}>
                                     <Stat size="sm">
                                         <StatLabel color="brand.textDark">Votes</StatLabel>
-                                        <StatNumber color="brand.primaryDark" fontWeight="bold">{design.votes}</StatNumber>
+                                        <StatNumber color="brand.primaryDark" fontWeight="bold">{design.votes || 0}</StatNumber>
                                     </Stat>
-                                    <Tooltip label={votedDesignIds.includes(design._id) ? "You have already voted for this design this month" : userVotesLeft <= 0 ? "No votes left this month" : design.user === user?._id ? "You cannot vote for your own design" : "Cast your vote!"} placement="top">
+                                    <Tooltip 
+                                        label={
+                                            design.user === user?._id ? "You cannot vote for your own design" :
+                                            votedDesignIds.includes(design._id) ? "You have already voted for this design this month" : 
+                                            userVotesLeft <= 0 ? "No votes left this month" : 
+                                            "Cast your vote!"
+                                        } 
+                                        placement="top"
+                                    >
                                         <Button
                                             colorScheme="brandAccentYellow"
                                             size="sm"
