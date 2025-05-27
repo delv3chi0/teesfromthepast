@@ -133,7 +133,7 @@ export default function MainLayout({ children }) {
                 h="550px" 
                 maxH="500px" 
                 objectFit="contain"
-		mt="2" 
+		mt="30" 
               />
             </ChakraLink>
           </Flex>          
