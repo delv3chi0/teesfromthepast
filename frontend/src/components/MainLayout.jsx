@@ -34,8 +34,6 @@ export default function MainLayout({ children }) {
       <Flex 
         as={RouterLink} 
         to="/dashboard" 
-        px="1"        
-        py="1"        
         align="center" 
         justifyContent="center" 
         _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
