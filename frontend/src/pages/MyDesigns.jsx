@@ -1,10 +1,13 @@
 // frontend/src/pages/MyDesigns.jsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react'; // Added useRef
 import { 
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
-    Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure 
+    Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
+    useDisclosure, // This is for the main image modal
+    AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, // For confirmation
+    useToast // For notifications
 } from '@chakra-ui/react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // Removed RouterLink as ChakraLink wasn't used directly with it here
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 
@@ -14,9 +17,17 @@ export default function MyDesigns() {
   const [error, setError] = useState('');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
 
-  const { isOpen, onOpen, onClose } = useDisclosure(); // For Modal
-  const [selectedDesign, setSelectedDesign] = useState(null); // For Modal content
+  // For the main image display modal
+  const { isOpen: isImageModalOpen, onOpen: onImageModalOpen, onClose: onImageModalClose } = useDisclosure();
+  const [selectedDesign, setSelectedDesign] = useState(null);
+
+  // For the submission confirmation AlertDialog
+  const { isOpen: isAlertOpen, onOpen: onAlertOpen, onClose: onAlertClose } = useDisclosure();
+  const [designToSubmit, setDesignToSubmit] = useState(null); // Store the design we are about to submit
+  const [isSubmitting, setIsSubmitting] = useState(false); // Loading state for submission
+  const cancelRef = useRef(); // For AlertDialog
 
   useEffect(() => {
     if (user) {
@@ -44,8 +55,58 @@ export default function MyDesigns() {
 
   const handleImageClick = (design) => {
     setSelectedDesign(design);
-    onOpen();
+    onImageModalOpen();
   };
+
+  const handleOpenSubmitConfirmation = (design) => {
+    setDesignToSubmit(design); // Set the design that we intend to submit
+    onAlertOpen(); // Open the confirmation dialog
+  };
+
+  const handleConfirmSubmitToContest = async () => {
+    if (!designToSubmit) return;
+
+    setIsSubmitting(true);
+    onAlertClose(); // Close the confirmation dialog
+
+    try {
+      // Call the backend endpoint to submit the design
+      const response = await client.post(`/contest/submit/${designToSubmit._id}`);
+      
+      toast({
+        title: "Submission Successful!",
+        description: response.data.message || "Your design has been submitted to the contest.",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      // Optionally, refresh designs to reflect submission status or update user context
+      // For now, we'll just close the image modal. The user might have a visual cue later (e.g., badge on design).
+      onImageModalClose(); 
+      // You might want to update the local 'designs' state or re-fetch them if the backend
+      // response or user object now indicates they've used their monthly submission.
+
+    } catch (err) {
+      console.error("Error submitting design to contest:", err);
+      const errorMessage = err.response?.data?.message || "Could not submit your design. Please try again.";
+      toast({
+        title: "Submission Failed",
+        description: errorMessage,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      if (err.response?.status === 401) {
+        logout();
+        navigate('/login');
+      }
+    } finally {
+      setIsSubmitting(false);
+      setDesignToSubmit(null); // Clear the design to submit
+    }
+  };
+
 
   if (loading) {
     return (
@@ -86,8 +147,8 @@ export default function MyDesigns() {
             borderRadius="lg" 
             overflow="hidden" 
             shadow="md"
-            cursor="pointer" // Make it look clickable
-            onClick={() => handleImageClick(design)} // Open modal on click
+            cursor="pointer"
+            onClick={() => handleImageClick(design)}
             _hover={{ shadow: "xl", transform: "translateY(-2px)", transitionDuration: "0.2s" }}
           >
             <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="gray.200"/> 
@@ -102,7 +163,7 @@ export default function MyDesigns() {
 
       {/* Modal for displaying the selected design */}
       {selectedDesign && (
-        <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
+        <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="xl" isCentered>
           <ModalOverlay />
           <ModalContent>
             <ModalHeader noOfLines={2} fontSize="md">{selectedDesign.prompt}</ModalHeader>
@@ -111,13 +172,57 @@ export default function MyDesigns() {
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="100%" objectFit="contain"/>
             </ModalBody>
             <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={onClose}>
+              <Button 
+                colorScheme="green" // Or your brand's accent color
+                mr={3} 
+                onClick={() => handleOpenSubmitConfirmation(selectedDesign)}
+                isLoading={isSubmitting} // Show loading state if currently submitting this design
+                isDisabled={isSubmitting}
+              >
+                🏆 Submit to Contest
+              </Button>
+              <Button variant="ghost" onClick={onImageModalClose}>
                 Close
               </Button>
-              {/* You could add other actions here, e.g., "Use this design" */}
             </ModalFooter>
           </ModalContent>
         </Modal>
+      )}
+
+      {/* Confirmation AlertDialog for Submitting to Contest */}
+      {designToSubmit && (
+        <AlertDialog
+            isOpen={isAlertOpen}
+            leastDestructiveRef={cancelRef}
+            onClose={onAlertClose}
+            isCentered
+        >
+            <AlertDialogOverlay>
+                <AlertDialogContent>
+                    <AlertDialogHeader fontSize="lg" fontWeight="bold">
+                        Confirm Submission
+                    </AlertDialogHeader>
+                    <AlertDialogBody>
+                        Are you sure you want to submit this design to the monthly contest? 
+                        You can only submit one design per month. This action cannot be undone for the current month.
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                        <Button ref={cancelRef} onClick={onAlertClose} isDisabled={isSubmitting}>
+                            Cancel
+                        </Button>
+                        <Button 
+                            colorScheme="green" 
+                            onClick={handleConfirmSubmitToContest} 
+                            ml={3}
+                            isLoading={isSubmitting}
+                            loadingText="Submitting..."
+                        >
+                            Yes, Submit This Design
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialogOverlay>
+        </AlertDialog>
       )}
     </Box>
   );
