@@ -8,6 +8,7 @@ const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'My Saved Designs', path: '/my-designs' },
+  { label: 'Customize My Shirt', path: '/product-studio' }, // <-- NEW LINK ADDED HERE
   { label: 'My Profile', path: '/profile' },
 ];
 
@@ -34,12 +35,14 @@ export default function MainLayout({ children }) {
       <Flex 
         as={RouterLink} 
         to="/dashboard" 
+        px="4"        
+        py="4"        
         align="center" 
         justifyContent="center" 
         _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
       >
         <Image 
-          src="/logo.png" // This is your main graphical logo for the sidebar
+          src="/logo.png" 
           alt="Tees From The Past Logo" 
           w="100%"            
           maxW="190px"         
@@ -92,7 +95,6 @@ export default function MainLayout({ children }) {
             justifyContent="center"
             py="2.5" 
           >
-            {/* This uses the main graphical logo for the mobile drawer */}
             <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
           </DrawerHeader>
           <DrawerBody>
@@ -112,7 +114,7 @@ export default function MainLayout({ children }) {
           borderBottomWidth="1px"
           borderColor="brand.primaryDark" 
           color="brand.textDark"     
-          h="14" // Top bar height is 56px
+          h="14"
         >
           <Flex align="center">
             <IconButton
@@ -128,11 +130,12 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo-text.png" 
                 alt="Tees From The Past Title" 
-                h="350px" 
+                h="48px" 
                 objectFit="contain"
               />
             </ChakraLink>
-          </Flex>          
+          </Flex>
+          
           <Flex align="center">
             <LogoutButton /> 
           </Flex>

@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
-import theme from './theme'; // <-- ADDED THIS IMPORT
+import theme from './theme'; 
 
 import { AuthProvider } from './context/AuthProvider';
 import Login from './Login';
@@ -13,20 +13,18 @@ import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
 import Profile from './pages/Profile';
 import Vote from "./pages/Vote"; 
-
+import ProductStudio from './pages/ProductStudio'; // <-- ADD IMPORT for new page
 import PrivateRoute from './components/PrivateRoute';
 
 export default function App() {
   return (
-    <ChakraProvider theme={theme}> {/* <-- THEME PROP ADDED HERE */}
+    <ChakraProvider theme={theme}> 
       <AuthProvider>
         <Routes>
-          {/* Public routes - no MainLayout */}
           <Route path="/" element={<Login />} /> 
           <Route path="/login" element={<Login />} /> 
           <Route path="/register" element={<RegistrationPage />} />
-
-          {/* Protected Routes - these will now use the MainLayout */}
+          
           <Route 
             path="/dashboard" 
             element={<PrivateRoute><MainLayout><Dashboard/></MainLayout></PrivateRoute>} 
@@ -38,6 +36,10 @@ export default function App() {
           <Route 
             path="/my-designs" 
             element={<PrivateRoute><MainLayout><MyDesigns/></MainLayout></PrivateRoute>} 
+          />
+          <Route 
+            path="/product-studio" // <-- ADD ROUTE for the new Design Studio page
+            element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>} 
           />
           <Route 
             path="/profile" 
