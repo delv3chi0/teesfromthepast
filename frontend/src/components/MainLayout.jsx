@@ -8,7 +8,8 @@ const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'My Saved Designs', path: '/my-designs' },
-  { label: 'Customize My Shirt', path: '/product-studio' }, // <-- NEW LINK ADDED HERE
+  { label: 'Customize My Shirt', path: '/product-studio' },
+  { label: '🏆 Vote Now!', path: '/vote-now' }, // <-- NEW LINK ADDED HERE
   { label: 'My Profile', path: '/profile' },
 ];
 
@@ -130,7 +131,7 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo-text.png" 
                 alt="Tees From The Past Title" 
-                h="48px" 
+                h="350px" 
                 objectFit="contain"
               />
             </ChakraLink>

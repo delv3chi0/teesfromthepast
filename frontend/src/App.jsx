@@ -11,9 +11,11 @@ import MainLayout from './components/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
+import ProductStudio from './pages/ProductStudio';
+import VotingPage from './pages/VotingPage'; // <-- ADD IMPORT for new Voting Page
 import Profile from './pages/Profile';
-import Vote from "./pages/Vote"; 
-import ProductStudio from './pages/ProductStudio'; // <-- ADD IMPORT for new page
+// Vote.jsx was your old one, we can remove its import if VotingPage.jsx replaces it
+// import Vote from "./pages/Vote"; 
 import PrivateRoute from './components/PrivateRoute';
 
 export default function App() {
@@ -38,17 +40,19 @@ export default function App() {
             element={<PrivateRoute><MainLayout><MyDesigns/></MainLayout></PrivateRoute>} 
           />
           <Route 
-            path="/product-studio" // <-- ADD ROUTE for the new Design Studio page
+            path="/product-studio" 
             element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>} 
+          />
+          <Route 
+            path="/vote-now" // <-- ADD ROUTE for the new Voting Page
+            element={<PrivateRoute><MainLayout><VotingPage/></MainLayout></PrivateRoute>} 
           />
           <Route 
             path="/profile" 
             element={<PrivateRoute><MainLayout><Profile/></MainLayout></PrivateRoute>} 
           />
-          <Route 
-            path="/vote" 
-            element={<PrivateRoute><MainLayout><Vote/></MainLayout></PrivateRoute>} 
-          />
+          {/* If Vote.jsx is being replaced by VotingPage.jsx, remove the old /vote route if it exists */}
+          {/* <Route path="/vote" element={<PrivateRoute><MainLayout><Vote/></MainLayout></PrivateRoute>} /> */}
 
           <Route path="*" element={<Navigate to="/" replace />} /> 
         </Routes>
