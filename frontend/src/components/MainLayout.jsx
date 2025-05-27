@@ -31,30 +31,25 @@ export default function MainLayout({ children }) {
       borderRightWidth="1px"
       w="60" 
     >
-      {/* === UPDATED SIDEBAR LOGO AREA === */}
       <Flex 
         as={RouterLink} 
         to="/dashboard" 
-        px="4"        // Side padding for the logo area
-        py="6"        // Increased vertical padding to give logo more space
+        px="4"        
+        py="4"        
         align="center" 
-        justifyContent="center" // Center the logo
+        justifyContent="center" 
         _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
-        // Removed fixed height h="14" from this Flex container
       >
         <Image 
-          src="/logo.png" 
+          src="/logo.png" // This is your main graphical logo for the sidebar
           alt="Tees From The Past Logo" 
-          w="100%"             // Make image take full available width of its parent Flex's content box
-          maxW="190px"         // Set a max width slightly less than full available (208px), for some spacing
-                               // You can adjust this value (e.g., "180px", "200px")
-          h="auto"             // Let height be determined by width and aspect ratio
-          maxH="150px"         // Set a max height to prevent it from getting too tall
-                               // Adjust this based on how tall you want it to be at max width
+          w="100%"            
+          maxW="190px"         
+          h="auto"            
+          maxH="150px"        
           objectFit="contain" 
         />
       </Flex>
-      {/* === END UPDATED SIDEBAR LOGO AREA === */}
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
           <ChakraLink
@@ -99,7 +94,7 @@ export default function MainLayout({ children }) {
             justifyContent="center"
             py="2.5" 
           >
-            {/* Sidebar logo in drawer, can be smaller if preferred */}
+            {/* This uses the main graphical logo for the mobile drawer */}
             <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
           </DrawerHeader>
           <DrawerBody>
@@ -119,7 +114,7 @@ export default function MainLayout({ children }) {
           borderBottomWidth="1px"
           borderColor="brand.primaryDark" 
           color="brand.textDark"     
-          h="14"
+          h="14" // Top bar height is 56px
         >
           <Flex align="center">
             <IconButton
@@ -132,14 +127,16 @@ export default function MainLayout({ children }) {
               mr={{ base: 2, md: 0 }} 
             />
             <ChakraLink as={RouterLink} to="/dashboard" display={{ base: 'none', md: 'flex' }} alignItems="center">
+              {/* === UPDATED TOP BAR LOGO TO TEXT LOGO === */}
               <Image 
-                src="/logo.png" 
-                alt="Tees From The Past Logo" 
-                h="44px" // Reverted to a standard height, removed sx prop
-                objectFit="contain"
+                src="/logo-text.png"  // <-- CHANGED to your text logo
+                alt="Tees From The Past Title" // <-- Updated alt text
+                h="32px" // <-- Adjusted height for a text logo (e.g., "normal site title size")
+                         // You can fine-tune this (e.g., "30px", "36px")
+                objectFit="contain" // Ensures it scales nicely
               />
+              {/* === END UPDATED TOP BAR LOGO === */}
             </ChakraLink>
-            {/* "DEPLOYMENT TEST TEXT" REMOVED */}
           </Flex>
           
           <Flex align="center">
