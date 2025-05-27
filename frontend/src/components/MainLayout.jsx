@@ -31,18 +31,26 @@ export default function MainLayout({ children }) {
       borderRightWidth="1px"
       w="60" 
     >
+      {/* === UPDATED SIDEBAR LOGO AREA === */}
       <Flex 
         as={RouterLink} 
         to="/dashboard" 
-        px="4" 
-        py="3" 
+        px="4"        // Side padding for the logo area
+        py="6"        // Increased vertical padding to give logo more space
         align="center" 
-        justifyContent="center"
-        _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }} 
-        h="14" 
+        justifyContent="center" // Center the logo
+        _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
+        // Removed fixed height h="14" from this Flex container
       >
-        <Image src="/logo.png" alt="Tees From The Past Logo" h="40px" objectFit="contain"/>
+        <Image 
+          src="/logo.png" 
+          alt="Tees From The Past Logo" 
+          maxH="100px" // Set a good max height (e.g., 100px, adjust to your liking)
+          // maxW="80%" // Optionally constrain width too if it gets too wide
+          objectFit="contain" 
+        />
       </Flex>
+      {/* === END UPDATED SIDEBAR LOGO AREA === */}
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
           <ChakraLink
@@ -87,7 +95,8 @@ export default function MainLayout({ children }) {
             justifyContent="center"
             py="2.5" 
           >
-            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="35px" objectFit="contain"/> 
+            {/* Sidebar logo in drawer, can be smaller if preferred */}
+            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
           </DrawerHeader>
           <DrawerBody>
             <SidebarContent onClick={onClose}/>
@@ -108,7 +117,7 @@ export default function MainLayout({ children }) {
           color="brand.textDark"     
           h="14"
         >
-          <Flex align="center"> {/* This Flex wraps Hamburger and Logo + Test Text */}
+          <Flex align="center">
             <IconButton
               aria-label="Open Menu"
               display={{ base: 'inline-flex', md: 'none' }}
@@ -122,19 +131,11 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
+                h="44px" // Reverted to a standard height, removed sx prop
                 objectFit="contain"
-                // REMOVED h and w props, using sx to force with !important
-                sx={{
-                  height: '50px !important', 
-                  width: 'auto'       // Let width adjust to maintain aspect ratio
-                }}
               />
             </ChakraLink>
-            {/* === ADDED THIS VERY OBVIOUS TEXT FOR TESTING === */}
-            <Text fontSize="lg" color="red.500" fontWeight="bold" ml={4} display={{ base: 'none', md: 'inline' }}>
-              DEPLOYMENT TEST TEXT
-            </Text>
-            {/* === END OF OBVIOUS TEXT === */}
+            {/* "DEPLOYMENT TEST TEXT" REMOVED */}
           </Flex>
           
           <Flex align="center">
