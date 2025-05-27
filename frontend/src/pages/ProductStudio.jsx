@@ -121,7 +121,7 @@ export default function ProductStudio() {
               {designs.map(design => (
                 <Box
                   key={design._id}
-                  borderWidth="2px" // Added thicker border
+                  borderWidth="2px" 
                   borderRadius="md"
                   overflow="hidden"
                   onClick={() => setSelectedDesign(design)}
@@ -146,12 +146,12 @@ export default function ProductStudio() {
                 <VStack spacing={4}>
                     <Box 
                         position="relative" 
-                        w={{base: "280px", sm: "300px", md: "350px"}} // Responsive preview box width
-                        h={{base: "280px", sm: "300px", md: "350px"}} // Responsive preview box height
-                        bg="gray.100" // Light background for the mockup area
+                        w={{base: "280px", sm: "300px", md: "350px"}} 
+                        h={{base: "280px", sm: "300px", md: "350px"}} 
+                        bg="gray.100" 
                         overflow="hidden" 
                         borderRadius="md"
-                        mx="auto" // Center the preview box
+                        mx="auto" 
                     >
                         <Image 
                             src={getCurrentMockupSrc()} 
@@ -165,15 +165,12 @@ export default function ProductStudio() {
                                 src={selectedDesign.imageDataUrl}
                                 alt="AI Design"
                                 position="absolute"
-                                // Centered and scaled down by 30% (original was 50% width/height, top/left 25%)
-                                // New size is 35% width/height. New top/left is (100-35)/2 = 32.5%
-                                top="32.5%" 
-                                left="32.5%"
-                                width="35%" 
-                                height="35%"
+                                top="24%"      // <-- MOVED UP for better chest placement
+                                left="33.5%"   // <-- Re-centered for 33% width: (100-33)/2
+                                width="33%"    // <-- SCALED DOWN (approx 5% smaller than 35%)
+                                height="33%"   // <-- SCALED DOWN
                                 objectFit="contain"
-                                mixBlendMode="multiply" // <-- ADDED for a more 'realistic' blend. Experiment!
-                                // Other blend modes to try: "overlay", "darken", "screen"
+                                // mixBlendMode prop removed
                             />
                         )}
                     </Box>
@@ -188,7 +185,6 @@ export default function ProductStudio() {
                 <Text color="brand.textMutedOnOrange" fontStyle="italic" textAlign="center">Select your apparel options and a design above to see a preview.</Text>
             )}
         </Box>
-
       </VStack>
     </Box>
   );
