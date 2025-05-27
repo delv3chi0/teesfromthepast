@@ -130,7 +130,7 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo-text.png" 
                 alt="Tees From The Past Title" 
-                h="450px" 
+                h="350px" 
                 objectFit="contain"
 		mt="30" 
               />
