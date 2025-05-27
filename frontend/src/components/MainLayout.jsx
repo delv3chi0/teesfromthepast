@@ -131,7 +131,7 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo-text.png"  // <-- CHANGED to your text logo
                 alt="Tees From The Past Title" // <-- Updated alt text
-                h="150px" // <-- Adjusted height for a text logo (e.g., "normal site title size")
+                h="350px" // <-- Adjusted height for a text logo (e.g., "normal site title size")
                          // You can fine-tune this (e.g., "30px", "36px")
                 objectFit="contain" // Ensures it scales nicely
               />
