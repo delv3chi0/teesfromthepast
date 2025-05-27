@@ -132,7 +132,7 @@ export default function MainLayout({ children }) {
                 alt="Tees From The Past Title" 
                 h="350px" 
                 objectFit="contain"
-		mt="30" 
+		mt="15" 
               />
             </ChakraLink>
           </Flex>          
