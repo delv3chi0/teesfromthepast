@@ -21,7 +21,7 @@ import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import checkoutRoutes from './routes/checkout.js';
 import designRoutes from './routes/designs.js'; 
-// import contestRoutes from './routes/contest.js'; // <-- TEMPORARILY COMMENTED OUT
+import contestRoutes from './routes/contest.js'; 
 
 const app = express();
 const PORT = process.env.PORT || 5000; // Ensure PORT is read from process.env
@@ -71,7 +71,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', generateImageRoutes); 
 app.use('/api', checkoutRoutes);
 app.use('/api/mydesigns', designRoutes); 
-// app.use('/api/contest', contestRoutes); // <-- TEMPORARILY COMMENTED OUT
+app.use('/api/contest', contestRoutes); 
 console.log('[Backend Log] All routes configured.');
 
 // --- Global Error Handler ---

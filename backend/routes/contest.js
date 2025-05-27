@@ -2,14 +2,16 @@
 import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import Design from '../models/Design.js';
-import User from '../models/User.js'; // We need the User model to update their submission/vote status
+import User from '../models/User.js';
 
 const router = express.Router();
 
 // Helper function to get current month in 'YYYY-MM' format
 const getCurrentMonthYYYYMM = () => {
   const now = new Date();
-  return `<span class="math-inline">\{now\.getFullYear\(\)\}\-</span>{String(now.getMonth() + 1).padStart(2, '0')}`;
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-indexed, ensure 2 digits
+  return `${year}-${month}`;
 };
 
 // === Recipe 1: Submit a Design to the Current Month's Contest ===
@@ -17,7 +19,7 @@ const getCurrentMonthYYYYMM = () => {
 router.post('/submit/:designId', protect, async (req, res) => {
   const { designId } = req.params;
   const userId = req.user.id;
-  const currentMonth = getCurrentMonthYYYYMM();
+  const currentMonth = getCurrentMonthYYYYMM(); // This will now work correctly
 
   try {
     const user = await User.findById(userId);
@@ -25,7 +27,6 @@ router.post('/submit/:designId', protect, async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Check if user has already submitted this month
     if (user.lastContestSubmissionMonth === currentMonth) {
       return res.status(400).json({ message: 'You have already submitted a design for this month\'s contest.' });
     }
@@ -38,18 +39,10 @@ router.post('/submit/:designId', protect, async (req, res) => {
     if (design.isSubmittedForContest && design.contestSubmissionMonth === currentMonth) {
       return res.status(400).json({ message: 'This design is already submitted for this month\'s contest.' });
     }
-    // If submitted in a previous month, it's okay to resubmit for a new month,
-    // but our User.lastContestSubmissionMonth check prevents multiple submissions by user in same month.
 
     design.isSubmittedForContest = true;
     design.contestSubmissionMonth = currentMonth;
-    // Reset votes if it's a new submission period for this design
-    // For simplicity, let's assume votes are always for the current submission.
-    // If a design can be re-submitted, its old votes shouldn't carry over.
-    // We might need more sophisticated logic if designs can be in multiple contests.
-    // For now, if it's re-submitted, this flag approach is simple.
-    // A more robust system might create separate ContestEntry documents.
-    design.votes = 0; // Reset votes upon submission to a new contest month
+    design.votes = 0; 
     await design.save();
 
     user.lastContestSubmissionMonth = currentMonth;
@@ -68,14 +61,13 @@ router.post('/submit/:designId', protect, async (req, res) => {
 
 // === Recipe 2: Get All Designs for the Current Month's Contest ===
 // Path: GET /api/contest/designs
-router.get('/designs', async (req, res) => { // Public route to view contest designs
-  const currentMonth = getCurrentMonthYYYYMM();
-  // We might want to add pagination later
+router.get('/designs', async (req, res) => { 
+  const currentMonth = getCurrentMonthYYYYMM(); // This will now work correctly
   try {
     const contestDesigns = await Design.find({ 
       isSubmittedForContest: true, 
       contestSubmissionMonth: currentMonth 
-    }).sort({ votes: -1, createdAt: -1 }); // Sort by most votes, then newest
+    }).sort({ votes: -1, createdAt: -1 }); 
 
     res.status(200).json(contestDesigns);
   } catch (error) {
@@ -89,7 +81,7 @@ router.get('/designs', async (req, res) => { // Public route to view contest des
 router.post('/vote/:designId', protect, async (req, res) => {
   const { designId } = req.params;
   const userId = req.user.id;
-  const currentMonth = getCurrentMonthYYYYMM();
+  const currentMonth = getCurrentMonthYYYYMM(); // This will now work correctly
 
   try {
     const designToVoteFor = await Design.findOne({
@@ -111,12 +103,18 @@ router.post('/vote/:designId', protect, async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Manage monthly vote tracking for the user
     let monthlyVote = user.monthlyVoteRecord.find(record => record.month === currentMonth);
     if (!monthlyVote) {
-      // If no record for this month, create one
       user.monthlyVoteRecord.push({ month: currentMonth, designsVotedFor: [] });
+      // Re-fetch the newly added record to work with it
       monthlyVote = user.monthlyVoteRecord.find(record => record.month === currentMonth);
+    }
+    
+    // Ensure monthlyVote is not undefined (it shouldn't be after the push and find)
+    if (!monthlyVote) {
+        // This should ideally not happen if the logic above is correct
+        console.error("[Contest Vote] Failed to create or find monthly vote record for user:", userId, "month:", currentMonth);
+        return res.status(500).json({ message: 'Internal server error processing vote record.'});
     }
 
     if (monthlyVote.designsVotedFor.length >= 3) {
@@ -127,7 +125,6 @@ router.post('/vote/:designId', protect, async (req, res) => {
       return res.status(400).json({ message: 'You have already voted for this design this month.' });
     }
 
-    // Cast vote
     monthlyVote.designsVotedFor.push(designId);
     await user.save();
 
