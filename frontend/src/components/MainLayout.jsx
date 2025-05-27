@@ -122,7 +122,8 @@ export default function MainLayout({ children }) {
               <Image 
                 src="/logo.png" 
                 alt="Tees From The Past Logo" 
-                h="48px" // <-- UPDATED HEIGHT
+                h="48px"
+		w="72px"
                 objectFit="contain"
               />
             </ChakraLink>
