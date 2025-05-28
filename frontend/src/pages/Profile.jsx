@@ -1,7 +1,7 @@
 // frontend/src/pages/Profile.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, FormControl, FormLabel } from '@chakra-ui/react'; // Added FormControl, FormLabel
+import { Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, FormControl, FormLabel, Spinner } from '@chakra-ui/react'; // Added FormControl, FormLabel
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaSave, FaEdit, FaTimes, FaTachometerAlt } from 'react-icons/fa';
