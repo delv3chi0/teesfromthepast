@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
     Box, Heading, Input, Button, Text, useToast, VStack, Image, 
-    Link as ChakraLink, Flex // Added Flex
+    Link as ChakraLink, Flex 
 } from '@chakra-ui/react';
 import { useAuth } from '../context/AuthProvider';
 
@@ -24,7 +24,13 @@ export default function RegistrationPage() {
 
     if (password.length < 6) {
         setError('Password must be at least 6 characters long.');
-        toast({ /* ... password too short toast ... */ });
+        toast({
+            title: 'Registration Failed',
+            description: 'Password must be at least 6 characters long.',
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+        });
         return;
     }
 
@@ -36,36 +42,43 @@ export default function RegistrationPage() {
       const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
       console.error('Registration error in RegistrationPage.jsx handleSubmit:', errorMessage, err);
       setError(errorMessage);
-      toast({ /* ... registration failed toast ... */ });
+      toast({
+        title: 'Registration Failed',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
   return (
-    // Main container for the page, allows header bar + content structure
     <Box>
-      {/* Dark Brown Header Bar with Logo */}
+      {/* Dark Brown Header Bar with Larger Logo */}
       <Flex
         as="header"
         align="center"
-        justify="center" // Center logo if it's the only item
-        bg="brand.primary" // Your dark brown
-        py={3} // Vertical padding for the bar
+        justify="center" 
+        bg="brand.primary" 
+        py={4} // Increased vertical padding for a taller bar
         px={4}
-        boxShadow="sm" // Optional: adds a subtle shadow below the bar
+        boxShadow="md" 
       >
-        <RouterLink to="/"> {/* Make logo link to home (which is now login) */}
+        <RouterLink to="/"> 
           <Image 
-            src="/logo.png" // Your graphical logo
+            src="/logo.png" 
             alt="Tees From The Past Logo" 
-            h="50px"      // Adjust height as desired for this bar
+            maxW="300px"  // << INCREASED maxW for potentially larger logo
+            h="auto"      // << Let height adjust
+            maxH="80px"   // << Set a generous max height, adjust as needed
             objectFit="contain"
           />
         </RouterLink>
       </Flex>
 
-      {/* Registration Form Area (Orange Background will come from global body style) */}
-      <VStack spacing={6} py={10} px={4}> {/* Added more vertical padding */}
-        <Box maxW="md" borderWidth="1px" borderRadius="lg" p={6} shadow="xl" w="100%" bg="brand.paper"> {/* Form on a 'paper' card */}
+      {/* Registration Form Area */}
+      <VStack spacing={6} py={10} px={4}>
+        <Box maxW="md" borderWidth="1px" borderRadius="lg" p={6} shadow="xl" w="100%" bg="brand.paper">
           <Heading mb={6} textAlign="center" size="lg" color="brand.textDark">
             Create Your Account
           </Heading>
@@ -73,27 +86,30 @@ export default function RegistrationPage() {
           <form onSubmit={handleSubmit}>
             <VStack spacing={4}>
               <Input 
-                name="username" // Good for accessibility and some autofill scenarios
+                name="username"
                 placeholder="Username" 
                 value={username} 
                 onChange={e => setUsername(e.target.value)} 
                 isRequired 
                 bg="white"
-                autoComplete="off" // Try to prevent browser pre-populating with email
+                autoComplete="new-password" // More robust attempt to prevent email autofill
               />
               <Input 
+                name="firstName" // Added name prop
                 placeholder="First Name" 
                 value={firstName} 
                 onChange={e => setFirstName(e.target.value)} 
                 bg="white"
               />
               <Input 
+                name="lastName" // Added name prop
                 placeholder="Last Name" 
                 value={lastName} 
                 onChange={e => setLastName(e.target.value)} 
                 bg="white"
               />
               <Input 
+                name="email" // Added name prop
                 type="email"
                 placeholder="Email" 
                 value={email} 
@@ -102,12 +118,14 @@ export default function RegistrationPage() {
                 bg="white"
               />
               <Input 
+                name="password" // Added name prop
                 type="password" 
                 placeholder="Password (min. 6 characters)" 
                 value={password} 
                 onChange={e => setPassword(e.target.value)} 
                 isRequired 
                 bg="white"
+                autoComplete="new-password" // Also for password if issues
               />
               <Button colorScheme="brandAccentOrange" width="full" type="submit" size="lg">
                 Register
