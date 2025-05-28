@@ -1,10 +1,15 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Divider as ChakraDivider } from '@chakra-ui/react'; // Added Avatar, HStack, ChakraDivider
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'; // Added useNavigate
+import { 
+    Box, Flex, VStack, Link as ChakraLink, Text, IconButton, 
+    useDisclosure, Drawer, DrawerOverlay, DrawerContent, 
+    DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, 
+    HStack, Divider as ChakraDivider, Icon // <-- Icon ADDED HERE
+} from '@chakra-ui/react';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
-import { useAuth } from '../context/AuthProvider'; // To get user for Avatar
-import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa'; // Example social icons
+import { useAuth } from '../context/AuthProvider';
+import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
@@ -18,8 +23,8 @@ const navItems = [
 export default function MainLayout({ children }) {
   const location = useLocation();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { user } = useAuth(); // Get user for Avatar name/initials
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const navigate = useNavigate(); // Already imported, good.
 
   const SidebarContent = ({onClick}) => (
     <Box
@@ -72,7 +77,7 @@ export default function MainLayout({ children }) {
               bg: 'brand.primaryLight', 
               color: 'brand.accentYellow',    
             }}
-            onClick={onClick} // For mobile drawer
+            onClick={onClick}
           >
             {item.label}
           </ChakraLink>
@@ -82,8 +87,8 @@ export default function MainLayout({ children }) {
   );
 
   return (
-    <Flex direction="column" minH="100vh"> {/* Changed to Flex direction column */}
-      <Box as="section" flexGrow={1}> {/* Allows main content to grow */}
+    <Flex direction="column" minH="100vh"> 
+      <Box as="section" flexGrow={1}> 
         <SidebarContent display={{ base: 'none', md: 'unset' }} />
         
         <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
@@ -115,14 +120,14 @@ export default function MainLayout({ children }) {
             align="center"
             justify="space-between" 
             w="full"
-            px={6} // Increased padding slightly
-            py={3} // Adjusted py for consistent vertical rhythm
+            px={6} 
+            py={3} 
             bg="brand.secondary" 
             borderBottomWidth="1px"
             borderColor="brand.primaryDark" 
             color="brand.textDark"     
-            h="auto" // Allow height to adjust to content a bit more
-            minH="14" // Keep a minimum height
+            h="auto" 
+            minH="14"
           >
             <Flex align="center">
               <IconButton
@@ -130,7 +135,7 @@ export default function MainLayout({ children }) {
                 display={{ base: 'inline-flex', md: 'none' }}
                 onClick={onOpen}
                 icon={<HamburgerIcon />}
-                size="md" // Slightly larger hamburger
+                size="md" 
                 variant="ghost"
                 mr={2} 
               />
@@ -138,11 +143,10 @@ export default function MainLayout({ children }) {
                 <Image 
                   src="/logo-text.png" 
                   alt="Tees From The Past Title Logo" 
-                  h="48px" // Kept at 48px, can be adjusted
+                  h="48px" 
                   objectFit="contain"
-                  mr={3} // Margin between image logo and text title
+                  mr={3} 
                 />
-                {/* ADDED Text Site Title */}
                 <Text fontSize="xl" fontWeight="bold" color="brand.primaryDark" display={{ base: 'none', lg: 'block' }}>
                   Tees From The Past
                 </Text>
@@ -150,13 +154,12 @@ export default function MainLayout({ children }) {
             </Flex>
             
             <Flex align="center">
-              {/* ADDED User Avatar */}
               {user && (
                 <ChakraLink as={RouterLink} to="/profile" mr={4}>
                   <Avatar 
                     size="sm" 
                     name={user.username || user.email} 
-                    src={user.avatarUrl || ''} // If you add avatarUrl to your user model later
+                    src={user.avatarUrl || ''} 
                     bg="brand.primaryDark" 
                     color="brand.textLight"
                   />
@@ -168,23 +171,22 @@ export default function MainLayout({ children }) {
 
           <Box 
             as="main" 
-            p={{base: 4, md: 6}} // Responsive padding
+            p={{base: 4, md: 6}} 
             bg="brand.accentOrange"
-            flexGrow={1} // Ensure main content takes available space if footer is at bottom
+            flexGrow={1} 
           > 
             {children}
           </Box>
         </Box>
       </Box>
 
-      {/* ADDED FOOTER */}
       <Box 
         as="footer" 
         textAlign="center" 
-        py={6} // Increased padding
+        py={6} 
         px={4}
-        bg="brand.primary" // Dark brown footer
-        color="brand.textLight" // Light text for footer
+        bg="brand.primary" 
+        color="brand.textLight" 
       >
         <Text fontSize="sm" mb={2}>
           © {new Date().getFullYear()} Tees From The Past. All rights reserved.
