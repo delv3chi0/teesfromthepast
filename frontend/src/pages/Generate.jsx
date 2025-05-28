@@ -4,7 +4,7 @@ import { useState } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
-import { FaMagic, FaSave, FaPhotoVideo } from 'react-icons/fa'; // Added FaPhotoVideo for gallery link
+import { FaMagic, FaSave, FaPhotoVideo } from 'react-icons/fa';
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
@@ -19,7 +19,7 @@ export default function Generate() {
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
     console.error(`Error during ${actionType}:`, err);
     const errorMessage = err.response?.data?.message || defaultMessage;
-    setError(errorMessage); // You can display this 'error' state in your JSX if needed
+    setError(errorMessage);
     toast({
       title: `${actionType.charAt(0).toUpperCase() + actionType.slice(1)} Failed`,
       description: errorMessage,
@@ -70,13 +70,13 @@ export default function Generate() {
 
   const handleSaveDesign = async () => {
     if (!prompt || !imageUrl) {
-      toast({ title: "Cannot save", description: "No prompt or image data available.", status: "warning", /*...*/});
+      toast({ title: "Cannot save", description: "No prompt or image data available.", status: "warning", duration: 3000, isClosable: true});
       return;
     }
     setIsSaving(true); setError(""); 
     try {
       await client.post('/mydesigns', { prompt, imageDataUrl: imageUrl });
-      toast({ title: "Design Saved!", description: "Your masterpiece is in your collection.", status: "success", /*...*/});
+      toast({ title: "Design Saved!", description: "Your masterpiece is in your collection.", status: "success", duration: 3000, isClosable: true});
     } catch (err) { 
       handleApiError(err, "Could not save your design.", "Saving Design");
     } finally { 
@@ -85,8 +85,14 @@ export default function Generate() {
   };
 
   return (
+    // This VStack is the main container for this page's content.
+    // It does NOT have its own 'bg' prop, so it will be transparent.
+    // The orange background comes from MainLayout.jsx's <Box as="main" bg="brand.accentOrange">
     <VStack spacing={8} w="100%" mt={{base:6, md:10}} px={4} pb={10}>
-      <Heading as="h1" size="2xl" textAlign="center">AI Image Generator</Heading>
+      <Heading as="h1" size="2xl" textAlign="center"> 
+        {/* This heading will use brand.textTeal from theme defaults */}
+        AI Image Generator 
+      </Heading>
       <Textarea 
         placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
         value={prompt} 
@@ -94,8 +100,8 @@ export default function Generate() {
         isDisabled={loading || isSaving}
         size="lg"
         minHeight="120px"
-        bg="brand.paper"
-        color="brand.textDark"
+        bg="brand.paper" // Textarea itself is on a 'paper' (white) background for readability
+        color="brand.textDark" // Text inside textarea is dark
         borderColor="brand.secondary"
         focusBorderColor="brand.primaryDark"
         _placeholder={{ color: 'gray.400' }}
@@ -121,36 +127,22 @@ export default function Generate() {
         >
           Generate Image
         </Button>
-        <Button 
-          onClick={() => navigate('/my-designs')}
-          bg="brand.primary" 
-          color="brand.textLight"
-          _hover={{bg: "brand.primaryLight"}}
-          variant="outline"
-          isDisabled={loading || isSaving}
-          size="lg"
-          px={8}
-          py={6}
-          borderRadius="full"
-          leftIcon={<Icon as={FaPhotoVideo} />} // Example icon
-          borderColor="brand.primaryLight" // Match hover for outline
-        >
-          View My Saved Designs
-        </Button>
+        {/* "View My Saved Designs" button was here, now removed as it's in sidebar */}
       </HStack>
 
       {error && <Alert status="error" mt={4} borderRadius="md" bg="red.50" borderColor="red.200"><AlertIcon color="red.500"/><Text color="red.700">{error}</Text></Alert>}
       
       {imageUrl && !error && (
+        // This VStack is a "card" for the generated image and save button
         <VStack 
           mt={6} 
           spacing={5} 
           p={6} 
-          bg="brand.paper"
+          bg="brand.paper" // Card background is 'paper' (white)
           borderRadius="xl" 
           shadow="xl" 
           w="100%"
-          maxW="580px" // Max width for the card
+          maxW="580px" 
           transition="all 0.2s ease-in-out"
           _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.01)"}}
         >
