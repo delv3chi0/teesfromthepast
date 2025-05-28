@@ -1,8 +1,12 @@
 // frontend/src/Login.jsx
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Box, Heading, Input, Button, Text, useToast } from '@chakra-ui/react';
-import { useAuth } from './context/AuthProvider';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { 
+    Box, Heading, Input, Button, Text, useToast, VStack, Image, 
+    Link as ChakraLink, Flex 
+} from '@chakra-ui/react';
+import { useAuth } from '../context/AuthProvider';
+import Footer from '../components/Footer'; // <-- IMPORT THE NEW FOOTER
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -15,17 +19,12 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    console.log('[Login.jsx] Attempting to login via AuthProvider...');
-
     try {
       await login({ email, password });
-
       toast({ title: 'Login successful!', status: 'success', duration: 3000, isClosable: true });
       navigate('/dashboard'); 
-
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Login failed. Please check credentials or server status.';
-      console.error('Login error in Login.jsx handleSubmit:', errorMessage, err);
       setError(errorMessage);
       toast({
         title: 'Login Failed',
@@ -38,32 +37,70 @@ export default function Login() {
   };
 
   return (
-    <Box maxW="md" borderWidth="1px" borderRadius="md" p={4} mx="auto" mt={8}>
-      <Heading mb={4} textAlign="center">Login</Heading>
-      {error && <Text color="red.500" mb={2} textAlign="center">{error}</Text>}
-      <form onSubmit={handleSubmit}>
-        <Input 
-          placeholder="Email" 
-          mb={2} 
-          value={email} 
-          onChange={(e) => setEmail(e.target.value)} 
-          required 
-        />
-        <Input 
-          type="password" 
-          placeholder="Password" 
-          mb={4} 
-          value={password} 
-          onChange={(e) => setPassword(e.target.value)} 
-          required 
-        />
-        <Button colorScheme="blue" width="full" type="submit">
-          Log In
-        </Button>
-      </form>
-      <Text mt={4} textAlign="center">
-        Don’t have an account? <Link to="/register" style={{ color: '#3182ce' }}>Sign up here</Link>
-      </Text>
-    </Box>
+    <Flex direction="column" minH="100vh" bg="brand.accentOrange"> {/* Page background */}
+      {/* Dark Brown Header Bar with Logo */}
+      <Flex
+        as="header"
+        align="center"
+        justify="center" 
+        bg="brand.primary" 
+        py={4} 
+        px={4}
+        boxShadow="md" 
+        flexShrink={0} // Prevent header from shrinking
+      >
+        <RouterLink to="/"> 
+          <Image 
+            src="/logo.png" 
+            alt="Tees From The Past Logo" 
+            maxW="300px"  
+            h="auto"      
+            maxH="80px"   
+            objectFit="contain"
+          />
+        </RouterLink>
+      </Flex>
+
+      {/* Login Form Area - make it grow to push footer down */}
+      <VStack spacing={6} py={10} px={4} flexGrow={1} justifyContent="center"> 
+        <Box maxW="md" borderWidth="1px" borderRadius="lg" p={6} shadow="xl" w="100%" bg="brand.paper">
+          <Heading mb={6} textAlign="center" size="lg" color="brand.textDark">
+            Login
+          </Heading>
+          {error && <Text color="red.500" mb={4} textAlign="center" fontWeight="medium">{error}</Text>}
+          <form onSubmit={handleSubmit}>
+            <VStack spacing={4}>
+              <Input 
+                type="email"
+                placeholder="Email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                isRequired 
+                bg="white"
+              />
+              <Input 
+                type="password" 
+                placeholder="Password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                isRequired 
+                bg="white"
+              />
+              <Button colorScheme="brandAccentOrange" width="full" type="submit" size="lg">
+                Log In
+              </Button>
+            </VStack>
+          </form>
+          <Text mt={6} textAlign="center" color="brand.textDark">
+            Don’t have an account?{' '}
+            <ChakraLink as={RouterLink} to="/register" color="brand.primaryDark" fontWeight="medium">
+              Sign up here
+            </ChakraLink>
+          </Text>
+        </Box>
+      </VStack>
+      {/* Add the Footer component */}
+      <Footer />
+    </Flex>
   );
 }

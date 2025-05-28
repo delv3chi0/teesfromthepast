@@ -1,10 +1,10 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Divider as ChakraDivider, Icon } from '@chakra-ui/react';
+import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack } from '@chakra-ui/react'; // Removed ChakraDivider, Icon, Fa...
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
-import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
+import Footer from './Footer'; // <-- IMPORT THE NEW FOOTER
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
@@ -85,7 +85,7 @@ export default function MainLayout({ children }) {
     <Flex direction="column" minH="100vh"> 
       <Box as="section" flexGrow={1}> 
         <SidebarContent display={{ base: 'none', md: 'unset' }} />
-        
+
         <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
           <DrawerOverlay />
           <DrawerContent bg="brand.primary" color="brand.textLight"> 
@@ -140,12 +140,10 @@ export default function MainLayout({ children }) {
                   alt="Tees From The Past Title Logo" 
                   h="48px" 
                   objectFit="contain"
-                  // mr={3} // REMOVED margin as text is gone
                 />
-                {/* TEXT SITE TITLE REMOVED */}
               </ChakraLink>
             </Flex>
-            
+
             <Flex align="center">
               {user && (
                 <ChakraLink as={RouterLink} to="/profile" mr={4}>
@@ -172,30 +170,8 @@ export default function MainLayout({ children }) {
           </Box>
         </Box>
       </Box>
-
-      {/* FOOTER HEIGHT REDUCED */}
-      <Box 
-        as="footer" 
-        textAlign="center" 
-        py={3} // <-- REDUCED vertical padding from 6 to 3
-        px={4}
-        bg="brand.primary" 
-        color="brand.textLight" 
-      >
-        <Text fontSize="sm" mb={2}>
-          © {new Date().getFullYear()} Tees From The Past. All rights reserved.
-        </Text>
-        <HStack spacing={4} justify="center" fontSize="sm">
-          <ChakraLink as={RouterLink} to="/privacy-policy" _hover={{textDecoration: "underline"}}>Privacy Policy</ChakraLink>
-          <Text>|</Text>
-          <ChakraLink as={RouterLink} to="/contact" _hover={{textDecoration: "underline"}}>Contact Us</ChakraLink>
-        </HStack>
-        <HStack spacing={5} justify="center" mt={3}>
-          <ChakraLink href="https://facebook.com" isExternal><Icon as={FaFacebook} boxSize={5} /></ChakraLink>
-          <ChakraLink href="https://twitter.com" isExternal><Icon as={FaTwitter} boxSize={5} /></ChakraLink>
-          <ChakraLink href="https://instagram.com" isExternal><Icon as={FaInstagram} boxSize={5} /></ChakraLink>
-        </HStack>
-      </Box>
+      {/* Use the Footer component */}
+      <Footer /> 
     </Flex>
   );
 }
