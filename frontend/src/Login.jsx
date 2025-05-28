@@ -5,9 +5,9 @@ import {
     Box, Heading, Input, Button, Text, useToast, VStack, Image, 
     Link as ChakraLink, Flex 
 } from '@chakra-ui/react';
-// CORRECTED IMPORT PATH FOR useAuth:
 import { useAuth } from './context/AuthProvider'; 
-import Footer from '../components/Footer'; 
+// CORRECTED IMPORT PATH FOR Footer:
+import Footer from './components/Footer'; 
 
 export default function Login() {
   const [email, setEmail] = useState('');
