@@ -1,10 +1,5 @@
 // frontend/src/components/MainLayout.jsx
-import { 
-    Box, Flex, VStack, Link as ChakraLink, Text, IconButton, 
-    useDisclosure, Drawer, DrawerOverlay, DrawerContent, 
-    DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, 
-    HStack, Divider as ChakraDivider, Icon // <-- Icon ADDED HERE
-} from '@chakra-ui/react';
+import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Divider as ChakraDivider, Icon } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
@@ -24,7 +19,7 @@ export default function MainLayout({ children }) {
   const location = useLocation();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { user } = useAuth();
-  const navigate = useNavigate(); // Already imported, good.
+  const navigate = useNavigate();
 
   const SidebarContent = ({onClick}) => (
     <Box
@@ -145,11 +140,9 @@ export default function MainLayout({ children }) {
                   alt="Tees From The Past Title Logo" 
                   h="48px" 
                   objectFit="contain"
-                  mr={3} 
+                  // mr={3} // REMOVED margin as text is gone
                 />
-                <Text fontSize="xl" fontWeight="bold" color="brand.primaryDark" display={{ base: 'none', lg: 'block' }}>
-                  Tees From The Past
-                </Text>
+                {/* TEXT SITE TITLE REMOVED */}
               </ChakraLink>
             </Flex>
             
@@ -180,10 +173,11 @@ export default function MainLayout({ children }) {
         </Box>
       </Box>
 
+      {/* FOOTER HEIGHT REDUCED */}
       <Box 
         as="footer" 
         textAlign="center" 
-        py={6} 
+        py={3} // <-- REDUCED vertical padding from 6 to 3
         px={4}
         bg="brand.primary" 
         color="brand.textLight" 
