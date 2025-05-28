@@ -5,8 +5,9 @@ import {
     Box, Heading, Input, Button, Text, useToast, VStack, Image, 
     Link as ChakraLink, Flex 
 } from '@chakra-ui/react';
-import { useAuth } from '../context/AuthProvider';
-import Footer from '../components/Footer'; // <-- IMPORT THE NEW FOOTER
+// CORRECTED IMPORT PATH FOR useAuth:
+import { useAuth } from './context/AuthProvider'; 
+import Footer from '../components/Footer'; 
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -37,8 +38,7 @@ export default function Login() {
   };
 
   return (
-    <Flex direction="column" minH="100vh" bg="brand.accentOrange"> {/* Page background */}
-      {/* Dark Brown Header Bar with Logo */}
+    <Flex direction="column" minH="100vh" bg="brand.accentOrange">
       <Flex
         as="header"
         align="center"
@@ -47,7 +47,7 @@ export default function Login() {
         py={4} 
         px={4}
         boxShadow="md" 
-        flexShrink={0} // Prevent header from shrinking
+        flexShrink={0}
       >
         <RouterLink to="/"> 
           <Image 
@@ -61,7 +61,6 @@ export default function Login() {
         </RouterLink>
       </Flex>
 
-      {/* Login Form Area - make it grow to push footer down */}
       <VStack spacing={6} py={10} px={4} flexGrow={1} justifyContent="center"> 
         <Box maxW="md" borderWidth="1px" borderRadius="lg" p={6} shadow="xl" w="100%" bg="brand.paper">
           <Heading mb={6} textAlign="center" size="lg" color="brand.textDark">
@@ -99,7 +98,6 @@ export default function Login() {
           </Text>
         </Box>
       </VStack>
-      {/* Add the Footer component */}
       <Footer />
     </Flex>
   );
