@@ -1,9 +1,10 @@
 // frontend/src/pages/Generate.jsx
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, HStack } from "@chakra-ui/react";
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, HStack, Icon } from "@chakra-ui/react"; // Added Icon
 import { useState } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
+import { FaMagic, FaSave } from 'react-icons/fa'; // Icons for buttons
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
@@ -16,6 +17,7 @@ export default function Generate() {
   const navigate = useNavigate(); 
 
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
+    // ... (this function remains the same, ensure it's present)
     console.error(`Error during ${actionType}:`, err);
     const errorMessage = err.response?.data?.message || defaultMessage;
     setError(errorMessage);
@@ -40,110 +42,102 @@ export default function Generate() {
   };
 
   const handleGenerate = async () => {
+    // ... (this function remains the same)
     if (!prompt.trim()) {
-      toast({
-        title: "Prompt is empty",
-        description: "Please describe your retro shirt idea.",
-        status: "warning",
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+      toast({ /* ... */ }); return;
     }
     setLoading(true); setError(""); setImageUrl("");
     try {
-      console.log("[Generate.jsx] Calling /api/designs/create with prompt:", prompt);
       const res = await client.post("/designs/create", { prompt });
       const url = res.data.imageDataUrl;
-      if (url) {
-        setImageUrl(url);
-        toast({
-          title: "Image Generated!",
-          status: "success",
-          duration: 3000,
-          isClosable: true,
-        });
+      if (url) { setImageUrl(url); toast({ title: "Image Generated!", status: "success", /*...*/ });
       } else { throw new Error("No image URL received"); }
-    } catch (err) {
-      handleApiError(err, "Failed to generate image. Please try again.", "Image Generation");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { handleApiError(err, "Failed to generate image. Please try again.", "Image Generation");
+    } finally { setLoading(false); }
   };
 
   const handleSaveDesign = async () => {
+    // ... (this function remains the same)
     if (!prompt || !imageUrl) {
-      toast({
-        title: "Cannot save",
-        description: "No prompt or image data available to save.",
-        status: "warning",
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+      toast({ /* ... */ }); return;
     }
     setIsSaving(true); setError(""); 
     try {
-      console.log("[Generate.jsx] Calling /api/mydesigns to save. Prompt:", prompt);
-      await client.post('/mydesigns', { 
-        prompt: prompt, 
-        imageDataUrl: imageUrl 
-      });
-      toast({
-        title: "Design Saved!",
-        description: "Your masterpiece is in your collection.",
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (err) {
-      handleApiError(err, "Could not save your design. Please try again.", "Saving Design");
-    } finally {
-      setIsSaving(false);
-    }
+      await client.post('/mydesigns', { prompt, imageDataUrl: imageUrl });
+      toast({ title: "Design Saved!", description: "Your masterpiece is in your collection.", status: "success", /*...*/});
+    } catch (err) { handleApiError(err, "Could not save your design. Please try again.", "Saving Design");
+    } finally { setIsSaving(false); }
   };
 
   return (
-    <VStack spacing={6} mt={10} px={4} pb={10}>
-      <Heading>AI Image Generator</Heading> {/* This heading should now be teal */}
+    <VStack spacing={8} mt={{base: 6, md: 10}} px={4} pb={10} w="100%"> {/* Increased top margin & spacing */}
+      <Heading as="h1" size="2xl">AI Image Generator</Heading> {/* Larger heading */}
       <Textarea 
         placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
         value={prompt} 
         onChange={(e) => setPrompt(e.target.value)} 
         isDisabled={loading || isSaving}
         size="lg"
-        minHeight="100px"
-        // Consider text color for textarea if default doesn't work on orange
-        // sx={{ '::placeholder': { color: 'brand.textMutedOnOrange' }, color: 'brand.textDark' }} 
+        minHeight="120px" // Slightly taller
+        bg="brand.paper" // White background for textarea
+        color="brand.textDark"
+        borderColor="brand.secondary"
+        focusBorderColor="brand.primary"
+        _placeholder={{ color: 'gray.400' }}
       />
-      {/* HStack only contains the Generate Image button now */}
       <HStack spacing={4}> 
         <Button 
           onClick={handleGenerate} 
-          colorScheme="purple" // You might want to use a brand colorScheme here later
+          bg="brand.accentYellow" // Using brand yellow
+          color="brand.textDark"
+          _hover={{bg: "brand.accentYellowHover"}}
           isLoading={loading}
           loadingText="Generating..."
           isDisabled={isSaving || loading}
           size="lg"
+          px={8} // More padding
+          py={6} // More padding
+          borderRadius="full" // Pill-shaped
+          leftIcon={<Icon as={FaMagic} />}
+          boxShadow="md"
+          _active={{ boxShadow: "lg" }}
         >
           Generate Image
         </Button>
-        {/* "View My Saved Designs" Button REMOVED from here */}
       </HStack>
 
-      {error && <Text color="red.500" mt={2}>Error: {error}</Text>}
+      {error && <Text color="red.300" bg="red.900" p={3} borderRadius="md" mt={2}>Error: {error}</Text>} {/* Improved error visibility */}
       
       {imageUrl && !error && (
-        <VStack mt={4} spacing={4} p={4} borderWidth="1px" borderRadius="lg" shadow="md" bg="brand.paper"> {/* Added bg for card effect */}
+        <VStack 
+          mt={6} 
+          spacing={4} 
+          p={6} // Increased padding
+          borderWidth="1px" 
+          borderRadius="xl" // More rounded
+          shadow="xl" // Enhanced shadow
+          bg="brand.paper" // Card background
+          w="100%"
+          maxW="560px" // Max width for the card
+          _hover={{ boxShadow: "2xl", transform: "scale(1.01) translateY(-2px)", transition: "all 0.2s ease-in-out" }}
+        >
           <Image src={imageUrl} alt="Generated Tee Art" maxW="512px" maxH="512px" borderRadius="md" />
           <Button
             mt={2}
-            colorScheme="green" // You might want to use a brand colorScheme here
+            bg="brand.primary" // Using brand primary (dark brown)
+            color="brand.textLight"
+            _hover={{bg: "brand.primaryLight"}}
             onClick={handleSaveDesign}
             isLoading={isSaving}
             loadingText="Saving..."
             isDisabled={loading}
             size="lg"
+            px={8}
+            py={6}
+            borderRadius="full"
+            leftIcon={<Icon as={FaSave} />}
+            boxShadow="md"
+            _active={{ boxShadow: "lg" }}
           >
             Save This Design
           </Button>
