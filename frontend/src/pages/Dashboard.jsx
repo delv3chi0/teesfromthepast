@@ -3,22 +3,23 @@ import { useState, useEffect } from 'react';
 import { client } from '../api/client';
 import { 
     Box, Heading, Text, VStack, Divider, Button, useToast, 
-    SimpleGrid, Image, Spinner, Alert, AlertIcon,
-    Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure 
-} from '@chakra-ui/react'; // Added Modal components & useDisclosure
+    SimpleGrid, Image, Spinner, Alert, AlertIcon, Link as ChakraLink,
+    Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
+    Icon // Import Icon for empty state
+} from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
+import { FaMagic, FaPlusCircle } from 'react-icons/fa'; // Import icons
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [recentDesigns, setRecentDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [designsError, setDesignsError] = useState('');
-  
+
   const navigate = useNavigate();
   const toast = useToast();
 
-  // Modal state and handlers (copied from MyDesigns.jsx and adapted)
   const { isOpen, onOpen, onClose } = useDisclosure(); 
   const [selectedDesign, setSelectedDesign] = useState(null);
 
@@ -50,50 +51,97 @@ export default function Dashboard() {
   };
 
   return (
-    <Box maxW="6xl" /* Removed mx="auto" */ mt={8} px={4} pb={10}> 
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={6}>
-        <Heading size="lg">Dashboard</Heading>
-      </Box>
+    // The main Box for Dashboard content. No explicit 'bg' here, so it will inherit from MainLayout's content area (brand.accentOrange)
+    <Box maxW="6xl" mt={4} px={4} pb={10}> {/* Reduced mt for less space from top bar if desired */}
 
-      {user && <Text fontSize="xl" mb={6}>Welcome back, {user.username || user.email}!</Text>}
-      <Divider my={6} />
+      {/* Welcome Message - Larger and more spacing */}
+      {user && 
+        <Heading as="h1" size="xl" my={8} textAlign="center" color="brand.textLight"> {/* Using textLight for contrast on orange */}
+          Welcome back, {user.username || user.email}!
+        </Heading>
+      }
+      {/* Removed the extra Divider here, spacing will be handled by VStack */}
 
-      <VStack align="stretch" spacing={8}>
+      <VStack align="stretch" spacing={10}> {/* Increased spacing for content blocks */}
+
+        {/* Recent Designs Section */}
         <Box>
-          <Heading size="md" mb={4}>Recent Designs</Heading>
+          <Heading 
+            as="h2" 
+            size="lg" // Made "Recent Designs" slightly larger
+            mb={6} 
+            pb={2}
+            color="brand.textLight" // For contrast on orange
+            borderBottomWidth="2px" 
+            borderColor="brand.accentYellow" // Yellow accent line
+          >
+            Recent Designs
+          </Heading>
           {loadingDesigns && (
             <Box textAlign="center" py={10}>
-              <Spinner size="xl" /><Text mt={2}>Loading your masterpieces...</Text>
+              <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
+              <Text mt={3} color="brand.textLight">Loading your masterpieces...</Text>
             </Box>
           )}
           {!loadingDesigns && designsError && (
-            <Alert status="error"><AlertIcon />{designsError}</Alert>
+            <Alert status="error" bg="brand.paper" borderRadius="md">
+              <AlertIcon />
+              <Text color="brand.textDark">{designsError}</Text>
+            </Alert>
           )}
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
-            <Box textAlign="center" p={5} borderWidth="1px" borderRadius="md" shadow="sm">
-              <Text fontSize="lg" color="gray.500">You haven't created any designs yet!</Text>
-              <Button mt={4} colorScheme="purple" onClick={() => navigate('/generate')}>
-                ✨ Let's Create Your First Design!
+            // Enhanced Empty State
+            <VStack 
+                spacing={5} 
+                p={8} 
+                bg="rgba(255,255,255,0.1)" // Semi-transparent white on orange
+                borderRadius="xl" 
+                shadow="md"
+                borderWidth="1px"
+                borderColor="rgba(255,255,255,0.2)"
+            >
+              {/* Replace with your SVG or keep Chakra Icon */}
+              <Icon as={FaPlusCircle} boxSize="50px" color="brand.textLight" /> 
+              <Text fontSize="xl" fontWeight="medium" color="brand.textLight">
+                You haven’t created any designs yet!
+              </Text>
+              <Button
+                onClick={() => navigate('/generate')}
+                bg="brand.accentYellow" // Using brand yellow
+                color="brand.textDark"   // Dark text for yellow button
+                _hover={{ bg: 'brand.accentYellowHover' }}
+                size="lg"
+                leftIcon={<Icon as={FaMagic} />}
+                borderRadius="full" // Pill-shaped
+                px={8} // Added more padding
+                py={6}
+                fontSize="lg"
+              >
+                Let’s Create Your First Design!
               </Button>
-            </Box>
+            </VStack>
           )}
           {!loadingDesigns && !designsError && recentDesigns.length > 0 && (
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
               {recentDesigns.map(design => (
                 <Box 
                   key={design._id} 
-                  borderWidth="1px" 
-                  borderRadius="lg" 
+                  bg="brand.paper" // Card background
+                  borderRadius="xl" // More rounded corners
                   overflow="hidden" 
-                  shadow="md"
-                  cursor="pointer" // Make it look clickable
-                  onClick={() => handleRecentDesignClick(design)} // Open modal on click
-                  _hover={{ shadow: "xl", transform: "translateY(-2px)", transitionDuration: "0.2s" }}
+                  shadow="lg" // Enhanced shadow
+                  cursor="pointer"
+                  onClick={() => handleRecentDesignClick(design)}
+                  transition="all 0.2s ease-in-out"
+                  _hover={{ 
+                    shadow: "2xl", // More prominent shadow on hover
+                    transform: "translateY(-4px) scale(1.02)" // Scale up effect
+                  }}
                 >
-                  <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="200px" bg="gray.200" />
-                  <Box p={4}>
-                    <Text fontSize="sm" color="gray.600" noOfLines={2} title={design.prompt}>
-                      {design.prompt}
+                  <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="220px" bg="gray.200" />
+                  <Box p={5}>
+                    <Text fontSize="md" color="brand.textDark" noOfLines={2} title={design.prompt} minH="40px" fontWeight="medium">
+                      {design.prompt || "Untitled Design"}
                     </Text>
                   </Box>
                 </Box>
@@ -103,21 +151,20 @@ export default function Dashboard() {
         </Box>
       </VStack>
 
-      {/* Modal for displaying the selected design */}
       {selectedDesign && (
         <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader noOfLines={2} fontSize="md">{selectedDesign.prompt}</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody display="flex" justifyContent="center" alignItems="center">
-              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="100%" objectFit="contain"/>
+          <ModalOverlay bg="blackAlpha.700" /> {/* Darker overlay */}
+          <ModalContent bg="brand.paper" borderRadius="lg">
+            <ModalHeader color="brand.textDark" fontWeight="bold" noOfLines={2} fontSize="lg">{selectedDesign.prompt}</ModalHeader>
+            <ModalCloseButton color="brand.textDark" />
+            <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
+              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="90%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
-            <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={onClose}>
+            <ModalFooter borderTopWidth="1px" borderColor="gray.200">
+              <Button bg="brand.secondary" color="brand.textLight" _hover={{bg: 'brand.primaryDark'}} mr={3} onClick={onClose}>
                 Close
               </Button>
-              <Button variant="ghost" onClick={() => { navigate('/generate'); onClose(); }}>Create Similar</Button>
+              {/* Future button: <Button colorScheme="brandAccentOrange">Use This Design</Button> */}
             </ModalFooter>
           </ModalContent>
         </Modal>
