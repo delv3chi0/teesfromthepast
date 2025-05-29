@@ -1,19 +1,26 @@
 // frontend/src/pages/Profile.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, FormControl, FormLabel, Spinner } from '@chakra-ui/react'; // Added FormControl, FormLabel
+import { 
+    Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, 
+    FormControl, FormLabel // Ensure FormControl and FormLabel are imported
+} from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaSave, FaEdit, FaTimes, FaTachometerAlt } from 'react-icons/fa';
 
 export default function Profile() {
-  const { user, logout, setUser: setAuthUser } = useAuth(); // Get setUser from AuthContext to update global state
-  const [profileData, setProfileData] = useState(null);
+  const { user, logout, setUser: setAuthUser } = useAuth(); // Get user and setUser for global state update
+  const [profileData, setProfileData] = useState(null); 
   const [form, setForm] = useState({
-    username: '', email: '', firstName: '', lastName: '',
+    username: '',
+    email: '', 
+    firstName: '',
+    lastName: '',
+    // newPassword: '', // Optional: For password change
   });
   const [editing, setEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false); // Add saving state
+  const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -25,10 +32,8 @@ export default function Profile() {
         email: user.email || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
+        // newPassword: '', // Reset password field
       });
-    } else {
-        // This case might indicate user is not fully loaded yet or an issue.
-        // Consider a loading state or redirect if user is definitively null after initial AuthProvider load.
     }
   }, [user]);
 
@@ -42,22 +47,24 @@ export default function Profile() {
         username: form.username,
         firstName: form.firstName,
         lastName: form.lastName,
-        // Email is not editable in this form, so we don't send it
-        // If you add password change, include it conditionally:
-        // password: form.newPassword ? form.newPassword : undefined, 
+        // email is not editable in this form
     };
-    // Filter out any unchanged fields compared to profileData to send only modified data
-    // Or just send all editable fields as the backend handles `value || existing_value`
+    // if (form.newPassword) { // If you add password change functionality
+    //   updateData.password = form.newPassword;
+    // }
     
     try {
         const { data: updatedProfileFromServer } = await client.put('/auth/profile', updateData);
-        setAuthUser(updatedProfileFromServer); // Update global user state
+        if (setAuthUser) { // Check if setAuthUser exists
+            setAuthUser(updatedProfileFromServer); // Update global user state
+        }
         setProfileData(updatedProfileFromServer); 
         setForm({                   
             username: updatedProfileFromServer.username || '',
-            email: updatedProfileFromServer.email || '', // Keep email in sync
+            email: updatedProfileFromServer.email || '',
             firstName: updatedProfileFromServer.firstName || '',
             lastName: updatedProfileFromServer.lastName || '',
+            // newPassword: '',
         });
         setEditing(false);
         toast({ title: "Profile Updated", status: "success", duration: 3000, isClosable: true });
@@ -78,53 +85,70 @@ export default function Profile() {
         setForm({
           username: profileData.username || '', email: profileData.email || '',
           firstName: profileData.firstName || '', lastName: profileData.lastName || '',
+          // newPassword: '',
         });
     }
     setEditing(false);
   };
 
-  if (!profileData) return <Box textAlign="center" mt={20}><Spinner size="xl" color="brand.primary"/><Text mt={4} color="brand.textLight">Loading Profile…</Text></Box>;
+  if (!profileData && !user) { // If no profileData (initial load) AND no user from context yet
+      return (
+        <Box textAlign="center" mt={20}>
+            <Spinner size="xl" color="brand.primary"/><Text mt={4} color="brand.textLight">Loading Profile…</Text>
+        </Box>
+      );
+  }
+  // If profileData is still null but user context exists, means useEffect is setting it up
+  if (!profileData && user) {
+      // This state ensures that if 'user' from context updates, the form initializes correctly.
+      // The useEffect will populate profileData and form state.
+      // Could also show a brief specific loader here if the delay is noticeable.
+      return <Box textAlign="center" mt={20}><Spinner size="xl" color="brand.primary"/><Text mt={4} color="brand.textLight">Initializing Profile Form…</Text></Box>;
+  }
+  if (!profileData) return null; // Fallback if something unexpected happens
 
   return (
     <Box 
         maxW="lg" 
         mt={{base: 6, md: 8}} 
-        p={{base: 6, md: 8}} 
+        p={{base: 6, md: 8}} // Increased padding for better spacing
         borderWidth="1px" 
         borderRadius="xl" 
         shadow="xl" 
-        bg="brand.paper" // White card on orange background
-        mx="auto" // Center the card on the page
+        bg="brand.paper" // This makes the profile area a "white card" on the orange background
+        mx="auto" // Center the card
     >
-      <Heading as="h1" size="xl" mb={8} textAlign="center" color="brand.textDark">
+      <Heading as="h1" size="xl" mb={8} textAlign="center" color="brand.textDark"> 
         Your Profile
       </Heading>
 
-      <VStack spacing={5} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}>
+      <VStack spacing={6} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}> {/* Increased spacing */}
         <FormControl id="username">
             <FormLabel fontWeight="bold" color="brand.textDark">Username:</FormLabel>
-            <Input name="username" placeholder="Username" value={form.username} onChange={handleChange} isDisabled={!editing} bg="white" />
+            <Input name="username" placeholder="Username" value={form.username} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"/>
         </FormControl>
         <FormControl id="email">
             <FormLabel fontWeight="bold" color="brand.textDark">Email:</FormLabel>
-            <Input name="email" placeholder="Email" value={form.email} isReadOnly bg="gray.100" />
+            <Input name="email" placeholder="Email" value={form.email} isReadOnly bg="gray.100" borderColor="brand.secondary"/>
         </FormControl>
         <FormControl id="firstName">
             <FormLabel fontWeight="bold" color="brand.textDark">First Name:</FormLabel>
-            <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} isDisabled={!editing} bg="white" />
+            <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"/>
         </FormControl>
         <FormControl id="lastName">
             <FormLabel fontWeight="bold" color="brand.textDark">Last Name:</FormLabel>
-            <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" />
+            <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"/>
         </FormControl>
 
-        <HStack spacing={4} mt={6} w="100%">
+        {/* Add password change fields here if/when you implement that feature */}
+
+        <HStack spacing={4} mt={8} w="100%"> {/* Increased top margin */}
           {!editing ? (
             <Button 
                 bg="brand.primary" color="brand.textLight" _hover={{bg: "brand.primaryLight"}}
                 onClick={() => setEditing(true)} 
                 leftIcon={<Icon as={FaEdit}/>}
-                borderRadius="full" px={6} size="lg" flex={1} boxShadow="md"
+                borderRadius="full" px={8} size="lg" flex={1} boxShadow="md"
             >Edit Profile</Button>
           ) : (
             <>
@@ -132,21 +156,21 @@ export default function Profile() {
                 bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}}
                 onClick={handleSave} 
                 leftIcon={<Icon as={FaSave}/>}
-                borderRadius="full" px={6} size="lg" flex={1} type="submit" isLoading={isSaving} loadingText="Saving..." boxShadow="md"
+                borderRadius="full" px={8} size="lg" flex={1} type="submit" isLoading={isSaving} loadingText="Saving..." boxShadow="md"
               >Save Changes</Button>
               <Button 
                 variant="outline" onClick={handleCancel} leftIcon={<Icon as={FaTimes}/>}
-                borderRadius="full" px={6} size="lg" flex={1}
-                borderColor="brand.secondary" color="brand.secondary" _hover={{bg:"gray.100"}}
+                borderRadius="full" px={8} size="lg" flex={1}
+                borderColor="brand.secondary" color="brand.secondary" _hover={{bg:"blackAlpha.50"}} // Subtle hover for outline
               >Cancel</Button>
             </>
           )}
         </HStack>
         <Button 
-            variant="link" // Changed to link style for less emphasis
+            variant="link" 
             onClick={() => navigate('/dashboard')} 
             leftIcon={<Icon as={FaTachometerAlt} />}
-            mt={4}
+            mt={6} // Increased margin
             color="brand.primaryDark"
             size="lg"
         >Dashboard</Button>
