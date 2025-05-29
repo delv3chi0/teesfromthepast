@@ -2,46 +2,55 @@
 import express from 'express';
 import Stripe from 'stripe';
 import 'dotenv/config';
+import { protect } from '../middleware/authMiddleware.js'; // Ensure users are logged in to checkout
 
 const router = express.Router();
+
+// Ensure your Stripe secret key is loaded correctly.
+// The key should be for TEST mode for now.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-router.post('/checkout', async (req, res) => {
-    const { items } = req.body; // Expecting an array of items, e.g., [{ id, name, price, imageUrl, quantity }]
+router.post('/create-payment-intent', protect, async (req, res) => {
+    // For now, let's assume a fixed amount for a T-shirt.
+    // In the future, 'req.body' would contain items from the cart, product IDs, quantities etc.
+    // to calculate the total amount.
+    const { items, currency = 'usd' } = req.body; // Frontend could send items or just trigger a default purchase
 
-    if (!items || items.length === 0) {
-        return res.status(400).json({ message: 'No items provided for checkout.' });
+    // EXAMPLE: Calculate order amount on the server.
+    // NEVER trust the amount sent from the client for actual charging.
+    // For this first step, let's assume a single item purchase and calculate amount here.
+    // Let's say a custom tee costs $25.00
+    const amountInCents = 2500; // Stripe expects amounts in the smallest currency unit (e.g., cents for USD)
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({ error: 'Stripe payments are not configured on the server.' });
     }
 
     try {
-        // Map your product items to Stripe's line_items format
-        const lineItems = items.map(item => ({
-            price_data: {
-                currency: 'usd',
-                product_data: {
-                    name: item.name,
-                    images: [item.imageUrl], // Use the generated image as product image
-                    description: `Custom AI Retro T-Shirt with prompt: ${item.name}`,
-                },
-                unit_amount: item.price, // Price in cents (e.g., 2500 for $25.00)
-            },
-            quantity: item.quantity,
-        }));
+        console.log(`[Payment Intent] Creating payment intent for amount: ${amountInCents} ${currency.toUpperCase()}`);
 
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            line_items: lineItems,
-            mode: 'payment',
-            success_url: 'http://localhost:5173/success?session_id={CHECKOUT_SESSION_ID}', // Redirect to frontend success page
-            cancel_url: 'http://localhost:5173/cancel', // Redirect to frontend cancel page
-            // Optionally, you can add client_reference_id to link to your user
-            // client_reference_id: req.user.id, // If you have user authentication in place
+        // Create a PaymentIntent with the order amount and currency
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount: amountInCents,
+            currency: currency,
+            automatic_payment_methods: {
+                enabled: true, // Stripe will automatically enable relevant payment methods
+            },
+            // You can add metadata here if needed, like userId, designId, etc.
+            // metadata: { userId: req.user.id, designId: items?.[0]?.designId || 'N/A' },
         });
 
-        res.json({ url: session.url });
+        console.log(`[Payment Intent] Created successfully. ID: ${paymentIntent.id}`);
+        // Send the client_secret back to the frontend
+        res.send({
+            clientSecret: paymentIntent.client_secret,
+            amount: amountInCents, // Optional: send amount back for display
+            currency: currency    // Optional: send currency back
+        });
+
     } catch (error) {
-        console.error('Error creating Stripe checkout session:', error);
-        res.status(500).json({ message: 'Failed to create Stripe checkout session.', error: error.message });
+        console.error("[Payment Intent] Error creating payment intent:", error.message);
+        res.status(400).send({ error: { message: error.message } });
     }
 });
 
