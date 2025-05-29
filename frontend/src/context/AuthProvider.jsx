@@ -1,6 +1,6 @@
 // frontend/src/context/AuthProvider.jsx
 import { client } from '../api/client';
-import { createContext, useContext, useEffect, useState }_from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
 
 export const AuthContext = createContext(null);
