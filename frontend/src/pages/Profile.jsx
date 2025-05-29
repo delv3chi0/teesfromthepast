@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, 
-    FormControl, FormLabel // Ensure FormControl and FormLabel are imported
+    FormControl, FormLabel, Spinner // Ensure FormControl and FormLabel are imported
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
