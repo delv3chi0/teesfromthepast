@@ -1,10 +1,10 @@
 // frontend/src/components/MainLayout.jsx
-import { /* ... all your existing Chakra UI imports ... */ Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react';
+import { Link as RouterLink, useLocation } from 'react-router-dom'; // Removed useNavigate
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
-import Footer from './Footer';
+import Footer from './Footer'; 
 import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
 
 const navItems = [
@@ -22,8 +22,6 @@ export default function MainLayout({ children }) {
   const { user } = useAuth();
 
   const SidebarContent = ({onClick}) => (
-    // ... SidebarContent remains the same as your last correct version ...
-    // (The one with the large graphical logo)
     <Box as="nav" pos="fixed" top="0" left="0" zIndex="sticky" h="full" pb="10" overflowX="hidden" overflowY="auto" bg="brand.primary" borderColor="brand.primaryDark" borderRightWidth="1px" w="60" >
       <Flex as={RouterLink} to="/dashboard" px="4" py="4" align="center" justifyContent="center" _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}>
         <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
@@ -54,7 +52,6 @@ export default function MainLayout({ children }) {
             </DrawerBody>
           </DrawerContent>
         </Drawer>
-
         <Box flexGrow={1} ml={{ base: 0, md: 60 }} transition=".3s ease" display="flex" flexDirection="column">
           <Flex
             as="header"
@@ -75,11 +72,13 @@ export default function MainLayout({ children }) {
                 <Image 
                   src="/logo-text.png" 
                   alt="Tees From The Past Title Logo" 
-                  h="48px" // Kept as 48px, adjust if needed
+                  h="50px" // <-- UPDATED from 48px to 50px
                   objectFit="contain"
-                  // mr={3} // Removed margin as text is gone
+                  mr={3} 
                 />
-                {/* TEXT "Tees From The Past" REMOVED FROM HERE */}
+                <Text fontSize="xl" fontWeight="bold" color="brand.primaryDark" display={{ base: 'none', lg: 'block' }}>
+                  Tees From The Past
+                </Text>
               </ChakraLink>
             </Flex>
             <Flex align="center">
@@ -91,7 +90,6 @@ export default function MainLayout({ children }) {
               <LogoutButton /> 
             </Flex>
           </Flex>
-
           <Box as="main" p={{base: 4, md: 6}} bg="brand.accentOrange" flexGrow={1} width="100%" > 
             {children}
           </Box>
