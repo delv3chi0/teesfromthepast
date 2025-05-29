@@ -7,7 +7,7 @@ import {
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
     Icon 
 } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
 import { FaMagic, FaPlusSquare } from 'react-icons/fa'; 
 
@@ -42,6 +42,10 @@ export default function Dashboard() {
           }
           setLoadingDesigns(false);
         });
+    } else {
+      // If user is null (e.g., after logout, before redirect completes fully from a protected route)
+      // Or if PrivateRoute allowed access somehow while user was briefly null during initial load
+      setLoadingDesigns(false); // Stop loading if no user
     }
   }, [user, logout, navigate, toast]);
 
@@ -56,7 +60,6 @@ export default function Dashboard() {
         <Heading size="lg" color="brand.textLight">Dashboard</Heading>
       </Box>
 
-      {/* UPDATED WELCOME MESSAGE TO PRIORITIZE firstName */}
       {user && 
         <Heading as="h1" size="xl" my={8} textAlign="center" color="brand.textLight">
           Welcome back, {user.firstName || user.username || user.email}!
@@ -68,14 +71,29 @@ export default function Dashboard() {
       <VStack align="stretch" spacing={10}>
         <Box>
           <Heading 
-            as="h2" size="lg" mb={6} pb={2}
+            as="h2" 
+            size="lg" 
+            mb={6} 
+            pb={2}
             color="brand.textLight" 
-            borderBottomWidth="2px" borderColor="brand.accentYellow"
+            borderBottomWidth="2px" 
+            borderColor="brand.accentYellow"
           >
             Recent Designs
           </Heading>
-          {loadingDesigns && ( /* ... your loading spinner ... */ )}
-          {!loadingDesigns && designsError && ( /* ... your error alert ... */ )}
+          {/* --- CORRECTED CONDITIONAL RENDERING BLOCKS --- */}
+          {loadingDesigns && (
+            <Box textAlign="center" py={10}>
+              <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
+              <Text mt={3} color="brand.textLight">Loading your masterpieces...</Text>
+            </Box>
+          )}
+          {!loadingDesigns && designsError && (
+            <Alert status="error" bg="brand.paper" borderRadius="md">
+              <AlertIcon />
+              <Text color="brand.textDark">{designsError}</Text>
+            </Alert>
+          )}
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
             <VStack 
                 spacing={5} p={8} bg="rgba(255,255,255,0.1)" borderRadius="xl" 
@@ -115,10 +133,27 @@ export default function Dashboard() {
               ))}
             </SimpleGrid>
           )}
+          {/* --- END CORRECTED CONDITIONAL RENDERING BLOCKS --- */}
         </Box>
       </VStack>
 
-      {selectedDesign && ( /* ... your existing Modal JSX ... */ )}
+      {selectedDesign && (
+        <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
+          <ModalOverlay bg="blackAlpha.700" />
+          <ModalContent bg="brand.paper" borderRadius="lg">
+            <ModalHeader color="brand.textDark" fontWeight="bold" noOfLines={2} fontSize="lg">{selectedDesign.prompt}</ModalHeader>
+            <ModalCloseButton color="brand.textDark" />
+            <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
+              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="90%" objectFit="contain" borderRadius="md"/>
+            </ModalBody>
+            <ModalFooter borderTopWidth="1px" borderColor="gray.200">
+              <Button bg="brand.secondary" color="brand.textLight" _hover={{bg: 'brand.primaryDark'}} mr={3} onClick={onClose}>
+                Close
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
     </Box>
   );
 }
