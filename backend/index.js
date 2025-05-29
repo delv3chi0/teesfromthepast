@@ -1,5 +1,4 @@
 // backend/index.js
-// ... (process listeners are good, I'll omit them for brevity here but they should remain in your actual file) ...
 process.on('uncaughtException', (err) => {
   console.error('[Backend Log] Uncaught Exception:', err.stack);
   process.exit(1);
@@ -19,12 +18,12 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
-import checkoutRoutes from './routes/checkout.js';
+import checkoutRoutes from './routes/checkout.js'; // Correctly imported
 import designRoutes from './routes/designs.js'; 
 import contestRoutes from './routes/contest.js'; 
 
 const app = express();
-const PORT = process.env.PORT || 5000; // Ensure PORT is read from process.env
+const PORT = process.env.PORT || 5000;
 
 console.log(`[Backend Log] Server starting with PORT: ${PORT}`);
 
@@ -32,7 +31,7 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('MongoDB connected successfully'))
     .catch(err => {
         console.error('MongoDB connection error:', err);
-        process.exit(1); // Exit if DB connection fails
+        process.exit(1); 
     });
 
 app.use(cors({
@@ -45,7 +44,7 @@ app.use(cors({
 }));
 console.log('[Backend Log] CORS middleware applied with updated origin list.');
 app.use(cookieParser());
-app.use('/api/webhook', stripeWebhookRoutes);
+app.use('/api/webhook', stripeWebhookRoutes); // This one handles raw body if set up correctly
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
@@ -68,8 +67,8 @@ app.get('/health', (req, res) => {
 // --- API Routes ---
 console.log('[Backend Log] Setting up API routes...');
 app.use('/api/auth', authRoutes); 
-app.use('/api', generateImageRoutes); 
-app.use('/api', checkoutRoutes);
+app.use('/api', generateImageRoutes); // Note: this means routes in generateImageRoutes are like /api/routeInFile
+app.use('/api/checkout', checkoutRoutes); // <-- CORRECTED THIS LINE
 app.use('/api/mydesigns', designRoutes); 
 app.use('/api/contest', contestRoutes); 
 console.log('[Backend Log] All routes configured.');
