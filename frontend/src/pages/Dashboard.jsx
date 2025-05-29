@@ -43,9 +43,7 @@ export default function Dashboard() {
           setLoadingDesigns(false);
         });
     } else {
-      // If user is null (e.g., after logout, before redirect completes fully from a protected route)
-      // Or if PrivateRoute allowed access somehow while user was briefly null during initial load
-      setLoadingDesigns(false); // Stop loading if no user
+      setLoadingDesigns(false); 
     }
   }, [user, logout, navigate, toast]);
 
@@ -55,21 +53,34 @@ export default function Dashboard() {
   };
 
   return (
-    <Box maxW="6xl" mt={4} px={4} pb={10}> 
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={6}>
-        <Heading size="lg" color="brand.textLight">Dashboard</Heading>
+    // Outermost box has no mx="auto", so it will be left-aligned within MainLayout's content area.
+    // It also has no 'bg' prop, so it's transparent to MainLayout's brand.accentOrange.
+    <Box maxW="6xl" mt={{base: 4, md: 6}} px={{base: 2, md: 4}} pb={10}> 
+      <Box 
+        display="flex" 
+        // justifyContent="space-between" // Not needed if only heading is here
+        alignItems="center" 
+        mb={6}
+      >
+        {/* Page Title "Dashboard" - Left Aligned */}
+        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left"> 
+          Dashboard
+        </Heading>
       </Box>
 
+      {/* Welcome Message - Left Aligned and Sized */}
       {user && 
-        <Heading as="h1" size="xl" my={8} textAlign="center" color="brand.textLight">
+        <Heading as="h2" size="lg" my={6} textAlign="left" color="brand.textLight" fontWeight="normal"> 
+          {/* Using h2 for semantic hierarchy, size lg for slightly smaller than page title */}
           Welcome back, {user.firstName || user.username || user.email}!
         </Heading>
       }
       
-      <Divider my={6} borderColor="brand.secondary" />
+      <Divider my={8} borderColor="brand.secondary" /> {/* Themed divider, increased margin */}
 
       <VStack align="stretch" spacing={10}>
         <Box>
+          {/* Section Header - Left Aligned */}
           <Heading 
             as="h2" 
             size="lg" 
@@ -78,10 +89,10 @@ export default function Dashboard() {
             color="brand.textLight" 
             borderBottomWidth="2px" 
             borderColor="brand.accentYellow"
+            textAlign="left" // Explicitly left-align
           >
             Recent Designs
           </Heading>
-          {/* --- CORRECTED CONDITIONAL RENDERING BLOCKS --- */}
           {loadingDesigns && (
             <Box textAlign="center" py={10}>
               <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
@@ -97,7 +108,7 @@ export default function Dashboard() {
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
             <VStack 
                 spacing={5} p={8} bg="rgba(255,255,255,0.1)" borderRadius="xl" 
-                shadow="md" borderWidth="1px" borderColor="rgba(255,255,255,0.2)" mt={8}
+                shadow="md" borderWidth="1px" borderColor="rgba(255,255,255,0.2)" mt={4} // Reduced mt
             >
               <Icon as={FaPlusSquare} boxSize="50px" color="brand.textLight" /> 
               <Text fontSize="xl" fontWeight="medium" color="brand.textLight" textAlign="center">
@@ -133,7 +144,6 @@ export default function Dashboard() {
               ))}
             </SimpleGrid>
           )}
-          {/* --- END CORRECTED CONDITIONAL RENDERING BLOCKS --- */}
         </Box>
       </VStack>
 
