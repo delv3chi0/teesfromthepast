@@ -1,6 +1,6 @@
 // frontend/src/components/MainLayout.jsx
 import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react';
-import { Link as RouterLink, useLocation } from 'react-router-dom'; // Removed useNavigate
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
@@ -72,13 +72,11 @@ export default function MainLayout({ children }) {
                 <Image 
                   src="/logo-text.png" 
                   alt="Tees From The Past Title Logo" 
-                  h="50px" // <-- UPDATED from 48px to 50px
+                  h="50px" // Current height for text logo
                   objectFit="contain"
-                  mr={3} 
+                  // Removed mr={3} as the text next to it is removed
                 />
-                <Text fontSize="xl" fontWeight="bold" color="brand.primaryDark" display={{ base: 'none', lg: 'block' }}>
-                  Tees From The Past
-                </Text>
+                {/* TEXT "Tees From The Past" REMOVED FROM HERE */}
               </ChakraLink>
             </Flex>
             <Flex align="center">
