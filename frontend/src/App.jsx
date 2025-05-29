@@ -12,10 +12,12 @@ import Dashboard from './pages/Dashboard';
 import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
 import ProductStudio from './pages/ProductStudio';
-import VotingPage from './pages/VotingPage'; // <-- ADD IMPORT for new Voting Page
+import VotingPage from './pages/VotingPage';
 import Profile from './pages/Profile';
-// Vote.jsx was your old one, we can remove its import if VotingPage.jsx replaces it
-// import Vote from "./pages/Vote"; 
+import CheckoutPage from './pages/CheckoutPage';         // <-- ADDED IMPORT
+import PaymentSuccessPage from './pages/PaymentSuccessPage'; // <-- ADDED IMPORT
+// import Vote from "./pages/Vote"; // Assuming this is replaced by VotingPage
+
 import PrivateRoute from './components/PrivateRoute';
 
 export default function App() {
@@ -23,10 +25,12 @@ export default function App() {
     <ChakraProvider theme={theme}> 
       <AuthProvider>
         <Routes>
+          {/* Public routes - no MainLayout */}
           <Route path="/" element={<Login />} /> 
           <Route path="/login" element={<Login />} /> 
           <Route path="/register" element={<RegistrationPage />} />
           
+          {/* Protected Routes - these will now use the MainLayout */}
           <Route 
             path="/dashboard" 
             element={<PrivateRoute><MainLayout><Dashboard/></MainLayout></PrivateRoute>} 
@@ -44,15 +48,23 @@ export default function App() {
             element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>} 
           />
           <Route 
-            path="/vote-now" // <-- ADD ROUTE for the new Voting Page
+            path="/vote-now" 
             element={<PrivateRoute><MainLayout><VotingPage/></MainLayout></PrivateRoute>} 
           />
           <Route 
             path="/profile" 
             element={<PrivateRoute><MainLayout><Profile/></MainLayout></PrivateRoute>} 
           />
-          {/* If Vote.jsx is being replaced by VotingPage.jsx, remove the old /vote route if it exists */}
-          {/* <Route path="/vote" element={<PrivateRoute><MainLayout><Vote/></MainLayout></PrivateRoute>} /> */}
+          <Route 
+            path="/checkout" // <-- ADDED CHECKOUT ROUTE
+            element={<PrivateRoute><MainLayout><CheckoutPage/></MainLayout></PrivateRoute>} 
+          />
+          <Route 
+            path="/payment-success" // <-- ADDED PAYMENT SUCCESS ROUTE
+            element={<PrivateRoute><MainLayout><PaymentSuccessPage/></MainLayout></PrivateRoute>} 
+            // Consider if payment-success needs to be strictly private or if some info can be shown if session is lost
+          />
+          {/* <Route path="/vote" element={<PrivateRoute><MainLayout><Vote/></MainLayout></PrivateRoute>} /> // Old vote route*/}
 
           <Route path="*" element={<Navigate to="/" replace />} /> 
         </Routes>
