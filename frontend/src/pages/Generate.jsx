@@ -1,26 +1,25 @@
 // frontend/src/pages/Generate.jsx
 import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, HStack, Icon, Alert, AlertIcon } from "@chakra-ui/react";
 import { useState } from "react";
-// client is not used in this temporary diagnostic version of handleGenerate
-// import { client } from '../api/client'; 
+import { client } from '../api/client'; // Make sure client is imported
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 import { FaMagic, FaSave } from 'react-icons/fa';
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // Will remain empty for this test
-  const [loading, setLoading] = useState(false);   // Not used by test handleGenerate
-  const [isSaving, setIsSaving] = useState(false); // Not used by test handleGenerate
-  const [error, setError] = useState("");       // Not used by test handleGenerate
-  const toast = useToast(); // Kept in case test involves it, but current test uses alert
-  const { logout } = useAuth(); // Kept for handleApiError, though not called by test
+  const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const toast = useToast();
+  const { logout } = useAuth(); 
   const navigate = useNavigate(); 
 
-  // handleApiError is not called by the simplified handleGenerate, but kept for when we restore logic
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
-    console.error(`Error during ${actionType}:`, err);
-    const errorMessage = err.response?.data?.message || defaultMessage;
+    console.error(`[Generate.jsx] handleApiError called for ${actionType}. Raw error:`, err);
+    console.error(`[Generate.jsx] handleApiError - error.response:`, err.response);
+    const errorMessage = err.response?.data?.message || err.message || defaultMessage;
     setError(errorMessage);
     toast({
       title: `${actionType.charAt(0).toUpperCase() + actionType.slice(1)} Failed`,
@@ -42,13 +41,7 @@ export default function Generate() {
     }
   };
 
-  // --- MODIFIED handleGenerate for DIAGNOSTIC TEST ---
   const handleGenerate = async () => {
-    console.log("[Generate.jsx] Generate Button CLICKED - Direct Test");
-    alert("Generate Button Clicked - Test Succeeded! Page should NOT navigate.");
-    
-    // All original logic is commented out for this test:
-    /*
     if (!prompt.trim()) {
       toast({
         title: "Prompt is empty",
@@ -59,28 +52,35 @@ export default function Generate() {
       });
       return;
     }
-    setLoading(true); setError(""); setImageUrl("");
+    
+    console.log("[Generate.jsx] handleGenerate: Setting loading states true.");
+    setLoading(true); 
+    setError(""); 
+    setImageUrl(""); 
+
     try {
-      console.log("[Generate.jsx] Calling /api/designs/create with prompt:", prompt);
-      const res = await client.post("/designs/create", { prompt }); // Make sure client is imported if you uncomment
+      console.log("[Generate.jsx] handleGenerate: About to call client.post('/designs/create') with prompt:", prompt);
+      const res = await client.post("/designs/create", { prompt }); 
+      console.log("[Generate.jsx] handleGenerate: API call successful. Raw response:", res);
+      
       const url = res.data.imageDataUrl;
       if (url) { 
+        console.log("[Generate.jsx] handleGenerate: imageDataUrl found:", url);
         setImageUrl(url); 
         toast({ title: "Image Generated!", status: "success", duration: 3000, isClosable: true });
       } else { 
-        throw new Error("No image URL received"); 
+        console.error("[Generate.jsx] handleGenerate: No imageDataUrl in response data.");
+        throw new Error("No image URL received from server."); 
       }
     } catch (err) { 
+      console.error("[Generate.jsx] handleGenerate: Caught error during API call or processing.");
       handleApiError(err, "Failed to generate image. Please try again.", "Image Generation");
     } finally { 
+      console.log("[Generate.jsx] handleGenerate: Setting loading state false.");
       setLoading(false); 
     }
-    */
   };
 
-  // handleSaveDesign is not directly relevant to this specific button test,
-  // but ensure it's here if you were testing saving previously.
-  // For now, its functionality is not being triggered by the modified handleGenerate.
   const handleSaveDesign = async () => { 
     if (!prompt || !imageUrl) {
       toast({ title: "Cannot save", description: "No prompt or image data available.", status: "warning", duration: 3000, isClosable: true});
@@ -88,15 +88,15 @@ export default function Generate() {
     }
     setIsSaving(true); setError(""); 
     try {
-      // Make sure client is imported if you uncomment the line below
-      // await client.post('/mydesigns', { prompt, imageDataUrl: imageUrl });
-      console.log("[Generate.jsx] Placeholder: Would save design here. Prompt:", prompt);
-      toast({ title: "Design Saved! (Placeholder)", description: "Your masterpiece would be in your collection.", status: "success", duration: 3000, isClosable: true});
+      console.log("[Generate.jsx] handleSaveDesign: About to call client.post('/mydesigns')");
+      await client.post('/mydesigns', { prompt, imageDataUrl: imageUrl });
+      console.log("[Generate.jsx] handleSaveDesign: Save API call successful.");
+      toast({ title: "Design Saved!", description: "Your masterpiece is in your collection.", status: "success", duration: 3000, isClosable: true});
     } catch (err) { 
-      // handleApiError(err, "Could not save your design.", "Saving Design");
-      console.error("Error saving design (placeholder):", err);
-       toast({ title: "Save Failed (Placeholder)", description: "Error saving.", status: "error", duration: 3000, isClosable: true});
+      console.error("[Generate.jsx] handleSaveDesign: Caught error during API call or processing.");
+      handleApiError(err, "Could not save your design.", "Saving Design");
     } finally { 
+      console.log("[Generate.jsx] handleSaveDesign: Setting isSaving state false.");
       setIsSaving(false); 
     }
   };
@@ -113,10 +113,10 @@ export default function Generate() {
         AI Image Generator 
       </Heading>
       <Textarea 
-        placeholder="Describe your retro shirt idea..." 
+        placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
         value={prompt} 
         onChange={(e) => setPrompt(e.target.value)} 
-        isDisabled={loading || isSaving} // loading/isSaving won't change in this test version
+        isDisabled={loading || isSaving}
         size="lg"
         minHeight="120px"
         bg="brand.paper" 
@@ -129,24 +129,23 @@ export default function Generate() {
       />
       <HStack spacing={4}> 
         <Button 
-          onClick={handleGenerate} // This now calls the simplified test function
+          onClick={handleGenerate} 
           bg="brand.accentYellow"
           color="brand.textDark"
           _hover={{bg: "brand.accentYellowHover"}}
-          // isLoading={loading} // Not relevant for this test
-          // loadingText="Generating..."
-          // isDisabled={isSaving || loading} // Not relevant for this test
+          isLoading={loading}
+          loadingText="Generating..."
+          isDisabled={isSaving || loading}
           size="lg" px={8} py={6} borderRadius="full"
           leftIcon={<Icon as={FaMagic} />}
           boxShadow="md" _active={{ boxShadow: "lg" }}
         >
-          Generate Image (Test Click)
+          Generate Image
         </Button>
       </HStack>
 
       {error && <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.300"><AlertIcon color="red.600"/><Text color="red.800">{error}</Text></Alert>}
       
-      {/* imageUrl will remain empty in this test, so this block won't render */}
       {imageUrl && !error && (
         <VStack 
           mt={6} spacing={5} p={6} 
@@ -159,8 +158,8 @@ export default function Generate() {
           <Button
             mt={3} bg="brand.primary" color="brand.textLight"
             _hover={{bg: "brand.primaryLight"}}
-            onClick={handleSaveDesign} // This save function is also a placeholder for now
-            // isLoading={isSaving} loadingText="Saving..." isDisabled={loading}
+            onClick={handleSaveDesign}
+            isLoading={isSaving} loadingText="Saving..." isDisabled={loading}
             size="lg" px={8} py={6} borderRadius="full"
             leftIcon={<Icon as={FaSave} />}
             boxShadow="md" _active={{ boxShadow: "lg" }}
