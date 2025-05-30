@@ -1,11 +1,10 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react'; // Removed unused Text import
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer'; 
-// Removed unused FaFacebook, FaTwitter, FaInstagram imports as they are in Footer.jsx
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
@@ -21,14 +20,13 @@ export default function MainLayout({ children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { user } = useAuth();
 
-  // SidebarContent definition with corrected zIndex
   const SidebarContent = ({onClick}) => (
     <Box 
       as="nav" 
       pos="fixed" 
       top="0" 
       left="0" 
-      zIndex={1200} // Corrected from "sticky"
+      zIndex={1200} 
       h="full" 
       pb="10" 
       overflowX="hidden" 
@@ -65,23 +63,14 @@ export default function MainLayout({ children }) {
   return (
     <Flex direction="column" minH="100vh"> 
       <Box as="section" display="flex" flexGrow={1}> 
-        {/* ---- MODIFICATION FOR TEST 2: Wrapper Box for Desktop Sidebar ---- */}
+        {/* Wrapper Box for Desktop Sidebar - diagnostic styles removed */}
         <Box 
-          display={{ base: 'none', md: 'block' }}      // Hide this Box (and its child SidebarContent) on mobile
-          bg={{ base: 'orange.500', md: 'transparent' }} // Diagnostic BG: orange on base (if not hidden), transparent on desktop
-          width={{ base: '100px', md: 'auto' }}       // Diagnostic width on base
-          height={{ base: '100px', md: 'auto' }}      // Diagnostic height on base
-          // The actual SidebarContent width is w="60" (240px), so this Box will constrain it on 'md' if 'auto' isn't overridden.
-          // For desktop, we want the SidebarContent to dictate its own width (w="60").
-          // So, if using this wrapper, the SidebarContent itself should not have pos="fixed" if the wrapper is handling layout.
-          // However, for just testing if the *wrapper* hides, this is okay.
-          // For a real fix with a wrapper, SidebarContent might need to be pos="relative" or similar if its parent is handling fixed pos.
-          // For now, let's keep SidebarContent as is, and focus on if this *outer Box* hides.
+          display={{ base: 'none', md: 'block' }} // Hide this Box (and its child SidebarContent) on mobile
+          // bg, width, height for 'base' are removed as they were for diagnostics.
+          // On 'md', the 'block' display allows SidebarContent to define its own appearance.
         >
-          {/* SidebarContent here now has NO direct responsive display/bg props */}
           <SidebarContent /> 
         </Box>
-        {/* ---- END MODIFICATION ---- */}
         
         <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
           <DrawerOverlay />
