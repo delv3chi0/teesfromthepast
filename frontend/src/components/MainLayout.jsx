@@ -1,5 +1,5 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer } from '@chakra-ui/react'; // Added Spacer import
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
@@ -95,7 +95,6 @@ export default function MainLayout({ children }) {
           <Flex
             as="header"
             align="center"
-            // justify="space-between" // Spacer will handle this now
             w="full"
             px={6} py={3} 
             bg="brand.secondary" 
@@ -127,11 +126,16 @@ export default function MainLayout({ children }) {
               </ChakraLink>
             </Flex>
 
-            <Spacer /> {/* This will push the left and right groups apart */}
+            <Spacer /> 
 
             <Flex align="center"> {/* Right Group */}
               {user && (
-                <ChakraLink as={RouterLink} to="/profile" mr={4}>
+                <ChakraLink 
+                  as={RouterLink} 
+                  to="/profile" 
+                  mr={4} 
+                  display={{ base: 'none', md: 'inline-flex' }} // Hide on mobile, show on desktop
+                >
                   <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} bg="brand.primaryDark" color="brand.textLight"/>
                 </ChakraLink>
               )}
