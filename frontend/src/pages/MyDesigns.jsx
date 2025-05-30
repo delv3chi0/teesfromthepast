@@ -4,12 +4,12 @@ import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
     useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, 
-    useToast, Icon
+    useToast, Icon, HStack // <-- HStack ADDED HERE
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaPlusSquare, FaMagic, FaTrophy, FaTimes, FaCheckCircle, FaTrashAlt } from 'react-icons/fa'; // Added FaTrashAlt
+import { FaPlusSquare, FaMagic, FaTrophy, FaTimes, FaCheckCircle, FaTrashAlt } from 'react-icons/fa';
 
 export default function MyDesigns() {
   const [designs, setDesigns] = useState([]);
@@ -19,22 +19,18 @@ export default function MyDesigns() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  // For the main image display modal
   const { isOpen: isImageModalOpen, onOpen: onImageModalOpen, onClose: onImageModalClose } = useDisclosure();
   const [selectedDesign, setSelectedDesign] = useState(null);
 
-  // For the contest submission confirmation AlertDialog
   const { isOpen: isContestAlertOpen, onOpen: onContestAlertOpen, onClose: onContestAlertClose } = useDisclosure();
   const [designToSubmit, setDesignToSubmit] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const cancelRef = useRef();
 
-  // --- NEW: For Delete Confirmation AlertDialog ---
   const { isOpen: isDeleteAlertOpen, onOpen: onDeleteAlertOpen, onClose: onDeleteAlertClose } = useDisclosure();
   const [designToDelete, setDesignToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const cancelDeleteRef = useRef();
-  // --- END NEW ---
 
   const fetchDesigns = () => {
     if (user) {
@@ -72,7 +68,6 @@ export default function MyDesigns() {
 
   const handleOpenSubmitConfirmation = (design) => {
     setDesignToSubmit(design);
-    // onImageModalOpen(); // Image modal should already be open if this button is visible
     onContestAlertOpen();
   };
 
@@ -113,13 +108,11 @@ export default function MyDesigns() {
     }
   };
 
-  // --- NEW: Handler for opening delete confirmation ---
   const handleOpenDeleteConfirmation = (design) => {
     setDesignToDelete(design);
     onDeleteAlertOpen();
   };
 
-  // --- NEW: Handler for confirming and executing deletion ---
   const handleConfirmDelete = async () => {
     if (!designToDelete) return;
     setIsDeleting(true);
@@ -133,9 +126,9 @@ export default function MyDesigns() {
         duration: 3000,
         isClosable: true,
       });
-      onImageModalClose(); // Close the main image modal
-      onDeleteAlertClose(); // Close the delete confirmation
-      fetchDesigns(); // Refresh the designs list
+      onImageModalClose(); 
+      onDeleteAlertClose(); 
+      fetchDesigns(); 
     } catch (err) {
       console.error("Error deleting design:", err);
       const errorMessage = err.response?.data?.message || "Could not delete the design. Please try again.";
@@ -150,16 +143,13 @@ export default function MyDesigns() {
         logout();
         navigate('/login');
       }
-      onDeleteAlertClose(); // Close the delete confirmation even on failure
+      onDeleteAlertClose(); 
     } finally {
       setIsDeleting(false);
       setDesignToDelete(null);
     }
   };
-  // --- END NEW ---
 
-
-  // ... (loading, error, no designs rendering logic remains the same) ...
   if (loading && !user && !error) { 
     return (
         <Box textAlign="center" mt={20} px={4}>
@@ -261,7 +251,6 @@ export default function MyDesigns() {
         </SimpleGrid>
       )}
 
-      {/* Image Display Modal */}
       {selectedDesign && (
         <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
           <ModalOverlay bg="blackAlpha.700"/>
@@ -273,25 +262,25 @@ export default function MyDesigns() {
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="75vh" maxW="95%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
-            <ModalFooter borderTopWidth="1px" borderColor="gray.200" justifyContent="space-between"> {/* Adjusted for new button */}
+            <ModalFooter borderTopWidth="1px" borderColor="gray.200" justifyContent="space-between">
               <Button 
-                bg="red.500" // Destructive action color
+                bg="red.500" 
                 color="white"
                 _hover={{bg: "red.600"}} 
                 onClick={() => handleOpenDeleteConfirmation(selectedDesign)} 
-                isLoading={isDeleting} // Use isDeleting state here if you want button to show loading
+                isLoading={isDeleting && designToDelete?._id === selectedDesign._id} // Show loading only for the selected design being deleted
                 leftIcon={<Icon as={FaTrashAlt} />} 
                 borderRadius="full" px={6} size="lg"
               >
                 Delete
               </Button>
-              <HStack> {/* Group for existing buttons */}
+              <HStack> {/* This HStack was causing the error if not imported */}
                 <Button 
                   bg="brand.accentYellow" color="brand.textDark" 
                   _hover={{bg: "brand.accentYellowHover"}} 
                   onClick={() => handleOpenSubmitConfirmation(selectedDesign)} 
-                  isLoading={isSubmitting} 
-                  isDisabled={isSubmitting}
+                  isLoading={isSubmitting && designToSubmit?._id === selectedDesign._id} 
+                  isDisabled={isSubmitting || isDeleting} // Disable if either operation is in progress
                   leftIcon={<Icon as={FaTrophy} />} 
                   borderRadius="full" px={6} size="lg"
                 >
@@ -305,6 +294,7 @@ export default function MyDesigns() {
                   borderRadius="full"
                   px={6} size="lg"
                   onClick={onImageModalClose}
+                  isDisabled={isDeleting || isSubmitting} // Disable if any operation is in progress
                 >
                   Close
                 </Button>
@@ -314,12 +304,11 @@ export default function MyDesigns() {
         </Modal>
       )}
 
-      {/* Contest Submission Confirmation AlertDialog */}
       {designToSubmit && (
         <AlertDialog
-            isOpen={isContestAlertOpen} // Changed from isAlertOpen
+            isOpen={isContestAlertOpen}
             leastDestructiveRef={cancelRef}
-            onClose={onContestAlertClose} // Changed from onAlertClose
+            onClose={onContestAlertClose}
             isCentered
         >
             <AlertDialogOverlay>
@@ -332,7 +321,7 @@ export default function MyDesigns() {
                     <AlertDialogFooter>
                         <Button 
                             ref={cancelRef} 
-                            onClick={onContestAlertClose} // Changed from onAlertClose
+                            onClick={onContestAlertClose}
                             isDisabled={isSubmitting} 
                             variant="outline"
                             borderColor="brand.primary"
@@ -362,7 +351,6 @@ export default function MyDesigns() {
         </AlertDialog>
       )}
 
-      {/* --- NEW: Delete Confirmation AlertDialog --- */}
       {designToDelete && (
         <AlertDialog
             isOpen={isDeleteAlertOpen}
@@ -392,7 +380,7 @@ export default function MyDesigns() {
                             Cancel
                         </Button>
                         <Button 
-                            bg="red.500" // Destructive action color
+                            bg="red.500" 
                             color="white"
                             _hover={{bg: "red.600"}} 
                             onClick={handleConfirmDelete} 
@@ -409,8 +397,6 @@ export default function MyDesigns() {
             </AlertDialogOverlay>
         </AlertDialog>
       )}
-      {/* --- END NEW --- */}
-
     </Box>
   );
 }
