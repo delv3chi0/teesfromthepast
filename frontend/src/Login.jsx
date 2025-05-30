@@ -1,4 +1,4 @@
-k// frontend/src/Login.jsx
+// frontend/src/Login.jsx
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
@@ -75,9 +75,9 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)} 
                 isRequired 
                 bg="white"
-                borderColor="brand.secondary" // Added for consistency if needed
-                focusBorderColor="brand.primaryDark" // Added for consistency
-                borderRadius="md" // Standard border radius for inputs
+                borderColor="brand.secondary" 
+                focusBorderColor="brand.primaryDark" 
+                borderRadius="md" 
               />
               <Input 
                 type="password" 
@@ -86,19 +86,18 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)} 
                 isRequired 
                 bg="white"
-                borderColor="brand.secondary" // Added for consistency
-                focusBorderColor="brand.primaryDark" // Added for consistency
-                borderRadius="md" // Standard border radius for inputs
+                borderColor="brand.secondary" 
+                focusBorderColor="brand.primaryDark" 
+                borderRadius="md" 
               />
               <Button 
-                bg="brand.accentYellow"      // Primary Action Style
-                color="brand.textDark"       // Primary Action Style
-                _hover={{ bg: 'brand.accentYellowHover' }} // Assuming you have this in your theme
+                bg="brand.accentYellow"      
+                color="brand.textDark"       
+                _hover={{ bg: 'brand.accentYellowHover' }} 
                 width="full" 
                 type="submit" 
                 size="lg"
-                borderRadius="full"         // Primary Action Style
-                // No icon added for plain "Log In" to keep it clean
+                borderRadius="full"         
               >
                 Log In
               </Button>
