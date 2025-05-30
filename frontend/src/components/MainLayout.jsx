@@ -39,8 +39,13 @@ export default function MainLayout({ children }) {
   return (
     <Flex direction="column" minH="100vh"> 
       <Box as="section" display="flex" flexGrow={1}> 
-        <SidebarContent display={{ base: 'none', md: 'unset' }} />
-        <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
+	<SidebarContent 
+	  display={{ base: 'none', md: 'block' }} // Changed 'unset' to 'block' for clarity, should behave similarly
+	  bg={{ base: 'pink.500', md: 'brand.primary' }} // Use pink for 'base', original for 'md'
+	  borderWidth={{base: "5px", md: "1px"}} // Add an obvious border too
+	  borderColor={{base: "lime", md: "brand.primaryDark"}} // Lime green border for base
+	/>        
+	<Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
           <DrawerOverlay />
           <DrawerContent bg="brand.primary" color="brand.textLight"> 
             <DrawerCloseButton />
