@@ -4,7 +4,7 @@ import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
     useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, 
-    useToast, Icon, HStack // <-- HStack ADDED HERE
+    useToast, Icon, HStack // Ensured HStack is imported
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
@@ -251,6 +251,7 @@ export default function MyDesigns() {
         </SimpleGrid>
       )}
 
+      {/* Image Display Modal */}
       {selectedDesign && (
         <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
           <ModalOverlay bg="blackAlpha.700"/>
@@ -262,27 +263,37 @@ export default function MyDesigns() {
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="75vh" maxW="95%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
-            <ModalFooter borderTopWidth="1px" borderColor="gray.200" justifyContent="space-between">
+            <ModalFooter 
+              borderTopWidth="1px" 
+              borderColor="gray.200" 
+              flexWrap="wrap" 
+              justifyContent={{ base: "center", sm: "space-between" }} 
+              py={4}
+            >
               <Button 
                 bg="red.500" 
                 color="white"
                 _hover={{bg: "red.600"}} 
                 onClick={() => handleOpenDeleteConfirmation(selectedDesign)} 
-                isLoading={isDeleting && designToDelete?._id === selectedDesign._id} // Show loading only for the selected design being deleted
+                isLoading={isDeleting && designToDelete?._id === selectedDesign._id} 
                 leftIcon={<Icon as={FaTrashAlt} />} 
                 borderRadius="full" px={6} size="lg"
+                mb={{ base: 2, sm: 0 }} 
+                mr={{ base: 0, sm: 2 }} 
+                flexShrink={0}
               >
                 Delete
               </Button>
-              <HStack> {/* This HStack was causing the error if not imported */}
+              <HStack spacing={3} flexShrink={0} justifyContent={{ base: "center", sm: "flex-end"}} w={{base: "100%", sm: "auto"}}> 
                 <Button 
                   bg="brand.accentYellow" color="brand.textDark" 
                   _hover={{bg: "brand.accentYellowHover"}} 
                   onClick={() => handleOpenSubmitConfirmation(selectedDesign)} 
                   isLoading={isSubmitting && designToSubmit?._id === selectedDesign._id} 
-                  isDisabled={isSubmitting || isDeleting} // Disable if either operation is in progress
+                  isDisabled={isSubmitting || isDeleting}
                   leftIcon={<Icon as={FaTrophy} />} 
                   borderRadius="full" px={6} size="lg"
+                  flexShrink={0}
                 >
                   Submit to Contest
                 </Button>
@@ -294,7 +305,8 @@ export default function MyDesigns() {
                   borderRadius="full"
                   px={6} size="lg"
                   onClick={onImageModalClose}
-                  isDisabled={isDeleting || isSubmitting} // Disable if any operation is in progress
+                  isDisabled={isDeleting || isSubmitting}
+                  flexShrink={0}
                 >
                   Close
                 </Button>
@@ -304,6 +316,7 @@ export default function MyDesigns() {
         </Modal>
       )}
 
+      {/* Contest Submission Confirmation AlertDialog */}
       {designToSubmit && (
         <AlertDialog
             isOpen={isContestAlertOpen}
@@ -351,6 +364,7 @@ export default function MyDesigns() {
         </AlertDialog>
       )}
 
+      {/* Delete Confirmation AlertDialog */}
       {designToDelete && (
         <AlertDialog
             isOpen={isDeleteAlertOpen}

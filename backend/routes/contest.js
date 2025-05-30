@@ -10,16 +10,15 @@ const router = express.Router();
 const getCurrentMonthYYYYMM = () => {
   const now = new Date();
   const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-indexed, ensure 2 digits
+  const month = String(now.getMonth() + 1).padStart(2, '0'); 
   return `${year}-${month}`;
 };
 
-// === Recipe 1: Submit a Design to the Current Month's Contest ===
-// Path: POST /api/contest/submit/:designId
+// ... (POST /submit/:designId route remains the same) ...
 router.post('/submit/:designId', protect, async (req, res) => {
   const { designId } = req.params;
   const userId = req.user.id;
-  const currentMonth = getCurrentMonthYYYYMM(); // This will now work correctly
+  const currentMonth = getCurrentMonthYYYYMM(); 
 
   try {
     const user = await User.findById(userId);
@@ -59,15 +58,18 @@ router.post('/submit/:designId', protect, async (req, res) => {
   }
 });
 
+
 // === Recipe 2: Get All Designs for the Current Month's Contest ===
 // Path: GET /api/contest/designs
 router.get('/designs', async (req, res) => { 
-  const currentMonth = getCurrentMonthYYYYMM(); // This will now work correctly
+  const currentMonth = getCurrentMonthYYYYMM();
   try {
     const contestDesigns = await Design.find({ 
       isSubmittedForContest: true, 
       contestSubmissionMonth: currentMonth 
-    }).sort({ votes: -1, createdAt: -1 }); 
+    })
+    .populate('user', 'username') // <-- MODIFICATION: Populate user field, select only username
+    .sort({ votes: -1, createdAt: -1 }); 
 
     res.status(200).json(contestDesigns);
   } catch (error) {
@@ -76,12 +78,11 @@ router.get('/designs', async (req, res) => {
   }
 });
 
-// === Recipe 3: Vote for a Design in the Current Month's Contest ===
-// Path: POST /api/contest/vote/:designId
+// ... (POST /vote/:designId route remains the same) ...
 router.post('/vote/:designId', protect, async (req, res) => {
   const { designId } = req.params;
   const userId = req.user.id;
-  const currentMonth = getCurrentMonthYYYYMM(); // This will now work correctly
+  const currentMonth = getCurrentMonthYYYYMM(); 
 
   try {
     const designToVoteFor = await Design.findOne({
@@ -106,13 +107,10 @@ router.post('/vote/:designId', protect, async (req, res) => {
     let monthlyVote = user.monthlyVoteRecord.find(record => record.month === currentMonth);
     if (!monthlyVote) {
       user.monthlyVoteRecord.push({ month: currentMonth, designsVotedFor: [] });
-      // Re-fetch the newly added record to work with it
       monthlyVote = user.monthlyVoteRecord.find(record => record.month === currentMonth);
     }
     
-    // Ensure monthlyVote is not undefined (it shouldn't be after the push and find)
     if (!monthlyVote) {
-        // This should ideally not happen if the logic above is correct
         console.error("[Contest Vote] Failed to create or find monthly vote record for user:", userId, "month:", currentMonth);
         return res.status(500).json({ message: 'Internal server error processing vote record.'});
     }
@@ -141,5 +139,6 @@ router.post('/vote/:designId', protect, async (req, res) => {
     res.status(500).json({ message: 'Server error casting vote.', error: error.message });
   }
 });
+
 
 export default router;

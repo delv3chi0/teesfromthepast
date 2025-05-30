@@ -100,7 +100,6 @@ export default function VotingPage() {
         }
     };
 
-    // --- Refined Loading / Error / Content Display Logic ---
     const renderContent = () => {
         if (loading) {
             return (
@@ -112,11 +111,11 @@ export default function VotingPage() {
         }
         if (error) {
             return (
-                <Box textAlign="center" mt={8} px={4}> {/* Adjusted mt */}
+                <Box textAlign="center" mt={8} px={4}>
                     <Alert status="error" bg="brand.paper" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={10}>
                         <AlertIcon boxSize="40px" mr={0} color="red.500" />
                         <Text mt={3} fontWeight="bold" color="brand.textDark">{error}</Text>
-                        <Button mt={4} colorScheme="brandPrimary" onClick={fetchContestDesigns}>Try Again</Button>
+                        <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" size="lg" onClick={fetchContestDesigns}>Try Again</Button>
                     </Alert>
                 </Box>
             );
@@ -148,18 +147,26 @@ export default function VotingPage() {
                     >
                         <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h="280px" bg="gray.200" />
                         <Box p={5} flexGrow={1} display="flex" flexDirection="column" justifyContent="space-between">
-                            <Text fontSize="md" color="brand.textDark" noOfLines={2} title={design.prompt} minH="48px" fontWeight="medium">
+                            {/* MODIFIED: Display username instead of prompt */}
+                            <Tooltip label={design.prompt || "No prompt provided"} placement="top" bg="gray.600" color="white" hasArrow>
+                                <Text fontSize="md" color="brand.textDark" fontWeight="medium" noOfLines={1}>
+                                    Submitted by: {design.user ? design.user.username : 'Unknown User'}
+                                </Text>
+                            </Tooltip>
+                            {/* You can choose to still display the prompt if desired, perhaps smaller or truncated */}
+                            {/* <Text fontSize="sm" color="gray.600" noOfLines={1} title={design.prompt} mt={1}>
                                 {design.prompt || "Untitled Design"}
-                            </Text>
+                            </Text> */}
                             <HStack justifyContent="space-between" mt={4}>
                                 <Stat size="sm">
-                                    <StatLabel color="brand.textMuted">Votes</StatLabel>
+                                    <StatLabel color="brand.textMutedOnOrange">Votes</StatLabel> 
+                                    {/* Changed textMuted to textMutedOnOrange for better contrast on paper, or use brand.secondary */}
                                     <StatNumber color="brand.primaryDark" fontWeight="bold" fontSize="xl">{design.votes || 0}</StatNumber>
                                 </Stat>
                                 <Tooltip 
                                     label={
                                         !user ? "Please log in to vote" :
-                                        design.user === user?._id ? "You cannot vote for your own design" :
+                                        design.user?._id === user?._id ? "You cannot vote for your own design" : // check design.user._id
                                         votedDesignIds.includes(design._id) ? "You have already voted for this design" : 
                                         userVotesLeft <= 0 ? "No votes left this month" : 
                                         "Cast your vote!"
@@ -172,7 +179,7 @@ export default function VotingPage() {
                                         size="md" px={6} borderRadius="full" 
                                         leftIcon={<Icon as={FaVoteYea} />}
                                         onClick={() => user ? handleVote(design._id) : navigate('/login')}
-                                        isDisabled={!user || votedDesignIds.includes(design._id) || userVotesLeft <= 0 || design.user === user?._id}
+                                        isDisabled={!user || votedDesignIds.includes(design._id) || userVotesLeft <= 0 || design.user?._id === user?._id} // check design.user._id
                                         boxShadow="md" _active={{ boxShadow: "lg" }}
                                     >
                                         Vote!
@@ -185,10 +192,8 @@ export default function VotingPage() {
             </SimpleGrid>
         );
     };
-    // --- END Refined Logic ---
 
-    // Initial check for user before attempting to render contest specific UI
-    if (!user && loading) { // If still loading initial auth state and no user, show generic loading
+    if (!user && loading) { 
         return (
             <Box textAlign="center" mt={20}>
                 <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
@@ -196,15 +201,16 @@ export default function VotingPage() {
             </Box>
         );
     }
-    if (!user && !loading && !error) { // If auth check done, no error, but still no user
-        return <Box textAlign="center" mt={20} px={4}><Text color="brand.textLight">Please log in to view the contest.</Text><Button mt={4} colorScheme="brandAccentYellow" onClick={() => navigate('/login')}>Go to Login</Button></Box>;
+    if (!user && !loading && !error) { 
+        return <Box textAlign="center" mt={20} px={4}><Text color="brand.textLight">Please log in to view the contest.</Text><Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/login')}>Go to Login</Button></Box>;
     }
 
-
     return (
-        <Box maxW="container.lg" mx="auto" mt={{base:6, md:8}} px={4} pb={10}>
-            <VStack spacing={4} align="stretch" mb={8}> {/* align="stretch" to make headings full width */}
-                <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%">🏆 Monthly Design Contest 🏆</Heading>
+        <Box maxW="container.lg" mx="auto" mt={{base:6, md:8}} /*px removed, MainLayout handles it*/ pb={10}>
+            <VStack spacing={4} align="stretch" mb={8}>
+                <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%" mb={6}> {/* Standardized H1 style */}
+                  🏆 Monthly Design Contest 🏆
+                </Heading>
                 {user && (
                     <>
                         <Text fontSize="lg" color="brand.textLight" textAlign="left" w="100%">
@@ -218,7 +224,7 @@ export default function VotingPage() {
                     </>
                 )}
             </VStack>
-            {renderContent()} {/* Call the function to render based on state */}
+            {renderContent()}
         </Box>
     );
 }
