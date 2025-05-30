@@ -8,7 +8,7 @@ import { FaMagic, FaSave } from 'react-icons/fa';
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState(""); // Correct state variable
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -17,10 +17,11 @@ export default function Generate() {
   const navigate = useNavigate(); 
 
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
-    console.error(`[${actionType} Error]`, err.response || err.message || err);
+    // The console.error here is likely where your "Generate.jsx:20" log comes from
+    console.error(`[${actionType} Error]`, err.response?.data || err.message || err); 
     let message = defaultMessage;
     if (err.response) {
-      message = err.response.data?.message || err.response.data?.error || defaultMessage;
+      message = err.response.data?.message || err.response.data?.error?.message || err.response.data?.error || defaultMessage;
       if (err.response.status === 401) {
         toast({
           title: 'Session Expired',
@@ -55,7 +56,6 @@ export default function Generate() {
     setImageUrl("");
     setError("");
     try {
-      // CORRECTED API ENDPOINT: Removed the leading '/api'
       const response = await client.post('/designs/create', { prompt }); 
       if (response.data && response.data.imageDataUrl) {
         setImageUrl(response.data.imageDataUrl);
@@ -71,16 +71,15 @@ export default function Generate() {
   };
 
   const handleSaveDesign = async () => {
-    if (!imageUrl) {
+    if (!imageUrl) { // Check against the correct state variable
         toast({ title: 'No Image', description: 'Generate an image first before saving.', status: 'warning', duration: 3000, isClosable: true });
         return;
     }
     setIsSaving(true);
     setError("");
     try {
-      // This endpoint should also be relative to the /api base in client.js
-      // Assuming /mydesigns is correct relative to /api
-      await client.post('/mydesigns', { prompt, imageDataUrl }); 
+      // CORRECTED: Send 'imageUrl' from state as 'imageDataUrl' in the request body
+      await client.post('/mydesigns', { prompt: prompt, imageDataUrl: imageUrl }); 
       toast({ title: 'Design Saved!', description: 'Your masterpiece is saved to "My Designs".', status: 'success', duration: 3000, isClosable: true });
     } catch (err) {
       handleApiError(err, 'Failed to save design.', 'Save Design');
@@ -128,7 +127,7 @@ export default function Generate() {
       {error && (
         <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%">
             <AlertIcon color="red.600"/>
-            <Text color="red.800" wordBreak="break-word">{error}</Text> {/* Added wordBreak */}
+            <Text color="red.800" wordBreak="break-word">{error}</Text>
         </Alert>
       )}
       
