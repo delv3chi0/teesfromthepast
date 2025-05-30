@@ -2,12 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
-import { client } from '../api/client'; // Your Axios client
-import CheckoutForm from '../components/CheckoutForm'; // We'll create this next
+import { client } from '../api/client'; 
+import CheckoutForm from '../components/CheckoutForm'; 
 import { Box, Heading, Text, Spinner, Alert, AlertIcon, VStack } from '@chakra-ui/react';
-import { useLocation } from 'react-router-dom'; // To get product details if passed
+import { useLocation } from 'react-router-dom'; 
 
-// Make sure to replace with your VITE_STRIPE_PUBLISHABLE_KEY from your .env file
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 export default function CheckoutPage() {
@@ -16,24 +15,26 @@ export default function CheckoutPage() {
   const [error, setError] = useState('');
   const [paymentDetails, setPaymentDetails] = useState({ amount: 0, currency: 'usd' });
 
-  const location = useLocation(); // To get passed state
-  const { designToCheckout } = location.state || {}; // Example: { designId: '...', prompt: '...', imageDataUrl: '...' }
+  const location = useLocation(); 
+  const { designToCheckout } = location.state || {}; 
 
   useEffect(() => {
-    // Create PaymentIntent as soon as the page loads
-    // In a real app, you might pass items from a cart here
     console.log("CheckoutPage: Attempting to create PaymentIntent...");
     if (!designToCheckout) {
-        setError("No design selected for checkout.");
+        setError("No design selected for checkout. Please return to the product studio to select a design."); // More helpful error
         setLoading(false);
-        // navigate('/product-studio'); // or some other appropriate action
         return;
     }
 
-    // For now, we pass a placeholder 'items' array.
-    // The backend calculates the amount.
     client.post('/checkout/create-payment-intent', { 
-      items: [{ id: designToCheckout?.designId || 'default_item', quantity: 1 }], // Example item
+      items: [{ 
+        id: designToCheckout?.designId || 'default_item', 
+        // Potentially send more details here for backend price calculation if needed:
+        // productType: designToCheckout?.productType,
+        // size: designToCheckout?.size,
+        // color: designToCheckout?.color,
+        quantity: 1 
+      }], 
       currency: 'usd' 
     })
       .then(res => {
@@ -44,19 +45,19 @@ export default function CheckoutPage() {
       })
       .catch(err => {
         console.error("CheckoutPage: Error creating PaymentIntent:", err);
-        setError(err.response?.data?.error?.message || 'Failed to initialize payment.');
+        setError(err.response?.data?.error?.message || 'Failed to initialize payment. Please try again or contact support.'); // More helpful error
         setLoading(false);
       });
   }, [designToCheckout]);
 
   const appearance = {
-    theme: 'stripe', // or 'night', 'flat', etc.
+    theme: 'stripe', 
     variables: {
-      colorPrimary: '#5D4037', // Your brand.primary (Dark Brown)
+      colorPrimary: '#5D4037', 
       colorBackground: '#ffffff',
-      colorText: '#3E2723', // Your brand.textDark
+      colorText: '#3E2723', 
       colorDanger: '#df1b41',
-      fontFamily: 'Montserrat, sans-serif', // Your brand.body font
+      fontFamily: 'Montserrat, sans-serif', 
       spacingUnit: '4px',
       borderRadius: '4px',
     }
@@ -66,50 +67,58 @@ export default function CheckoutPage() {
     appearance,
   };
 
-  if (loading) {
-    return (
-      <VStack justifyContent="center" alignItems="center" minH="60vh">
-        <Spinner size="xl" thickness="4px" color="brand.primary"/>
-        <Text mt={3} color="brand.textTeal">Preparing your secure checkout...</Text>
-      </VStack>
-    );
-  }
-
-  if (error) {
-    return (
-      <VStack justifyContent="center" alignItems="center" minH="60vh" px={4}>
-        <Alert status="error" borderRadius="md" bg="red.50" p={6}>
-          <AlertIcon color="red.500" />
-          <Box>
-            <Heading size="md" color="red.700">Payment Initialization Failed</Heading>
-            <Text color="red.700" mt={2}>{error}</Text>
-          </Box>
-        </Alert>
-      </VStack>
-    );
-  }
-
-  if (!clientSecret) { // Should be caught by loading/error but as a fallback
-     return (
-      <VStack justifyContent="center" alignItems="center" minH="60vh" px={4}>
-         <Text color="brand.textTeal">Initializing payment...</Text>
-      </VStack>
-     );
-  }
-
+  // Main content container for this page, assuming it's within MainLayout.
+  // Padding will come from MainLayout. Let's ensure maxW for content.
   return (
-    <Box maxW="lg" mx="auto" mt={8} px={4} pb={10}>
-      <Heading as="h1" size="xl" textAlign="center" mb={2} color="brand.textLight">
+    <Box maxW="lg" mx="auto" /* mt removed, MainLayout handles top padding */ pb={10}>
+      <Heading 
+        as="h1" 
+        size="xl" 
+        color="brand.textLight" 
+        textAlign="left"       // Updated from center
+        w="100%"                // Added
+        mb={6}                  // Updated from mb={2}
+      >
         Secure Checkout
       </Heading>
-      <Text textAlign="center" fontSize="lg" mb={8} color="brand.textLight">
-        Amount: ${(paymentDetails.amount / 100).toFixed(2)} {paymentDetails.currency.toUpperCase()}
-      </Text>
-      <Box bg="brand.paper" p={8} borderRadius="xl" shadow="2xl">
-        <Elements options={options} stripe={stripePromise}>
-          <CheckoutForm designDetails={designToCheckout} />
-        </Elements>
-      </Box>
+      
+      {loading && (
+        <VStack justifyContent="center" alignItems="center" minH="40vh"> {/* Reduced minH */}
+          <Spinner size="xl" thickness="4px" color="brand.primary"/>
+          <Text mt={3} color="brand.textTeal">Preparing your secure checkout...</Text>
+        </VStack>
+      )}
+
+      {!loading && error && ( // Show error only if not loading
+        <VStack justifyContent="center" alignItems="center" minH="40vh" px={0}> {/* Reduced minH, px from MainLayout */}
+          <Alert status="error" borderRadius="md" bg="red.50" p={6} w="100%">
+            <AlertIcon color="red.500" />
+            <Box>
+              <Heading size="md" color="red.700">Payment Initialization Failed</Heading>
+              <Text color="red.700" mt={2}>{error}</Text>
+            </Box>
+          </Alert>
+        </VStack>
+      )}
+
+      {!loading && !error && !clientSecret && designToCheckout && ( // Specific state if PI creation failed silently but no explicit error caught
+         <VStack justifyContent="center" alignItems="center" minH="40vh">
+             <Text color="brand.textTeal">There was an issue initializing payment. Please try again.</Text>
+         </VStack>
+      )}
+
+      {!loading && !error && clientSecret && (
+        <>
+          <Text textAlign="left" fontSize="lg" mb={8} color="brand.textLight" w="100%"> {/* Aligned with heading */}
+            Amount: ${(paymentDetails.amount / 100).toFixed(2)} {paymentDetails.currency.toUpperCase()}
+          </Text>
+          <Box bg="brand.paper" p={8} borderRadius="xl" shadow="2xl">
+            <Elements options={options} stripe={stripePromise}>
+              <CheckoutForm designDetails={designToCheckout} />
+            </Elements>
+          </Box>
+        </>
+      )}
     </Box>
   );
 }

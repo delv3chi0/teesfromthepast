@@ -1,14 +1,15 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect } from 'react';
 import { 
-    Box, Heading, Text, VStack, HStack, Button, Select, 
+    Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
-    Link as ChakraLink, Divider, useToast, Icon // Added Icon
-} from '@chakra-ui/react';
+    Link as ChakraLink, Divider, useToast, Icon 
+} from '@chakra-ui/react'; // Removed HStack, Button as they are not directly used at this level now, Button is, my mistake. Added Button back.
+import { Button } from '@chakra-ui/react'; // Explicitly importing Button
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaShoppingCart } from 'react-icons/fa'; // Example icon for checkout
+import { FaShoppingCart } from 'react-icons/fa'; 
 
 const productTypes = [
   { value: 'tee', label: 'T-Shirt', mockups: { white: '/images/mockups/white_tee.png', black: '/images/mockups/black_tee.png' } },
@@ -55,7 +56,7 @@ export default function ProductStudio() {
           setLoadingDesigns(false);
         });
     }
-  }, [user, logout, navigate, toast]); // Added toast to dependency array
+  }, [user, logout, navigate, toast]);
 
   const getCurrentMockupSrc = () => {
     const product = productTypes.find(p => p.value === selectedProductType);
@@ -87,9 +88,18 @@ export default function ProductStudio() {
   };
 
   return (
-    <Box maxW="container.xl" mx="auto" mt={8} px={4} pb={10}>
+    <Box maxW="container.xl" mx="auto" /* mt removed, MainLayout handles top padding */ px={0} /* MainLayout handles x-padding */ pb={10}>
       <VStack spacing={6} align="stretch">
-        <Heading as="h1" size="xl" textAlign="center" color="brand.textLight">👕 Customize Your Apparel!</Heading>
+        <Heading 
+          as="h1" 
+          size="xl" 
+          color="brand.textLight" 
+          textAlign="left"       // Updated from center
+          w="100%"                // Added
+          mb={6}                  // Added
+        >
+          👕 Customize Your Apparel!
+        </Heading>
         
         <Alert status="info" borderRadius="md" bg="brand.paper" color="brand.textDark">
           <AlertIcon color="blue.500"/>
@@ -111,7 +121,7 @@ export default function ProductStudio() {
                 value={selectedProductType} 
                 onChange={(e) => { setSelectedProductType(e.target.value); setSelectedDesign(null);}}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
-                size="lg" // Consistent size
+                size="lg" 
               >
                 {productTypes.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
               </Select>
@@ -122,7 +132,7 @@ export default function ProductStudio() {
                 value={selectedProductColor} 
                 onChange={(e) => { setSelectedProductColor(e.target.value); setSelectedDesign(null);}}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
-                size="lg" // Consistent size
+                size="lg" 
               >
                 {productColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}
               </Select>
@@ -133,7 +143,7 @@ export default function ProductStudio() {
                 value={selectedProductSize} 
                 onChange={(e) => setSelectedProductSize(e.target.value)}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
-                size="lg" // Consistent size
+                size="lg" 
               >
                 {productSizes.map(ps => <option key={ps} value={ps}>{ps}</option>)}
               </Select>
@@ -213,17 +223,16 @@ export default function ProductStudio() {
                         Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}
                     </Text>
                      <Button 
-                        bg="brand.accentYellow"         // Primary Action Style
-                        color="brand.textDark"          // Primary Action Style
-                        _hover={{ bg: "brand.accentYellowHover" }} // Assuming this is in your theme
-                        size="lg"                        // Primary Action Style
+                        bg="brand.accentYellow"
+                        color="brand.textDark"
+                        _hover={{ bg: "brand.accentYellowHover" }} 
+                        size="lg"
                         mt={4}
                         px={8}
-                        // py={6} // Using size="lg" handles height/padding well
-                        borderRadius="full"             // Primary Action Style
+                        borderRadius="full"
                         boxShadow="md"
                         onClick={handleProceedToCheckout}
-                        leftIcon={<Icon as={FaShoppingCart} />} // Example Icon
+                        leftIcon={<Icon as={FaShoppingCart} />} 
                     >
                         Proceed to Checkout
                     </Button>
