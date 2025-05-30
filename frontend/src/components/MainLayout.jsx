@@ -1,11 +1,11 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, Text, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react';
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react'; // Removed unused Text import
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer'; 
-import { FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
+// Removed unused FaFacebook, FaTwitter, FaInstagram imports as they are in Footer.jsx
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard' },
@@ -21,14 +21,40 @@ export default function MainLayout({ children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { user } = useAuth();
 
+  // SidebarContent definition with corrected zIndex
   const SidebarContent = ({onClick}) => (
-    <Box as="nav" pos="fixed" top="0" left="0" zIndex={1200} h="full" pb="10" overflowX="hidden" overflowY="auto" bg="brand.primary" borderColor="brand.primaryDark" borderRightWidth="1px" w="60" >
+    <Box 
+      as="nav" 
+      pos="fixed" 
+      top="0" 
+      left="0" 
+      zIndex={1200} // Corrected from "sticky"
+      h="full" 
+      pb="10" 
+      overflowX="hidden" 
+      overflowY="auto" 
+      bg="brand.primary" 
+      borderColor="brand.primaryDark" 
+      borderRightWidth="1px" 
+      w="60" 
+    >
       <Flex as={RouterLink} to="/dashboard" px="4" py="4" align="center" justifyContent="center" _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}>
         <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
       </Flex>
       <VStack spacing={3} align="stretch" px="4" mt={8}>
         {navItems.map((item) => (
-          <ChakraLink key={item.label} as={RouterLink} to={item.path} p={3} borderRadius="md" fontWeight="medium" color={location.pathname === item.path ? "brand.accentYellow" : "brand.textLight"} bg={location.pathname === item.path ? "brand.primaryLight" : "transparent"} _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }} onClick={onClick} >
+          <ChakraLink 
+            key={item.label} 
+            as={RouterLink} 
+            to={item.path} 
+            p={3} 
+            borderRadius="md" 
+            fontWeight="medium" 
+            color={location.pathname === item.path ? "brand.accentYellow" : "brand.textLight"} 
+            bg={location.pathname === item.path ? "brand.primaryLight" : "transparent"} 
+            _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }} 
+            onClick={onClick} 
+          >
             {item.label}
           </ChakraLink>
         ))}
@@ -39,17 +65,38 @@ export default function MainLayout({ children }) {
   return (
     <Flex direction="column" minH="100vh"> 
       <Box as="section" display="flex" flexGrow={1}> 
-	<SidebarContent 
-	  display={{ base: 'none', md: 'block' }} // Changed 'unset' to 'block' for clarity, should behave similarly
-	  bg={{ base: 'pink.500', md: 'brand.primary' }} // Use pink for 'base', original for 'md'
-	  borderWidth={{base: "5px", md: "1px"}} // Add an obvious border too
-	  borderColor={{base: "lime", md: "brand.primaryDark"}} // Lime green border for base
-	/>        
-	<Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
+        {/* ---- MODIFICATION FOR TEST 2: Wrapper Box for Desktop Sidebar ---- */}
+        <Box 
+          display={{ base: 'none', md: 'block' }}      // Hide this Box (and its child SidebarContent) on mobile
+          bg={{ base: 'orange.500', md: 'transparent' }} // Diagnostic BG: orange on base (if not hidden), transparent on desktop
+          width={{ base: '100px', md: 'auto' }}       // Diagnostic width on base
+          height={{ base: '100px', md: 'auto' }}      // Diagnostic height on base
+          // The actual SidebarContent width is w="60" (240px), so this Box will constrain it on 'md' if 'auto' isn't overridden.
+          // For desktop, we want the SidebarContent to dictate its own width (w="60").
+          // So, if using this wrapper, the SidebarContent itself should not have pos="fixed" if the wrapper is handling layout.
+          // However, for just testing if the *wrapper* hides, this is okay.
+          // For a real fix with a wrapper, SidebarContent might need to be pos="relative" or similar if its parent is handling fixed pos.
+          // For now, let's keep SidebarContent as is, and focus on if this *outer Box* hides.
+        >
+          {/* SidebarContent here now has NO direct responsive display/bg props */}
+          <SidebarContent /> 
+        </Box>
+        {/* ---- END MODIFICATION ---- */}
+        
+        <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
           <DrawerOverlay />
           <DrawerContent bg="brand.primary" color="brand.textLight"> 
             <DrawerCloseButton />
-            <DrawerHeader borderBottomWidth="1px" borderColor="brand.primaryDark" as={RouterLink} to="/dashboard" _hover={{textDecoration: 'none'}} display="flex" alignItems="center" justifyContent="center" py="2.5" >
+            <DrawerHeader 
+              borderBottomWidth="1px" 
+              borderColor="brand.primaryDark" 
+              as={RouterLink} to="/dashboard" 
+              _hover={{textDecoration: 'none'}} 
+              display="flex" 
+              alignItems="center" 
+              justifyContent="center" 
+              py="2.5" 
+            >
               <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
             </DrawerHeader>
             <DrawerBody p={0}>
@@ -57,6 +104,7 @@ export default function MainLayout({ children }) {
             </DrawerBody>
           </DrawerContent>
         </Drawer>
+        
         <Box flexGrow={1} ml={{ base: 0, md: 60 }} transition=".3s ease" display="flex" flexDirection="column">
           <Flex
             as="header"
@@ -72,16 +120,24 @@ export default function MainLayout({ children }) {
             flexShrink={0}
           >
             <Flex align="center">
-              <IconButton aria-label="Open Menu" display={{ base: 'inline-flex', md: 'none' }} onClick={onOpen} icon={<HamburgerIcon />} size="md" variant="ghost" mr={2} />
+              <IconButton 
+                aria-label="Open Menu" 
+                display={{ base: 'inline-flex', md: 'none' }} 
+                onClick={onOpen} 
+                icon={<HamburgerIcon />} 
+                size="md" 
+                variant="ghost" 
+                mr={2} 
+                color="brand.primaryDark"
+                _hover={{ bg: 'brand.primaryLight' }}
+              />
               <ChakraLink as={RouterLink} to="/dashboard" display="flex" alignItems="center" _hover={{textDecoration: "none"}}>
                 <Image 
                   src="/logo-text.png" 
                   alt="Tees From The Past Title Logo" 
-                  h="50px" // Current height for text logo
+                  h="50px" 
                   objectFit="contain"
-                  // Removed mr={3} as the text next to it is removed
                 />
-                {/* TEXT "Tees From The Past" REMOVED FROM HERE */}
               </ChakraLink>
             </Flex>
             <Flex align="center">
