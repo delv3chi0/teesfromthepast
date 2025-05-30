@@ -4,9 +4,9 @@ import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
     useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, 
-    useToast, Icon, Link as ChakraLink
-} from '@chakra-ui/react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+    useToast, Icon
+} from '@chakra-ui/react'; // Removed ChakraLink as it wasn't used
+import { useNavigate } from 'react-router-dom'; // Removed Link as RouterLink, wasn't used
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaPlusSquare, FaMagic, FaTrophy, FaTimes, FaCheckCircle } from 'react-icons/fa';
@@ -19,11 +19,9 @@ export default function MyDesigns() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  // For the main image display modal
   const { isOpen: isImageModalOpen, onOpen: onImageModalOpen, onClose: onImageModalClose } = useDisclosure();
   const [selectedDesign, setSelectedDesign] = useState(null);
 
-  // For the submission confirmation AlertDialog
   const { isOpen: isAlertOpen, onOpen: onAlertOpen, onClose: onAlertClose } = useDisclosure();
   const [designToSubmit, setDesignToSubmit] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,13 +63,14 @@ export default function MyDesigns() {
 
   const handleOpenSubmitConfirmation = (design) => {
     setDesignToSubmit(design);
+    onImageModalOpen(); // Keep image modal open, open alert on top
     onAlertOpen();
   };
 
   const handleConfirmSubmitToContest = async () => {
     if (!designToSubmit) return;
     setIsSubmitting(true);
-    onAlertClose();
+    // onAlertClose(); // Close alert first
 
     try {
       const response = await client.post(`/contest/submit/${designToSubmit._id}`);
@@ -82,7 +81,8 @@ export default function MyDesigns() {
         duration: 5000,
         isClosable: true,
       });
-      onImageModalClose(); 
+      onImageModalClose(); // Close the image modal after successful submission
+      onAlertClose();     // Ensure alert is also closed
       fetchDesigns(); 
     } catch (err) {
       console.error("Error submitting design to contest:", err);
@@ -98,6 +98,7 @@ export default function MyDesigns() {
         logout();
         navigate('/login');
       }
+      onAlertClose(); // Close alert even on failure
     } finally {
       setIsSubmitting(false);
       setDesignToSubmit(null);
@@ -108,7 +109,7 @@ export default function MyDesigns() {
     return (
         <Box textAlign="center" mt={20} px={4}>
             <Text fontSize="lg" color="brand.textLight">Please log in to view your designs.</Text>
-            <Button mt={4} colorScheme="brandAccentYellow" onClick={() => navigate('/login')}>Go to Login</Button>
+            <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" size="lg" onClick={() => navigate('/login')}>Go to Login</Button>
         </Box>
     );
   }
@@ -126,7 +127,7 @@ export default function MyDesigns() {
             <Alert status="error" bg="brand.paper" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={10}>
                 <AlertIcon boxSize="40px" mr={0} color="red.500"/>
                 <Text mt={3} fontWeight="bold" color="brand.textDark">{error}</Text>
-                <Button mt={4} colorScheme="brandPrimary" onClick={fetchDesigns}>Try Again</Button>
+                <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" size="lg" onClick={fetchDesigns}>Try Again</Button>
             </Alert>
         </Box>
     );
@@ -199,7 +200,6 @@ export default function MyDesigns() {
         </SimpleGrid>
       )}
 
-      {/* Full Modal JSX for displaying selected design */}
       {selectedDesign && (
         <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
           <ModalOverlay bg="blackAlpha.700"/>
@@ -216,15 +216,21 @@ export default function MyDesigns() {
                 mr={3} 
                 onClick={() => handleOpenSubmitConfirmation(selectedDesign)} 
                 isLoading={isSubmitting} 
-                // isDisabled={isSubmitting || selectedDesign.isSubmittedForContest} // Add back when isSubmittedForContest field is on design
-                isDisabled={isSubmitting}
+                isDisabled={isSubmitting} // Simplified disabled logic
                 leftIcon={<Icon as={FaTrophy} />} 
-                borderRadius="full" px={6}
+                borderRadius="full" px={6} size="lg" // Added size="lg"
               >
-                {/* selectedDesign.isSubmittedForContest ? "Already Submitted" : "Submit to Contest" */}
                 Submit to Contest
               </Button>
-              <Button variant="outline" onClick={onImageModalClose} color="brand.textDark" borderColor="brand.secondary" _hover={{bg:"gray.100"}} borderRadius="full" px={6}>
+              <Button 
+                variant="outline"             // Secondary Action Style
+                borderColor="brand.primary"   // Secondary Action Style
+                color="brand.primary"       // Secondary Action Style
+                _hover={{ bg: 'blackAlpha.50' }} 
+                borderRadius="full"         // Secondary Action Style
+                px={6} size="lg"            // Added size="lg"
+                onClick={onImageModalClose}
+              >
                 Close
               </Button>
             </ModalFooter>
@@ -232,7 +238,6 @@ export default function MyDesigns() {
         </Modal>
       )}
 
-      {/* Full AlertDialog JSX for contest submission confirmation */}
       {designToSubmit && (
         <AlertDialog
             isOpen={isAlertOpen}
@@ -248,16 +253,29 @@ export default function MyDesigns() {
                         You can only submit one design per month. This action cannot be undone for the current month.
                     </AlertDialogBody>
                     <AlertDialogFooter>
-                        <Button ref={cancelRef} onClick={onAlertClose} isDisabled={isSubmitting} variant="outline" borderRadius="full" px={6} colorScheme="gray">Cancel</Button>
                         <Button 
-                            bg="brand.primary" color="brand.textLight" 
-                            _hover={{bg: "brand.primaryLight"}} 
+                            ref={cancelRef} 
+                            onClick={onAlertClose} 
+                            isDisabled={isSubmitting} 
+                            variant="outline"             // Secondary Action Style
+                            borderColor="brand.primary"   // Secondary Action Style
+                            color="brand.primary"       // Secondary Action Style
+                            _hover={{ bg: 'blackAlpha.50' }}
+                            borderRadius="full"         // Secondary Action Style
+                            px={6} size="lg"            // Added size="lg"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            bg="brand.accentYellow"      // Primary Action Style
+                            color="brand.textDark"       // Primary Action Style
+                            _hover={{bg: "brand.accentYellowHover"}} 
                             onClick={handleConfirmSubmitToContest} 
                             ml={3} 
                             isLoading={isSubmitting} 
                             loadingText="Submitting..." 
                             leftIcon={<Icon as={FaCheckCircle} />} 
-                            borderRadius="full" px={6}
+                            borderRadius="full" px={6} size="lg" // Added size="lg"
                         >
                             Yes, Submit This Design
                         </Button>

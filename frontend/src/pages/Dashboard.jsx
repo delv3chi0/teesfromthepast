@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { client } from '../api/client';
 import { 
     Box, Heading, Text, VStack, Divider, Button, useToast, 
-    SimpleGrid, Image, Spinner, Alert, AlertIcon, Link as ChakraLink,
+    SimpleGrid, Image, Spinner, Alert, AlertIcon, 
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
     Icon 
 } from '@chakra-ui/react';
@@ -53,34 +53,27 @@ export default function Dashboard() {
   };
 
   return (
-    // Outermost box has no mx="auto", so it will be left-aligned within MainLayout's content area.
-    // It also has no 'bg' prop, so it's transparent to MainLayout's brand.accentOrange.
     <Box maxW="6xl" mt={{base: 4, md: 6}} px={{base: 2, md: 4}} pb={10}> 
       <Box 
         display="flex" 
-        // justifyContent="space-between" // Not needed if only heading is here
         alignItems="center" 
         mb={6}
       >
-        {/* Page Title "Dashboard" - Left Aligned */}
         <Heading as="h1" size="xl" color="brand.textLight" textAlign="left"> 
           Dashboard
         </Heading>
       </Box>
 
-      {/* Welcome Message - Left Aligned and Sized */}
       {user && 
         <Heading as="h2" size="lg" my={6} textAlign="left" color="brand.textLight" fontWeight="normal"> 
-          {/* Using h2 for semantic hierarchy, size lg for slightly smaller than page title */}
           Welcome back, {user.firstName || user.username || user.email}!
         </Heading>
       }
       
-      <Divider my={8} borderColor="brand.secondary" /> {/* Themed divider, increased margin */}
+      <Divider my={8} borderColor="brand.secondary" />
 
       <VStack align="stretch" spacing={10}>
         <Box>
-          {/* Section Header - Left Aligned */}
           <Heading 
             as="h2" 
             size="lg" 
@@ -89,7 +82,7 @@ export default function Dashboard() {
             color="brand.textLight" 
             borderBottomWidth="2px" 
             borderColor="brand.accentYellow"
-            textAlign="left" // Explicitly left-align
+            textAlign="left"
           >
             Recent Designs
           </Heading>
@@ -108,7 +101,7 @@ export default function Dashboard() {
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
             <VStack 
                 spacing={5} p={8} bg="rgba(255,255,255,0.1)" borderRadius="xl" 
-                shadow="md" borderWidth="1px" borderColor="rgba(255,255,255,0.2)" mt={4} // Reduced mt
+                shadow="md" borderWidth="1px" borderColor="rgba(255,255,255,0.2)" mt={4}
             >
               <Icon as={FaPlusSquare} boxSize="50px" color="brand.textLight" /> 
               <Text fontSize="xl" fontWeight="medium" color="brand.textLight" textAlign="center">
@@ -157,7 +150,16 @@ export default function Dashboard() {
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="90%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
             <ModalFooter borderTopWidth="1px" borderColor="gray.200">
-              <Button bg="brand.secondary" color="brand.textLight" _hover={{bg: 'brand.primaryDark'}} mr={3} onClick={onClose}>
+              <Button 
+                variant="outline"             // Secondary Action Style
+                borderColor="brand.primary"   // Secondary Action Style
+                color="brand.primary"       // Secondary Action Style
+                _hover={{ bg: 'blackAlpha.50' }} // Subtle hover for outline on light bg
+                borderRadius="full"         // Secondary Action Style
+                size="lg"                   // Consistent size
+                mr={3} 
+                onClick={onClose}
+              >
                 Close
               </Button>
             </ModalFooter>
