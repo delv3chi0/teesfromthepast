@@ -1,34 +1,49 @@
 // frontend/src/components/LogoutButton.jsx
-import { Button, Icon } from "@chakra-ui/react"; // Added Icon
+import { Button, IconButton, Icon, Box } from "@chakra-ui/react"; // Added IconButton and Box
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthProvider"; // Import useAuth to use the context's logout
-import { FaSignOutAlt } from 'react-icons/fa'; // Example icon
+import { useAuth } from "../context/AuthProvider";
+import { FaSignOutAlt } from 'react-icons/fa';
 
 export default function LogoutButton() {
   const navigate = useNavigate();
-  const { logout } = useAuth(); // Use the logout function from AuthProvider
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    logout(); // Call context's logout
-    // AuthProvider's logout now handles token removal and state update,
-    // navigation might be handled by PrivateRoute or App logic if auth state changes.
-    // If explicit navigation is still desired after AuthProvider's logout:
+    logout(); 
     navigate("/login"); 
   };
 
   return (
-    <Button 
-      variant="outline"             // Secondary Action Style
-      borderColor="brand.primary"   // Secondary Action Style
-      color="brand.primary"       // Secondary Action Style (text color on brand.secondary bg)
-      _hover={{ bg: 'brand.primaryDark', color: 'brand.textLight' }} // Adjusted hover for better visibility on brand.secondary
-      borderRadius="full"         // Secondary Action Style
-      size="lg"                   // Consistent size, can be 'md' if 'lg' is too big for header
-      onClick={handleLogout}
-      leftIcon={<Icon as={FaSignOutAlt} />}
-      px={6} // Adjust padding as needed for header
-    >
-      Logout
-    </Button>
+    <>
+      {/* IconButton for Mobile View */}
+      <IconButton
+        aria-label="Logout"
+        icon={<Icon as={FaSignOutAlt} />}
+        onClick={handleLogout}
+        variant="outline"             // Secondary Action Style base
+        borderColor="brand.primary"   // Secondary Action Style base
+        color="brand.primary"       // Secondary Action Style base
+        _hover={{ bg: 'brand.primaryDark', color: 'brand.textLight' }}
+        borderRadius="full"         // Consistent shape
+        size="lg"                   // Consistent size with other header items
+        display={{ base: 'inline-flex', md: 'none' }} // Show only on mobile
+      />
+
+      {/* Full Button for Desktop View */}
+      <Button 
+        variant="outline"             // Secondary Action Style
+        borderColor="brand.primary"   // Secondary Action Style
+        color="brand.primary"       // Secondary Action Style
+        _hover={{ bg: 'brand.primaryDark', color: 'brand.textLight' }}
+        borderRadius="full"         // Secondary Action Style
+        size="lg"                   // Consistent size
+        onClick={handleLogout}
+        leftIcon={<Icon as={FaSignOutAlt} />}
+        display={{ base: 'none', md: 'inline-flex' }} // Show only on desktop
+        px={6} 
+      >
+        Logout
+      </Button>
+    </>
   );
 }
