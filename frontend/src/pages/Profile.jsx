@@ -11,23 +11,20 @@ import { FaSave, FaEdit, FaTimes, FaTachometerAlt } from 'react-icons/fa';
 
 export default function Profile() {
   const { user, logout, setUser: setAuthUser } = useAuth(); 
-  // Initialize form state with empty strings
   const [form, setForm] = useState({
     username: '',
     email: '', 
     firstName: '',
     lastName: '',
   });
-  const [isLoading, setIsLoading] = useState(true); // To manage loading state of profile data
+  const [isLoading, setIsLoading] = useState(true); 
   const [editing, setEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
 
   useEffect(() => {
-    console.log("[Profile.jsx] useEffect triggered, user from context:", user);
     if (user) {
-      console.log("[Profile.jsx] User context exists, setting form data.");
       setForm({
         username: user.username || '',
         email: user.email || '',
@@ -35,25 +32,12 @@ export default function Profile() {
         lastName: user.lastName || '',
       });
       setIsLoading(false);
-    } else if (localStorage.getItem('token')) {
-      // This case handles if user directly navigates to /profile and AuthProvider is still initializing
-      // AuthProvider will eventually set 'user' or log out if token is invalid.
-      // We show loading until 'user' is populated by AuthProvider or this fetch completes/fails.
-      console.log("[Profile.jsx] No user in context yet, token exists. AuthProvider might be loading user.");
-      // It's generally better to rely on AuthProvider to set the user globally.
-      // This fallback fetch can be removed if AuthProvider is robustly setting 'user' on refresh.
-      // For now, let's keep a simplified path: rely on 'user' from context.
-      // If 'user' is null and loadingAuth from AuthProvider is false, PrivateRoute would redirect.
-      // So, if we reach here and 'user' is null, it means AuthProvider is still loading or failed.
-      // Let's ensure we don't get stuck in a loop if AuthProvider fails and user remains null.
-      if (!isLoading) setIsLoading(true); // Show loading if user is null but we expect it
-    } else {
-      // No user, no token - PrivateRoute should have redirected, but as a fallback:
-      console.log("[Profile.jsx] No user and no token. Should redirect.");
-      setIsLoading(false);
-      // navigate('/login'); // PrivateRoute handles this
+    } else if (!isLoading && !authStillLoading) { 
+      // If still no user after auth check is complete, it's an issue
+      // PrivateRoute should handle redirect, but as a safeguard for display:
+      setIsLoading(false); 
     }
-  }, [user]); // Only depend on 'user' from AuthContext
+  }, [user, isLoading]); // Dependency on isLoading and authStillLoading for initial setup
 
   const handleChange = (e) => {
     setForm(currentForm => ({ ...currentForm, [e.target.name]: e.target.value }));
@@ -72,7 +56,6 @@ export default function Profile() {
         if (setAuthUser) {
             setAuthUser(updatedProfileFromServer); 
         }
-        // Update form directly from server response to ensure it's the source of truth
         setForm({                   
             username: updatedProfileFromServer.username || '',
             email: updatedProfileFromServer.email || '', 
@@ -92,7 +75,7 @@ export default function Profile() {
   };
 
   const handleCancel = () => {
-    if (user) { // Reset form to the data from user context
+    if (user) { 
         setForm({
           username: user.username || '', 
           email: user.email || '',
@@ -102,11 +85,10 @@ export default function Profile() {
     }
     setEditing(false);
   };
-
-  // If AuthProvider is still establishing auth status, useAuth() might return loadingAuth: true
-  // PrivateRoute should be handling this, but an extra check here for initial data can be useful.
-  // The primary check is if 'user' from context is populated.
+  
   const { loadingAuth: authStillLoading } = useAuth();
+
+  // Enhanced loading state: Show spinner if auth is loading OR if user isn't set yet and we expect it
   if (authStillLoading || (isLoading && !user)) { 
     return (
       <Box textAlign="center" mt={20} py={10}>
@@ -116,13 +98,11 @@ export default function Profile() {
     );
   }
   
-  // If auth check is done, but no user (e.g. token was invalid & cleared by AuthProvider)
-  // PrivateRoute should have redirected, but this is a safeguard.
-  if (!user) {
+  if (!user) { // If auth is done loading, and there's still no user
       return (
           <Box textAlign="center" mt={20} px={4}>
               <Text color="brand.textLight" fontSize="lg">Could not load profile. You may need to log in again.</Text>
-              <Button mt={4} onClick={() => navigate('/login')}>Go to Login</Button>
+              <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/login')}>Go to Login</Button>
           </Box>
       );
   }
@@ -130,7 +110,7 @@ export default function Profile() {
   return (
     <Box 
         maxW="lg" 
-        mt={{base: 4, md: 6}} // Reduced top margin slightly
+        mt={{base: 4, md: 6}} 
         p={{base: 6, md: 8}} 
         borderWidth="1px" 
         borderRadius="xl" 
@@ -142,44 +122,55 @@ export default function Profile() {
         Your Profile
       </Heading>
 
-      <VStack spacing={5} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}> {/* Reduced spacing slightly */}
+      <VStack spacing={5} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}>
         <FormControl id="username">
             <FormLabel fontWeight="bold" color="brand.textDark">Username:</FormLabel>
-            <Input name="username" placeholder="Username" value={form.username} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md"/>
+            <Input name="username" placeholder="Username" value={form.username} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="email">
             <FormLabel fontWeight="bold" color="brand.textDark">Email:</FormLabel>
-            <Input name="email" placeholder="Email" value={form.email} isReadOnly bg="gray.100" borderColor="brand.secondary" borderRadius="md"/>
+            <Input name="email" placeholder="Email" value={form.email} isReadOnly bg="gray.100" borderColor="brand.secondary" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="firstName">
             <FormLabel fontWeight="bold" color="brand.textDark">First Name:</FormLabel>
-            <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md"/>
+            <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="lastName">
             <FormLabel fontWeight="bold" color="brand.textDark">Last Name:</FormLabel>
-            <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md"/>
+            <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
 
-        <HStack spacing={4} mt={6} w="100%"> {/* Reduced top margin slightly */}
+        <HStack spacing={4} mt={6} w="100%">
           {!editing ? (
             <Button 
-                bg="brand.primary" color="brand.textLight" _hover={{bg: "brand.primaryLight"}}
+                bg="brand.accentYellow"      // Primary Action Style
+                color="brand.textDark"       // Primary Action Style
+                _hover={{bg: "brand.accentYellowHover"}}
                 onClick={() => setEditing(true)} 
                 leftIcon={<Icon as={FaEdit}/>}
-                borderRadius="full" px={8} size="lg" flex={1} 
+                borderRadius="full"         // Primary Action Style
+                px={8} size="lg" flex={1} 
             >Edit Profile</Button>
           ) : (
             <>
               <Button 
-                bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}}
+                bg="brand.accentYellow"      // Primary Action Style
+                color="brand.textDark"       // Primary Action Style
+                _hover={{bg: "brand.accentYellowHover"}}
                 onClick={handleSave} 
                 leftIcon={<Icon as={FaSave}/>}
-                borderRadius="full" px={8} size="lg" flex={1} type="submit" isLoading={isSaving} loadingText="Saving..."
+                borderRadius="full"         // Primary Action Style
+                px={8} size="lg" flex={1} type="submit" isLoading={isSaving} loadingText="Saving..."
               >Save Changes</Button>
               <Button 
-                variant="outline" onClick={handleCancel} leftIcon={<Icon as={FaTimes}/>}
-                borderRadius="full" px={8} size="lg" flex={1}
-                borderColor="brand.secondary" color="brand.secondary" _hover={{bg:"blackAlpha.100"}}
+                variant="outline"             // Secondary Action Style
+                borderColor="brand.primary"   // Secondary Action Style
+                color="brand.primary"       // Secondary Action Style
+                _hover={{ bg: 'blackAlpha.50' }} // Subtle hover for outline on light bg
+                onClick={handleCancel} 
+                leftIcon={<Icon as={FaTimes}/>}
+                borderRadius="full"         // Secondary Action Style
+                px={8} size="lg" flex={1}
               >Cancel</Button>
             </>
           )}
@@ -188,7 +179,7 @@ export default function Profile() {
             variant="link" 
             onClick={() => navigate('/dashboard')} 
             leftIcon={<Icon as={FaTachometerAlt} />}
-            mt={4} // Reduced margin
+            mt={4} 
             color="brand.primaryDark"
             size="lg"
         >Dashboard</Button>

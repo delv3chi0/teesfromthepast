@@ -3,11 +3,12 @@ import { useState, useEffect } from 'react';
 import { 
     Box, Heading, Text, VStack, HStack, Button, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
-    Link as ChakraLink, Divider, useToast // Added useToast
+    Link as ChakraLink, Divider, useToast, Icon // Added Icon
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
+import { FaShoppingCart } from 'react-icons/fa'; // Example icon for checkout
 
 const productTypes = [
   { value: 'tee', label: 'T-Shirt', mockups: { white: '/images/mockups/white_tee.png', black: '/images/mockups/black_tee.png' } },
@@ -24,7 +25,7 @@ const productSizes = ['S', 'M', 'L', 'XL', 'XXL'];
 export default function ProductStudio() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const toast = useToast(); // Initialize toast
+  const toast = useToast(); 
 
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
@@ -47,13 +48,14 @@ export default function ProductStudio() {
           console.error("Error fetching designs for studio:", err);
           setDesignsError('Could not load your saved designs.');
           if (err.response?.status === 401) {
+            toast({ title: "Session Expired", description: "Please log in again.", status: "warning", duration: 3000, isClosable: true });
             logout();
             navigate('/login');
           }
           setLoadingDesigns(false);
         });
     }
-  }, [user, logout, navigate]);
+  }, [user, logout, navigate, toast]); // Added toast to dependency array
 
   const getCurrentMockupSrc = () => {
     const product = productTypes.find(p => p.value === selectedProductType);
@@ -65,13 +67,11 @@ export default function ProductStudio() {
         const productDetailsForCheckout = {
             designId: selectedDesign._id,
             prompt: selectedDesign.prompt,
-            imageDataUrl: selectedDesign.imageDataUrl, // The AI Design
+            imageDataUrl: selectedDesign.imageDataUrl, 
             productType: productTypes.find(p => p.value === selectedProductType)?.label,
-            productImage: getCurrentMockupSrc(), // The mockup image
+            productImage: getCurrentMockupSrc(), 
             color: selectedProductColor,
             size: selectedProductSize,
-            // You'll determine price on the backend, but can display an estimated one here if needed
-            // price: 2500 // Example price in cents
         };
         console.log("Proceeding to checkout with:", productDetailsForCheckout);
         navigate('/checkout', { state: { designToCheckout: productDetailsForCheckout } });
@@ -111,6 +111,7 @@ export default function ProductStudio() {
                 value={selectedProductType} 
                 onChange={(e) => { setSelectedProductType(e.target.value); setSelectedDesign(null);}}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
+                size="lg" // Consistent size
               >
                 {productTypes.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
               </Select>
@@ -121,6 +122,7 @@ export default function ProductStudio() {
                 value={selectedProductColor} 
                 onChange={(e) => { setSelectedProductColor(e.target.value); setSelectedDesign(null);}}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
+                size="lg" // Consistent size
               >
                 {productColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}
               </Select>
@@ -131,6 +133,7 @@ export default function ProductStudio() {
                 value={selectedProductSize} 
                 onChange={(e) => setSelectedProductSize(e.target.value)}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
+                size="lg" // Consistent size
               >
                 {productSizes.map(ps => <option key={ps} value={ps}>{ps}</option>)}
               </Select>
@@ -179,7 +182,7 @@ export default function ProductStudio() {
                         position="relative" 
                         w={{base: "280px", sm: "300px", md: "400px"}} 
                         h={{base: "280px", sm: "300px", md: "400px"}} 
-                        bg={selectedProductColor === 'white' ? 'gray.50' : 'gray.700'} // Background for mockup area based on shirt color
+                        bg={selectedProductColor === 'white' ? 'gray.50' : 'gray.700'} 
                         overflow="hidden" 
                         borderRadius="md"
                         mx="auto" 
@@ -210,22 +213,23 @@ export default function ProductStudio() {
                         Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}
                     </Text>
                      <Button 
-                        bg="brand.accentOrange" 
-                        color="brand.textLight"
-                        _hover={{ bg: "brand.accentOrangeHover" }}
-                        size="lg" 
+                        bg="brand.accentYellow"         // Primary Action Style
+                        color="brand.textDark"          // Primary Action Style
+                        _hover={{ bg: "brand.accentYellowHover" }} // Assuming this is in your theme
+                        size="lg"                        // Primary Action Style
                         mt={4}
                         px={8}
-                        py={6}
-                        borderRadius="full"
+                        // py={6} // Using size="lg" handles height/padding well
+                        borderRadius="full"             // Primary Action Style
                         boxShadow="md"
                         onClick={handleProceedToCheckout}
+                        leftIcon={<Icon as={FaShoppingCart} />} // Example Icon
                     >
                         Proceed to Checkout
                     </Button>
                 </VStack>
             ) : (
-                <Text color="brand.textMuted" fontStyle="italic" textAlign="center"> {/* textMuted may need to be themed for paper bg */}
+                <Text color="brand.textDark" fontStyle="italic" textAlign="center"> 
                     Select your apparel options and a design above to see a preview.
                 </Text>
             )}
