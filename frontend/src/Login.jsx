@@ -1,4 +1,4 @@
-// frontend/src/Login.jsx
+k// frontend/src/Login.jsx
 import { useState } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
@@ -6,7 +6,6 @@ import {
     Link as ChakraLink, Flex 
 } from '@chakra-ui/react';
 import { useAuth } from './context/AuthProvider'; 
-// CORRECTED IMPORT PATH FOR Footer:
 import Footer from './components/Footer'; 
 
 export default function Login() {
@@ -76,6 +75,9 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)} 
                 isRequired 
                 bg="white"
+                borderColor="brand.secondary" // Added for consistency if needed
+                focusBorderColor="brand.primaryDark" // Added for consistency
+                borderRadius="md" // Standard border radius for inputs
               />
               <Input 
                 type="password" 
@@ -84,15 +86,27 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)} 
                 isRequired 
                 bg="white"
+                borderColor="brand.secondary" // Added for consistency
+                focusBorderColor="brand.primaryDark" // Added for consistency
+                borderRadius="md" // Standard border radius for inputs
               />
-              <Button colorScheme="brandAccentOrange" width="full" type="submit" size="lg">
+              <Button 
+                bg="brand.accentYellow"      // Primary Action Style
+                color="brand.textDark"       // Primary Action Style
+                _hover={{ bg: 'brand.accentYellowHover' }} // Assuming you have this in your theme
+                width="full" 
+                type="submit" 
+                size="lg"
+                borderRadius="full"         // Primary Action Style
+                // No icon added for plain "Log In" to keep it clean
+              >
                 Log In
               </Button>
             </VStack>
           </form>
           <Text mt={6} textAlign="center" color="brand.textDark">
             Don’t have an account?{' '}
-            <ChakraLink as={RouterLink} to="/register" color="brand.primaryDark" fontWeight="medium">
+            <ChakraLink as={RouterLink} to="/register" color="brand.primaryDark" fontWeight="medium" _hover={{ textDecoration: "underline" }}>
               Sign up here
             </ChakraLink>
           </Text>
