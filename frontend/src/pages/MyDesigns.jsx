@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaPlusSquare, FaMagic, FaTrophy, FaTimes, FaCheckCircle } from 'react-icons/fa';
+import { FaPlusSquare, FaMagic, FaTrophy, FaTimes, FaCheckCircle, FaTrashAlt } from 'react-icons/fa'; // Added FaTrashAlt
 
 export default function MyDesigns() {
   const [designs, setDesigns] = useState([]);
@@ -19,13 +19,22 @@ export default function MyDesigns() {
   const navigate = useNavigate();
   const toast = useToast();
 
+  // For the main image display modal
   const { isOpen: isImageModalOpen, onOpen: onImageModalOpen, onClose: onImageModalClose } = useDisclosure();
   const [selectedDesign, setSelectedDesign] = useState(null);
 
-  const { isOpen: isAlertOpen, onOpen: onAlertOpen, onClose: onAlertClose } = useDisclosure();
+  // For the contest submission confirmation AlertDialog
+  const { isOpen: isContestAlertOpen, onOpen: onContestAlertOpen, onClose: onContestAlertClose } = useDisclosure();
   const [designToSubmit, setDesignToSubmit] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const cancelRef = useRef();
+
+  // --- NEW: For Delete Confirmation AlertDialog ---
+  const { isOpen: isDeleteAlertOpen, onOpen: onDeleteAlertOpen, onClose: onDeleteAlertClose } = useDisclosure();
+  const [designToDelete, setDesignToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const cancelDeleteRef = useRef();
+  // --- END NEW ---
 
   const fetchDesigns = () => {
     if (user) {
@@ -63,8 +72,8 @@ export default function MyDesigns() {
 
   const handleOpenSubmitConfirmation = (design) => {
     setDesignToSubmit(design);
-    onImageModalOpen(); 
-    onAlertOpen();
+    // onImageModalOpen(); // Image modal should already be open if this button is visible
+    onContestAlertOpen();
   };
 
   const handleConfirmSubmitToContest = async () => {
@@ -81,7 +90,7 @@ export default function MyDesigns() {
         isClosable: true,
       });
       onImageModalClose(); 
-      onAlertClose();     
+      onContestAlertClose();     
       fetchDesigns(); 
     } catch (err) {
       console.error("Error submitting design to contest:", err);
@@ -97,13 +106,60 @@ export default function MyDesigns() {
         logout();
         navigate('/login');
       }
-      onAlertClose(); 
+      onContestAlertClose(); 
     } finally {
       setIsSubmitting(false);
       setDesignToSubmit(null);
     }
   };
 
+  // --- NEW: Handler for opening delete confirmation ---
+  const handleOpenDeleteConfirmation = (design) => {
+    setDesignToDelete(design);
+    onDeleteAlertOpen();
+  };
+
+  // --- NEW: Handler for confirming and executing deletion ---
+  const handleConfirmDelete = async () => {
+    if (!designToDelete) return;
+    setIsDeleting(true);
+
+    try {
+      await client.delete(`/mydesigns/${designToDelete._id}`);
+      toast({
+        title: "Design Deleted",
+        description: `"${designToDelete.prompt.substring(0, 30)}..." has been deleted.`,
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      onImageModalClose(); // Close the main image modal
+      onDeleteAlertClose(); // Close the delete confirmation
+      fetchDesigns(); // Refresh the designs list
+    } catch (err) {
+      console.error("Error deleting design:", err);
+      const errorMessage = err.response?.data?.message || "Could not delete the design. Please try again.";
+      toast({
+        title: "Deletion Failed",
+        description: errorMessage,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      if (err.response?.status === 401) {
+        logout();
+        navigate('/login');
+      }
+      onDeleteAlertClose(); // Close the delete confirmation even on failure
+    } finally {
+      setIsDeleting(false);
+      setDesignToDelete(null);
+    }
+  };
+  // --- END NEW ---
+
+
+  // ... (loading, error, no designs rendering logic remains the same) ...
   if (loading && !user && !error) { 
     return (
         <Box textAlign="center" mt={20} px={4}>
@@ -135,7 +191,7 @@ export default function MyDesigns() {
   return (
     <Box maxW="6xl" mx="auto" mt={{base:6, md:8}} px={{base:2, md:4}} pb={10}>
       <VStack spacing={6} align="stretch" mb={8}>
-        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%" mb={6}> {/* Ensured consistent H1 style */}
+        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%" mb={6}>
           My Saved Designs
         </Heading>
         
@@ -187,16 +243,14 @@ export default function MyDesigns() {
               onClick={() => handleImageClick(design)}
               transition="all 0.2s ease-in-out"
               _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.02)" }}
-              display="flex" flexDirection="column" // Added for flex behavior
+              display="flex" flexDirection="column"
             >
               <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="gray.200"/> 
-              <Box p={5} flexGrow={1}> {/* Added flexGrow */}
+              <Box p={5} flexGrow={1}>
                 <Text 
                     fontSize="md" 
                     color="brand.textDark" 
-                    // noOfLines={2} // Removed to show full text
-                    title={design.prompt} // Keep for native tooltip
-                    // minH="48px" // Removed minH
+                    title={design.prompt}
                     fontWeight="medium"
                 >
                   {design.prompt || "Untitled Design"}
@@ -207,53 +261,65 @@ export default function MyDesigns() {
         </SimpleGrid>
       )}
 
+      {/* Image Display Modal */}
       {selectedDesign && (
         <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
           <ModalOverlay bg="blackAlpha.700"/>
           <ModalContent bg="brand.paper" borderRadius="lg">
-            {/* MODIFIED: Removed prompt from ModalHeader */}
             <ModalHeader color="brand.textDark" fontWeight="bold" fontSize="xl">
                 Design Preview
-                {/* {selectedDesign.prompt} // Text removed */}
             </ModalHeader>
             <ModalCloseButton color="brand.textDark" />
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="75vh" maxW="95%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
-            <ModalFooter borderTopWidth="1px" borderColor="gray.200">
+            <ModalFooter borderTopWidth="1px" borderColor="gray.200" justifyContent="space-between"> {/* Adjusted for new button */}
               <Button 
-                bg="brand.accentYellow" color="brand.textDark" 
-                _hover={{bg: "brand.accentYellowHover"}} 
-                mr={3} 
-                onClick={() => handleOpenSubmitConfirmation(selectedDesign)} 
-                isLoading={isSubmitting} 
-                isDisabled={isSubmitting}
-                leftIcon={<Icon as={FaTrophy} />} 
+                bg="red.500" // Destructive action color
+                color="white"
+                _hover={{bg: "red.600"}} 
+                onClick={() => handleOpenDeleteConfirmation(selectedDesign)} 
+                isLoading={isDeleting} // Use isDeleting state here if you want button to show loading
+                leftIcon={<Icon as={FaTrashAlt} />} 
                 borderRadius="full" px={6} size="lg"
               >
-                Submit to Contest
+                Delete
               </Button>
-              <Button 
-                variant="outline"
-                borderColor="brand.primary"
-                color="brand.primary"
-                _hover={{ bg: 'blackAlpha.50' }} 
-                borderRadius="full"
-                px={6} size="lg"
-                onClick={onImageModalClose}
-              >
-                Close
-              </Button>
+              <HStack> {/* Group for existing buttons */}
+                <Button 
+                  bg="brand.accentYellow" color="brand.textDark" 
+                  _hover={{bg: "brand.accentYellowHover"}} 
+                  onClick={() => handleOpenSubmitConfirmation(selectedDesign)} 
+                  isLoading={isSubmitting} 
+                  isDisabled={isSubmitting}
+                  leftIcon={<Icon as={FaTrophy} />} 
+                  borderRadius="full" px={6} size="lg"
+                >
+                  Submit to Contest
+                </Button>
+                <Button 
+                  variant="outline"
+                  borderColor="brand.primary"
+                  color="brand.primary"
+                  _hover={{ bg: 'blackAlpha.50' }} 
+                  borderRadius="full"
+                  px={6} size="lg"
+                  onClick={onImageModalClose}
+                >
+                  Close
+                </Button>
+              </HStack>
             </ModalFooter>
           </ModalContent>
         </Modal>
       )}
 
+      {/* Contest Submission Confirmation AlertDialog */}
       {designToSubmit && (
         <AlertDialog
-            isOpen={isAlertOpen}
+            isOpen={isContestAlertOpen} // Changed from isAlertOpen
             leastDestructiveRef={cancelRef}
-            onClose={onAlertClose}
+            onClose={onContestAlertClose} // Changed from onAlertClose
             isCentered
         >
             <AlertDialogOverlay>
@@ -266,7 +332,7 @@ export default function MyDesigns() {
                     <AlertDialogFooter>
                         <Button 
                             ref={cancelRef} 
-                            onClick={onAlertClose} 
+                            onClick={onContestAlertClose} // Changed from onAlertClose
                             isDisabled={isSubmitting} 
                             variant="outline"
                             borderColor="brand.primary"
@@ -295,6 +361,56 @@ export default function MyDesigns() {
             </AlertDialogOverlay>
         </AlertDialog>
       )}
+
+      {/* --- NEW: Delete Confirmation AlertDialog --- */}
+      {designToDelete && (
+        <AlertDialog
+            isOpen={isDeleteAlertOpen}
+            leastDestructiveRef={cancelDeleteRef}
+            onClose={onDeleteAlertClose}
+            isCentered
+        >
+            <AlertDialogOverlay>
+                <AlertDialogContent bg="brand.paper" borderRadius="lg">
+                    <AlertDialogHeader fontSize="xl" fontWeight="bold" color="brand.textDark">Confirm Deletion</AlertDialogHeader>
+                    <AlertDialogBody color="brand.textDark">
+                        Are you sure you want to delete the design "{designToDelete.prompt.substring(0,50)}{designToDelete.prompt.length > 50 ? "..." : ""}"? 
+                        This action cannot be undone.
+                    </AlertDialogBody>
+                    <AlertDialogFooter>
+                        <Button 
+                            ref={cancelDeleteRef} 
+                            onClick={onDeleteAlertClose} 
+                            isDisabled={isDeleting}
+                            variant="outline"
+                            borderColor="brand.primary"
+                            color="brand.primary"
+                            _hover={{ bg: 'blackAlpha.50' }}
+                            borderRadius="full"
+                            px={6} size="lg"
+                        >
+                            Cancel
+                        </Button>
+                        <Button 
+                            bg="red.500" // Destructive action color
+                            color="white"
+                            _hover={{bg: "red.600"}} 
+                            onClick={handleConfirmDelete} 
+                            ml={3} 
+                            isLoading={isDeleting} 
+                            loadingText="Deleting..." 
+                            leftIcon={<Icon as={FaTrashAlt} />}
+                            borderRadius="full" px={6} size="lg"
+                        >
+                            Delete Design
+                        </Button>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialogOverlay>
+        </AlertDialog>
+      )}
+      {/* --- END NEW --- */}
+
     </Box>
   );
 }
