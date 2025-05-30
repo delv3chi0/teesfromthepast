@@ -104,7 +104,7 @@ export default function MainLayout({ children }) {
             h="auto" minH="14"
             flexShrink={0}
           >
-            <Flex align="center"> {/* Left Group */}
+            <Flex align="center" flex="0"> {/* Left Group */}
               <IconButton 
                 aria-label="Open Menu" 
                 display={{ base: 'inline-flex', md: 'none' }} 
@@ -122,19 +122,20 @@ export default function MainLayout({ children }) {
                   alt="Tees From The Past Title Logo" 
                   h="50px" 
                   objectFit="contain"
+                  maxW={{ base: "120px", md: "150px" }} // <-- ADDED RESPONSIVE MAX WIDTH
                 />
               </ChakraLink>
             </Flex>
 
             <Spacer /> 
 
-            <Flex align="center"> {/* Right Group */}
+            <Flex align="center" flex="0"> {/* Right Group */}
               {user && (
                 <ChakraLink 
                   as={RouterLink} 
                   to="/profile" 
                   mr={4} 
-                  display={{ base: 'none', md: 'inline-flex' }} // Hide on mobile, show on desktop
+                  display={{ base: 'none', md: 'inline-flex' }} 
                 >
                   <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} bg="brand.primaryDark" color="brand.textLight"/>
                 </ChakraLink>
