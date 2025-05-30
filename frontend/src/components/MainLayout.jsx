@@ -1,5 +1,5 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer } from '@chakra-ui/react';
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue } from '@chakra-ui/react'; // Added useBreakpointValue
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
@@ -11,7 +11,7 @@ const navItems = [
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'Customize My Shirt', path: '/product-studio' },
-  { label: '🏆 Vote Now!', path: '/vote-now' },
+  { label: '🏆 Vote Now!', path: '/vote-now' }, // User chose Option A, so they might remove an emoji here
   { label: 'My Profile', path: '/profile' },
 ];
 
@@ -19,6 +19,10 @@ export default function MainLayout({ children }) {
   const location = useLocation();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { user } = useAuth();
+
+  // Diagnostic: Check current breakpoint
+  const isDesktopView = useBreakpointValue({ base: false, md: true });
+  console.log('[MainLayout Diagnostics] isOpen:', isOpen, 'isDesktopView:', isDesktopView);
 
   const SidebarContent = ({onClick}) => (
     <Box 
@@ -71,7 +75,11 @@ export default function MainLayout({ children }) {
         
         <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
           <DrawerOverlay />
-          <DrawerContent bg="brand.primary" color="brand.textLight"> 
+          <DrawerContent 
+            bg="brand.primary" 
+            color="brand.textLight"
+            border="5px dashed lime" // DIAGNOSTIC: Add obvious border
+          > 
             <DrawerCloseButton />
             <DrawerHeader 
               borderBottomWidth="1px" 
@@ -120,9 +128,9 @@ export default function MainLayout({ children }) {
                 <Image 
                   src="/logo-text.png" 
                   alt="Tees From The Past Title Logo" 
-                  h="50px" // Height constraint remains
+                  h="50px" 
                   objectFit="contain"
-                  maxW={{ base: "180px" }} // Mobile max-width increased, desktop max-width constraint removed
+                  maxW={{ base: "180px" }} 
                 />
               </ChakraLink>
             </Flex>
