@@ -120,9 +120,9 @@ export default function MainLayout({ children }) {
                 <Image 
                   src="/logo-text.png" 
                   alt="Tees From The Past Title Logo" 
-                  h="50px" 
+                  h="50px" // Height constraint remains
                   objectFit="contain"
-                  maxW={{ base: "120px", md: "150px" }} // <-- ADDED RESPONSIVE MAX WIDTH
+                  maxW={{ base: "180px" }} // Mobile max-width increased, desktop max-width constraint removed
                 />
               </ChakraLink>
             </Flex>
