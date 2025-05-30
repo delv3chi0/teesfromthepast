@@ -16,9 +16,8 @@ export default function Generate() {
   const { logout } = useAuth(); 
   const navigate = useNavigate(); 
 
-  // Assuming these handlers are now filled in from your actual file
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
-    console.error(`[${actionType} Error]`, err);
+    console.error(`[${actionType} Error]`, err.response || err.message || err);
     let message = defaultMessage;
     if (err.response) {
       message = err.response.data?.message || err.response.data?.error || defaultMessage;
@@ -32,7 +31,7 @@ export default function Generate() {
         });
         logout();
         navigate('/login');
-        return; // Prevent further error handling for 401 as logout is initiated
+        return; 
       }
     } else if (err.message) {
       message = err.message;
@@ -56,9 +55,8 @@ export default function Generate() {
     setImageUrl("");
     setError("");
     try {
-      // Note: Ensure this API endpoint matches your backend route exactly.
-      // Based on our backend review, it should be '/api/designs/create'
-      const response = await client.post('/api/designs/create', { prompt });
+      // CORRECTED API ENDPOINT: Removed the leading '/api'
+      const response = await client.post('/designs/create', { prompt }); 
       if (response.data && response.data.imageDataUrl) {
         setImageUrl(response.data.imageDataUrl);
         toast({ title: 'Image Generated!', description: 'Your retro design is ready.', status: 'success', duration: 3000, isClosable: true });
@@ -80,7 +78,9 @@ export default function Generate() {
     setIsSaving(true);
     setError("");
     try {
-      await client.post('/mydesigns', { prompt, imageDataUrl });
+      // This endpoint should also be relative to the /api base in client.js
+      // Assuming /mydesigns is correct relative to /api
+      await client.post('/mydesigns', { prompt, imageDataUrl }); 
       toast({ title: 'Design Saved!', description: 'Your masterpiece is saved to "My Designs".', status: 'success', duration: 3000, isClosable: true });
     } catch (err) {
       handleApiError(err, 'Failed to save design.', 'Save Design');
@@ -91,7 +91,7 @@ export default function Generate() {
 
   return (
     <VStack spacing={8} w="100%" maxW="4xl" mx="auto" mt={{base: 4, md: 6}} px={{base:2, md:4}} pb={10}>
-      <Heading as="h1" size="xl" textAlign="left" w="100%" color="brand.textLight" mb={6}> 
+      <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%" mb={6}> 
         AI Image Generator 
       </Heading>
       
@@ -110,15 +110,15 @@ export default function Generate() {
         />
         <Button 
           onClick={handleGenerate} 
-          bg="brand.accentYellow"      // Primary Action Style
-          color="brand.textDark"       // Primary Action Style
-          _hover={{bg: "brand.accentYellowHover"}} // Assuming this is in your theme
+          bg="brand.accentYellow"
+          color="brand.textDark"
+          _hover={{bg: "brand.accentYellowHover"}}
           isLoading={loading}
           loadingText="Generating..."
           isDisabled={isSaving || loading}
           size="lg" 
           px={8} 
-          borderRadius="full"         // Primary Action Style
+          borderRadius="full"
           leftIcon={<Icon as={FaMagic} />}
         >
           Generate Image
@@ -126,9 +126,9 @@ export default function Generate() {
       </VStack>
 
       {error && (
-        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%"> {/* Removed maxW="xl" for full width error */}
+        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%">
             <AlertIcon color="red.600"/>
-            <Text color="red.800">{error}</Text>
+            <Text color="red.800" wordBreak="break-word">{error}</Text> {/* Added wordBreak */}
         </Alert>
       )}
       
@@ -143,16 +143,16 @@ export default function Generate() {
           <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="512px" maxH="512px" borderRadius="lg" shadow="md" />
           <Button
             mt={3} 
-            bg="brand.accentYellow"      // Primary Action Style
-            color="brand.textDark"       // Primary Action Style
-            _hover={{bg: "brand.accentYellowHover"}} // Assuming this is in your theme
+            bg="brand.accentYellow"
+            color="brand.textDark"
+            _hover={{bg: "brand.accentYellowHover"}}
             onClick={handleSaveDesign}
             isLoading={isSaving} 
             loadingText="Saving..." 
-            isDisabled={loading || !imageUrl} // Disable if no image URL
+            isDisabled={loading || !imageUrl}
             size="lg" 
             px={8} 
-            borderRadius="full"         // Primary Action Style
+            borderRadius="full"
             leftIcon={<Icon as={FaSave} />}
           >
             Save This Design
