@@ -7,7 +7,7 @@ import {
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
     Icon 
 } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom'; // Removed Link as RouterLink as it wasn't used
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
 import { FaMagic, FaPlusSquare } from 'react-icons/fa'; 
 
@@ -53,31 +53,48 @@ export default function Dashboard() {
   };
 
   return (
-    <Box maxW="6xl" mt={{base: 4, md: 6}} px={{base: 2, md: 4}} pb={10}> 
+    // MainLayout provides base padding, so mt/px removed from here for direct content flow
+    <Box maxW="6xl" pb={10}> 
       <Box 
         display="flex" 
         alignItems="center" 
-        mb={6}
+        mb={{ base: 4, md: 6 }} // Responsive margin
       >
-        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%"> 
+        <Heading 
+          as="h1" 
+          // Size 'xl' is from our standard, let's make it responsive if needed
+          size={{ base: "lg", md: "xl" }} // Slightly smaller on mobile for space
+          color="brand.textLight" 
+          textAlign="left" 
+          w="100%"
+        > 
           Dashboard
         </Heading>
       </Box>
 
       {user && 
-        <Heading as="h2" size="lg" my={6} textAlign="left" color="brand.textLight" fontWeight="normal"> 
+        <Heading 
+          as="h2" 
+          // Size 'lg' is good, can be responsive too
+          size={{ base: "md", md: "lg" }} // Smaller on mobile
+          my={{ base: 4, md: 6 }} // Responsive margin
+          textAlign="left" 
+          color="brand.textLight" 
+          fontWeight="normal"
+        > 
           Welcome back, {user.firstName || user.username || user.email}!
         </Heading>
       }
       
-      <Divider my={8} borderColor="brand.secondary" />
+      <Divider my={{ base: 6, md: 8 }} borderColor="brand.secondary" />
 
-      <VStack align="stretch" spacing={10}>
+      <VStack align="stretch" spacing={{ base: 6, md: 10 }}> {/* Responsive spacing */}
         <Box>
           <Heading 
             as="h2" 
-            size="lg" 
-            mb={6} 
+            // size="lg" is good for section titles
+            size={{ base: "md", md: "lg" }} // Smaller on mobile
+            mb={{ base: 4, md: 6 }} // Responsive margin
             pb={2}
             color="brand.textLight" 
             borderBottomWidth="2px" 
@@ -89,54 +106,61 @@ export default function Dashboard() {
           {loadingDesigns && (
             <Box textAlign="center" py={10}>
               <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
-              <Text mt={3} color="brand.textLight">Loading your masterpieces...</Text>
+              <Text mt={3} color="brand.textLight" fontSize={{ base: "md", md: "lg" }}> {/* Responsive font size */}
+                Loading your masterpieces...
+              </Text>
             </Box>
           )}
           {!loadingDesigns && designsError && (
-            <Alert status="error" bg="brand.paper" borderRadius="md">
+            <Alert status="error" bg="brand.paper" borderRadius="md" flexDirection={{ base: "column", sm: "row"}} p={{ base: 3, sm: 4}}> {/* Responsive padding & direction */}
               <AlertIcon />
-              <Text color="brand.textDark">{designsError}</Text>
+              <Text color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>{designsError}</Text>
             </Alert>
           )}
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
             <VStack 
-                spacing={5} p={8} bg="rgba(255,255,255,0.1)" borderRadius="xl" 
+                spacing={5} p={{ base: 4, md: 8}} bg="rgba(255,255,255,0.1)" borderRadius="xl" 
                 shadow="md" borderWidth="1px" borderColor="rgba(255,255,255,0.2)" mt={4}
             >
-              <Icon as={FaPlusSquare} boxSize="50px" color="brand.textLight" /> 
-              <Text fontSize="xl" fontWeight="medium" color="brand.textLight" textAlign="center">
+              <Icon as={FaPlusSquare} boxSize={{ base: "40px", md: "50px" }} color="brand.textLight" /> 
+              <Text fontSize={{ base: "lg", md: "xl" }} fontWeight="medium" color="brand.textLight" textAlign="center">
                 You haven’t created any designs yet!
               </Text>
               <Button
                 onClick={() => navigate('/generate')}
                 bg="brand.accentYellow" color="brand.textDark" 
                 _hover={{ bg: 'brand.accentYellowHover' }}
-                size="lg" leftIcon={<Icon as={FaMagic} />} borderRadius="full" 
-                px={8} py={6} fontSize="lg" boxShadow="md" _active={{ boxShadow: "lg" }}
+                size={{ base: "md", md: "lg" }} // Responsive button size
+                leftIcon={<Icon as={FaMagic} />} borderRadius="full" 
+                px={{ base: 6, md: 8 }} 
+                // py={{ base: 4, md: 6 }} // Consider if py is needed with size prop
+                fontSize={{ base: "sm", md: "lg" }} 
+                boxShadow="md" _active={{ boxShadow: "lg" }}
               >
                 Let’s Create Your First Design!
               </Button>
             </VStack>
           )}
           {!loadingDesigns && !designsError && recentDesigns.length > 0 && (
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
+            // Grid columns: 1 on base, 2 on sm, 3 on md. This should already be responsive.
+            // Let's ensure spacing is also responsive.
+            <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={{ base: 4, md: 6 }}>
               {recentDesigns.map(design => (
                 <Box 
                   key={design._id} bg="brand.paper" borderRadius="xl" overflow="hidden" 
                   shadow="lg" cursor="pointer" onClick={() => handleRecentDesignClick(design)}
                   transition="all 0.2s ease-in-out"
                   _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.02)" }}
-                  display="flex" flexDirection="column" // Added for flex behavior of children
+                  display="flex" flexDirection="column"
                 >
-                  <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="220px" bg="gray.200" />
-                  <Box p={5} flexGrow={1}> {/* Added flexGrow to allow text box to expand if needed */}
+                  <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h={{ base: "180px", md: "220px" }} bg="gray.200" /> {/* Responsive image height */}
+                  <Box p={{ base: 3, md: 5 }} flexGrow={1}> 
                     <Text 
-                      fontSize="md" 
+                      fontSize={{ base: "sm", md: "md" }} // Responsive font size for card text
                       color="brand.textDark" 
-                      // noOfLines={2} // Removed to show full text
-                      title={design.prompt} // Keep for native tooltip
-                      // minH="40px" // Removed minH to allow natural height
+                      title={design.prompt}
                       fontWeight="medium"
+                      // noOfLines={2} // Keeping this removed for full text display based on prior change
                     >
                       {design.prompt || "Untitled Design"}
                     </Text>
@@ -149,28 +173,39 @@ export default function Dashboard() {
       </VStack>
 
       {selectedDesign && (
-        <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
+        <Modal isOpen={isOpen} onClose={onClose} size={{ base: "full", sm: "xl" }} isCentered> {/* Responsive modal size */}
           <ModalOverlay bg="blackAlpha.700" />
-          <ModalContent bg="brand.paper" borderRadius="lg">
-            {/* MODIFIED: Removed prompt from ModalHeader, kept header for structure or can be removed if just close button is needed */}
-            <ModalHeader color="brand.textDark" fontWeight="bold" fontSize="lg"> 
-              Design Preview 
-              {/* {selectedDesign.prompt} // Text removed */}
+          <ModalContent bg="brand.paper" borderRadius={{ base: "none", sm: "lg" }}> {/* Responsive border radius */}
+            <ModalHeader 
+              color="brand.textDark" 
+              fontWeight="bold" 
+              fontSize={{ base: "lg", md: "xl" }} // Responsive font size
+              noOfLines={2} // Allow header to wrap if needed
+            >
+              Design Preview
             </ModalHeader>
-            <ModalCloseButton color="brand.textDark" />
-            <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
-              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="90%" objectFit="contain" borderRadius="md"/>
+            <ModalCloseButton color="brand.textDark" top={{ base: 2, sm: 3}} right={{ base: 2, sm: 3}} /> {/* Adjust close button position */}
+            <ModalBody display="flex" justifyContent="center" alignItems="center" py={6} px={{ base: 2, sm: 6}}>
+              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH={{ base: "60vh", sm: "70vh" }} maxW="95%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
-            <ModalFooter borderTopWidth="1px" borderColor="gray.200">
+            <ModalFooter 
+                borderTopWidth="1px" 
+                borderColor="gray.200"
+                flexDirection={{ base: "column", sm: "row" }} // Stack buttons on mobile
+                justifyContent={{ base: "center", sm: "flex-end" }} // Adjusted from space-between
+                alignItems="center" // Center items when stacked
+                py={4} px={{ base: 2, sm: 4}}
+            >
+              {/* The delete button from MyDesigns might be different here, assuming just a close */}
               <Button 
                 variant="outline"
                 borderColor="brand.primary"
                 color="brand.primary"
                 _hover={{ bg: 'blackAlpha.50' }} 
                 borderRadius="full"
-                size="lg"
-                mr={3} 
+                size="lg" // Keep size lg for tappability
                 onClick={onClose}
+                w={{ base: "full", sm: "auto" }} // Full width on mobile
               >
                 Close
               </Button>
