@@ -1,5 +1,5 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue } from '@chakra-ui/react'; // Added useBreakpointValue
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
@@ -11,7 +11,7 @@ const navItems = [
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'Customize My Shirt', path: '/product-studio' },
-  { label: '🏆 Vote Now!', path: '/vote-now' }, // User chose Option A, so they might remove an emoji here
+  { label: '🏆 Monthly Design Contest', path: '/vote-now' }, // Assuming you made title change here
   { label: 'My Profile', path: '/profile' },
 ];
 
@@ -20,9 +20,8 @@ export default function MainLayout({ children }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { user } = useAuth();
 
-  // Diagnostic: Check current breakpoint
   const isDesktopView = useBreakpointValue({ base: false, md: true });
-  console.log('[MainLayout Diagnostics] isOpen:', isOpen, 'isDesktopView:', isDesktopView);
+  // console.log('[MainLayout Diagnostics] isOpen:', isOpen, 'isDesktopView:', isDesktopView); // Keep for debugging if needed
 
   const SidebarContent = ({onClick}) => (
     <Box 
@@ -67,40 +66,50 @@ export default function MainLayout({ children }) {
   return (
     <Flex direction="column" minH="100vh"> 
       <Box as="section" display="flex" flexGrow={1}> 
+        {/* Desktop Sidebar: Render only if isDesktopView is true */}
+        {isDesktopView && (
+          <Box> {/* Removed display={{ base: 'none', md: 'block' }} as isDesktopView now controls rendering */}
+            <SidebarContent /> 
+          </Box>
+        )}
+        
+        {/* Mobile Drawer: Render only if NOT isDesktopView */}
+        {!isDesktopView && (
+          <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
+            <DrawerOverlay />
+            <DrawerContent 
+              bg="brand.primary" 
+              color="brand.textLight"
+              border={isOpen ? "5px dashed lime" : "none"} // Keep diagnostic border only if open, for clarity
+            > 
+              <DrawerCloseButton />
+              <DrawerHeader 
+                borderBottomWidth="1px" 
+                borderColor="brand.primaryDark" 
+                as={RouterLink} to="/dashboard" 
+                _hover={{textDecoration: 'none'}} 
+                display="flex" 
+                alignItems="center" 
+                justifyContent="center" 
+                py="2.5" 
+              >
+                <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
+              </DrawerHeader>
+              <DrawerBody p={0}>
+                <SidebarContent onClick={onClose}/>
+              </DrawerBody>
+            </DrawerContent>
+          </Drawer>
+        )}
+        
         <Box 
-          display={{ base: 'none', md: 'block' }} 
+          flexGrow={1} 
+          ml={isDesktopView ? "60" : "0"} // Use isDesktopView for margin logic
+          transition=".3s ease" 
+          display="flex" 
+          flexDirection="column"
         >
-          <SidebarContent /> 
-        </Box>
-        
-        <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
-          <DrawerOverlay />
-          <DrawerContent 
-            bg="brand.primary" 
-            color="brand.textLight"
-            border="5px dashed lime" // DIAGNOSTIC: Add obvious border
-          > 
-            <DrawerCloseButton />
-            <DrawerHeader 
-              borderBottomWidth="1px" 
-              borderColor="brand.primaryDark" 
-              as={RouterLink} to="/dashboard" 
-              _hover={{textDecoration: 'none'}} 
-              display="flex" 
-              alignItems="center" 
-              justifyContent="center" 
-              py="2.5" 
-            >
-              <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
-            </DrawerHeader>
-            <DrawerBody p={0}>
-              <SidebarContent onClick={onClose}/>
-            </DrawerBody>
-          </DrawerContent>
-        </Drawer>
-        
-        <Box flexGrow={1} ml={{ base: 0, md: 60 }} transition=".3s ease" display="flex" flexDirection="column">
-          <Flex
+          <Flex // Header
             as="header"
             align="center"
             w="full"
@@ -113,17 +122,19 @@ export default function MainLayout({ children }) {
             flexShrink={0}
           >
             <Flex align="center" flex="0"> {/* Left Group */}
-              <IconButton 
-                aria-label="Open Menu" 
-                display={{ base: 'inline-flex', md: 'none' }} 
-                onClick={onOpen} 
-                icon={<HamburgerIcon />} 
-                size="md" 
-                variant="ghost" 
-                mr={2} 
-                color="brand.primaryDark"
-                _hover={{ bg: 'brand.primaryLight' }}
-              />
+              {/* Hamburger Icon: Render only if NOT isDesktopView */}
+              {!isDesktopView && (
+                <IconButton 
+                  aria-label="Open Menu" 
+                  onClick={onOpen} 
+                  icon={<HamburgerIcon />} 
+                  size="md" 
+                  variant="ghost" 
+                  mr={2} 
+                  color="brand.primaryDark"
+                  _hover={{ bg: 'brand.primaryLight' }}
+                />
+              )}
               <ChakraLink as={RouterLink} to="/dashboard" display="flex" alignItems="center" _hover={{textDecoration: "none"}}>
                 <Image 
                   src="/logo-text.png" 
@@ -138,12 +149,12 @@ export default function MainLayout({ children }) {
             <Spacer /> 
 
             <Flex align="center" flex="0"> {/* Right Group */}
-              {user && (
+              {/* Profile Icon: Render only if user exists AND isDesktopView */}
+              {user && isDesktopView && (
                 <ChakraLink 
                   as={RouterLink} 
                   to="/profile" 
                   mr={4} 
-                  display={{ base: 'none', md: 'inline-flex' }} 
                 >
                   <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} bg="brand.primaryDark" color="brand.textLight"/>
                 </ChakraLink>
