@@ -1,5 +1,5 @@
 // frontend/src/components/MainLayout.jsx
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon } from '@chakra-ui/react';
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer } from '@chakra-ui/react'; // Added Spacer import
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
@@ -63,11 +63,8 @@ export default function MainLayout({ children }) {
   return (
     <Flex direction="column" minH="100vh"> 
       <Box as="section" display="flex" flexGrow={1}> 
-        {/* Wrapper Box for Desktop Sidebar - diagnostic styles removed */}
         <Box 
-          display={{ base: 'none', md: 'block' }} // Hide this Box (and its child SidebarContent) on mobile
-          // bg, width, height for 'base' are removed as they were for diagnostics.
-          // On 'md', the 'block' display allows SidebarContent to define its own appearance.
+          display={{ base: 'none', md: 'block' }} 
         >
           <SidebarContent /> 
         </Box>
@@ -98,7 +95,7 @@ export default function MainLayout({ children }) {
           <Flex
             as="header"
             align="center"
-            justify="space-between" 
+            // justify="space-between" // Spacer will handle this now
             w="full"
             px={6} py={3} 
             bg="brand.secondary" 
@@ -108,7 +105,7 @@ export default function MainLayout({ children }) {
             h="auto" minH="14"
             flexShrink={0}
           >
-            <Flex align="center">
+            <Flex align="center"> {/* Left Group */}
               <IconButton 
                 aria-label="Open Menu" 
                 display={{ base: 'inline-flex', md: 'none' }} 
@@ -129,7 +126,10 @@ export default function MainLayout({ children }) {
                 />
               </ChakraLink>
             </Flex>
-            <Flex align="center">
+
+            <Spacer /> {/* This will push the left and right groups apart */}
+
+            <Flex align="center"> {/* Right Group */}
               {user && (
                 <ChakraLink as={RouterLink} to="/profile" mr={4}>
                   <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} bg="brand.primaryDark" color="brand.textLight"/>
