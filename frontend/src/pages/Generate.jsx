@@ -85,12 +85,13 @@ export default function Generate() {
   };
 
   return (
-    // Outermost VStack for the page content. No 'bg' prop, so it's transparent to MainLayout's orange.
-    <VStack spacing={8} w="100%" maxW="3xl" mx="auto" mt={{base: 4, md: 6}} px={4} pb={10}> {/* Centered content with maxW */}
-      <Heading as="h1" size="xl" textAlign="left" w="100%" color="brand.textLight"> 
+    // Root VStack for the page content. No 'bg' prop, it's transparent to MainLayout's orange.
+    <VStack spacing={8} w="100%" maxW="3xl" mx="auto" mt={{base: 4, md: 6}} px={4} pb={10}>
+      <Heading as="h1" size="2xl" textAlign="left" w="100%" color="brand.textLight" mb={2}> 
         AI Image Generator 
       </Heading>
       
+      {/* Card for the input area */}
       <VStack spacing={5} w="100%" bg="brand.paper" p={6} borderRadius="xl" shadow="lg">
         <Textarea 
           placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
@@ -99,13 +100,10 @@ export default function Generate() {
           isDisabled={loading || isSaving}
           size="lg"
           minHeight="120px"
-          // bg="brand.paper" // Background is now on the parent VStack card
           color="brand.textDark" 
           borderColor="brand.secondary"
           focusBorderColor="brand.primaryDark"
-          _placeholder={{ color: 'gray.500' }} // Darker placeholder for white bg
-          // boxShadow="sm" // Shadow is now on the parent card
-          // borderRadius="md" // Radius is now on parent card
+          _placeholder={{ color: 'gray.500' }}
         />
         <Button 
           onClick={handleGenerate} 
@@ -117,18 +115,15 @@ export default function Generate() {
           isDisabled={isSaving || loading}
           size="lg" 
           px={8} 
-          // py={6} // Defaulted by size="lg" from theme
           borderRadius="full"
           leftIcon={<Icon as={FaMagic} />}
-          // boxShadow="md" // Defaulted by theme
-          // _active={{ boxShadow: "lg" }} // Defaulted by theme
         >
           Generate Image
         </Button>
       </VStack>
 
       {error && (
-        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%" maxW="xl">
+        <Alert status="error" mt={4} borderRadius="md" bg="red.50" borderColor="red.200" w="100%" maxW="xl">
             <AlertIcon color="red.600"/>
             <Text color="red.800">{error}</Text>
         </Alert>
@@ -148,9 +143,8 @@ export default function Generate() {
             _hover={{bg: "brand.primaryLight"}}
             onClick={handleSaveDesign}
             isLoading={isSaving} loadingText="Saving..." isDisabled={loading}
-            size="lg" px={8} /* py={6} */ borderRadius="full"
+            size="lg" px={8} borderRadius="full"
             leftIcon={<Icon as={FaSave} />}
-            // boxShadow="md" _active={{ boxShadow: "lg" }} // Uses theme defaults
           >
             Save This Design
           </Button>
