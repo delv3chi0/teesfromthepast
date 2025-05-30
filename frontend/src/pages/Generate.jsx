@@ -16,13 +16,80 @@ export default function Generate() {
   const { logout } = useAuth(); 
   const navigate = useNavigate(); 
 
-  const handleApiError = (err, defaultMessage, actionType = "operation") => { /* ...your existing logic... */ };
-  const handleGenerate = async () => { /* ...your existing logic... */ };
-  const handleSaveDesign = async () => { /* ...your existing logic... */ };
+  // Assuming these handlers are now filled in from your actual file
+  const handleApiError = (err, defaultMessage, actionType = "operation") => {
+    console.error(`[${actionType} Error]`, err);
+    let message = defaultMessage;
+    if (err.response) {
+      message = err.response.data?.message || err.response.data?.error || defaultMessage;
+      if (err.response.status === 401) {
+        toast({
+          title: 'Session Expired',
+          description: 'Please log in again.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+        logout();
+        navigate('/login');
+        return; // Prevent further error handling for 401 as logout is initiated
+      }
+    } else if (err.message) {
+      message = err.message;
+    }
+    setError(message);
+    toast({
+      title: `${actionType} Failed`,
+      description: message,
+      status: 'error',
+      duration: 7000,
+      isClosable: true,
+    });
+  };
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      toast({ title: 'Prompt is empty', description: 'Please enter a prompt to generate an image.', status: 'warning', duration: 3000, isClosable: true });
+      return;
+    }
+    setLoading(true);
+    setImageUrl("");
+    setError("");
+    try {
+      // Note: Ensure this API endpoint matches your backend route exactly.
+      // Based on our backend review, it should be '/api/designs/create'
+      const response = await client.post('/api/designs/create', { prompt });
+      if (response.data && response.data.imageDataUrl) {
+        setImageUrl(response.data.imageDataUrl);
+        toast({ title: 'Image Generated!', description: 'Your retro design is ready.', status: 'success', duration: 3000, isClosable: true });
+      } else {
+        throw new Error("No image data received from server.");
+      }
+    } catch (err) {
+      handleApiError(err, 'Failed to generate image.', 'Image Generation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveDesign = async () => {
+    if (!imageUrl) {
+        toast({ title: 'No Image', description: 'Generate an image first before saving.', status: 'warning', duration: 3000, isClosable: true });
+        return;
+    }
+    setIsSaving(true);
+    setError("");
+    try {
+      await client.post('/mydesigns', { prompt, imageDataUrl });
+      toast({ title: 'Design Saved!', description: 'Your masterpiece is saved to "My Designs".', status: 'success', duration: 3000, isClosable: true });
+    } catch (err) {
+      handleApiError(err, 'Failed to save design.', 'Save Design');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
-    // Outermost VStack: No 'bg', uses MainLayout's padding via mt, px, pb.
-    // Added mx="auto" and maxW to center content block if desired, or remove for full width.
     <VStack spacing={8} w="100%" maxW="4xl" mx="auto" mt={{base: 4, md: 6}} px={{base:2, md:4}} pb={10}>
       <Heading as="h1" size="xl" textAlign="left" w="100%" color="brand.textLight" mb={6}> 
         AI Image Generator 
@@ -43,15 +110,15 @@ export default function Generate() {
         />
         <Button 
           onClick={handleGenerate} 
-          bg="brand.accentYellow"
-          color="brand.textDark"
-          _hover={{bg: "brand.accentYellowHover"}}
+          bg="brand.accentYellow"      // Primary Action Style
+          color="brand.textDark"       // Primary Action Style
+          _hover={{bg: "brand.accentYellowHover"}} // Assuming this is in your theme
           isLoading={loading}
           loadingText="Generating..."
           isDisabled={isSaving || loading}
           size="lg" 
           px={8} 
-          borderRadius="full"
+          borderRadius="full"         // Primary Action Style
           leftIcon={<Icon as={FaMagic} />}
         >
           Generate Image
@@ -59,7 +126,7 @@ export default function Generate() {
       </VStack>
 
       {error && (
-        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%" maxW="xl">
+        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%"> {/* Removed maxW="xl" for full width error */}
             <AlertIcon color="red.600"/>
             <Text color="red.800">{error}</Text>
         </Alert>
@@ -73,13 +140,19 @@ export default function Generate() {
           transition="all 0.2s ease-in-out"
           _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.01)"}}
         >
-          <Image src={imageUrl} alt="Generated Tee Art" maxW="512px" maxH="512px" borderRadius="lg" shadow="md" />
+          <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="512px" maxH="512px" borderRadius="lg" shadow="md" />
           <Button
-            mt={3} bg="brand.primary" color="brand.textLight"
-            _hover={{bg: "brand.primaryLight"}}
+            mt={3} 
+            bg="brand.accentYellow"      // Primary Action Style
+            color="brand.textDark"       // Primary Action Style
+            _hover={{bg: "brand.accentYellowHover"}} // Assuming this is in your theme
             onClick={handleSaveDesign}
-            isLoading={isSaving} loadingText="Saving..." isDisabled={loading}
-            size="lg" px={8} borderRadius="full"
+            isLoading={isSaving} 
+            loadingText="Saving..." 
+            isDisabled={loading || !imageUrl} // Disable if no image URL
+            size="lg" 
+            px={8} 
+            borderRadius="full"         // Primary Action Style
             leftIcon={<Icon as={FaSave} />}
           >
             Save This Design

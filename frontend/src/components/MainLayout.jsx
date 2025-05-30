@@ -22,7 +22,7 @@ export default function MainLayout({ children }) {
   const { user } = useAuth();
 
   const SidebarContent = ({onClick}) => (
-    <Box as="nav" pos="fixed" top="0" left="0" zIndex="sticky" h="full" pb="10" overflowX="hidden" overflowY="auto" bg="brand.primary" borderColor="brand.primaryDark" borderRightWidth="1px" w="60" >
+    <Box as="nav" pos="fixed" top="0" left="0" zIndex={1200} h="full" pb="10" overflowX="hidden" overflowY="auto" bg="brand.primary" borderColor="brand.primaryDark" borderRightWidth="1px" w="60" >
       <Flex as={RouterLink} to="/dashboard" px="4" py="4" align="center" justifyContent="center" _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}>
         <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
       </Flex>
