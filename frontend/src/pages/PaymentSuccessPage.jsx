@@ -2,27 +2,23 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
-import { Box, Heading, Text, Spinner, Alert, AlertIcon, Button, VStack, Icon as ChakraUIIcon } from '@chakra-ui/react'; // Renamed Icon to ChakraUIIcon
-import { CheckCircleIcon, WarningIcon, InfoIcon } from '@chakra-ui/icons'; // Chakra UI icons
-import { useAuth } from '../context/AuthProvider'; // To potentially clear cart or update user state
+import { Box, Heading, Text, Spinner, Alert, AlertIcon, Button, VStack, Icon as ChakraUIIcon } from '@chakra-ui/react';
+import { CheckCircleIcon, WarningIcon, InfoIcon } from '@chakra-ui/icons';
+// Removed useAuth as user wasn't used directly in this component's logic
 
-// Make sure your VITE_STRIPE_PUBLISHABLE_KEY is in your frontend/.env file
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 export default function PaymentSuccessPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth(); // Get user if needed for context
 
   const [message, setMessage] = useState('Verifying your payment, please wait...');
-  const [status, setStatus] = useState('loading'); // 'loading', 'success', 'processing', 'error'
+  const [status, setStatus] = useState('loading'); 
   const [paymentIntentDetails, setPaymentIntentDetails] = useState(null);
 
   useEffect(() => {
     const clientSecret = searchParams.get('payment_intent_client_secret');
-    const paymentIntentIdFromUrl = searchParams.get('payment_intent'); // Can be useful for display or logging
-    // const redirectStatus = searchParams.get('redirect_status'); // Can also be used for an initial hint
-
+    
     if (!clientSecret) {
       console.error("PaymentSuccessPage: No client_secret found in URL.");
       setMessage('Error: Payment information is missing. Unable to confirm payment status.');
@@ -39,7 +35,6 @@ export default function PaymentSuccessPage() {
         return;
       }
 
-      // Retrieve the PaymentIntent status from Stripe using the client_secret
       const { error, paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
 
       if (error) {
@@ -48,15 +43,12 @@ export default function PaymentSuccessPage() {
         setStatus('error');
       } else if (paymentIntent) {
         console.log("PaymentSuccessPage: Retrieved PaymentIntent:", paymentIntent);
-        setPaymentIntentDetails(paymentIntent); // Store for display if needed
+        setPaymentIntentDetails(paymentIntent); 
 
         switch (paymentIntent.status) {
           case 'succeeded':
             setMessage('Thank you! Your payment was successful and your order is confirmed.');
             setStatus('success');
-            // TODO: Clear the user's cart (if you implement a cart)
-            // TODO: Potentially trigger a call to your backend to finalize order in your DB,
-            //       though relying on webhooks is more robust for fulfillment.
             break;
           case 'processing':
             setMessage('Your payment is processing. We will update you once it is confirmed.');
@@ -65,8 +57,6 @@ export default function PaymentSuccessPage() {
           case 'requires_payment_method':
             setMessage('Payment failed. Please try another payment method or check your details.');
             setStatus('error');
-            // You might want to navigate them back to the checkout page:
-            // navigate('/checkout', { replace: true, state: { retryClientSecret: clientSecret } });
             break;
           default:
             setMessage(`Payment status: ${paymentIntent.status}. Please contact support if this persists.`);
@@ -77,7 +67,7 @@ export default function PaymentSuccessPage() {
     };
 
     verifyPayment();
-  }, [searchParams, navigate]); // Rerun if searchParams change (shouldn't typically happen on this page)
+  }, [searchParams, navigate]); 
 
   if (status === 'loading') {
     return (
@@ -103,9 +93,8 @@ export default function PaymentSuccessPage() {
   } else if (status === 'processing') {
     alertStatus = 'info';
     alertTitle = 'Payment Processing';
-    AlertIconComponent = InfoIcon; // Or Chakra's Spinner can be used as an icon
+    AlertIconComponent = InfoIcon; 
   }
-
 
   return (
     <VStack spacing={6} textAlign="center" py={10} px={6} mt={2} minH="70vh" justifyContent="center" bg="brand.accentOrange">
@@ -124,15 +113,14 @@ export default function PaymentSuccessPage() {
             <Button
                 mt={8}
                 as={RouterLink}
-                to={status === 'error' ? '/checkout' : '/my-designs'} // Or homepage for processing/success
-                bg="brand.accentYellow"
-                color="brand.textDark"
-                _hover={{ bg: 'brand.accentYellowHover' }}
-                borderRadius="full"
-                px={8}
-                py={6}
-                size="lg"
-                boxShadow="md"
+                to={status === 'error' ? '/checkout' : '/my-designs'} 
+                bg="brand.accentYellow"      // Primary Action Style
+                color="brand.textDark"       // Primary Action Style
+                _hover={{ bg: 'brand.accentYellowHover' }} // Assuming this is in your theme
+                borderRadius="full"         // Primary Action Style
+                px={8}                      // Good padding for lg button
+                size="lg"                   // Primary Action Style (consistent size)
+                boxShadow="md"              // Kept for prominence
             >
                 {status === 'error' ? 'Try Payment Again' : 'Continue Shopping'}
             </Button>
