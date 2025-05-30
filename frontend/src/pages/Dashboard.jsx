@@ -7,7 +7,7 @@ import {
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
     Icon 
 } from '@chakra-ui/react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // Removed Link as RouterLink as it wasn't used
 import { useAuth } from '../context/AuthProvider';
 import { FaMagic, FaPlusSquare } from 'react-icons/fa'; 
 
@@ -59,7 +59,7 @@ export default function Dashboard() {
         alignItems="center" 
         mb={6}
       >
-        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left"> 
+        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%"> 
           Dashboard
         </Heading>
       </Box>
@@ -126,10 +126,18 @@ export default function Dashboard() {
                   shadow="lg" cursor="pointer" onClick={() => handleRecentDesignClick(design)}
                   transition="all 0.2s ease-in-out"
                   _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.02)" }}
+                  display="flex" flexDirection="column" // Added for flex behavior of children
                 >
                   <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="220px" bg="gray.200" />
-                  <Box p={5}>
-                    <Text fontSize="md" color="brand.textDark" noOfLines={2} title={design.prompt} minH="40px" fontWeight="medium">
+                  <Box p={5} flexGrow={1}> {/* Added flexGrow to allow text box to expand if needed */}
+                    <Text 
+                      fontSize="md" 
+                      color="brand.textDark" 
+                      // noOfLines={2} // Removed to show full text
+                      title={design.prompt} // Keep for native tooltip
+                      // minH="40px" // Removed minH to allow natural height
+                      fontWeight="medium"
+                    >
                       {design.prompt || "Untitled Design"}
                     </Text>
                   </Box>
@@ -144,19 +152,23 @@ export default function Dashboard() {
         <Modal isOpen={isOpen} onClose={onClose} size="xl" isCentered>
           <ModalOverlay bg="blackAlpha.700" />
           <ModalContent bg="brand.paper" borderRadius="lg">
-            <ModalHeader color="brand.textDark" fontWeight="bold" noOfLines={2} fontSize="lg">{selectedDesign.prompt}</ModalHeader>
+            {/* MODIFIED: Removed prompt from ModalHeader, kept header for structure or can be removed if just close button is needed */}
+            <ModalHeader color="brand.textDark" fontWeight="bold" fontSize="lg"> 
+              Design Preview 
+              {/* {selectedDesign.prompt} // Text removed */}
+            </ModalHeader>
             <ModalCloseButton color="brand.textDark" />
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="90%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
             <ModalFooter borderTopWidth="1px" borderColor="gray.200">
               <Button 
-                variant="outline"             // Secondary Action Style
-                borderColor="brand.primary"   // Secondary Action Style
-                color="brand.primary"       // Secondary Action Style
-                _hover={{ bg: 'blackAlpha.50' }} // Subtle hover for outline on light bg
-                borderRadius="full"         // Secondary Action Style
-                size="lg"                   // Consistent size
+                variant="outline"
+                borderColor="brand.primary"
+                color="brand.primary"
+                _hover={{ bg: 'blackAlpha.50' }} 
+                borderRadius="full"
+                size="lg"
                 mr={3} 
                 onClick={onClose}
               >

@@ -5,8 +5,8 @@ import {
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
     useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, 
     useToast, Icon
-} from '@chakra-ui/react'; // Removed ChakraLink as it wasn't used
-import { useNavigate } from 'react-router-dom'; // Removed Link as RouterLink, wasn't used
+} from '@chakra-ui/react';
+import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaPlusSquare, FaMagic, FaTrophy, FaTimes, FaCheckCircle } from 'react-icons/fa';
@@ -63,15 +63,14 @@ export default function MyDesigns() {
 
   const handleOpenSubmitConfirmation = (design) => {
     setDesignToSubmit(design);
-    onImageModalOpen(); // Keep image modal open, open alert on top
+    onImageModalOpen(); 
     onAlertOpen();
   };
 
   const handleConfirmSubmitToContest = async () => {
     if (!designToSubmit) return;
     setIsSubmitting(true);
-    // onAlertClose(); // Close alert first
-
+    
     try {
       const response = await client.post(`/contest/submit/${designToSubmit._id}`);
       toast({
@@ -81,8 +80,8 @@ export default function MyDesigns() {
         duration: 5000,
         isClosable: true,
       });
-      onImageModalClose(); // Close the image modal after successful submission
-      onAlertClose();     // Ensure alert is also closed
+      onImageModalClose(); 
+      onAlertClose();     
       fetchDesigns(); 
     } catch (err) {
       console.error("Error submitting design to contest:", err);
@@ -98,7 +97,7 @@ export default function MyDesigns() {
         logout();
         navigate('/login');
       }
-      onAlertClose(); // Close alert even on failure
+      onAlertClose(); 
     } finally {
       setIsSubmitting(false);
       setDesignToSubmit(null);
@@ -136,7 +135,7 @@ export default function MyDesigns() {
   return (
     <Box maxW="6xl" mx="auto" mt={{base:6, md:8}} px={{base:2, md:4}} pb={10}>
       <VStack spacing={6} align="stretch" mb={8}>
-        <Heading as="h1" size="xl" textAlign="left" w="100%" color="brand.textLight" mb={0}>
+        <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%" mb={6}> {/* Ensured consistent H1 style */}
           My Saved Designs
         </Heading>
         
@@ -188,10 +187,18 @@ export default function MyDesigns() {
               onClick={() => handleImageClick(design)}
               transition="all 0.2s ease-in-out"
               _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.02)" }}
+              display="flex" flexDirection="column" // Added for flex behavior
             >
               <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="gray.200"/> 
-              <Box p={5}>
-                <Text fontSize="md" color="brand.textDark" noOfLines={2} title={design.prompt} minH="48px" fontWeight="medium">
+              <Box p={5} flexGrow={1}> {/* Added flexGrow */}
+                <Text 
+                    fontSize="md" 
+                    color="brand.textDark" 
+                    // noOfLines={2} // Removed to show full text
+                    title={design.prompt} // Keep for native tooltip
+                    // minH="48px" // Removed minH
+                    fontWeight="medium"
+                >
                   {design.prompt || "Untitled Design"}
                 </Text>
               </Box>
@@ -204,7 +211,11 @@ export default function MyDesigns() {
         <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
           <ModalOverlay bg="blackAlpha.700"/>
           <ModalContent bg="brand.paper" borderRadius="lg">
-            <ModalHeader color="brand.textDark" fontWeight="bold" noOfLines={3} fontSize="xl">{selectedDesign.prompt}</ModalHeader>
+            {/* MODIFIED: Removed prompt from ModalHeader */}
+            <ModalHeader color="brand.textDark" fontWeight="bold" fontSize="xl">
+                Design Preview
+                {/* {selectedDesign.prompt} // Text removed */}
+            </ModalHeader>
             <ModalCloseButton color="brand.textDark" />
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="75vh" maxW="95%" objectFit="contain" borderRadius="md"/>
@@ -216,19 +227,19 @@ export default function MyDesigns() {
                 mr={3} 
                 onClick={() => handleOpenSubmitConfirmation(selectedDesign)} 
                 isLoading={isSubmitting} 
-                isDisabled={isSubmitting} // Simplified disabled logic
+                isDisabled={isSubmitting}
                 leftIcon={<Icon as={FaTrophy} />} 
-                borderRadius="full" px={6} size="lg" // Added size="lg"
+                borderRadius="full" px={6} size="lg"
               >
                 Submit to Contest
               </Button>
               <Button 
-                variant="outline"             // Secondary Action Style
-                borderColor="brand.primary"   // Secondary Action Style
-                color="brand.primary"       // Secondary Action Style
+                variant="outline"
+                borderColor="brand.primary"
+                color="brand.primary"
                 _hover={{ bg: 'blackAlpha.50' }} 
-                borderRadius="full"         // Secondary Action Style
-                px={6} size="lg"            // Added size="lg"
+                borderRadius="full"
+                px={6} size="lg"
                 onClick={onImageModalClose}
               >
                 Close
@@ -257,25 +268,25 @@ export default function MyDesigns() {
                             ref={cancelRef} 
                             onClick={onAlertClose} 
                             isDisabled={isSubmitting} 
-                            variant="outline"             // Secondary Action Style
-                            borderColor="brand.primary"   // Secondary Action Style
-                            color="brand.primary"       // Secondary Action Style
+                            variant="outline"
+                            borderColor="brand.primary"
+                            color="brand.primary"
                             _hover={{ bg: 'blackAlpha.50' }}
-                            borderRadius="full"         // Secondary Action Style
-                            px={6} size="lg"            // Added size="lg"
+                            borderRadius="full"
+                            px={6} size="lg"
                         >
                             Cancel
                         </Button>
                         <Button 
-                            bg="brand.accentYellow"      // Primary Action Style
-                            color="brand.textDark"       // Primary Action Style
+                            bg="brand.accentYellow"
+                            color="brand.textDark"
                             _hover={{bg: "brand.accentYellowHover"}} 
                             onClick={handleConfirmSubmitToContest} 
                             ml={3} 
                             isLoading={isSubmitting} 
                             loadingText="Submitting..." 
                             leftIcon={<Icon as={FaCheckCircle} />} 
-                            borderRadius="full" px={6} size="lg" // Added size="lg"
+                            borderRadius="full" px={6} size="lg"
                         >
                             Yes, Submit This Design
                         </Button>
