@@ -23,66 +23,73 @@ export default function MainLayout({ children }) {
   const isDesktopView = useBreakpointValue({ base: false, md: true });
   // console.log('[MainLayout Diagnostics] isOpen:', isOpen, 'isDesktopView:', isDesktopView); 
 
-  // MODIFIED SidebarContent to be adaptable
-  const SidebarContent = ({ onClick, inDrawer = false }) => (
-    <Box 
-      as="nav" 
-      pos={inDrawer ? "relative" : "fixed"} // Relative when in drawer, fixed otherwise
-      top={inDrawer ? undefined : "0"}
-      left={inDrawer ? undefined : "0"}
-      zIndex={inDrawer ? "auto" : 1200} // Auto zIndex in drawer, specific for fixed
-      h={inDrawer ? "100%" : "full"}      // Fill height of drawer or full viewport
-      pb={inDrawer ? 4 : "10"}           // Adjust padding for drawer context
-      overflowX="hidden" 
-      overflowY="auto" 
-      bg="brand.primary" 
-      // No borderRight when in drawer, as DrawerContent provides the visual boundary
-      borderColor={inDrawer ? "transparent" : "brand.primaryDark"} 
-      borderRightWidth={inDrawer ? "0" : "1px"} 
-      w={inDrawer ? "100%" : "60"} // Full width of drawer, or fixed width '60' for desktop
-    >
-      <Flex 
-        as={RouterLink} 
-        to="/dashboard" 
-        px="4" 
-        py="4" // This py might be for the logo container, keep it for now
-        align="center" 
-        justifyContent="center" 
-        _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
-        // For the logo inside the drawer's SidebarContent, you might want it smaller than the DrawerHeader logo
-        // This specific logo is the one in the sidebar, not the drawer header
-        display={inDrawer ? "none" : "flex"} // Optionally hide this logo if DrawerHeader already has one
+  const SidebarContent = ({ onClick, inDrawer = false }) => {
+    // Determine if the logo inside SidebarContent should be shown
+    // It's shown if NOT inDrawer. If inDrawer, it's hidden because DrawerHeader has a logo.
+    const showInternalLogo = !inDrawer; 
+
+    return (
+      <Box 
+        as="nav" 
+        pos={inDrawer ? "relative" : "fixed"}
+        top={inDrawer ? undefined : "0"}
+        left={inDrawer ? undefined : "0"}
+        zIndex={inDrawer ? "auto" : 1200}
+        h={inDrawer ? "100%" : "full"}     
+        pb={inDrawer ? 4 : "10"}          
+        overflowX="hidden" 
+        overflowY="auto" 
+        bg="brand.primary" 
+        borderColor={inDrawer ? "transparent" : "brand.primaryDark"} 
+        borderRightWidth={inDrawer ? "0" : "1px"} 
+        w={inDrawer ? "100%" : "60"} 
       >
-        <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
-      </Flex>
-      <VStack spacing={3} align="stretch" px="4" mt={inDrawer && ! (inDrawer && display === "none") ? 4 : 8}> 
-      {/* Adjust mt if logo above is hidden in drawer */}
-        {navItems.map((item) => (
-          <ChakraLink 
-            key={item.label} 
+        {showInternalLogo && ( // Conditionally render the logo container
+          <Flex 
             as={RouterLink} 
-            to={item.path} 
-            p={3} 
-            borderRadius="md" 
-            fontWeight="medium" 
-            color={location.pathname === item.path ? "brand.accentYellow" : "brand.textLight"} 
-            bg={location.pathname === item.path ? "brand.primaryLight" : "transparent"} 
-            _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }} 
-            onClick={onClick} // This closes the drawer on navigation
+            to="/dashboard" 
+            px="4" 
+            py="4"
+            align="center" 
+            justifyContent="center" 
+            _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
           >
-            {item.label}
-          </ChakraLink>
-        ))}
-      </VStack>
-    </Box>
-  );
+            <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
+          </Flex>
+        )}
+        <VStack 
+          spacing={3} 
+          align="stretch" 
+          px="4" 
+          mt={showInternalLogo ? 8 : 4} // Adjust mt based on whether the internal logo is shown
+        >
+          {navItems.map((item) => (
+            <ChakraLink 
+              key={item.label} 
+              as={RouterLink} 
+              to={item.path} 
+              p={3} 
+              borderRadius="md" 
+              fontWeight="medium" 
+              color={location.pathname === item.path ? "brand.accentYellow" : "brand.textLight"} 
+              bg={location.pathname === item.path ? "brand.primaryLight" : "transparent"} 
+              _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }} 
+              onClick={onClick} 
+            >
+              {item.label}
+            </ChakraLink>
+          ))}
+        </VStack>
+      </Box>
+    );
+  };
 
   return (
     <Flex direction="column" minH="100vh"> 
       <Box as="section" display="flex" flexGrow={1}> 
         {isDesktopView && (
           <Box>
-            <SidebarContent /> {/* inDrawer defaults to false */}
+            <SidebarContent /> 
           </Box>
         )}
         
@@ -92,7 +99,7 @@ export default function MainLayout({ children }) {
             <DrawerContent 
               bg="brand.primary" 
               color="brand.textLight"
-              border={isOpen ? "2px dashed lime" : "none"} // Kept a subtle diagnostic border for when drawer is open
+              border={isOpen ? "2px dashed lime" : "none"} 
             > 
               <DrawerCloseButton />
               <DrawerHeader 
@@ -104,12 +111,12 @@ export default function MainLayout({ children }) {
                 alignItems="center" 
                 justifyContent="center" 
                 py="2.5" 
-                onClick={onClose} // Close drawer if header is clicked
+                onClick={onClose} 
               >
                 <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/> 
               </DrawerHeader>
-              <DrawerBody p={0}> {/* DrawerBody has its own padding, set to 0 if SidebarContent handles it */}
-                <SidebarContent onClick={onClose} inDrawer={true} /> {/* Pass inDrawer=true */}
+              <DrawerBody p={0}> 
+                <SidebarContent onClick={onClose} inDrawer={true} /> 
               </DrawerBody>
             </DrawerContent>
           </Drawer>
@@ -122,7 +129,6 @@ export default function MainLayout({ children }) {
           display="flex" 
           flexDirection="column"
         >
-          {/* ... Header and Main content ... (remains the same as your last version) */}
           <Flex
             as="header"
             align="center"
@@ -135,7 +141,7 @@ export default function MainLayout({ children }) {
             h="auto" minH="14"
             flexShrink={0}
           >
-            <Flex align="center" flex="0"> {/* Left Group */}
+            <Flex align="center" flex="0"> 
               {!isDesktopView && (
                 <IconButton 
                   aria-label="Open Menu" 
@@ -161,7 +167,7 @@ export default function MainLayout({ children }) {
 
             <Spacer /> 
 
-            <Flex align="center" flex="0"> {/* Right Group */}
+            <Flex align="center" flex="0"> 
               {user && isDesktopView && (
                 <ChakraLink 
                   as={RouterLink} 
