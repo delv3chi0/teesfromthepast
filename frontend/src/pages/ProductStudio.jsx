@@ -1,10 +1,13 @@
 // frontend/src/pages/ProductStudio.jsx
-import { useState, useEffect, useRef } from 'react'; // Added useRef
-import { fabric } from 'fabric'; // Import Fabric.js
+import { useState, useEffect, useRef } from 'react';
+// This is the standard import for Fabric.js v5+
+// The error suggests this specific 'fabric' named export isn't found in the .mjs file Vite is using.
+// Ensure you have Fabric.js v5.x.x installed.
+import { fabric } from 'fabric'; 
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
-    Link as ChakraLink, Divider, useToast, Icon, Button // Ensured Button is imported
+    Link as ChakraLink, Divider, useToast, Icon, Button
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
@@ -23,7 +26,6 @@ const productColors = [
 
 const productSizes = ['S', 'M', 'L', 'XL', 'XXL'];
 
-// Define canvas dimensions - these can be made responsive later
 const CANVAS_WIDTH = 400;
 const CANVAS_HEIGHT = 400;
 
@@ -41,9 +43,8 @@ export default function ProductStudio() {
   const [selectedProductSize, setSelectedProductSize] = useState(productSizes[2]);
   const [selectedDesign, setSelectedDesign] = useState(null);
 
-  // Refs for Fabric.js canvas
-  const canvasEl = useRef(null); // For the <canvas> DOM element
-  const fabricCanvas = useRef(null); // For the Fabric.js Canvas instance
+  const canvasEl = useRef(null); 
+  const fabricCanvas = useRef(null); 
 
   useEffect(() => {
     if (user) {
@@ -71,76 +72,66 @@ export default function ProductStudio() {
     return product?.mockups[selectedProductColor] || '';
   };
 
-  // useEffect for initializing and updating Fabric.js canvas
   useEffect(() => {
-    // Initialize Fabric canvas instance if it doesn't exist
-    if (canvasEl.current && !fabricCanvas.current) {
-      fabricCanvas.current = new fabric.Canvas(canvasEl.current, {
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
-        // backgroundColor: 'lightgray', // Optional: for debugging canvas area
-      });
+    if (!fabricCanvas.current && canvasEl.current) {
+        fabricCanvas.current = new fabric.Canvas(canvasEl.current, {
+            width: CANVAS_WIDTH,
+            height: CANVAS_HEIGHT,
+        });
     }
 
-    const fCanvas = fabricCanvas.current;
-    if (fCanvas) {
-      fCanvas.clear(); // Clear previous content
+    const FCanvas = fabricCanvas.current;
+    if (FCanvas) {
+        FCanvas.clear();
+        const mockupSrc = getCurrentMockupSrc();
 
-      const mockupSrc = getCurrentMockupSrc();
+        if (mockupSrc) {
+            fabric.Image.fromURL(mockupSrc, (mockupImg) => {
+                if (mockupImg.width === 0 || mockupImg.height === 0) {
+                    console.error("Mockup image loaded with zero dimensions:", mockupSrc);
+                    FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); // Fallback
+                    return;
+                }
+                FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
+                    scaleX: CANVAS_WIDTH / mockupImg.width,
+                    scaleY: CANVAS_HEIGHT / mockupImg.height,
+                    selectable: false,
+                    evented: false,
+                });
+            }, { crossOrigin: 'anonymous' });
+        } else {
+            FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
+            FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); // Clear with white if no mockup
+        }
 
-      // 1. Load Mockup Image as Canvas Background
-      if (mockupSrc) {
-        fabric.Image.fromURL(mockupSrc, (mockupImg) => {
-          fCanvas.setBackgroundImage(mockupImg, fCanvas.renderAll.bind(fCanvas), {
-            scaleX: CANVAS_WIDTH / mockupImg.width,
-            scaleY: CANVAS_HEIGHT / mockupImg.height,
-            // Ensure it's not selectable if it's just a background
-            selectable: false, 
-            evented: false,
-          });
-        }, { crossOrigin: 'anonymous' }); // Important if images are from different domains or dataURLs
-      } else {
-        // If no mockupSrc, clear background and render
-        fCanvas.setBackgroundImage(null, fCanvas.renderAll.bind(fCanvas));
-      }
+        if (selectedDesign?.imageDataUrl) {
+            fabric.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
+                if (designImg.width === 0 || designImg.height === 0) {
+                    console.error("Design image loaded with zero dimensions:", selectedDesign.imageDataUrl);
+                    return; // Don't add invalid image
+                }
+                const designWidth = CANVAS_WIDTH * 0.33;
+                designImg.scaleToWidth(designWidth);
+                const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5;
+                const designTop = CANVAS_HEIGHT * 0.24;
 
-      // 2. Load Selected AI Design Image and Add it on Top
-      if (selectedDesign?.imageDataUrl) {
-        fabric.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-          // Initial placement and scaling for the design
-          // These values are similar to your previous CSS overlay
-          const designWidth = CANVAS_WIDTH * 0.33; // 33% of canvas width
-          designImg.scaleToWidth(designWidth);
-          
-          // Calculate top and left based on canvas dimensions
-          // These percentages might need adjustment for best visual fit on canvas
-          const designTop = CANVAS_HEIGHT * 0.24; // 24% from the top of the canvas
-          const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5; // Centered horizontally for this example
-                                        // Or your previous: CANVAS_WIDTH * 0.335; 
-
-          designImg.set({
-            top: designTop,
-            left: designLeft,
-            // objectCaching: false, // May help with performance of transformations later
-          });
-          
-          fCanvas.add(designImg);
-          // fCanvas.setActiveObject(designImg); // Optional: make it active for manipulation
-          fCanvas.renderAll();
-        }, { crossOrigin: 'anonymous' });
-      }
+                designImg.set({
+                    top: designTop,
+                    left: designLeft,
+                });
+                FCanvas.add(designImg);
+                FCanvas.renderAll();
+            }, { crossOrigin: 'anonymous' });
+        }
     }
     
-    // Cleanup function for when component unmounts or dependencies change
-    // This is important to prevent memory leaks with Fabric.js
+    // Optional: More robust cleanup, though usually not needed if canvas instance persists
     // return () => {
-    //   if (fabricCanvas.current) {
-    //     fabricCanvas.current.dispose();
-    //     fabricCanvas.current = null;
+    //   if (FCanvas) {
+    //     // FCanvas.dispose(); // Only if re-creating canvas itself on unmount
     //   }
     // };
-  // Rerun this effect if the selected design or product details change
-  }, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]);
+}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]);
 
 
   const handleProceedToCheckout = () => {
@@ -150,8 +141,6 @@ export default function ProductStudio() {
             prompt: selectedDesign.prompt,
             imageDataUrl: selectedDesign.imageDataUrl, 
             productType: productTypes.find(p => p.value === selectedProductType)?.label,
-            // For checkout, you might want to get the current canvas content as an image
-            // For now, we still pass the original AI design URL and mockup image URL
             productImage: getCurrentMockupSrc(), 
             color: selectedProductColor,
             size: selectedProductSize,
@@ -266,21 +255,20 @@ export default function ProductStudio() {
         
         <Divider my={4} borderColor="brand.secondary"/>
 
-        {/* MODIFIED: Preview Section now uses a Canvas */}
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
             <Heading as="h2" size="lg" mb={6} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
             {selectedDesign ? (
                 <VStack spacing={6}>
                     <Box 
-                        // This Box is now a container for the canvas
                         w={`${CANVAS_WIDTH}px`} 
                         h={`${CANVAS_HEIGHT}px`} 
-                        bg={selectedProductColor === 'white' ? 'gray.50' : 'gray.700'} // Background for canvas area
+                        bg={selectedProductColor === 'white' ? 'gray.100' : 'gray.700'} // Slightly lighter for white mockup bg
                         mx="auto" 
                         borderWidth="1px"
                         borderColor="brand.secondary"
                         borderRadius="md"
-                        overflow="hidden" // In case canvas tries to be bigger
+                        overflow="hidden" 
+                        position="relative" // For any potential absolute positioned controls later
                     >
                         <canvas ref={canvasEl} id="mockupCanvas"></canvas>
                     </Box>
