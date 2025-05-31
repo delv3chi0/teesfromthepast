@@ -1,6 +1,6 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-import 'fabric'; // Import for side-effects, hoping it attaches to window
+// REMOVED: import 'fabric'; // No longer importing fabric directly here
 
 import { 
     Box, Heading, Text, VStack, Select, 
@@ -77,8 +77,8 @@ export default function ProductStudio() {
   };
 
   useEffect(() => {
-    const fabricScriptPollInterval = 100; // Check every 100ms
-    const maxPolls = 50; // Try for up to 5 seconds (100ms * 50)
+    const fabricScriptPollInterval = 100; 
+    const maxPolls = 50; 
     let pollCount = 0;
 
     const setupCanvas = (fabricInstance) => {
@@ -149,14 +149,13 @@ export default function ProductStudio() {
     };
 
     const pollForFabric = () => {
-      const fabricInstance = window.fabric;
+      const fabricInstance = window.fabric; // Access global fabric
       if (fabricInstance && fabricInstance.Canvas) {
         console.log("[ProductStudio] Fabric.js found on window object after polling.");
         setupCanvas(fabricInstance);
       } else {
         pollCount++;
         if (pollCount < maxPolls) {
-          // console.log(`[ProductStudio] Fabric not yet on window. Poll ${pollCount}/${maxPolls}. Retrying...`);
           setTimeout(pollForFabric, fabricScriptPollInterval);
         } else {
           console.error("[ProductStudio] Fabric.js did NOT become available on window object after polling.");
@@ -165,11 +164,11 @@ export default function ProductStudio() {
       }
     };
 
-    if (canvasEl.current) { // Only start polling if canvas element is ready
+    if (canvasEl.current) { 
         pollForFabric();
     }
     
-}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc, toast]); // Removed fabricModule, using window.fabric
+}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc, toast]);
 
 
   const handleProceedToCheckout = () => {
