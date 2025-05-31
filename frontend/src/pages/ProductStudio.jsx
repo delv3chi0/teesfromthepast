@@ -1,9 +1,6 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// MODIFIED IMPORT START: Import for side effects, then access global
-import 'fabric'; // This imports the library, expecting it to create a global 'fabric'
-// We will then access window.fabric directly
-// MODIFIED IMPORT END
+// Fabric.js will be imported dynamically below
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
@@ -44,47 +41,58 @@ export default function ProductStudio() {
   const [selectedDesign, setSelectedDesign] = useState(null);
 
   const canvasEl = useRef(null); 
-  const fabricCanvas = useRef(null); 
+  const fabricCanvas = useRef(null);
+  const [fabricModule, setFabricModule] = useState(null); // State for dynamically loaded fabric module
 
+  // Effect to load Fabric.js dynamically
   useEffect(() => {
-    if (user) {
-      setLoadingDesigns(true);
-      client.get('/mydesigns')
-        .then(response => {
-          setDesigns(response.data);
-          setLoadingDesigns(false);
-        })
-        .catch(err => {
-          console.error("Error fetching designs for studio:", err);
-          setDesignsError('Could not load your saved designs.');
-          if (err.response?.status === 401) {
-            toast({ title: "Session Expired", description: "Please log in again.", status: "warning", duration: 3000, isClosable: true });
-            logout();
-            navigate('/login');
-          }
-          setLoadingDesigns(false);
-        });
-    }
-  }, [user, logout, navigate, toast]);
+    console.log("[ProductStudio] Attempting to dynamically import Fabric.js...");
+    import('fabric')
+      .then(module => {
+        console.log("[ProductStudio] Fabric.js module loaded:", module);
+        if (module.fabric && module.fabric.Canvas) {
+          console.log("[ProductStudio] Using module.fabric");
+          setFabricModule(module.fabric);
+        } else if (module.default && module.default.Canvas) {
+          console.log("[ProductStudio] Using module.default");
+          setFabricModule(module.default);
+        } else if (module.Canvas) { 
+           console.log("[ProductStudio] Using module directly (has Canvas property)");
+           setFabricModule(module);
+        } else {
+          console.error("[ProductStudio] Failed to find usable fabric object in dynamically imported module", module);
+          toast({ title: "Preview Error", description: "Fabric.js module loaded but structure unexpected.", status: "error", duration: 7000, isClosable: true });
+        }
+      })
+      .catch(err => {
+        console.error("[ProductStudio] Error dynamically importing Fabric.js:", err);
+        toast({ title: "Preview Error", description: "Could not load Fabric.js for preview.", status: "error", duration: 7000, isClosable: true });
+      });
+  }, [toast]); // Runs once to load fabric
 
   const getCurrentMockupSrc = () => {
     const product = productTypes.find(p => p.value === selectedProductType);
     return product?.mockups[selectedProductColor] || '';
   };
 
+  // useEffect for initializing and updating Fabric.js canvas
   useEffect(() => {
-    // Access fabric from the window object
-    const fabricInstance = window.fabric;
-
-    if (!fabricInstance || !fabricInstance.Canvas) {
-        console.error("[ProductStudio] Fabric.js not found on window object or 'Canvas' not found.", fabricInstance);
-        toast({ title: "Preview Error", description: "Cannot initialize product preview. Fabric.js might not be loaded.", status: "error", duration: 5000 });
-        return; 
+    if (!fabricModule) { 
+        console.log("[ProductStudio] Canvas Effect: Fabric module not yet loaded.");
+        return;
+    }
+    if (!fabricModule.Canvas) {
+        console.error("[ProductStudio] Canvas Effect: Fabric module loaded, but Canvas constructor not found.", fabricModule);
+        return;
+    }
+    if (!canvasEl.current) {
+        console.log("[ProductStudio] Canvas Effect: Canvas DOM element not yet available.");
+        return;
     }
 
-    if (!fabricCanvas.current && canvasEl.current) {
-        console.log("[ProductStudio] Initializing Fabric canvas from window.fabric.");
-        fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, {
+    if (!fabricCanvas.current) {
+        console.log("[ProductStudio] Initializing Fabric canvas with dynamically loaded module.");
+        fabricCanvas.current = new fabricModule.Canvas(canvasEl.current, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
         });
@@ -98,7 +106,7 @@ export default function ProductStudio() {
 
         if (mockupSrc) {
             console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
-            fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
+            fabricModule.Image.fromURL(mockupSrc, (mockupImg) => {
                 console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
                 if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
                     console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
@@ -121,7 +129,7 @@ export default function ProductStudio() {
 
         if (selectedDesign?.imageDataUrl) {
             console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-            fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
+            fabricModule.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
                 console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
                 if (!designImg || designImg.width === 0 || designImg.height === 0) {
                     console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
@@ -142,16 +150,19 @@ export default function ProductStudio() {
             }, { crossOrigin: 'anonymous' });
         } else {
             console.log("[ProductStudio] No selected design to load.");
+             // Ensure canvas is rendered even if no design (e.g., to show background or cleared state)
+            if (FCanvas.backgroundImage || FCanvas.backgroundColor) {
+                FCanvas.renderAll();
+            }
         }
     } else {
-        console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available.");
+        console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available for update.");
     }
     
-}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]);
+}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc, fabricModule]); // Added fabricModule to dependencies
 
 
   const handleProceedToCheckout = () => {
-    // ... (rest of the function remains the same)
     if (selectedDesign && selectedProductType && selectedProductColor && selectedProductSize) {
         const productDetailsForCheckout = {
             designId: selectedDesign._id,
@@ -176,7 +187,6 @@ export default function ProductStudio() {
   };
 
   return (
-    // ... (JSX structure remains the same) ...
     <Box maxW="container.xl" mx="auto" px={0} pb={10}>
       <VStack spacing={6} align="stretch">
         <Heading 
