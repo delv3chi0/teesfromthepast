@@ -1,11 +1,6 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// MODIFIED IMPORT START
-import * as FabricFullModule from 'fabric';
-// Attempt to access the 'fabric' object, assuming it's a property on the imported module
-// or if the module itself is the main fabric object.
-const fabric = FabricFullModule.fabric || FabricFullModule; 
-// MODIFIED IMPORT END
+import { fabric } from 'fabric'; 
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
@@ -75,13 +70,13 @@ export default function ProductStudio() {
   };
 
   useEffect(() => {
-    // Ensure fabric object is available before proceeding
     if (!fabric || !fabric.Canvas) {
-        console.error("Fabric.js not loaded correctly.", fabric);
+        console.error("[ProductStudio] Fabric.js not loaded correctly at start of effect.", fabric);
         return; 
     }
 
     if (!fabricCanvas.current && canvasEl.current) {
+        console.log("[ProductStudio] Initializing Fabric canvas.");
         fabricCanvas.current = new fabric.Canvas(canvasEl.current, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
@@ -90,16 +85,20 @@ export default function ProductStudio() {
 
     const FCanvas = fabricCanvas.current;
     if (FCanvas) {
+        console.log("[ProductStudio] Updating canvas. Clearing canvas.");
         FCanvas.clear();
         const mockupSrc = getCurrentMockupSrc();
 
         if (mockupSrc) {
+            console.log("[ProductStudio] Attempting to load mockup:", mockupSrc); // Added log
             fabric.Image.fromURL(mockupSrc, (mockupImg) => {
+                console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg); // Added log
                 if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
-                    console.error("Mockup image loaded with zero dimensions or is null:", mockupSrc);
-                    FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas));
+                    console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
+                    FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); 
                     return;
                 }
+                console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height); // Added log
                 FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
                     scaleX: CANVAS_WIDTH / mockupImg.width,
                     scaleY: CANVAS_HEIGHT / mockupImg.height,
@@ -108,14 +107,17 @@ export default function ProductStudio() {
                 });
             }, { crossOrigin: 'anonymous' });
         } else {
+            console.log("[ProductStudio] No mockupSrc, clearing background and setting to white."); // Added log
             FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
             FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
         }
 
         if (selectedDesign?.imageDataUrl) {
+            console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "..."); // Added log
             fabric.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
+                console.log("[ProductStudio] Design image loaded callback. Image object:", designImg); // Added log
                 if (!designImg || designImg.width === 0 || designImg.height === 0) {
-                    console.error("Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl);
+                    console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
                     return; 
                 }
                 const designWidth = CANVAS_WIDTH * 0.33;
@@ -128,12 +130,17 @@ export default function ProductStudio() {
                     left: designLeft,
                 });
                 FCanvas.add(designImg);
+                console.log("[ProductStudio] Design image added to canvas."); // Added log
                 FCanvas.renderAll();
             }, { crossOrigin: 'anonymous' });
+        } else {
+            console.log("[ProductStudio] No selected design to load."); // Added log
         }
+    } else {
+        console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available.");
     }
     
-}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]); // Removed fabric from deps array as it's module-level
+}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]);
 
 
   const handleProceedToCheckout = () => {
@@ -259,7 +266,6 @@ export default function ProductStudio() {
 
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
             <Heading as="h2" size="lg" mb={6} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
-            {/* Canvas container for consistent sizing based on constants */}
              <Box 
                 w={`${CANVAS_WIDTH}px`} 
                 h={`${CANVAS_HEIGHT}px`} 
@@ -273,8 +279,8 @@ export default function ProductStudio() {
             >
                 <canvas ref={canvasEl} id="mockupCanvas"></canvas>
             </Box>
-            {selectedDesign && ( // Only show text if a design is selected for preview
-                <VStack spacing={6} mt={4}> {/* Add margin top for spacing from canvas */}
+            {selectedDesign && ( 
+                <VStack spacing={6} mt={4}> 
                     <Text color="brand.textDark" fontWeight="medium" textAlign="center">
                         Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}
                     </Text>
@@ -293,7 +299,7 @@ export default function ProductStudio() {
                     </Button>
                 </VStack>
             )}
-            {!selectedDesign && ( // Show placeholder text if no design selected for preview
+            {!selectedDesign && ( 
                  <Text color="brand.textDark" fontStyle="italic" textAlign="center" mt={4}> 
                     Select your apparel options and a design above to see a preview.
                 </Text>
