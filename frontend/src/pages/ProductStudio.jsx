@@ -1,9 +1,9 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// ATTEMPTING DEFAULT IMPORT
-import FabricInstance from 'fabric'; 
-const fabric = FabricInstance; // Assuming the default export is the fabric object
-
+// MODIFIED IMPORT START: Import for side effects, then access global
+import 'fabric'; // This imports the library, expecting it to create a global 'fabric'
+// We will then access window.fabric directly
+// MODIFIED IMPORT END
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
@@ -73,14 +73,18 @@ export default function ProductStudio() {
   };
 
   useEffect(() => {
-    if (!fabric || !fabric.Canvas) {
-        console.error("[ProductStudio] Fabric.js not loaded correctly or 'Canvas' not found on fabric object.", fabric);
+    // Access fabric from the window object
+    const fabricInstance = window.fabric;
+
+    if (!fabricInstance || !fabricInstance.Canvas) {
+        console.error("[ProductStudio] Fabric.js not found on window object or 'Canvas' not found.", fabricInstance);
+        toast({ title: "Preview Error", description: "Cannot initialize product preview. Fabric.js might not be loaded.", status: "error", duration: 5000 });
         return; 
     }
 
     if (!fabricCanvas.current && canvasEl.current) {
-        console.log("[ProductStudio] Initializing Fabric canvas.");
-        fabricCanvas.current = new fabric.Canvas(canvasEl.current, {
+        console.log("[ProductStudio] Initializing Fabric canvas from window.fabric.");
+        fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
         });
@@ -94,7 +98,7 @@ export default function ProductStudio() {
 
         if (mockupSrc) {
             console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
-            fabric.Image.fromURL(mockupSrc, (mockupImg) => {
+            fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
                 console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
                 if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
                     console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
@@ -117,7 +121,7 @@ export default function ProductStudio() {
 
         if (selectedDesign?.imageDataUrl) {
             console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-            fabric.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
+            fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
                 console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
                 if (!designImg || designImg.width === 0 || designImg.height === 0) {
                     console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
@@ -147,6 +151,7 @@ export default function ProductStudio() {
 
 
   const handleProceedToCheckout = () => {
+    // ... (rest of the function remains the same)
     if (selectedDesign && selectedProductType && selectedProductColor && selectedProductSize) {
         const productDetailsForCheckout = {
             designId: selectedDesign._id,
@@ -171,6 +176,7 @@ export default function ProductStudio() {
   };
 
   return (
+    // ... (JSX structure remains the same) ...
     <Box maxW="container.xl" mx="auto" px={0} pb={10}>
       <VStack spacing={6} align="stretch">
         <Heading 
