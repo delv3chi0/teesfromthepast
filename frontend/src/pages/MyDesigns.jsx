@@ -4,7 +4,7 @@ import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, 
     useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, 
-    useToast, Icon, HStack // Ensured HStack is imported
+    useToast, Icon, HStack
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
@@ -261,7 +261,14 @@ export default function MyDesigns() {
             </ModalHeader>
             <ModalCloseButton color="brand.textDark" />
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
-              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="75vh" maxW="95%" objectFit="contain" borderRadius="md"/>
+              <Image 
+                src={selectedDesign.imageDataUrl} 
+                alt={selectedDesign.prompt} 
+                maxH={{ base: "60vh", sm: "75vh" }} // Applied responsive maxH
+                maxW="95%" 
+                objectFit="contain" 
+                borderRadius="md"
+              />
             </ModalBody>
             <ModalFooter 
               borderTopWidth="1px" 
