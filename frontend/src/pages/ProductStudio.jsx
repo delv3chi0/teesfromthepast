@@ -1,6 +1,9 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-import { fabric } from 'fabric'; 
+// ATTEMPTING DEFAULT IMPORT
+import FabricInstance from 'fabric'; 
+const fabric = FabricInstance; // Assuming the default export is the fabric object
+
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
@@ -71,7 +74,7 @@ export default function ProductStudio() {
 
   useEffect(() => {
     if (!fabric || !fabric.Canvas) {
-        console.error("[ProductStudio] Fabric.js not loaded correctly at start of effect.", fabric);
+        console.error("[ProductStudio] Fabric.js not loaded correctly or 'Canvas' not found on fabric object.", fabric);
         return; 
     }
 
@@ -90,15 +93,15 @@ export default function ProductStudio() {
         const mockupSrc = getCurrentMockupSrc();
 
         if (mockupSrc) {
-            console.log("[ProductStudio] Attempting to load mockup:", mockupSrc); // Added log
+            console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
             fabric.Image.fromURL(mockupSrc, (mockupImg) => {
-                console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg); // Added log
+                console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
                 if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
                     console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
                     FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); 
                     return;
                 }
-                console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height); // Added log
+                console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height);
                 FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
                     scaleX: CANVAS_WIDTH / mockupImg.width,
                     scaleY: CANVAS_HEIGHT / mockupImg.height,
@@ -107,15 +110,15 @@ export default function ProductStudio() {
                 });
             }, { crossOrigin: 'anonymous' });
         } else {
-            console.log("[ProductStudio] No mockupSrc, clearing background and setting to white."); // Added log
+            console.log("[ProductStudio] No mockupSrc, clearing background and setting to white.");
             FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
             FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
         }
 
         if (selectedDesign?.imageDataUrl) {
-            console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "..."); // Added log
+            console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
             fabric.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-                console.log("[ProductStudio] Design image loaded callback. Image object:", designImg); // Added log
+                console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
                 if (!designImg || designImg.width === 0 || designImg.height === 0) {
                     console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
                     return; 
@@ -130,11 +133,11 @@ export default function ProductStudio() {
                     left: designLeft,
                 });
                 FCanvas.add(designImg);
-                console.log("[ProductStudio] Design image added to canvas."); // Added log
+                console.log("[ProductStudio] Design image added to canvas.");
                 FCanvas.renderAll();
             }, { crossOrigin: 'anonymous' });
         } else {
-            console.log("[ProductStudio] No selected design to load."); // Added log
+            console.log("[ProductStudio] No selected design to load.");
         }
     } else {
         console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available.");
