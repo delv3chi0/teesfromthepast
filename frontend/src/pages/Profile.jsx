@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, 
-    FormControl, FormLabel, Spinner 
+    FormControl, FormLabel, Spinner, Stack // Added Stack for responsive HStack/VStack
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -33,11 +33,9 @@ export default function Profile() {
       });
       setIsLoading(false);
     } else if (!isLoading && !authStillLoading) { 
-      // If still no user after auth check is complete, it's an issue
-      // PrivateRoute should handle redirect, but as a safeguard for display:
       setIsLoading(false); 
     }
-  }, [user, isLoading]); // Dependency on isLoading and authStillLoading for initial setup
+  }, [user, isLoading]); 
 
   const handleChange = (e) => {
     setForm(currentForm => ({ ...currentForm, [e.target.name]: e.target.value }));
@@ -88,7 +86,6 @@ export default function Profile() {
   
   const { loadingAuth: authStillLoading } = useAuth();
 
-  // Enhanced loading state: Show spinner if auth is loading OR if user isn't set yet and we expect it
   if (authStillLoading || (isLoading && !user)) { 
     return (
       <Box textAlign="center" mt={20} py={10}>
@@ -98,7 +95,7 @@ export default function Profile() {
     );
   }
   
-  if (!user) { // If auth is done loading, and there's still no user
+  if (!user) { 
       return (
           <Box textAlign="center" mt={20} px={4}>
               <Text color="brand.textLight" fontSize="lg">Could not load profile. You may need to log in again.</Text>
@@ -111,14 +108,21 @@ export default function Profile() {
     <Box 
         maxW="lg" 
         mt={{base: 4, md: 6}} 
-        p={{base: 6, md: 8}} 
+        p={{base: 4, sm: 6, md: 8}} // Responsive padding for the card
         borderWidth="1px" 
         borderRadius="xl" 
         shadow="xl" 
         bg="brand.paper" 
         mx="auto" 
     >
-      <Heading as="h1" size="xl" mb={8} textAlign="left" w="100%" color="brand.textDark"> 
+      <Heading 
+        as="h1" 
+        size="xl" 
+        mb={6} // Consistent margin
+        textAlign="left" 
+        w="100%" 
+        color="brand.textDark"
+      > 
         Your Profile
       </Heading>
 
@@ -140,41 +144,54 @@ export default function Profile() {
             <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
 
-        <HStack spacing={4} mt={6} w="100%">
+        {/* MODIFIED: Use Stack for responsive button layout */}
+        <Stack 
+            direction={{ base: 'column', md: 'row' }} // Column on mobile, Row on desktop
+            spacing={4} 
+            mt={6} 
+            w="100%"
+        >
           {!editing ? (
             <Button 
-                bg="brand.accentYellow"      // Primary Action Style
-                color="brand.textDark"       // Primary Action Style
+                bg="brand.accentYellow"
+                color="brand.textDark"
                 _hover={{bg: "brand.accentYellowHover"}}
                 onClick={() => setEditing(true)} 
                 leftIcon={<Icon as={FaEdit}/>}
-                borderRadius="full"         // Primary Action Style
-                px={8} size="lg" flex={1} 
+                borderRadius="full"
+                px={8} size="lg" 
+                w={{ base: "full", md: "auto" }} // Full width on mobile if stacked
+                flex={editing ? undefined : 1} // Only flex={1} when it's the single button
             >Edit Profile</Button>
           ) : (
             <>
               <Button 
-                bg="brand.accentYellow"      // Primary Action Style
-                color="brand.textDark"       // Primary Action Style
+                bg="brand.accentYellow"
+                color="brand.textDark"
                 _hover={{bg: "brand.accentYellowHover"}}
                 onClick={handleSave} 
                 leftIcon={<Icon as={FaSave}/>}
-                borderRadius="full"         // Primary Action Style
-                px={8} size="lg" flex={1} type="submit" isLoading={isSaving} loadingText="Saving..."
+                borderRadius="full"
+                px={8} size="lg" 
+                w={{ base: "full", md: "auto" }} // Full width on mobile
+                flex={{ base: undefined, md: 1 }} // flex={1} for desktop row
+                type="submit" isLoading={isSaving} loadingText="Saving..."
               >Save Changes</Button>
               <Button 
-                variant="outline"             // Secondary Action Style
-                borderColor="brand.primary"   // Secondary Action Style
-                color="brand.primary"       // Secondary Action Style
-                _hover={{ bg: 'blackAlpha.50' }} // Subtle hover for outline on light bg
+                variant="outline"
+                borderColor="brand.primary"
+                color="brand.primary"
+                _hover={{ bg: 'blackAlpha.50' }} 
                 onClick={handleCancel} 
                 leftIcon={<Icon as={FaTimes}/>}
-                borderRadius="full"         // Secondary Action Style
-                px={8} size="lg" flex={1}
+                borderRadius="full"
+                px={8} size="lg" 
+                w={{ base: "full", md: "auto" }} // Full width on mobile
+                flex={{ base: undefined, md: 1 }} // flex={1} for desktop row
               >Cancel</Button>
             </>
           )}
-        </HStack>
+        </Stack>
         <Button 
             variant="link" 
             onClick={() => navigate('/dashboard')} 
