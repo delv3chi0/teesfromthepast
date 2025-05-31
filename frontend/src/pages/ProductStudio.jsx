@@ -1,6 +1,7 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-import { fabric } from 'fabric'; 
+import 'fabric'; // Import for side-effects, hoping it attaches to window
+
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
@@ -32,7 +33,7 @@ export default function ProductStudio() {
   const toast = useToast(); 
 
   const [designs, setDesigns] = useState([]);
-  const [loadingDesigns, setLoadingDesigns] = useState(true); // Initialized to true
+  const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [designsError, setDesignsError] = useState('');
 
   const [selectedProductType, setSelectedProductType] = useState(productTypes[0].value);
@@ -41,22 +42,15 @@ export default function ProductStudio() {
   const [selectedDesign, setSelectedDesign] = useState(null);
 
   const canvasEl = useRef(null); 
-  const fabricCanvas = useRef(null);
-  // const [fabricModule, setFabricModule] = useState(null); // Assuming fabric is globally available after 'import "fabric"'
-
-  // Log user state on component render
-  // console.log("[ProductStudio] Component render. User state:", user);
+  const fabricCanvas = useRef(null); 
 
   useEffect(() => {
-    // console.log("[ProductStudio] Designs fetch useEffect triggered. User state:", user);
     if (user) {
       setLoadingDesigns(true);
-      setDesignsError(''); // Clear previous errors
-      setDesigns([]); // Clear previous designs while loading new ones
-      // console.log("[ProductStudio] Fetching designs for user:", user._id);
+      setDesignsError(''); 
+      setDesigns([]); 
       client.get('/mydesigns')
         .then(response => {
-          // console.log("[ProductStudio] Designs fetched successfully:", response.data);
           setDesigns(response.data);
           setLoadingDesigns(false);
         })
@@ -71,13 +65,11 @@ export default function ProductStudio() {
           setLoadingDesigns(false);
         });
     } else {
-      // If there's no user, stop loading and clear designs/errors.
-      // console.log("[ProductStudio] No user found in designs fetch useEffect. Stopping loading.");
       setLoadingDesigns(false);
       setDesigns([]); 
       setDesignsError(''); 
     }
-  }, [user, logout, navigate, toast]); // Dependencies
+  }, [user, logout, navigate, toast]);
 
   const getCurrentMockupSrc = () => {
     const product = productTypes.find(p => p.value === selectedProductType);
@@ -85,83 +77,99 @@ export default function ProductStudio() {
   };
 
   useEffect(() => {
-    const fabricInstance = window.fabric; // Using window.fabric after import 'fabric' for side effects
+    const fabricScriptPollInterval = 100; // Check every 100ms
+    const maxPolls = 50; // Try for up to 5 seconds (100ms * 50)
+    let pollCount = 0;
 
-    if (!fabricInstance || !fabricInstance.Canvas) {
-        console.error("[ProductStudio] Fabric.js not found on window object or 'Canvas' not found.", fabricInstance);
-        // toast({ title: "Preview Error", description: "Cannot initialize product preview. Fabric.js might not be loaded.", status: "error", duration: 5000, isClosable: true });
-        return; 
-    }
-
-    if (!fabricCanvas.current && canvasEl.current) {
-        // console.log("[ProductStudio] Initializing Fabric canvas from window.fabric.");
+    const setupCanvas = (fabricInstance) => {
+      if (!fabricCanvas.current && canvasEl.current) {
+        console.log("[ProductStudio] Initializing Fabric canvas from window.fabric.");
         fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
         });
-    }
+      }
 
-    const FCanvas = fabricCanvas.current;
-    if (FCanvas) {
-        // console.log("[ProductStudio] Updating canvas. Clearing canvas.");
-        FCanvas.clear();
-        const mockupSrc = getCurrentMockupSrc();
+      const FCanvas = fabricCanvas.current;
+      if (FCanvas) {
+          console.log("[ProductStudio] Updating canvas. Clearing canvas.");
+          FCanvas.clear();
+          const mockupSrc = getCurrentMockupSrc();
 
-        if (mockupSrc) {
-            // console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
-            fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
-                // console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
-                if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
-                    console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
-                    FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); 
-                    return;
-                }
-                // console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height);
-                FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
-                    scaleX: CANVAS_WIDTH / mockupImg.width,
-                    scaleY: CANVAS_HEIGHT / mockupImg.height,
-                    selectable: false,
-                    evented: false,
-                });
-            }, { crossOrigin: 'anonymous' });
+          if (mockupSrc) {
+              console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
+              fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
+                  console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
+                  if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
+                      console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
+                      FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); 
+                      return;
+                  }
+                  console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height);
+                  FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
+                      scaleX: CANVAS_WIDTH / mockupImg.width,
+                      scaleY: CANVAS_HEIGHT / mockupImg.height,
+                      selectable: false,
+                      evented: false,
+                  });
+              }, { crossOrigin: 'anonymous' });
+          } else {
+              console.log("[ProductStudio] No mockupSrc, clearing background and setting to white.");
+              FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
+              FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
+          }
+
+          if (selectedDesign?.imageDataUrl) {
+              console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
+              fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
+                  console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
+                  if (!designImg || designImg.width === 0 || designImg.height === 0) {
+                      console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
+                      return; 
+                  }
+                  const designWidth = CANVAS_WIDTH * 0.33;
+                  designImg.scaleToWidth(designWidth);
+                  const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5;
+                  const designTop = CANVAS_HEIGHT * 0.24;
+
+                  designImg.set({ top: designTop, left: designLeft });
+                  FCanvas.add(designImg);
+                  console.log("[ProductStudio] Design image added to canvas.");
+                  FCanvas.renderAll();
+              }, { crossOrigin: 'anonymous' });
+          } else {
+              console.log("[ProductStudio] No selected design to load.");
+              if (FCanvas.backgroundImage || FCanvas.backgroundColor) {
+                  FCanvas.renderAll();
+              }
+          }
+      } else {
+          console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available for update (should have been initialized).");
+      }
+    };
+
+    const pollForFabric = () => {
+      const fabricInstance = window.fabric;
+      if (fabricInstance && fabricInstance.Canvas) {
+        console.log("[ProductStudio] Fabric.js found on window object after polling.");
+        setupCanvas(fabricInstance);
+      } else {
+        pollCount++;
+        if (pollCount < maxPolls) {
+          // console.log(`[ProductStudio] Fabric not yet on window. Poll ${pollCount}/${maxPolls}. Retrying...`);
+          setTimeout(pollForFabric, fabricScriptPollInterval);
         } else {
-            // console.log("[ProductStudio] No mockupSrc, clearing background and setting to white.");
-            FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
-            FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
+          console.error("[ProductStudio] Fabric.js did NOT become available on window object after polling.");
+          toast({ title: "Preview Error", description: "Cannot initialize product preview (Fabric.js timeout).", status: "error", duration: 7000, isClosable: true });
         }
+      }
+    };
 
-        if (selectedDesign?.imageDataUrl) {
-            // console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-            fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-                // console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
-                if (!designImg || designImg.width === 0 || designImg.height === 0) {
-                    console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-                    return; 
-                }
-                const designWidth = CANVAS_WIDTH * 0.33;
-                designImg.scaleToWidth(designWidth);
-                const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5;
-                const designTop = CANVAS_HEIGHT * 0.24;
-
-                designImg.set({
-                    top: designTop,
-                    left: designLeft,
-                });
-                FCanvas.add(designImg);
-                // console.log("[ProductStudio] Design image added to canvas.");
-                FCanvas.renderAll();
-            }, { crossOrigin: 'anonymous' });
-        } else {
-            // console.log("[ProductStudio] No selected design to load.");
-            if (FCanvas.backgroundImage || FCanvas.backgroundColor) { // Only renderAll if there's something to clear/show
-                FCanvas.renderAll();
-            }
-        }
-    } else {
-        // console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available for update.");
+    if (canvasEl.current) { // Only start polling if canvas element is ready
+        pollForFabric();
     }
     
-}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]); // Removed fabricModule, using window.fabric
+}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc, toast]); // Removed fabricModule, using window.fabric
 
 
   const handleProceedToCheckout = () => {
@@ -175,7 +183,7 @@ export default function ProductStudio() {
             color: selectedProductColor,
             size: selectedProductSize,
         };
-        // console.log("Proceeding to checkout with:", productDetailsForCheckout);
+        console.log("Proceeding to checkout with:", productDetailsForCheckout);
         navigate('/checkout', { state: { designToCheckout: productDetailsForCheckout } });
     } else {
         toast({ 
@@ -256,7 +264,6 @@ export default function ProductStudio() {
 
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" size="lg" mb={6} color="brand.textDark">2. Choose Your Saved Design</Heading>
-          {/* UPDATED loadingDesigns logic rendering */}
           {loadingDesigns && (
             <Box textAlign="center" py={10}>
                 <Spinner size="xl" color="brand.primary" thickness="4px"/>
@@ -267,7 +274,7 @@ export default function ProductStudio() {
             <Alert status="error" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={6}>
                 <AlertIcon boxSize="30px" />
                 <Text fontWeight="bold" mt={3}>{designsError}</Text>
-                <Button mt={4} size="sm" colorScheme="brandPrimary" onClick={() => { if(user) fetchDesigns(); else navigate('/login');}}>
+                <Button mt={4} size="sm" bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" onClick={() => { if(user) fetchDesigns(); else navigate('/login');}}>
                     {user ? "Try Again" : "Login to View Designs"}
                 </Button>
             </Alert>
