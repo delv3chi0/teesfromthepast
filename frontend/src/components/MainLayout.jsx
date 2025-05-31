@@ -11,7 +11,7 @@ const navItems = [
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'Customize My Shirt', path: '/product-studio' },
-  { label: '🏆 Monthly Design Contest', path: '/vote-now' },
+  { label: '🏆 Monthly Design Contest', path: '/vote-now' }, 
   { label: 'My Profile', path: '/profile' },
 ];
 
@@ -24,8 +24,6 @@ export default function MainLayout({ children }) {
   // console.log('[MainLayout Diagnostics] isOpen:', isOpen, 'isDesktopView:', isDesktopView); 
 
   const SidebarContent = ({ onClick, inDrawer = false }) => {
-    // Determine if the logo inside SidebarContent should be shown
-    // It's shown if NOT inDrawer. If inDrawer, it's hidden because DrawerHeader has a logo.
     const showInternalLogo = !inDrawer; 
 
     return (
@@ -44,7 +42,7 @@ export default function MainLayout({ children }) {
         borderRightWidth={inDrawer ? "0" : "1px"} 
         w={inDrawer ? "100%" : "60"} 
       >
-        {showInternalLogo && ( // Conditionally render the logo container
+        {showInternalLogo && (
           <Flex 
             as={RouterLink} 
             to="/dashboard" 
@@ -61,7 +59,7 @@ export default function MainLayout({ children }) {
           spacing={3} 
           align="stretch" 
           px="4" 
-          mt={showInternalLogo ? 8 : 4} // Adjust mt based on whether the internal logo is shown
+          mt={showInternalLogo ? 8 : 4} 
         >
           {navItems.map((item) => (
             <ChakraLink 
@@ -99,7 +97,7 @@ export default function MainLayout({ children }) {
             <DrawerContent 
               bg="brand.primary" 
               color="brand.textLight"
-              border={isOpen ? "2px dashed lime" : "none"} 
+              // border={isOpen ? "2px dashed lime" : "none"} // <-- DIAGNOSTIC BORDER REMOVED
             > 
               <DrawerCloseButton />
               <DrawerHeader 
