@@ -1,9 +1,11 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// This is the standard import for Fabric.js v5+
-// The error suggests this specific 'fabric' named export isn't found in the .mjs file Vite is using.
-// Ensure you have Fabric.js v5.x.x installed.
-import { fabric } from 'fabric'; 
+// MODIFIED IMPORT START
+import * as FabricFullModule from 'fabric';
+// Attempt to access the 'fabric' object, assuming it's a property on the imported module
+// or if the module itself is the main fabric object.
+const fabric = FabricFullModule.fabric || FabricFullModule; 
+// MODIFIED IMPORT END
 import { 
     Box, Heading, Text, VStack, Select, 
     SimpleGrid, Image, Spinner, Alert, AlertIcon, 
@@ -73,6 +75,12 @@ export default function ProductStudio() {
   };
 
   useEffect(() => {
+    // Ensure fabric object is available before proceeding
+    if (!fabric || !fabric.Canvas) {
+        console.error("Fabric.js not loaded correctly.", fabric);
+        return; 
+    }
+
     if (!fabricCanvas.current && canvasEl.current) {
         fabricCanvas.current = new fabric.Canvas(canvasEl.current, {
             width: CANVAS_WIDTH,
@@ -87,9 +95,9 @@ export default function ProductStudio() {
 
         if (mockupSrc) {
             fabric.Image.fromURL(mockupSrc, (mockupImg) => {
-                if (mockupImg.width === 0 || mockupImg.height === 0) {
-                    console.error("Mockup image loaded with zero dimensions:", mockupSrc);
-                    FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); // Fallback
+                if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
+                    console.error("Mockup image loaded with zero dimensions or is null:", mockupSrc);
+                    FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas));
                     return;
                 }
                 FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
@@ -101,14 +109,14 @@ export default function ProductStudio() {
             }, { crossOrigin: 'anonymous' });
         } else {
             FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
-            FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); // Clear with white if no mockup
+            FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
         }
 
         if (selectedDesign?.imageDataUrl) {
             fabric.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-                if (designImg.width === 0 || designImg.height === 0) {
-                    console.error("Design image loaded with zero dimensions:", selectedDesign.imageDataUrl);
-                    return; // Don't add invalid image
+                if (!designImg || designImg.width === 0 || designImg.height === 0) {
+                    console.error("Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl);
+                    return; 
                 }
                 const designWidth = CANVAS_WIDTH * 0.33;
                 designImg.scaleToWidth(designWidth);
@@ -125,13 +133,7 @@ export default function ProductStudio() {
         }
     }
     
-    // Optional: More robust cleanup, though usually not needed if canvas instance persists
-    // return () => {
-    //   if (FCanvas) {
-    //     // FCanvas.dispose(); // Only if re-creating canvas itself on unmount
-    //   }
-    // };
-}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]);
+}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc]); // Removed fabric from deps array as it's module-level
 
 
   const handleProceedToCheckout = () => {
@@ -257,21 +259,22 @@ export default function ProductStudio() {
 
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
             <Heading as="h2" size="lg" mb={6} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
-            {selectedDesign ? (
-                <VStack spacing={6}>
-                    <Box 
-                        w={`${CANVAS_WIDTH}px`} 
-                        h={`${CANVAS_HEIGHT}px`} 
-                        bg={selectedProductColor === 'white' ? 'gray.100' : 'gray.700'} // Slightly lighter for white mockup bg
-                        mx="auto" 
-                        borderWidth="1px"
-                        borderColor="brand.secondary"
-                        borderRadius="md"
-                        overflow="hidden" 
-                        position="relative" // For any potential absolute positioned controls later
-                    >
-                        <canvas ref={canvasEl} id="mockupCanvas"></canvas>
-                    </Box>
+            {/* Canvas container for consistent sizing based on constants */}
+             <Box 
+                w={`${CANVAS_WIDTH}px`} 
+                h={`${CANVAS_HEIGHT}px`} 
+                bg={selectedProductColor === 'white' ? 'gray.100' : 'gray.700'}
+                mx="auto" 
+                borderWidth="1px"
+                borderColor="brand.secondary"
+                borderRadius="md"
+                overflow="hidden" 
+                position="relative" 
+            >
+                <canvas ref={canvasEl} id="mockupCanvas"></canvas>
+            </Box>
+            {selectedDesign && ( // Only show text if a design is selected for preview
+                <VStack spacing={6} mt={4}> {/* Add margin top for spacing from canvas */}
                     <Text color="brand.textDark" fontWeight="medium" textAlign="center">
                         Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}
                     </Text>
@@ -280,7 +283,6 @@ export default function ProductStudio() {
                         color="brand.textDark"
                         _hover={{ bg: "brand.accentYellowHover" }} 
                         size="lg"
-                        mt={4}
                         px={8}
                         borderRadius="full"
                         boxShadow="md"
@@ -290,8 +292,9 @@ export default function ProductStudio() {
                         Proceed to Checkout
                     </Button>
                 </VStack>
-            ) : (
-                <Text color="brand.textDark" fontStyle="italic" textAlign="center"> 
+            )}
+            {!selectedDesign && ( // Show placeholder text if no design selected for preview
+                 <Text color="brand.textDark" fontStyle="italic" textAlign="center" mt={4}> 
                     Select your apparel options and a design above to see a preview.
                 </Text>
             )}
