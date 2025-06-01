@@ -7,7 +7,7 @@ import CheckoutForm from '../components/CheckoutForm';
 import { 
     Box, Heading, Text, Spinner, Alert, AlertIcon, VStack, Button,
     FormControl, FormLabel, Input, Checkbox, Divider, SimpleGrid, Icon,
-    useToast, HStack, Image // Added HStack, Image
+    useToast, HStack, Image
 } from '@chakra-ui/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
@@ -33,21 +33,20 @@ export default function CheckoutPage() {
     billingAddress: { ...initialAddressState },
   });
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
-  const [isSavingAddress, setIsSavingAddress] = useState(false); // For "Continue to Payment" button loading
+  const [isProcessingAction, setIsProcessingAction] = useState(false); // Combined loading state for address save + PI creation
 
   const [clientSecret, setClientSecret] = useState('');
-  const [loadingPageData, setLoadingPageData] = useState(true); // General loading for initial setup
+  const [loadingPageData, setLoadingPageData] = useState(true); 
   const [error, setError] = useState('');
   const [paymentDetails, setPaymentDetails] = useState({ amount: 0, currency: 'usd' });
 
-  // Populate address form from user context on load
   useEffect(() => {
     setLoadingPageData(true);
+    setError(''); // Clear previous errors on user change or initial load
     if (user) {
       const sa = { ...initialAddressState, ...(user.shippingAddress || {}) };
       const ba = { ...initialAddressState, ...(user.billingAddress || {}) };
       
-      // If shipping recipientName is empty, try to prefill from user's first/last name
       if (!sa.recipientName && (user.firstName || user.lastName)) {
         sa.recipientName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
       }
@@ -55,12 +54,11 @@ export default function CheckoutPage() {
       setAddressForm({ shippingAddress: sa, billingAddress: ba });
 
       const addressesAreIdentical = user.shippingAddress && user.billingAddress &&
-        Object.keys(sa).every(key => sa[key] === ba[key] && sa[key] !== ''); // Ensure non-empty identical
+        Object.keys(sa).every(key => sa[key] === ba[key] && (sa[key] !== '' && sa[key] !== undefined && sa[key] !== null) ); // Check for meaningful identical values
       
       if (addressesAreIdentical) {
         setBillingSameAsShipping(true);
       } else if (user.shippingAddress && (!user.billingAddress || Object.values(ba).every(v => v === ''))) {
-        // If shipping is present and billing is not (or all billing fields are empty), default to same
         setBillingSameAsShipping(true);
         setAddressForm(prevForm => ({ ...prevForm, billingAddress: { ...prevForm.shippingAddress } }));
       } else if (!user.shippingAddress && !user.billingAddress) {
@@ -68,14 +66,20 @@ export default function CheckoutPage() {
       } else {
         setBillingSameAsShipping(false);
       }
+    } else {
+      // If no user, initialize with empty addresses and checkbox true
+      setAddressForm({
+        shippingAddress: { ...initialAddressState },
+        billingAddress: { ...initialAddressState },
+      });
+      setBillingSameAsShipping(true);
     }
-    setLoadingPageData(false); // Done with initial address setup
+    setLoadingPageData(false);
   }, [user]);
 
-  // REMOVED useEffect that created PaymentIntent on load. 
-  // PaymentIntent will now only be created in handleProceedToPayment.
+  // THIS useEffect which created PaymentIntent on load IS REMOVED.
 
-  const handleAddressChange = (e, addressType) => {
+  const handleAddressChange = (e, addressType) => { /* ... same as your version ... */ 
     const { name, value } = e.target;
     setAddressForm(prevForm => {
       const updatedAddress = { ...prevForm[addressType], [name]: value };
@@ -86,19 +90,18 @@ export default function CheckoutPage() {
     });
   };
 
-  const handleBillingSameAsShippingChange = (e) => {
+  const handleBillingSameAsShippingChange = (e) => { /* ... same as your version ... */ 
     const isChecked = e.target.checked;
     setBillingSameAsShipping(isChecked);
     if (isChecked) {
       setAddressForm(prevForm => ({ ...prevForm, billingAddress: { ...prevForm.shippingAddress } }));
     } else {
-      // Optionally clear billing form or leave as is for user to edit
       setAddressForm(prevForm => ({ ...prevForm, billingAddress: { ...initialAddressState, ...(user?.billingAddress && !isChecked ? user.billingAddress : {}) } }));
     }
   };
 
   const handleProceedToPayment = async () => {
-    setIsSavingAddress(true); // Indicates address saving + PI creation
+    setIsProcessingAction(true); // Use combined loading state
     setError('');
 
     let shipping = { ...addressForm.shippingAddress };
@@ -107,24 +110,23 @@ export default function CheckoutPage() {
     }
     
     let billing = billingSameAsShipping ? { ...shipping } : { ...addressForm.billingAddress };
-    if (!billing.recipientName && user) { // Ensure billing recipient name is also set
+    if (!billing.recipientName && user) { 
         billing.recipientName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
     }
 
     if (!shipping.recipientName || !shipping.street1 || !shipping.city || !shipping.state || !shipping.zipCode || !shipping.country) {
         toast({ title: "Missing Shipping Information", description: "Please complete all required shipping address fields.", status: "error", duration: 4000, isClosable: true });
-        setIsSavingAddress(false); return;
+        setIsProcessingAction(false); return;
     }
     if (!billingSameAsShipping && (!billing.recipientName || !billing.street1 || !billing.city || !billing.state || !billing.zipCode || !billing.country)) {
         toast({ title: "Missing Billing Information", description: "Please complete all required billing address fields.", status: "error", duration: 4000, isClosable: true });
-        setIsSavingAddress(false); return;
+        setIsProcessingAction(false); return;
     }
 
     try {
       if (!designToCheckout) {
         setError("No product selected for checkout. Please go back to the Product Studio.");
-        setIsSavingAddress(false);
-        return;
+        setIsProcessingAction(false); return;
       }
 
       console.log("[CheckoutPage] Saving addresses to profile...");
@@ -141,19 +143,23 @@ export default function CheckoutPage() {
       };
       const res = await client.post('/checkout/create-payment-intent', paymentIntentPayload);
       console.log("CheckoutPage: PaymentIntent created:", res.data);
-      setClientSecret(res.data.clientSecret);
-      setPaymentDetails({ amount: res.data.amount, currency: res.data.currency });
-      setStep(2);
+      if (res.data.clientSecret) {
+        setClientSecret(res.data.clientSecret);
+        setPaymentDetails({ amount: res.data.amount, currency: res.data.currency });
+        setStep(2);
+      } else {
+        throw new Error("Failed to retrieve client_secret for payment.");
+      }
     } catch (err) {
       console.error("CheckoutPage Error (Saving Address or Creating PI):", err.response?.data || err.message);
       setError(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to proceed. Please ensure addresses are correct and try again.');
       if (err.response?.status === 401) { logout(); navigate('/login'); }
     } finally {
-      setIsSavingAddress(false);
+      setIsProcessingAction(false);
     }
   };
 
-  const renderAddressFields = (addressType, legend) => ( /* ... same as your provided version ... */ 
+  const renderAddressFields = (addressType, legend) => ( /* ... same as your version from Turn 93 ... */ 
     <VStack spacing={4} align="stretch" w="100%">
       <Heading as="h3" size="md" color="brand.textDark" mb={2}>{legend}</Heading>
       <FormControl isRequired id={`${addressType}RecipientName`}>
@@ -202,9 +208,20 @@ export default function CheckoutPage() {
     );
   }
   
-  if (!designToCheckout && !error) { /* ... your existing no design selected message ... */ }
+  if (!designToCheckout && !error) {
+    return (
+      <VStack justifyContent="center" alignItems="center" minH="60vh" px={4} textAlign="center">
+        <Alert status="warning" borderRadius="md" bg="yellow.50" p={6} flexDirection="column" maxW="md">
+          <AlertIcon color="yellow.500" boxSize="30px"/>
+          <Heading size="md" color="yellow.700" mt={3}>No Product Selected for Checkout</Heading>
+          <Text color="yellow.700" mt={2}>It seems you've landed on the checkout page without selecting a product. Please go to the studio to customize your apparel first.</Text>
+          <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{bg:"brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/product-studio')}>Go to Product Studio</Button>
+        </Alert>
+      </VStack>
+    );
+  }
 
-  const appearance = { theme: 'stripe', variables: { colorPrimary: '#5D4037', /* ... */ } };
+  const appearance = { theme: 'stripe', variables: { colorPrimary: '#5D4037', colorBackground: '#ffffff', colorText: '#3E2723', colorDanger: '#df1b41', fontFamily: 'Montserrat, sans-serif', spacingUnit: '4px', borderRadius: '4px' } };
   const stripeOptions = clientSecret ? { clientSecret, appearance } : {};
 
   return (
@@ -213,9 +230,26 @@ export default function CheckoutPage() {
         Checkout
       </Heading>
 
-      {designToCheckout && ( /* ... Order Summary ... */ )}
+      {designToCheckout && (
+        <Box mb={6} p={6} bg="brand.paper" borderRadius="xl" shadow="lg">
+          <Heading as="h3" size="lg" color="brand.textDark" mb={3} borderBottomWidth="1px" borderColor="brand.secondary" pb={3}>Order Summary</Heading>
+          <HStack spacing={4} align="flex-start">
+            <Image src={designToCheckout.imageDataUrl || designToCheckout.productImage} alt={designToCheckout.prompt || "Product"} boxSize="100px" objectFit="cover" borderRadius="md" />
+            <VStack align="flex-start" spacing={1}>
+              <Text fontWeight="bold" fontSize="lg" color="brand.textDark">{designToCheckout.productType || "Custom Apparel"}</Text>
+              <Text fontSize="md" color="gray.700">Color: {designToCheckout.color}, Size: {designToCheckout.size}</Text>
+              {designToCheckout.prompt && <Text fontSize="sm" color="gray.600" noOfLines={2}>Design: "{designToCheckout.prompt}"</Text>}
+            </VStack>
+          </HStack>
+        </Box>
+      )}
       
-      {error && ( /* ... Error Alert ... */ )}
+      {error && (
+        <Alert status="error" borderRadius="md" bg="red.50" p={4} mb={6} w="100%" variant="subtle">
+          <AlertIcon color="red.500" />
+          <Text color="red.700" fontWeight="medium">{error}</Text>
+        </Alert>
+      )}
 
       {step === 1 && (
         <Box bg="brand.paper" p={{base:4, md:8}} borderRadius="xl" shadow="xl">
@@ -229,7 +263,7 @@ export default function CheckoutPage() {
           {!billingSameAsShipping && renderAddressFields('billingAddress', 'Billing Address')}
           <Button 
             onClick={handleProceedToPayment} 
-            isLoading={isSavingAddress} // Changed from isSavingAddress || loadingPaymentIntent
+            isLoading={isProcessingAction} 
             loadingText="Saving Addresses & Proceeding..."
             bg="brand.accentYellow" color="brand.textDark" _hover={{bg: 'brand.accentYellowHover'}}
             size="lg" borderRadius="full" width="full" mt={6}
@@ -242,7 +276,7 @@ export default function CheckoutPage() {
 
       {step === 2 && clientSecret && (
         <Box bg="brand.paper" p={{base:4, md:8}} borderRadius="xl" shadow="xl">
-          <Heading as="h3" size="lg" color="brand.textDark" mb={3} borderBottomWidth="1px" borderColor="brand.secondary" pb={3}>Payment Details</Heading> {/* Changed size from md to lg */}
+          <Heading as="h3" size="lg" color="brand.textDark" mb={3} borderBottomWidth="1px" borderColor="brand.secondary" pb={3}>Payment Details</Heading>
           <Text fontSize="lg" mb={6} color="brand.textDark">
             Total Amount: <Text as="span" fontWeight="bold">${(paymentDetails.amount / 100).toFixed(2)} {paymentDetails.currency.toUpperCase()}</Text>
           </Text>
@@ -254,10 +288,10 @@ export default function CheckoutPage() {
           </Text>
         </Box>
       )}
-       {(step === 2 && loadingPaymentIntent && !clientSecret && !error) && ( // Show loading only if PI is being created for step 2
+       {(step === 2 && isProcessingAction && !clientSecret && !error) && ( // Show loading for PI creation specifically if step 2 is pending PI
         <VStack justifyContent="center" alignItems="center" minH="40vh">
           <Spinner size="xl" thickness="4px" color="brand.primary"/>
-          <Text mt={3} color="brand.textLight">Initializing secure payment...</Text> {/* Changed from textTeal */}
+          <Text mt={3} color="brand.textLight">Initializing secure payment...</Text>
         </VStack>
       )}
     </Box>
