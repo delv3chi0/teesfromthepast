@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 5000;
 
 console.log(`[Backend Log] Server starting with PORT: ${PORT}`);
 
-mongoose.connect(process.env.MONGO\_URI)
+mongoose.connect(process.env.MONGO_URI)
 .then(() =\> console.log('MongoDB connected successfully'))
 .catch(err =\> {
 console.error('MongoDB connection error:', err);
