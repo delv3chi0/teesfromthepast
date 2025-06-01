@@ -1,12 +1,12 @@
 // backend/index.js
-process.on('uncaughtException', (err) => {
-  console.error('[Backend Log] Uncaught Exception:', err.stack);
+process.on(&#39;uncaughtException&#39;, (err) =&gt; {
+  console.error(&#39;[Backend Log] Uncaught Exception:&#39;, err.stack);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Backend Log] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
-  process.exit(1);
+process.on('unhandledRejection', (reason, promise) =\> {
+console.error('[Backend Log] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
+process.exit(1);
 });
 
 import express from 'express';
@@ -18,72 +18,73 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
-import checkoutRoutes from './routes/checkout.js'; // Correctly imported
-import designRoutes from './routes/designs.js'; 
-import contestRoutes from './routes/contest.js'; 
+import checkoutRoutes from './routes/checkout.js';
+import designRoutes from './routes/designs.js';
+import contestRoutes from './routes/contest.js';
+import orderRoutes from './routes/orders.js'; // \<-- IMPORT ADDED
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 console.log(`[Backend Log] Server starting with PORT: ${PORT}`);
 
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('MongoDB connected successfully'))
-    .catch(err => {
-        console.error('MongoDB connection error:', err);
-        process.exit(1); 
-    });
+mongoose.connect(process.env.MONGO\_URI)
+.then(() =\> console.log('MongoDB connected successfully'))
+.catch(err =\> {
+console.error('MongoDB connection error:', err);
+process.exit(1);
+});
 
 app.use(cors({
-    origin: [
-        'https://teesfromthepast.vercel.app', 
-        'https://teesfromthepast-git-main-delv3chios-projects.vercel.app',
-        'http://localhost:5173' 
-    ],
-    credentials: true, 
+origin: [
+'https://teesfromthepast.vercel.app',
+'https://teesfromthepast-git-main-delv3chios-projects.vercel.app',
+'http://localhost:5173'
+],
+credentials: true,
 }));
 console.log('[Backend Log] CORS middleware applied with updated origin list.');
 app.use(cookieParser());
 app.use('/api/webhook', stripeWebhookRoutes); // This one handles raw body if set up correctly
-app.use(express.json({ limit: '50mb' })); 
+app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
 
 // --- Basic & Health Routes ---
-app.get('/', (req, res) => { 
-    console.log('[Backend Log] Root path (/) hit.');
-    res.send('Tees From The Past Backend API');
+app.get('/', (req, res) =\> {
+console.log('[Backend Log] Root path (/) hit.');
+res.send('Tees From The Past Backend API');
 });
-app.get('/test', (req, res) => { 
-    console.log('[Backend Log] Test path (/test) hit.');
-    res.status(200).send('Backend is running and test route works!');
+app.get('/test', (req, res) =\> {
+console.log('[Backend Log] Test path (/test) hit.');
+res.status(200).send('Backend is running and test route works\!');
 });
-app.get('/health', (req, res) => { 
-    console.log('[Backend Log] Health path (/health) hit.');
-    res.status(200).json({ status: 'OK', message: 'Backend is healthy!' });
+app.get('/health', (req, res) =\> {
+console.log('[Backend Log] Health path (/health) hit.');
+res.status(200).json({ status: 'OK', message: 'Backend is healthy\!' });
 });
-
 
 // --- API Routes ---
 console.log('[Backend Log] Setting up API routes...');
-app.use('/api/auth', authRoutes); 
-app.use('/api', generateImageRoutes); // Note: this means routes in generateImageRoutes are like /api/routeInFile
-app.use('/api/checkout', checkoutRoutes); // <-- CORRECTED THIS LINE
-app.use('/api/mydesigns', designRoutes); 
-app.use('/api/contest', contestRoutes); 
+app.use('/api/auth', authRoutes);
+app.use('/api', generateImageRoutes);
+app.use('/api/checkout', checkoutRoutes);
+app.use('/api/mydesigns', designRoutes);
+app.use('/api/contest', contestRoutes);
+app.use('/api/orders', orderRoutes); // \<-- ROUTE MOUNTED
 console.log('[Backend Log] All routes configured.');
 
 // --- Global Error Handler ---
-app.use((err, req, res, next) => { 
-    console.error('[Backend Log] Global Server Error:', err.stack);
-    if (err.type === 'entity.too.large') {
-      return res.status(413).json({ message: 'Request payload is too large. Please reduce data size.' });
-    }
-    res.status(500).json({ error: 'An unexpected server error occurred!' });
+app.use((err, req, res, next) =\> {
+console.error('[Backend Log] Global Server Error:', err.stack);
+if (err.type === 'entity.too.large') {
+return res.status(413).json({ message: 'Request payload is too large. Please reduce data size.' });
+}
+res.status(500).json({ error: 'An unexpected server error occurred\!' });
 });
 
 // --- Server Listener ---
-app.listen(PORT, '0.0.0.0', () => { 
-    console.log(`Server running on port ${PORT}`);
-    console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
+app.listen(PORT, '0.0.0.0', () =\> {
+console.log(`Server running on port ${PORT}`);
+console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
 });
