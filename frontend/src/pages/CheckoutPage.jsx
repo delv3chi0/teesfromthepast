@@ -4,7 +4,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { client } from '../api/client';
 import CheckoutForm from '../components/CheckoutForm';
-import { 
+import {
     Box, Heading, Text, Spinner, Alert, AlertIcon, VStack, Button,
     FormControl, FormLabel, Input, Checkbox, Divider, SimpleGrid, Icon,
     useToast, HStack, Image
@@ -25,6 +25,7 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
   const toast = useToast();
   
+  // designToCheckout is expected to have: designId, productType, size, color, prompt, imageDataUrl, productImage
   const { designToCheckout } = location.state || {};
 
   const [step, setStep] = useState(1); // 1 for address, 2 for payment
@@ -33,16 +34,19 @@ export default function CheckoutPage() {
     billingAddress: { ...initialAddressState },
   });
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
-  const [isProcessingAction, setIsProcessingAction] = useState(false); // Combined loading state for address save + PI creation
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   const [clientSecret, setClientSecret] = useState('');
-  const [loadingPageData, setLoadingPageData] = useState(true); 
+  const [loadingPageData, setLoadingPageData] = useState(true);  
   const [error, setError] = useState('');
   const [paymentDetails, setPaymentDetails] = useState({ amount: 0, currency: 'usd' });
 
   useEffect(() => {
     setLoadingPageData(true);
-    setError(''); // Clear previous errors on user change or initial load
+    setError(''); 
+    console.log("[CheckoutPage] useEffect user or designToCheckout changed. User:", user);
+    console.log("[CheckoutPage] designToCheckout from location state:", designToCheckout);
+
     if (user) {
       const sa = { ...initialAddressState, ...(user.shippingAddress || {}) };
       const ba = { ...initialAddressState, ...(user.billingAddress || {}) };
@@ -54,7 +58,7 @@ export default function CheckoutPage() {
       setAddressForm({ shippingAddress: sa, billingAddress: ba });
 
       const addressesAreIdentical = user.shippingAddress && user.billingAddress &&
-        Object.keys(sa).every(key => sa[key] === ba[key] && (sa[key] !== '' && sa[key] !== undefined && sa[key] !== null) ); // Check for meaningful identical values
+        Object.keys(sa).every(key => sa[key] === ba[key] && (sa[key] !== '' && sa[key] !== undefined && sa[key] !== null) );
       
       if (addressesAreIdentical) {
         setBillingSameAsShipping(true);
@@ -67,7 +71,6 @@ export default function CheckoutPage() {
         setBillingSameAsShipping(false);
       }
     } else {
-      // If no user, initialize with empty addresses and checkbox true
       setAddressForm({
         shippingAddress: { ...initialAddressState },
         billingAddress: { ...initialAddressState },
@@ -75,11 +78,9 @@ export default function CheckoutPage() {
       setBillingSameAsShipping(true);
     }
     setLoadingPageData(false);
-  }, [user]);
+  }, [user, designToCheckout]); // Added designToCheckout as a dependency for logging
 
-  // THIS useEffect which created PaymentIntent on load IS REMOVED.
-
-  const handleAddressChange = (e, addressType) => { /* ... same as your version ... */ 
+  const handleAddressChange = (e, addressType) => { 
     const { name, value } = e.target;
     setAddressForm(prevForm => {
       const updatedAddress = { ...prevForm[addressType], [name]: value };
@@ -90,7 +91,7 @@ export default function CheckoutPage() {
     });
   };
 
-  const handleBillingSameAsShippingChange = (e) => { /* ... same as your version ... */ 
+  const handleBillingSameAsShippingChange = (e) => { 
     const isChecked = e.target.checked;
     setBillingSameAsShipping(isChecked);
     if (isChecked) {
@@ -101,8 +102,27 @@ export default function CheckoutPage() {
   };
 
   const handleProceedToPayment = async () => {
-    setIsProcessingAction(true); // Use combined loading state
+    setIsProcessingAction(true); 
     setError('');
+
+    console.log("[CheckoutPage] designToCheckout before proceeding to payment:", designToCheckout);
+
+    if (!designToCheckout || !designToCheckout.designId || !designToCheckout.productType || !designToCheckout.imageDataUrl || !designToCheckout.prompt) {
+      const missingFields = [];
+      if (!designToCheckout) missingFields.push("product data");
+      else {
+        if(!designToCheckout.designId) missingFields.push("design ID");
+        if(!designToCheckout.productType) missingFields.push("product type");
+        if(!designToCheckout.imageDataUrl) missingFields.push("design image");
+        if(!designToCheckout.prompt) missingFields.push("design prompt");
+      }
+      const errorMessage = `Incomplete product information for checkout (${missingFields.join(', ')} missing). Please re-select from Product Studio.`;
+      setError(errorMessage);
+      toast({ title: "Missing Product Information", description: errorMessage, status: "error", duration: 7000, isClosable: true });
+      setIsProcessingAction(false);
+      navigate('/product-studio');
+      return;
+    }
 
     let shipping = { ...addressForm.shippingAddress };
     if (!shipping.recipientName && user) {
@@ -110,56 +130,91 @@ export default function CheckoutPage() {
     }
     
     let billing = billingSameAsShipping ? { ...shipping } : { ...addressForm.billingAddress };
-    if (!billing.recipientName && user) { 
+    if (!billing.recipientName && user) {  
         billing.recipientName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
     }
 
-    if (!shipping.recipientName || !shipping.street1 || !shipping.city || !shipping.state || !shipping.zipCode || !shipping.country) {
-        toast({ title: "Missing Shipping Information", description: "Please complete all required shipping address fields.", status: "error", duration: 4000, isClosable: true });
-        setIsProcessingAction(false); return;
+    // Basic validation for required address fields
+    const requiredFields = ['recipientName', 'street1', 'city', 'state', 'zipCode', 'country'];
+    for (const field of requiredFields) {
+        if (!shipping[field]) {
+            toast({ title: "Missing Shipping Information", description: `Please complete the '${field}' field in your shipping address.`, status: "error", duration: 4000, isClosable: true });
+            setIsProcessingAction(false); return;
+        }
+        if (!billingSameAsShipping && !billing[field]) {
+            toast({ title: "Missing Billing Information", description: `Please complete the '${field}' field in your billing address.`, status: "error", duration: 4000, isClosable: true });
+            setIsProcessingAction(false); return;
+        }
     }
-    if (!billingSameAsShipping && (!billing.recipientName || !billing.street1 || !billing.city || !billing.state || !billing.zipCode || !billing.country)) {
-        toast({ title: "Missing Billing Information", description: "Please complete all required billing address fields.", status: "error", duration: 4000, isClosable: true });
-        setIsProcessingAction(false); return;
+    // Specific check for country format (frontend hint)
+    if (shipping.country && shipping.country.length > 2 && !(shipping.country.toUpperCase() === "UNITED STATES" || shipping.country.toUpperCase() === "USA")) {
+        toast({ title: "Shipping Country Format", description: "Please use a 2-letter country code (e.g., US, CA) for the shipping country.", status: "warning", duration: 5000, isClosable: true });
     }
+    if (!billingSameAsShipping && billing.country && billing.country.length > 2 && !(billing.country.toUpperCase() === "UNITED STATES" || billing.country.toUpperCase() === "USA")) {
+        toast({ title: "Billing Country Format", description: "Please use a 2-letter country code (e.g., US, CA) for the billing country.", status: "warning", duration: 5000, isClosable: true });
+    }
+
 
     try {
-      if (!designToCheckout) {
-        setError("No product selected for checkout. Please go back to the Product Studio.");
-        setIsProcessingAction(false); return;
-      }
-
       console.log("[CheckoutPage] Saving addresses to profile...");
       const profileUpdateData = { shippingAddress: shipping, billingAddress: billing };
       const { data: updatedProfile } = await client.put('/auth/profile', profileUpdateData);
-      if (setAuthUser) setAuthUser(updatedProfile);
+      if (setAuthUser) setAuthUser(updatedProfile); // Update user context with new addresses
       toast({ title: "Addresses Saved to Profile", status: "success", duration: 2000, isClosable: true });
 
-      console.log("[CheckoutPage] Creating PaymentIntent with shipping:", shipping);
+      console.log("[CheckoutPage] Creating PaymentIntent with shipping address:", shipping);
       const paymentIntentPayload = {
-        items: [{ id: designToCheckout.designId, productType: designToCheckout.productType, size: designToCheckout.size, color: designToCheckout.color, quantity: 1 }],
-        currency: 'usd',
+        items: [{ 
+            id: designToCheckout.designId, 
+            productType: designToCheckout.productType, 
+            size: designToCheckout.size, 
+            color: designToCheckout.color, 
+            quantity: 1, // Assuming quantity is 1 for now
+            // Ensure these are passed as backend expects them on each item for metadata
+            imageDataUrl: designToCheckout.imageDataUrl, 
+            prompt: designToCheckout.prompt 
+        }],
+        currency: 'usd', // Or make this dynamic if needed
         shippingAddress: shipping,
+        // billingAddress: billing, // Stripe's PaymentIntent takes one shipping object. Billing details can be passed in metadata if needed or handled separately.
       };
+      console.log("[CheckoutPage] PaymentIntent Payload to be sent:", JSON.stringify(paymentIntentPayload, null, 2));
+      
       const res = await client.post('/checkout/create-payment-intent', paymentIntentPayload);
-      console.log("CheckoutPage: PaymentIntent created:", res.data);
+      console.log("[CheckoutPage] PaymentIntent created successfully:", res.data);
+
       if (res.data.clientSecret) {
         setClientSecret(res.data.clientSecret);
         setPaymentDetails({ amount: res.data.amount, currency: res.data.currency });
-        setStep(2);
+        setStep(2); // Move to payment step
       } else {
         throw new Error("Failed to retrieve client_secret for payment.");
       }
     } catch (err) {
-      console.error("CheckoutPage Error (Saving Address or Creating PI):", err.response?.data || err.message);
-      setError(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to proceed. Please ensure addresses are correct and try again.');
-      if (err.response?.status === 401) { logout(); navigate('/login'); }
+      console.error("CheckoutPage Error (Saving Address or Creating PI):", err.response?.data || err.message || err);
+      const errorMsg = err.response?.data?.message || err.response?.data?.error?.message || 'Failed to proceed. Please ensure addresses are correct and try again.';
+      setError(errorMsg);
+      // If the error is about country format from our new backend validation
+      if (errorMsg.toLowerCase().includes("country format") && errorMsg.toLowerCase().includes("2-letter")) {
+        toast({
+            title: "Address Error",
+            description: "Please use a 2-letter ISO code for the country (e.g., US, CA).",
+            status: "error",
+            duration: 6000,
+            isClosable: true
+        });
+      }
+      if (err.response?.status === 401) { 
+        toast({ title: "Session Expired", description: "Your session has expired. Please log in again.", status: "error", duration: 4000, isClosable: true });
+        logout(); 
+        navigate('/login'); 
+      }
     } finally {
       setIsProcessingAction(false);
     }
   };
 
-  const renderAddressFields = (addressType, legend) => ( /* ... same as your version from Turn 93 ... */ 
+  const renderAddressFields = (addressType, legend) => ( 
     <VStack spacing={4} align="stretch" w="100%">
       <Heading as="h3" size="md" color="brand.textDark" mb={2}>{legend}</Heading>
       <FormControl isRequired id={`${addressType}RecipientName`}>
@@ -189,8 +244,8 @@ export default function CheckoutPage() {
         </FormControl>
       </SimpleGrid>
       <FormControl isRequired id={`${addressType}Country`}>
-        <FormLabel>Country</FormLabel>
-        <Input name="country" value={addressForm[addressType]?.country || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={addressType === 'billingAddress' && billingSameAsShipping} bg="white" autoComplete={`${addressType === 'shippingAddress' ? 'shipping country-name' : 'billing country-name'}`} size="lg"/>
+        <FormLabel>Country (2-letter code, e.g., US)</FormLabel>
+        <Input name="country" value={addressForm[addressType]?.country || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={addressType === 'billingAddress' && billingSameAsShipping} bg="white" autoComplete={`${addressType === 'shippingAddress' ? 'shipping country-name' : 'billing country-name'}`} size="lg" placeholder="e.g., US, CA, GB"/>
       </FormControl>
       <FormControl id={`${addressType}Phone`}>
         <FormLabel>Phone (Optional)</FormLabel>
@@ -208,13 +263,13 @@ export default function CheckoutPage() {
     );
   }
   
-  if (!designToCheckout && !error) {
+  if (!designToCheckout && !error && !loadingPageData) { // Ensure not to show this if there's an error message already
     return (
       <VStack justifyContent="center" alignItems="center" minH="60vh" px={4} textAlign="center">
         <Alert status="warning" borderRadius="md" bg="yellow.50" p={6} flexDirection="column" maxW="md">
           <AlertIcon color="yellow.500" boxSize="30px"/>
-          <Heading size="md" color="yellow.700" mt={3}>No Product Selected for Checkout</Heading>
-          <Text color="yellow.700" mt={2}>It seems you've landed on the checkout page without selecting a product. Please go to the studio to customize your apparel first.</Text>
+          <Heading size="md" color="yellow.700" mt={3}>No Product Selected</Heading>
+          <Text color="yellow.700" mt={2}>It seems you've landed here without selecting a product. Please go to the studio to customize your apparel first.</Text>
           <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{bg:"brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/product-studio')}>Go to Product Studio</Button>
         </Alert>
       </VStack>
@@ -225,7 +280,7 @@ export default function CheckoutPage() {
   const stripeOptions = clientSecret ? { clientSecret, appearance } : {};
 
   return (
-    <Box maxW="2xl" mx="auto" pb={10}>
+    <Box maxW="2xl" mx="auto" pb={10} px={{base: 4, md: 0}}>
       <Heading as="h1" size={{base: "lg", md: "xl"}} color="brand.textLight" textAlign="left" w="100%" mb={6}>
         Checkout
       </Heading>
@@ -234,10 +289,17 @@ export default function CheckoutPage() {
         <Box mb={6} p={6} bg="brand.paper" borderRadius="xl" shadow="lg">
           <Heading as="h3" size="lg" color="brand.textDark" mb={3} borderBottomWidth="1px" borderColor="brand.secondary" pb={3}>Order Summary</Heading>
           <HStack spacing={4} align="flex-start">
-            <Image src={designToCheckout.imageDataUrl || designToCheckout.productImage} alt={designToCheckout.prompt || "Product"} boxSize="100px" objectFit="cover" borderRadius="md" />
+            <Image 
+                src={designToCheckout.imageDataUrl || designToCheckout.productImage || 'https://placehold.co/100x100/E2E8F0/A0AEC0?text=Design'} 
+                alt={designToCheckout.prompt || "Product Image"} 
+                boxSize="100px" 
+                objectFit="cover" 
+                borderRadius="md" 
+                fallbackSrc='https://placehold.co/100x100/E2E8F0/A0AEC0?text=Design'
+            />
             <VStack align="flex-start" spacing={1}>
               <Text fontWeight="bold" fontSize="lg" color="brand.textDark">{designToCheckout.productType || "Custom Apparel"}</Text>
-              <Text fontSize="md" color="gray.700">Color: {designToCheckout.color}, Size: {designToCheckout.size}</Text>
+              <Text fontSize="md" color="gray.700">Color: {designToCheckout.color || 'N/A'}, Size: {designToCheckout.size || 'N/A'}</Text>
               {designToCheckout.prompt && <Text fontSize="sm" color="gray.600" noOfLines={2}>Design: "{designToCheckout.prompt}"</Text>}
             </VStack>
           </HStack>
@@ -261,13 +323,14 @@ export default function CheckoutPage() {
             </Checkbox>
           </FormControl>
           {!billingSameAsShipping && renderAddressFields('billingAddress', 'Billing Address')}
-          <Button 
-            onClick={handleProceedToPayment} 
-            isLoading={isProcessingAction} 
-            loadingText="Saving Addresses & Proceeding..."
+          <Button  
+            onClick={handleProceedToPayment}  
+            isLoading={isProcessingAction}  
+            loadingText="Saving & Proceeding..."
             bg="brand.accentYellow" color="brand.textDark" _hover={{bg: 'brand.accentYellowHover'}}
             size="lg" borderRadius="full" width="full" mt={6}
             rightIcon={<Icon as={FaArrowRight} />}
+            isDisabled={!designToCheckout} // Disable if no product
           >
             Continue to Payment
           </Button>
@@ -284,11 +347,11 @@ export default function CheckoutPage() {
             <CheckoutForm designDetails={designToCheckout} />
           </Elements>
           <Text fontSize="xs" color="gray.500" mt={8} textAlign="center">
-            We value your privacy and will never sell your personal information. All payment information is processed securely by Stripe.
+            We value your privacy. All payment information is processed securely by Stripe.
           </Text>
         </Box>
       )}
-       {(step === 2 && isProcessingAction && !clientSecret && !error) && ( // Show loading for PI creation specifically if step 2 is pending PI
+       {(step === 2 && isProcessingAction && !clientSecret && !error) && ( 
         <VStack justifyContent="center" alignItems="center" minH="40vh">
           <Spinner size="xl" thickness="4px" color="brand.primary"/>
           <Text mt={3} color="brand.textLight">Initializing secure payment...</Text>
