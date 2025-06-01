@@ -1,9 +1,9 @@
 // frontend/src/pages/MyOrdersPage.jsx
 import React, { useState, useEffect } from 'react';
-import { 
-    Box, Heading, Text, Spinner, Alert, AlertIcon, 
-    VStack, Divider, SimpleGrid, useColorModeValue, Image as ChakraImage, // Added ChakraImage
-    Tag // Added Tag
+import {
+    Box, Heading, Text, Spinner, Alert, AlertIcon,
+    VStack, Divider, SimpleGrid, useColorModeValue, Image as ChakraImage,
+    Tag, HStack // Added HStack
 } from '@chakra-ui/react';
 import { client } from '../api/client'; // Your API client
 import { useAuth } from '../context/AuthProvider';
@@ -29,7 +29,7 @@ const OrderItemCard = ({ order }) => {
         <HStack>
             <Text fontSize="sm" fontWeight="bold">Order Status:</Text>
             <Tag size="sm" colorScheme={
-                order.orderStatus === 'Delivered' ? 'green' : 
+                order.orderStatus === 'Delivered' ? 'green' :
                 order.orderStatus === 'Shipped' ? 'blue' :
                 order.orderStatus === 'Processing' ? 'purple' :
                 order.orderStatus === 'Pending Confirmation' ? 'yellow' : 'gray'
@@ -38,7 +38,7 @@ const OrderItemCard = ({ order }) => {
             </Tag>
         </HStack>
       </VStack>
-      
+
       <Divider my={4} />
       <Heading fontSize="md" color={headingColor} mb={3}>Items ({order.items.length})</Heading>
       <VStack align="stretch" spacing={4}>
@@ -46,12 +46,12 @@ const OrderItemCard = ({ order }) => {
           <Box key={index} p={3} borderWidth="1px" borderRadius="md" borderColor={useColorModeValue('gray.200', 'gray.600')}>
             <HStack spacing={4} align="start">
                 {item.designImageUrl && (
-                    <ChakraImage 
-                        src={item.designImageUrl} 
-                        alt={item.productName || 'Product Image'} 
-                        boxSize="70px" 
-                        objectFit="cover" 
-                        borderRadius="md" 
+                    <ChakraImage
+                        src={item.designImageUrl}
+                        alt={item.productName || 'Product Image'}
+                        boxSize="70px"
+                        objectFit="cover"
+                        borderRadius="md"
                     />
                 )}
                 <VStack align="start" spacing={1} flex="1">
@@ -90,40 +90,57 @@ export default function MyOrdersPage() {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!user) { // AuthProvider should ensure user is loaded, or PrivateRoute redirects
+      if (!user || !user._id) {
         setLoading(false);
         return;
       }
       try {
         setLoading(true);
         setError('');
-        console.log("Fetching orders for user:", user._id); // Ensure user._id is available
-        const response = await client.get('/api/orders/myorders'); // Your new endpoint
+        console.log("Fetching orders for user:", user._id);
+        const response = await client.get('/api/orders/myorders');
         console.log("Orders fetched:", response.data);
         setOrders(response.data);
       } catch (err) {
         console.error("MyOrdersPage - Failed to fetch orders:", err.response?.data || err.message);
         setError(err.response?.data?.message || 'An error occurred while fetching your orders.');
+        setOrders([]);
       } finally {
         setLoading(false);
       }
     };
 
-    // Only fetch if user is available
-    if (user && user._id) { // Check for user._id to be safe
+    if (user && user._id) {
         fetchOrders();
-    } else if (!user) {
-        setLoading(false); // Not logged in or user data not yet available
-        // setError("Please log in to view orders."); // Or let PrivateRoute handle it
+    } else {
+        // If user is null or user._id is not yet available,
+        // set loading to false if not already trying to load.
+        // This prevents showing "no orders" if user is still loading.
+        if (loading && !user) setLoading(false);
     }
-  }, [user]); // Re-fetch if user changes
+  }, [user, loading]); // Added loading to dependency array to handle initial state correctly
 
+  // This is the corrected loading state return
   if (loading) {
-    return ( /* ... same loading spinner ... */ );
+    return (
+      <VStack justifyContent="center" alignItems="center" minH="60vh">
+        <Spinner size="xl" thickness="4px" color="brand.primary"/>
+        <Text mt={3} color="brand.textLight">Loading Your Orders...</Text>
+      </VStack>
+    );
   }
 
+  // This is the corrected error state return
   if (error) {
-    return ( /* ... same error alert ... */ );
+    return (
+      <Alert status="error" borderRadius="md" bg="red.50" p={4} variant="subtle" w="100%">
+        <AlertIcon color="red.500" />
+        <VStack align="start">
+            <Text fontWeight="bold" color="red.700">Failed to Load Orders</Text>
+            <Text color="red.700" fontSize="sm">{error}</Text>
+        </VStack>
+      </Alert>
+    );
   }
 
   return (
@@ -131,10 +148,10 @@ export default function MyOrdersPage() {
       <Heading as="h1" size={{ base: "lg", md: "xl" }} color="brand.textLight" textAlign="left" mb={8}>
         My Orders
       </Heading>
-      {orders.length === 0 && !loading ? ( // Ensure not to show "no orders" while loading
+      {orders.length === 0 ? (
         <Text fontSize="lg" color="brand.textMedium">You haven't placed any orders yet.</Text>
       ) : (
-        <SimpleGrid columns={{ base: 1, lg: 1 }} spacing={6}> {/* Changed to 1 column for better detail display per order */}
+        <SimpleGrid columns={{ base: 1, lg: 1 }} spacing={6}>
           {orders.map(order => (
             <OrderItemCard key={order._id} order={order} />
           ))}
