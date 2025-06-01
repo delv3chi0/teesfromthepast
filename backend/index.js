@@ -21,7 +21,7 @@ import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import checkoutRoutes from './routes/checkout.js';
 import designRoutes from './routes/designs.js';
 import contestRoutes from './routes/contest.js';
-import orderRoutes from './routes/orders.js'; // \<-- IMPORT ADDED
+import orderRoutes from './routes/orders.js'; // Ensure this filename matches yours
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,7 +45,10 @@ credentials: true,
 }));
 console.log('[Backend Log] CORS middleware applied with updated origin list.');
 app.use(cookieParser());
-app.use('/api/webhook', stripeWebhookRoutes); // This one handles raw body if set up correctly
+
+// IMPORTANT: Stripe webhook route must come BEFORE express.json() if it needs the raw body
+app.use('/api/webhook', stripeWebhookRoutes);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
@@ -67,11 +70,11 @@ res.status(200).json({ status: 'OK', message: 'Backend is healthy\!' });
 // --- API Routes ---
 console.log('[Backend Log] Setting up API routes...');
 app.use('/api/auth', authRoutes);
-app.use('/api', generateImageRoutes);
+app.use('/api', generateImageRoutes); // Base path for generateImageRoutes
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/mydesigns', designRoutes);
 app.use('/api/contest', contestRoutes);
-app.use('/api/orders', orderRoutes); // \<-- ROUTE MOUNTED
+app.use('/api/orders', orderRoutes);
 console.log('[Backend Log] All routes configured.');
 
 // --- Global Error Handler ---
@@ -79,6 +82,10 @@ app.use((err, req, res, next) =\> {
 console.error('[Backend Log] Global Server Error:', err.stack);
 if (err.type === 'entity.too.large') {
 return res.status(413).json({ message: 'Request payload is too large. Please reduce data size.' });
+}
+// Ensure a response is always sent
+if (res.headersSent) {
+return next(err);
 }
 res.status(500).json({ error: 'An unexpected server error occurred\!' });
 });
