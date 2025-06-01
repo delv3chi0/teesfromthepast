@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-    Box, Heading, Input, Button, Text, HStack, useToast, VStack, Icon, 
-    FormControl, FormLabel, Spinner, Stack // Added Stack for responsive HStack/VStack
-} from '@chakra-ui/react';
+    Box, Heading, Input, Button, Text, Stack, useToast, VStack, Icon, 
+    FormControl, FormLabel, Spinner 
+} from '@chakra-ui/react'; // Stack was already imported
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaSave, FaEdit, FaTimes, FaTachometerAlt } from 'react-icons/fa';
@@ -23,8 +23,13 @@ export default function Profile() {
   const navigate = useNavigate();
   const toast = useToast();
 
+  // To access loadingAuth from useAuth to prevent premature "Could not load profile"
+  const { loadingAuth: authStillLoading } = useAuth(); 
+
   useEffect(() => {
+    // console.log("[Profile.jsx] useEffect triggered, user from context:", user, "authStillLoading:", authStillLoading);
     if (user) {
+      // console.log("[Profile.jsx] User context exists, setting form data.");
       setForm({
         username: user.username || '',
         email: user.email || '',
@@ -32,10 +37,14 @@ export default function Profile() {
         lastName: user.lastName || '',
       });
       setIsLoading(false);
-    } else if (!isLoading && !authStillLoading) { 
+    } else if (!authStillLoading && !user) { 
+      // If auth is done loading and there's still no user
+      // console.log("[Profile.jsx] Auth loaded, no user. Clearing loading.");
       setIsLoading(false); 
+      // PrivateRoute should handle navigation to /login
     }
-  }, [user, isLoading]); 
+    // If authStillLoading is true, isLoading will remain true until user is set or auth load finishes
+  }, [user, authStillLoading]); 
 
   const handleChange = (e) => {
     setForm(currentForm => ({ ...currentForm, [e.target.name]: e.target.value }));
@@ -48,6 +57,12 @@ export default function Profile() {
         firstName: form.firstName,
         lastName: form.lastName,
     };
+    // Only include password if it's being changed and is not empty
+    // This part was missing from the previous full file paste for Profile.jsx
+    // but was in backend/routes/auth.js. Assuming you might want to add password change here.
+    // if (form.password && form.password.length > 0) {
+    //   updateData.password = form.password;
+    // }
     
     try {
         const { data: updatedProfileFromServer } = await client.put('/auth/profile', updateData);
@@ -84,9 +99,7 @@ export default function Profile() {
     setEditing(false);
   };
   
-  const { loadingAuth: authStillLoading } = useAuth();
-
-  if (authStillLoading || (isLoading && !user)) { 
+  if (authStillLoading || isLoading) { 
     return (
       <Box textAlign="center" mt={20} py={10}>
         <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200"/>
@@ -107,8 +120,8 @@ export default function Profile() {
   return (
     <Box 
         maxW="lg" 
-        mt={{base: 4, md: 6}} 
-        p={{base: 4, sm: 6, md: 8}} // Responsive padding for the card
+        // mt={{base: 4, md: 6}} // Top margin/padding comes from MainLayout
+        p={{base: 4, sm: 6, md: 8}} 
         borderWidth="1px" 
         borderRadius="xl" 
         shadow="xl" 
@@ -117,8 +130,8 @@ export default function Profile() {
     >
       <Heading 
         as="h1" 
-        size="xl" 
-        mb={6} // Consistent margin
+        size={{ base: "lg", md: "xl" }}      // Responsive heading size
+        mb={{ base: 4, md: 6 }}           // Responsive bottom margin
         textAlign="left" 
         w="100%" 
         color="brand.textDark"
@@ -126,27 +139,26 @@ export default function Profile() {
         Your Profile
       </Heading>
 
-      <VStack spacing={5} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}>
+      <VStack spacing={{ base: 4, md: 5 }} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}> {/* Responsive spacing */}
         <FormControl id="username">
-            <FormLabel fontWeight="bold" color="brand.textDark">Username:</FormLabel>
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Username:</FormLabel> {/* Responsive label size */}
             <Input name="username" placeholder="Username" value={form.username} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="email">
-            <FormLabel fontWeight="bold" color="brand.textDark">Email:</FormLabel>
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Email:</FormLabel> {/* Responsive label size */}
             <Input name="email" placeholder="Email" value={form.email} isReadOnly bg="gray.100" borderColor="brand.secondary" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="firstName">
-            <FormLabel fontWeight="bold" color="brand.textDark">First Name:</FormLabel>
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>First Name:</FormLabel> {/* Responsive label size */}
             <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="lastName">
-            <FormLabel fontWeight="bold" color="brand.textDark">Last Name:</FormLabel>
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Last Name:</FormLabel> {/* Responsive label size */}
             <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
 
-        {/* MODIFIED: Use Stack for responsive button layout */}
         <Stack 
-            direction={{ base: 'column', md: 'row' }} // Column on mobile, Row on desktop
+            direction={{ base: 'column', md: 'row' }} 
             spacing={4} 
             mt={6} 
             w="100%"
@@ -160,8 +172,8 @@ export default function Profile() {
                 leftIcon={<Icon as={FaEdit}/>}
                 borderRadius="full"
                 px={8} size="lg" 
-                w={{ base: "full", md: "auto" }} // Full width on mobile if stacked
-                flex={editing ? undefined : 1} // Only flex={1} when it's the single button
+                w={{ base: "full", md: "auto" }} 
+                flex={editing ? undefined : 1} 
             >Edit Profile</Button>
           ) : (
             <>
@@ -173,8 +185,8 @@ export default function Profile() {
                 leftIcon={<Icon as={FaSave}/>}
                 borderRadius="full"
                 px={8} size="lg" 
-                w={{ base: "full", md: "auto" }} // Full width on mobile
-                flex={{ base: undefined, md: 1 }} // flex={1} for desktop row
+                w={{ base: "full", md: "auto" }} 
+                flex={{ base: undefined, md: 1 }} 
                 type="submit" isLoading={isSaving} loadingText="Saving..."
               >Save Changes</Button>
               <Button 
@@ -186,8 +198,8 @@ export default function Profile() {
                 leftIcon={<Icon as={FaTimes}/>}
                 borderRadius="full"
                 px={8} size="lg" 
-                w={{ base: "full", md: "auto" }} // Full width on mobile
-                flex={{ base: undefined, md: 1 }} // flex={1} for desktop row
+                w={{ base: "full", md: "auto" }} 
+                flex={{ base: undefined, md: 1 }} 
               >Cancel</Button>
             </>
           )}
