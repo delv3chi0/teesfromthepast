@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
     Box, Heading, Input, Button, Text, Stack, useToast, VStack, Icon, 
     FormControl, FormLabel, Spinner 
-} from '@chakra-ui/react'; // Stack was already imported
+} from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaSave, FaEdit, FaTimes, FaTachometerAlt } from 'react-icons/fa';
@@ -16,34 +16,31 @@ export default function Profile() {
     email: '', 
     firstName: '',
     lastName: '',
+    // shippingAddress and billingAddress should be initialized here if you expect them in the form
+    // For now, keeping it as per Turn 86 which didn't have address fields yet in this component
   });
   const [isLoading, setIsLoading] = useState(true); 
   const [editing, setEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
-
-  // To access loadingAuth from useAuth to prevent premature "Could not load profile"
   const { loadingAuth: authStillLoading } = useAuth(); 
 
   useEffect(() => {
-    // console.log("[Profile.jsx] useEffect triggered, user from context:", user, "authStillLoading:", authStillLoading);
     if (user) {
-      // console.log("[Profile.jsx] User context exists, setting form data.");
       setForm({
         username: user.username || '',
         email: user.email || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
+        // Populate with address data if available from user object
+        // shippingAddress: user.shippingAddress || { recipientName: '', street1: '', ...etc. },
+        // billingAddress: user.billingAddress || { recipientName: '', street1: '', ...etc. },
       });
       setIsLoading(false);
     } else if (!authStillLoading && !user) { 
-      // If auth is done loading and there's still no user
-      // console.log("[Profile.jsx] Auth loaded, no user. Clearing loading.");
       setIsLoading(false); 
-      // PrivateRoute should handle navigation to /login
     }
-    // If authStillLoading is true, isLoading will remain true until user is set or auth load finishes
   }, [user, authStillLoading]); 
 
   const handleChange = (e) => {
@@ -56,24 +53,24 @@ export default function Profile() {
         username: form.username,
         firstName: form.firstName,
         lastName: form.lastName,
+        // Include address data if form handles it:
+        // shippingAddress: form.shippingAddress,
+        // billingAddress: form.billingAddress,
     };
-    // Only include password if it's being changed and is not empty
-    // This part was missing from the previous full file paste for Profile.jsx
-    // but was in backend/routes/auth.js. Assuming you might want to add password change here.
-    // if (form.password && form.password.length > 0) {
-    //   updateData.password = form.password;
-    // }
     
     try {
         const { data: updatedProfileFromServer } = await client.put('/auth/profile', updateData);
         if (setAuthUser) {
             setAuthUser(updatedProfileFromServer); 
         }
+        // Repopulate form from server response to ensure consistency, including addresses
         setForm({                   
             username: updatedProfileFromServer.username || '',
             email: updatedProfileFromServer.email || '', 
             firstName: updatedProfileFromServer.firstName || '',
             lastName: updatedProfileFromServer.lastName || '',
+            // shippingAddress: updatedProfileFromServer.shippingAddress || { recipientName: '', ...etc. },
+            // billingAddress: updatedProfileFromServer.billingAddress || { recipientName: '', ...etc. },
         });
         setEditing(false);
         toast({ title: "Profile Updated", description: "Your changes have been saved.", status: "success", duration: 3000, isClosable: true });
@@ -94,6 +91,9 @@ export default function Profile() {
           email: user.email || '',
           firstName: user.firstName || '', 
           lastName: user.lastName || '',
+          // Reset addresses from user context too
+          // shippingAddress: user.shippingAddress || { recipientName: '', ...etc. },
+          // billingAddress: user.billingAddress || { recipientName: '', ...etc. },
         });
     }
     setEditing(false);
@@ -120,7 +120,6 @@ export default function Profile() {
   return (
     <Box 
         maxW="lg" 
-        // mt={{base: 4, md: 6}} // Top margin/padding comes from MainLayout
         p={{base: 4, sm: 6, md: 8}} 
         borderWidth="1px" 
         borderRadius="xl" 
@@ -130,32 +129,37 @@ export default function Profile() {
     >
       <Heading 
         as="h1" 
-        size={{ base: "lg", md: "xl" }}      // Responsive heading size
-        mb={{ base: 4, md: 6 }}           // Responsive bottom margin
+        size={{ base: "lg", md: "xl" }}      
+        mb={{ base: 4, md: 6 }}           
         textAlign="left" 
         w="100%" 
         color="brand.textDark"
       > 
-        Your Profile
+        Your Profile 
       </Heading>
 
-      <VStack spacing={{ base: 4, md: 5 }} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}> {/* Responsive spacing */}
+      <VStack spacing={{ base: 4, md: 5 }} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}>
         <FormControl id="username">
-            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Username:</FormLabel> {/* Responsive label size */}
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Username:</FormLabel>
             <Input name="username" placeholder="Username" value={form.username} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="email">
-            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Email:</FormLabel> {/* Responsive label size */}
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Email:</FormLabel>
             <Input name="email" placeholder="Email" value={form.email} isReadOnly bg="gray.100" borderColor="brand.secondary" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="firstName">
-            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>First Name:</FormLabel> {/* Responsive label size */}
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>First Name:</FormLabel>
             <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
         <FormControl id="lastName">
-            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Last Name:</FormLabel> {/* Responsive label size */}
+            <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Last Name:</FormLabel>
             <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg"/>
         </FormControl>
+
+        {/* Note: Shipping and Billing address fields are not yet added here. 
+            That was planned as the *next* step after this mobile responsiveness pass for Profile.jsx.
+            The backend changes for addresses are done, but this frontend component doesn't have the UI for them yet.
+        */}
 
         <Stack 
             direction={{ base: 'column', md: 'row' }} 
