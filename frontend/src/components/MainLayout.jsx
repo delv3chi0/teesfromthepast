@@ -14,7 +14,7 @@ const navItems = [
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'Customize My Shirt', path: '/product-studio' },
   { label: '🏆 Monthly Design Contest', path: '/vote-now' },
-  { label: 'My Orders', path: '/my-orders' }, // <-- ADDED "My Orders"
+  { label: 'My Orders', path: '/my-orders' }, // This was added based on your request
   { label: 'My Profile', path: '/profile' },
 ];
 
@@ -34,7 +34,7 @@ export default function MainLayout({ children }) {
         pos={inDrawer ? "relative" : "fixed"}
         top={inDrawer ? undefined : "0"}
         left={inDrawer ? undefined : "0"}
-        zIndex={inDrawer ? "auto" : 1200} // Ensure fixed sidebar is above some content if needed
+        zIndex={inDrawer ? "auto" : 1200}
         h={inDrawer ? "100%" : "full"}
         pb={inDrawer ? 4 : "10"}
         overflowX="hidden"
@@ -42,7 +42,7 @@ export default function MainLayout({ children }) {
         bg="brand.primary"
         borderColor={inDrawer ? "transparent" : "brand.primaryDark"}
         borderRightWidth={inDrawer ? "0" : "1px"}
-        w={inDrawer ? "100%" : "60"} // Standard Chakra unit for width (240px if 1 unit = 4px)
+        w={inDrawer ? "100%" : "60"}
       >
         {showInternalLogo && (
           <Flex
@@ -53,7 +53,7 @@ export default function MainLayout({ children }) {
             align="center"
             justifyContent="center"
             _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
-            onClick={onClick} // Close drawer if logo in fixed sidebar is clicked when drawer is open (edge case)
+            onClick={onClick}
           >
             <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
           </Flex>
@@ -75,11 +75,8 @@ export default function MainLayout({ children }) {
               color={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/')) || (item.path === '/dashboard' && location.pathname === '/') ? "brand.accentYellow" : "brand.textLight"}
               bg={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/')) || (item.path === '/dashboard' && location.pathname === '/') ? "brand.primaryLight" : "transparent"}
               _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }}
-              onClick={onClick} // This closes the drawer when a nav item is clicked
+              onClick={onClick}
             >
-              {/* If you add an icon property to navItems, you could render it here: 
-                {item.icon && <Icon as={item.icon} mr={2} />} 
-              */}
               {item.label}
             </ChakraLink>
           ))}
@@ -89,10 +86,10 @@ export default function MainLayout({ children }) {
   };
 
   return (
-    <Flex direction="column" minH="100vh"> {/* Base flex container for sticky footer */}
-      <Box as="section" display="flex" flexGrow={1}> {/* Section for sidebar and main content */}
+    <Flex direction="column" minH="100vh">
+      <Box as="section" display="flex" flexGrow={1}>
         {isDesktopView && (
-          <Box as="aside" w="60" flexShrink={0}> {/* Occupy space for fixed sidebar */}
+          <Box as="aside" w="60" flexShrink={0}>
             <SidebarContent />
           </Box>
         )}
@@ -113,12 +110,12 @@ export default function MainLayout({ children }) {
                 display="flex"
                 alignItems="center"
                 justifyContent="center"
-                py="2.5" // Adjusted padding
-                onClick={onClose} // Close drawer when header logo is clicked
+                py="2.5"
+                onClick={onClose}
               >
                 <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/>
               </DrawerHeader>
-              <DrawerBody p={0}> {/* Remove padding to allow SidebarContent to control its own */}
+              <DrawerBody p={0}>
                 <SidebarContent onClick={onClose} inDrawer={true} />
               </DrawerBody>
             </DrawerContent>
@@ -127,25 +124,25 @@ export default function MainLayout({ children }) {
         
         <Box
           flexGrow={1}
-          ml={isDesktopView ? "60" : "0"} // Adjust margin left if desktop view
-          transition=".3s ease" // Smooth transition for margin change (optional)
+          // This is the corrected line for the margin:
+          ml={isDesktopView ? "0" : "0"} 
+          transition=".3s ease"
           display="flex"
-          flexDirection="column" // Ensure this box can also manage a footer within its own flow if needed
+          flexDirection="column"
         >
-          {/* Header bar */}
           <Flex
             as="header"
             align="center"
-            w="full" // Take full width of its container
+            w="full"
             px={6} py={3}
-            bg="brand.secondary" // Your header background color
+            bg="brand.secondary"
             borderBottomWidth="1px"
-            borderColor="brand.primaryDark" // Or your theme's border color
-            color="brand.textDark" // Text color for header
-            h="auto" minH="14" // Chakra unit for height (56px if 1 unit = 4px)
-            flexShrink={0} // Prevent header from shrinking
+            borderColor="brand.primaryDark"
+            color="brand.textDark"   
+            h="auto" minH="14"
+            flexShrink={0}
           >
-            <Flex align="center" flex="0"> {/* Container for hamburger and mobile logo */}
+            <Flex align="center" flex="0">
               {!isDesktopView && (
                 <IconButton
                   aria-label="Open Menu"
@@ -154,26 +151,25 @@ export default function MainLayout({ children }) {
                   size="md"
                   variant="ghost"
                   mr={2}
-                  color="brand.primaryDark" // Or your desired icon color
+                  color="brand.primaryDark"
                   _hover={{ bg: 'brand.primaryLight' }}
                 />
               )}
-              {/* Text Logo in header */}
               <ChakraLink as={RouterLink} to="/dashboard" display="flex" alignItems="center" _hover={{textDecoration: "none"}}>
                 <Image
-                  src="/logo-text.png" // Assuming this is your text-based logo image
+                  src="/logo-text.png"
                   alt="Tees From The Past Title Logo"
-                  h="50px" // Adjust height as needed
+                  h="50px"
                   objectFit="contain"
-                  maxW={{ base: "180px" }} // Responsive max width
+                  maxW={{ base: "180px" }}
                 />
               </ChakraLink>
             </Flex>
 
-            <Spacer /> {/* Pushes avatar and logout button to the right */}
+            <Spacer />
 
-            <Flex align="center" flex="0"> {/* Container for Profile Avatar and Logout */}
-              {user && isDesktopView && ( // Show avatar on desktop if user is logged in
+            <Flex align="center" flex="0">
+              {user && isDesktopView && (
                 <ChakraLink
                   as={RouterLink}
                   to="/profile"
@@ -185,13 +181,12 @@ export default function MainLayout({ children }) {
               <LogoutButton />
             </Flex>
           </Flex>
-          {/* Main content area where page components are rendered */}
-          <Box as="main" p={{base: 4, md: 6}} bg="brand.accentOrange" flexGrow={1} width="100%" > 
-            {children} {/* This is where <Dashboard />, <Generate />, etc., will be rendered */}
+          <Box as="main" p={{base: 4, md: 6}} bg="brand.accentOrange" flexGrow={1} width="100%" >
+            {children}
           </Box>
         </Box>
       </Box>
-      <Footer /> {/* Your existing Footer component */}
+      <Footer />
     </Flex>
   );
 }
