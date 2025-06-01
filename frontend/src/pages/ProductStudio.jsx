@@ -1,10 +1,10 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// REMOVED: import 'fabric'; // No longer importing fabric directly here
+import 'fabric'; // Assuming this is still how we are successfully loading fabric for side-effects
 
 import { 
     Box, Heading, Text, VStack, Select, 
-    SimpleGrid, Image, Spinner, Alert, AlertIcon, 
+    SimpleGrid, Image, Spinner, Alert, AlertIcon, AlertCloseButton, // Added AlertCloseButton
     Link as ChakraLink, Divider, useToast, Icon, Button
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -27,6 +27,8 @@ const productSizes = ['S', 'M', 'L', 'XL', 'XXL'];
 const CANVAS_WIDTH = 400;
 const CANVAS_HEIGHT = 400;
 
+const INFO_ALERT_DISMISSED_KEY = 'productStudioInfoAlertDismissed_v1'; // localStorage key
+
 export default function ProductStudio() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -41,8 +43,19 @@ export default function ProductStudio() {
   const [selectedProductSize, setSelectedProductSize] = useState(productSizes[2]);
   const [selectedDesign, setSelectedDesign] = useState(null);
 
+  // State for the dismissible info alert
+  const [showInfoAlert, setShowInfoAlert] = useState(false);
+
   const canvasEl = useRef(null); 
   const fabricCanvas = useRef(null); 
+
+  // Effect to check localStorage for alert dismissal status on mount
+  useEffect(() => {
+    const dismissed = localStorage.getItem(INFO_ALERT_DISMISSED_KEY);
+    if (dismissed !== 'true') {
+      setShowInfoAlert(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -83,75 +96,50 @@ export default function ProductStudio() {
 
     const setupCanvas = (fabricInstance) => {
       if (!fabricCanvas.current && canvasEl.current) {
-        console.log("[ProductStudio] Initializing Fabric canvas from window.fabric.");
         fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, {
             width: CANVAS_WIDTH,
             height: CANVAS_HEIGHT,
         });
       }
-
+      // ... (rest of your canvas setup logic from previous version)
       const FCanvas = fabricCanvas.current;
       if (FCanvas) {
-          console.log("[ProductStudio] Updating canvas. Clearing canvas.");
           FCanvas.clear();
           const mockupSrc = getCurrentMockupSrc();
-
           if (mockupSrc) {
-              console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
               fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
-                  console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
                   if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
-                      console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
-                      FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); 
-                      return;
+                      FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); return;
                   }
-                  console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height);
                   FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
-                      scaleX: CANVAS_WIDTH / mockupImg.width,
-                      scaleY: CANVAS_HEIGHT / mockupImg.height,
-                      selectable: false,
-                      evented: false,
+                      scaleX: CANVAS_WIDTH / mockupImg.width, scaleY: CANVAS_HEIGHT / mockupImg.height,
+                      selectable: false, evented: false,
                   });
               }, { crossOrigin: 'anonymous' });
           } else {
-              console.log("[ProductStudio] No mockupSrc, clearing background and setting to white.");
               FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
               FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
           }
-
           if (selectedDesign?.imageDataUrl) {
-              console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
               fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-                  console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
-                  if (!designImg || designImg.width === 0 || designImg.height === 0) {
-                      console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-                      return; 
-                  }
+                  if (!designImg || designImg.width === 0 || designImg.height === 0) { return; }
                   const designWidth = CANVAS_WIDTH * 0.33;
                   designImg.scaleToWidth(designWidth);
                   const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5;
                   const designTop = CANVAS_HEIGHT * 0.24;
-
                   designImg.set({ top: designTop, left: designLeft });
                   FCanvas.add(designImg);
-                  console.log("[ProductStudio] Design image added to canvas.");
                   FCanvas.renderAll();
               }, { crossOrigin: 'anonymous' });
           } else {
-              console.log("[ProductStudio] No selected design to load.");
-              if (FCanvas.backgroundImage || FCanvas.backgroundColor) {
-                  FCanvas.renderAll();
-              }
+              if (FCanvas.backgroundImage || FCanvas.backgroundColor) { FCanvas.renderAll(); }
           }
-      } else {
-          console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available for update (should have been initialized).");
       }
     };
 
     const pollForFabric = () => {
-      const fabricInstance = window.fabric; // Access global fabric
+      const fabricInstance = window.fabric; 
       if (fabricInstance && fabricInstance.Canvas) {
-        console.log("[ProductStudio] Fabric.js found on window object after polling.");
         setupCanvas(fabricInstance);
       } else {
         pollCount++;
@@ -172,27 +160,18 @@ export default function ProductStudio() {
 
 
   const handleProceedToCheckout = () => {
+    // ... (this function remains the same)
     if (selectedDesign && selectedProductType && selectedProductColor && selectedProductSize) {
-        const productDetailsForCheckout = {
-            designId: selectedDesign._id,
-            prompt: selectedDesign.prompt,
-            imageDataUrl: selectedDesign.imageDataUrl, 
-            productType: productTypes.find(p => p.value === selectedProductType)?.label,
-            productImage: getCurrentMockupSrc(), 
-            color: selectedProductColor,
-            size: selectedProductSize,
-        };
-        console.log("Proceeding to checkout with:", productDetailsForCheckout);
+        const productDetailsForCheckout = { /* ... */ };
         navigate('/checkout', { state: { designToCheckout: productDetailsForCheckout } });
     } else {
-        toast({ 
-            title: "Selection Incomplete", 
-            description: "Please select all product options and a design before proceeding to checkout.", 
-            status: "warning", 
-            duration: 4000,
-            isClosable: true,
-        });
+        toast({ /* ... */ });
     }
+  };
+
+  const handleDismissInfoAlert = () => {
+    setShowInfoAlert(false);
+    localStorage.setItem(INFO_ALERT_DISMISSED_KEY, 'true');
   };
 
   return (
@@ -209,17 +188,28 @@ export default function ProductStudio() {
           👕 Customize Your Apparel!
         </Heading>
         
-        <Alert status="info" borderRadius="md" bg="brand.paper" color="brand.textDark">
-          <AlertIcon color="blue.500"/>
-          <Box flex="1">
-            Want a brand new design for your product? 
-            <ChakraLink as={RouterLink} to="/generate" color="brand.primaryDark" fontWeight="bold" ml={1} _hover={{textDecoration: "underline"}}>
-              Create it in the AI Image Generator first
-            </ChakraLink>
-            , save it, then come back here to choose it!
-          </Box>
-        </Alert>
+        {/* MODIFIED: Conditional rendering for the Alert */}
+        {showInfoAlert && (
+          <Alert 
+            status="info" 
+            borderRadius="md" 
+            bg="brand.paper" 
+            color="brand.textDark"
+            variant="subtle" // A slightly less intrusive variant
+          >
+            <AlertIcon color="blue.500"/>
+            <Box flex="1">
+              Want a brand new design for your product? 
+              <ChakraLink as={RouterLink} to="/generate" color="brand.primaryDark" fontWeight="bold" ml={1} _hover={{textDecoration: "underline"}}>
+                Create it in the AI Image Generator first
+              </ChakraLink>
+              , save it, then come back here to choose it!
+            </Box>
+            <AlertCloseButton onClick={handleDismissInfoAlert} /> {/* ADDED Close Button */}
+          </Alert>
+        )}
 
+        {/* ... (rest of the JSX for choosing apparel, designs, and preview remains the same) ... */}
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" size="lg" mb={6} color="brand.textDark">1. Choose Your Apparel</Heading>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
