@@ -18,7 +18,7 @@ import cors from 'cors';
 
 import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
-import stripeWebhookRoutes from './routes/stripeWebhook.js';
+import stripeWebhookRoutes from './routes/stripeWebhook.js'; // This router handles '/webhook' internally
 import checkoutRoutes from './routes/checkout.js';
 import designRoutes from './routes/designs.js';
 import contestRoutes from './routes/contest.js';
@@ -47,8 +47,16 @@ credentials: true,
 console.log('[Backend Log] CORS middleware applied with updated origin list.');
 app.use(cookieParser());
 
-app.use('/api/webhook', stripeWebhookRoutes);
+// MODIFIED: Changed path to /api/stripe to match Stripe webhook configuration
+// The stripeWebhookRoutes router itself handles the '/webhook' sub-path.
+// So, Stripe POSTs to /api/stripe/webhook will be handled.
+app.use('/api/stripe', stripeWebhookRoutes); 
+console.log('[Backend Log] Stripe webhook route configured at /api/stripe/webhook.');
 
+
+// These body parsers should generally come AFTER specific routes that need raw bodies,
+// or be configured not to interfere. However, since /api/stripe/webhook uses express.raw()
+// within its own router, this order should be okay.
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
@@ -59,16 +67,16 @@ res.send('Tees From The Past Backend API');
 });
 app.get('/test', (req, res) => {
 console.log('[Backend Log] Test path (/test) hit.');
-res.status(200).send('Backend is running and test route works\!');
+res.status(200).send('Backend is running and test route works!');
 });
 app.get('/health', (req, res) => {
 console.log('[Backend Log] Health path (/health) hit.');
-res.status(200).json({ status: 'OK', message: 'Backend is healthy\!' });
+res.status(200).json({ status: 'OK', message: 'Backend is healthy!' });
 });
 
-console.log('[Backend Log] Setting up API routes...');
+console.log('[Backend Log] Setting up other API routes...');
 app.use('/api/auth', authRoutes);
-app.use('/api', generateImageRoutes);
+app.use('/api', generateImageRoutes); // Note: this might conflict if generateImageRoutes has a /stripe or /webhook path.
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/mydesigns', designRoutes);
 app.use('/api/contest', contestRoutes);
@@ -83,7 +91,7 @@ return res.status(413).json({ message: 'Request payload is too large. Please red
 if (res.headersSent) {
 return next(err);
 }
-res.status(500).json({ error: 'An unexpected server error occurred\!' });
+res.status(500).json({ error: 'An unexpected server error occurred!' });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
