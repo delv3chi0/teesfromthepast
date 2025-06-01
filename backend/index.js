@@ -18,11 +18,12 @@ import cors from 'cors';
 
 import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
-import stripeWebhookRoutes from './routes/stripeWebhook.js'; // This router handles '/webhook' internally
+import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import checkoutRoutes from './routes/checkout.js';
 import designRoutes from './routes/designs.js';
 import contestRoutes from './routes/contest.js';
 import orderRoutes from './routes/orders.js';
+import adminUserRoutes from './routes/adminUserRoutes.js'; // <-- IMPORT new admin user routes
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -47,16 +48,9 @@ credentials: true,
 console.log('[Backend Log] CORS middleware applied with updated origin list.');
 app.use(cookieParser());
 
-// MODIFIED: Changed path to /api/stripe to match Stripe webhook configuration
-// The stripeWebhookRoutes router itself handles the '/webhook' sub-path.
-// So, Stripe POSTs to /api/stripe/webhook will be handled.
-app.use('/api/stripe', stripeWebhookRoutes); 
+app.use('/api/stripe', stripeWebhookRoutes);
 console.log('[Backend Log] Stripe webhook route configured at /api/stripe/webhook.');
 
-
-// These body parsers should generally come AFTER specific routes that need raw bodies,
-// or be configured not to interfere. However, since /api/stripe/webhook uses express.raw()
-// within its own router, this order should be okay.
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
@@ -74,27 +68,28 @@ console.log('[Backend Log] Health path (/health) hit.');
 res.status(200).json({ status: 'OK', message: 'Backend is healthy!' });
 });
 
-console.log('[Backend Log] Setting up other API routes...');
+console.log('[Backend Log] Setting up API routes...');
 app.use('/api/auth', authRoutes);
-app.use('/api', generateImageRoutes); // Note: this might conflict if generateImageRoutes has a /stripe or /webhook path.
+app.use('/api', generateImageRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/mydesigns', designRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/orders', orderRoutes);
-console.log('[Backend Log] All routes configured.');
+app.use('/api/admin/users', adminUserRoutes); // <-- MOUNT new admin user routes
+console.log('[Backend Log] All routes configured, including /api/admin/users.');
 
 app.use((err, req, res, next) => {
 console.error('[Backend Log] Global Server Error:', err.stack);
-if (err.type === 'entity.too.large') {
-return res.status(413).json({ message: 'Request payload is too large. Please reduce data size.' });
-}
-if (res.headersSent) {
-return next(err);
-}
-res.status(500).json({ error: 'An unexpected server error occurred!' });
+const statusCode = res.statusCode === 200 ? 500 : res.statusCode; // Use existing status code if not 200
+res.status(statusCode);
+res.json({
+    message: err.message,
+    // Stack trace only in development
+    stack: process.env.NODE_ENV === 'production' ? '🥞' : err.stack,
+});
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-console.log(`Server running on port ${PORT}`);
+console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
 });

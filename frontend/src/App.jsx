@@ -1,10 +1,10 @@
 // frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
-import { Routes, Route, Navigate } from "react-router-dom"; // BrowserRouter is likely in your index.js or main.jsx
+import { Routes, Route, Navigate } from "react-router-dom";
 import theme from './theme';
 
 import { AuthProvider } from './context/AuthProvider';
-import Login from './Login'; // Assuming Login is directly in src, adjust if it's in pages
+import Login from './Login';
 import RegistrationPage from './pages/RegistrationPage';
 
 import MainLayout from './components/MainLayout';
@@ -16,16 +16,16 @@ import VotingPage from './pages/VotingPage';
 import Profile from './pages/Profile';
 import CheckoutPage from './pages/CheckoutPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
-import MyOrdersPage from './pages/MyOrdersPage'; // <-- ADDED IMPORT FOR MyOrdersPage
+import MyOrdersPage from './pages/MyOrdersPage';
 
 import PrivateRoute from './components/PrivateRoute';
+import AdminRoute from './components/AdminRoute'; // <-- IMPORT AdminRoute
+import AdminPage from './pages/AdminPage';     // <-- IMPORT AdminPage (will be created next)
 
 export default function App() {
   return (
     <ChakraProvider theme={theme}>
       <AuthProvider>
-        {/* Ensure BrowserRouter is wrapping this App component at a higher level,
-            typically in your main.jsx or index.js file */}
         <Routes>
           {/* Public routes - no MainLayout */}
           <Route path="/" element={<Login />} />
@@ -50,7 +50,7 @@ export default function App() {
             element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>}
           />
           <Route
-            path="/vote-now" // Path for VotingPage
+            path="/vote-now"
             element={<PrivateRoute><MainLayout><VotingPage/></MainLayout></PrivateRoute>}
           />
           <Route
@@ -65,11 +65,24 @@ export default function App() {
             path="/payment-success"
             element={<PrivateRoute><MainLayout><PaymentSuccessPage/></MainLayout></PrivateRoute>}
           />
-          {/* ADDED My Orders ROUTE */}
           <Route
             path="/my-orders"
             element={<PrivateRoute><MainLayout><MyOrdersPage/></MainLayout></PrivateRoute>}
           />
+
+          {/* ADMIN ROUTE */}
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>  {/* Protects with AdminRoute */}
+                <MainLayout> {/* Uses the same MainLayout */}
+                  <AdminPage />
+                </MainLayout>
+              </AdminRoute>
+            }
+          />
+          {/* We can add more nested admin routes later, e.g., /admin/users, /admin/orders */}
+
 
           {/* Fallback route - navigates to login or dashboard depending on auth state could be more robust */}
           <Route path="*" element={<Navigate to="/" replace />} />
