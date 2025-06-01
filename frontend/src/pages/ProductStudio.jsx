@@ -2,15 +2,15 @@
 import { useState, useEffect, useRef } from 'react';
 // NO 'fabric' import here. We rely on window.fabric from the script tag in index.html.
 
-import { 
-    Box, Heading, Text, VStack, Select, 
-    SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton, // MODIFIED: AlertCloseButton replaced with CloseButton
+import {
+    Box, Heading, Text, VStack, Select,
+    SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton,
     Link as ChakraLink, Divider, useToast, Icon, Button
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaShoppingCart } from 'react-icons/fa'; 
+import { FaShoppingCart } from 'react-icons/fa';
 
 const productTypes = [
   { value: 'tee', label: 'T-Shirt', mockups: { white: '/images/mockups/white_tee.png', black: '/images/mockups/black_tee.png' } },
@@ -32,7 +32,7 @@ const INFO_ALERT_DISMISSED_KEY = 'productStudioInfoAlertDismissed_v1';
 export default function ProductStudio() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const toast = useToast(); 
+  const toast = useToast();
 
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
@@ -40,13 +40,13 @@ export default function ProductStudio() {
 
   const [selectedProductType, setSelectedProductType] = useState(productTypes[0].value);
   const [selectedProductColor, setSelectedProductColor] = useState(productColors[0].value);
-  const [selectedProductSize, setSelectedProductSize] = useState(productSizes[2]);
-  const [selectedDesign, setSelectedDesign] = useState(null);
+  const [selectedProductSize, setSelectedProductSize] = useState(productSizes[2]); // Default to 'L'
+  const [selectedDesign, setSelectedDesign] = useState(null); // Stores the full design object
 
   const [showInfoAlert, setShowInfoAlert] = useState(false);
 
-  const canvasEl = useRef(null); 
-  const fabricCanvas = useRef(null); 
+  const canvasEl = useRef(null);
+  const fabricCanvas = useRef(null);
 
   useEffect(() => {
     const dismissed = localStorage.getItem(INFO_ALERT_DISMISSED_KEY);
@@ -54,33 +54,38 @@ export default function ProductStudio() {
       setShowInfoAlert(true);
     }
   }, []);
+  
+  const fetchUserDesigns = () => {
+    setLoadingDesigns(true);
+    setDesignsError('');
+    setDesigns([]);
+    client.get('/mydesigns')
+      .then(response => {
+        setDesigns(response.data);
+        setLoadingDesigns(false);
+      })
+      .catch(err => {
+        console.error("[ProductStudio] Error fetching designs for studio:", err);
+        setDesignsError('Could not load your saved designs.');
+        if (err.response?.status === 401) {
+          toast({ title: "Session Expired", description: "Please log in again.", status: "warning", duration: 3000, isClosable: true });
+          logout();
+          navigate('/login');
+        }
+        setLoadingDesigns(false);
+      });
+  };
 
   useEffect(() => {
     if (user) {
-      setLoadingDesigns(true);
-      setDesignsError(''); 
-      setDesigns([]); 
-      client.get('/mydesigns')
-        .then(response => {
-          setDesigns(response.data);
-          setLoadingDesigns(false);
-        })
-        .catch(err => {
-          console.error("[ProductStudio] Error fetching designs for studio:", err);
-          setDesignsError('Could not load your saved designs.');
-          if (err.response?.status === 401) {
-            toast({ title: "Session Expired", description: "Please log in again.", status: "warning", duration: 3000, isClosable: true });
-            logout(); 
-            navigate('/login');
-          }
-          setLoadingDesigns(false);
-        });
+      fetchUserDesigns();
     } else {
       setLoadingDesigns(false);
-      setDesigns([]); 
-      setDesignsError(''); 
+      setDesigns([]);
+      setDesignsError('');
     }
-  }, [user, logout, navigate, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // Removed logout, navigate, toast as they are stable
 
   const getCurrentMockupSrc = () => {
     const product = productTypes.find(p => p.value === selectedProductType);
@@ -88,81 +93,69 @@ export default function ProductStudio() {
   };
 
   useEffect(() => {
-    const fabricScriptPollInterval = 100; 
-    const maxPolls = 50; 
+    const fabricScriptPollInterval = 100;
+    const maxPolls = 50;
     let pollCount = 0;
 
     const setupCanvas = (fabricInstance) => {
       if (!fabricCanvas.current && canvasEl.current) {
-        // console.log("[ProductStudio] Initializing Fabric canvas from window.fabric.");
         fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, {
-            width: CANVAS_WIDTH,
-            height: CANVAS_HEIGHT,
+          width: CANVAS_WIDTH,
+          height: CANVAS_HEIGHT,
         });
       }
 
       const FCanvas = fabricCanvas.current;
       if (FCanvas) {
-          // console.log("[ProductStudio] Updating canvas. Clearing canvas.");
-          FCanvas.clear();
-          const mockupSrc = getCurrentMockupSrc();
+        FCanvas.clear();
+        const mockupSrc = getCurrentMockupSrc();
 
-          if (mockupSrc) {
-              // console.log("[ProductStudio] Attempting to load mockup:", mockupSrc);
-              fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
-                  // console.log("[ProductStudio] Mockup loaded callback. Image object:", mockupImg);
-                  if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
-                      console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
-                      FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); 
-                      return;
-                  }
-                  // console.log("[ProductStudio] Setting background image with mockup:", mockupImg.width, "x", mockupImg.height);
-                  FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
-                      scaleX: CANVAS_WIDTH / mockupImg.width,
-                      scaleY: CANVAS_HEIGHT / mockupImg.height,
-                      selectable: false,
-                      evented: false,
-                  });
-              }, { crossOrigin: 'anonymous' });
-          } else {
-              // console.log("[ProductStudio] No mockupSrc, clearing background and setting to white.");
-              FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
-              FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas)); 
+        if (mockupSrc) {
+          fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
+            if (!mockupImg || mockupImg.width === 0 || mockupImg.height === 0) {
+              console.error("[ProductStudio] Mockup image loaded with zero dimensions or is null:", mockupSrc, mockupImg);
+              FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas));
+              return;
+            }
+            FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), {
+              scaleX: CANVAS_WIDTH / mockupImg.width,
+              scaleY: CANVAS_HEIGHT / mockupImg.height,
+              selectable: false,
+              evented: false,
+            });
+          }, { crossOrigin: 'anonymous' });
+        } else {
+          FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
+          FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas));
+        }
+
+        if (selectedDesign?.imageDataUrl) {
+          fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
+            if (!designImg || designImg.width === 0 || designImg.height === 0) {
+              console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
+              return;
+            }
+            const designWidth = CANVAS_WIDTH * 0.33; // Example: design covers 1/3 of canvas width
+            designImg.scaleToWidth(designWidth);
+            // Example positioning (center chest area)
+            const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5; 
+            const designTop = CANVAS_HEIGHT * 0.24; // Adjust this based on mockup type
+
+            designImg.set({ top: designTop, left: designLeft });
+            FCanvas.add(designImg);
+            FCanvas.renderAll();
+          }, { crossOrigin: 'anonymous' });
+        } else {
+          if (FCanvas.backgroundImage || FCanvas.backgroundColor) {
+            FCanvas.renderAll();
           }
-
-          if (selectedDesign?.imageDataUrl) {
-              // console.log("[ProductStudio] Attempting to load design:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-              fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-                  // console.log("[ProductStudio] Design image loaded callback. Image object:", designImg);
-                  if (!designImg || designImg.width === 0 || designImg.height === 0) {
-                      console.error("[ProductStudio] Design image loaded with zero dimensions or is null:", selectedDesign.imageDataUrl.substring(0,50) + "...");
-                      return; 
-                  }
-                  const designWidth = CANVAS_WIDTH * 0.33;
-                  designImg.scaleToWidth(designWidth);
-                  const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5;
-                  const designTop = CANVAS_HEIGHT * 0.24;
-
-                  designImg.set({ top: designTop, left: designLeft });
-                  FCanvas.add(designImg);
-                  // console.log("[ProductStudio] Design image added to canvas.");
-                  FCanvas.renderAll();
-              }, { crossOrigin: 'anonymous' });
-          } else {
-              // console.log("[ProductStudio] No selected design to load.");
-              if (FCanvas.backgroundImage || FCanvas.backgroundColor) {
-                  FCanvas.renderAll();
-              }
-          }
-      } else {
-          // console.log("[ProductStudio] FCanvas (Fabric Canvas instance) is not available for update (should have been initialized).");
+        }
       }
     };
 
     const pollForFabric = () => {
-      const fabricInstance = window.fabric; 
+      const fabricInstance = window.fabric;
       if (fabricInstance && fabricInstance.Canvas) {
-        // console.log("[ProductStudio] Fabric.js found on window object after polling.");
         setupCanvas(fabricInstance);
       } else {
         pollCount++;
@@ -175,20 +168,74 @@ export default function ProductStudio() {
       }
     };
 
-    if (canvasEl.current) { 
-        pollForFabric();
+    if (canvasEl.current) {
+      pollForFabric();
     }
-    
-}, [selectedDesign, selectedProductType, selectedProductColor, getCurrentMockupSrc, toast]);
+  // Recalculate getCurrentMockupSrc only when relevant state changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDesign, selectedProductType, selectedProductColor, toast]);
 
 
   const handleProceedToCheckout = () => {
-    if (selectedDesign && selectedProductType && selectedProductColor && selectedProductSize) {
-        const productDetailsForCheckout = { /* ... */ }; // Ensure this object is correctly populated
-        navigate('/checkout', { state: { designToCheckout: productDetailsForCheckout } });
-    } else {
-        toast({ /* ... */ });
+    if (!selectedDesign || !selectedDesign._id || !selectedDesign.imageDataUrl || !selectedDesign.prompt) {
+        toast({
+            title: "Design Not Fully Selected",
+            description: "Please select one of your saved designs. Ensure it has all necessary details.",
+            status: "warning",
+            duration: 5000,
+            isClosable: true,
+        });
+        console.warn("[ProductStudio] Attempted to checkout with incomplete selectedDesign:", selectedDesign);
+        return;
     }
+
+    if (!selectedProductType || !selectedProductColor || !selectedProductSize) {
+        toast({
+            title: "Product Details Missing",
+            description: "Please ensure product type, color, and size are selected.",
+            status: "warning",
+            duration: 5000,
+            isClosable: true,
+        });
+        return;
+    }
+
+    const productTypeObject = productTypes.find(p => p.value === selectedProductType);
+    if (!productTypeObject || !productTypeObject.label) {
+        console.error("[ProductStudio] Could not find label for product type value:", selectedProductType);
+        toast({ title: "Error", description: "Invalid product type selected.", status: "error", duration: 5000, isClosable: true });
+        return;
+    }
+
+    const productDetailsForCheckout = {
+        designId: selectedDesign._id,
+        productType: productTypeObject.label, // e.g., "T-Shirt", "Hoodie"
+        size: selectedProductSize,
+        color: selectedProductColor, // e.g., "white", "black"
+        prompt: selectedDesign.prompt,
+        imageDataUrl: selectedDesign.imageDataUrl, // This is the AI-generated design image
+        productImage: getCurrentMockupSrc(), // Base mockup image for summary display
+    };
+
+    console.log("[ProductStudio] Data being sent to checkout:", JSON.stringify(productDetailsForCheckout, null, 2));
+
+    // Final check for sanity, though previous checks should catch these
+    const requiredFields = ['designId', 'productType', 'size', 'color', 'prompt', 'imageDataUrl'];
+    const missing = requiredFields.filter(field => !productDetailsForCheckout[field]);
+
+    if (missing.length > 0) {
+        console.error("[ProductStudio] CRITICAL: Fields missing before navigating:", missing.join(', '), productDetailsForCheckout);
+        toast({
+            title: "Internal Error",
+            description: `Could not prepare all product details for checkout (missing: ${missing.join(', ')}). Please try again.`,
+            status: "error",
+            duration: 7000,
+            isClosable: true,
+        });
+        return;
+    }
+
+    navigate('/checkout', { state: { designToCheckout: productDetailsForCheckout } });
   };
 
   const handleDismissInfoAlert = () => {
@@ -197,80 +244,80 @@ export default function ProductStudio() {
   };
 
   return (
-    <Box maxW="container.xl" mx="auto" px={0} pb={10}>
+    <Box maxW="container.xl" mx="auto" px={{base: 4, md: 0}} pb={10}> {/* Added base padding */}
       <VStack spacing={6} align="stretch">
-        <Heading 
-          as="h1" 
-          size="xl" 
-          color="brand.textLight" 
+        <Heading
+          as="h1"
+          fontSize={{ base: "2xl", md: "3xl" }} // Responsive font size
+          color="brand.textLight"
           textAlign="left"
-          w="100%" 
-          mb={6} 
+          w="100%"
+          mb={6}
         >
           👕 Customize Your Apparel!
         </Heading>
         
         {showInfoAlert && (
-          <Alert 
-            status="info" 
-            borderRadius="md" 
-            bg="brand.paper" 
+          <Alert
+            status="info"
+            borderRadius="md"
+            bg="brand.paper"
             color="brand.textDark"
-            variant="subtle" 
-            alignItems="flex-start" // Align items to top for better close button positioning
+            variant="subtle"
+            alignItems="flex-start"
           >
-            <AlertIcon color="blue.500" mt={1} /> {/* Adjusted for alignment */}
-            <Box flex="1" mr={6}> {/* Added margin right to prevent text overlapping with CloseButton */}
-              Want a brand new design for your product? 
+            <AlertIcon color="blue.500" mt={1} />
+            <Box flex="1" mr={6}>
+              Want a brand new design for your product?
               <ChakraLink as={RouterLink} to="/generate" color="brand.primaryDark" fontWeight="bold" ml={1} _hover={{textDecoration: "underline"}}>
                 Create it in the AI Image Generator first
               </ChakraLink>
               , save it, then come back here to choose it!
             </Box>
-            {/* MODIFIED: Using CloseButton instead of AlertCloseButton */}
-            <CloseButton 
+            <CloseButton
               size="md"
-              onClick={handleDismissInfoAlert} 
-              position="relative" // Changed from absolute for better flow or keep absolute if needed
-              right="-8px"  // Standard AlertCloseButton offset
-              top="-8px"    // Standard AlertCloseButton offset
-            /> 
+              onClick={handleDismissInfoAlert}
+              position="relative" 
+              right="-8px"
+              top="-8px"
+            />
           </Alert>
         )}
 
-        {/* ... (rest of the JSX for choosing apparel, designs, and preview remains the same) ... */}
-        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
-          <Heading as="h2" size="lg" mb={6} color="brand.textDark">1. Choose Your Apparel</Heading>
+        <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
+          <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">1. Choose Your Apparel</Heading>
           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Product Type:</Text>
-              <Select 
-                value={selectedProductType} 
-                onChange={(e) => { setSelectedProductType(e.target.value); setSelectedDesign(null);}}
+              <Select
+                value={selectedProductType}
+                // When product type changes, reset design as mockups/design placement might differ
+                onChange={(e) => { setSelectedProductType(e.target.value); setSelectedDesign(null);}} 
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
-                size="lg" 
+                size="lg"
               >
                 {productTypes.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
               </Select>
             </VStack>
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Color:</Text>
-              <Select 
-                value={selectedProductColor} 
+              <Select
+                value={selectedProductColor}
+                // When color changes, reset design as mockups/design placement might differ
                 onChange={(e) => { setSelectedProductColor(e.target.value); setSelectedDesign(null);}}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
-                size="lg" 
+                size="lg"
               >
                 {productColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}
               </Select>
             </VStack>
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Size:</Text>
-              <Select 
-                value={selectedProductSize} 
+              <Select
+                value={selectedProductSize}
                 onChange={(e) => setSelectedProductSize(e.target.value)}
                 bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark"
-                size="lg" 
+                size="lg"
               >
                 {productSizes.map(ps => <option key={ps} value={ps}>{ps}</option>)}
               </Select>
@@ -280,25 +327,25 @@ export default function ProductStudio() {
 
         <Divider my={4} borderColor="brand.secondary"/>
 
-        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
-          <Heading as="h2" size="lg" mb={6} color="brand.textDark">2. Choose Your Saved Design</Heading>
+        <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
+          <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">2. Choose Your Saved Design</Heading>
           {loadingDesigns && (
             <Box textAlign="center" py={10}>
-                <Spinner size="xl" color="brand.primary" thickness="4px"/>
-                <Text mt={3} color="brand.textDark">Loading designs...</Text>
+              <Spinner size="xl" color="brand.primary" thickness="4px"/>
+              <Text mt={3} color="brand.textDark">Loading designs...</Text>
             </Box>
           )}
           {!loadingDesigns && designsError && (
             <Alert status="error" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={6}>
-                <AlertIcon boxSize="30px" />
-                <Text fontWeight="bold" mt={3}>{designsError}</Text>
-                <Button mt={4} size="sm" bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" onClick={() => { if(user) fetchDesigns(); else navigate('/login');}}>
-                    {user ? "Try Again" : "Login to View Designs"}
-                </Button>
+              <AlertIcon boxSize="30px" />
+              <Text fontWeight="bold" mt={3}>{designsError}</Text>
+              <Button mt={4} size="sm" bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" onClick={() => { if(user) fetchUserDesigns(); else navigate('/login');}}>
+                  {user ? "Try Again" : "Login to View Designs"}
+              </Button>
             </Alert>
           )}
           {!loadingDesigns && !designsError && designs.length === 0 && (
-            <Text color="brand.textDark" textAlign="center" py={10}> 
+            <Text color="brand.textDark" textAlign="center" py={10}>
               You have no saved designs yet. Go to the <ChakraLink as={RouterLink} to="/generate" color="brand.primaryDark" fontWeight="bold">AI Image Generator</ChakraLink> to create some!
             </Text>
           )}
@@ -317,7 +364,7 @@ export default function ProductStudio() {
                   _hover={{ shadow: "lg", borderColor: "brand.accentYellow" }}
                   transition="all 0.2s"
                 >
-                  <Image src={design.imageDataUrl} alt={design.prompt} h="150px" w="100%" objectFit="cover" />
+                  <Image src={design.imageDataUrl} alt={design.prompt || 'User design'} h="150px" w="100%" objectFit="cover" fallbackSrc="https://via.placeholder.com/150?text=No+Image" />
                 </Box>
               ))}
             </SimpleGrid>
@@ -326,44 +373,44 @@ export default function ProductStudio() {
         
         <Divider my={4} borderColor="brand.secondary"/>
 
-        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
-            <Heading as="h2" size="lg" mb={6} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
-             <Box 
-                w={`${CANVAS_WIDTH}px`} 
-                h={`${CANVAS_HEIGHT}px`} 
+        <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
+            <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
+             <Box
+                w={`${CANVAS_WIDTH}px`}
+                h={`${CANVAS_HEIGHT}px`}
                 bg={selectedProductColor === 'white' ? 'gray.100' : 'gray.700'}
-                mx="auto" 
+                mx="auto"
                 borderWidth="1px"
                 borderColor="brand.secondary"
                 borderRadius="md"
-                overflow="hidden" 
-                position="relative" 
+                overflow="hidden"
+                position="relative"
             >
                 <canvas ref={canvasEl} id="mockupCanvas"></canvas>
             </Box>
-            {selectedDesign && ( 
-                <VStack spacing={6} mt={4}> 
-                    <Text color="brand.textDark" fontWeight="medium" textAlign="center">
-                        Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label}
+            {selectedDesign && (
+                <VStack spacing={6} mt={6}> {/* Increased margin top */}
+                    <Text color="brand.textDark" fontWeight="medium" textAlign="center" fontSize="lg">
+                        Your design "{selectedDesign.prompt}" on a {selectedProductSize} {selectedProductColor} {productTypes.find(p=>p.value === selectedProductType)?.label || selectedProductType}
                     </Text>
-                     <Button 
+                     <Button
                         bg="brand.accentYellow"
                         color="brand.textDark"
-                        _hover={{ bg: "brand.accentYellowHover" }} 
+                        _hover={{ bg: "brand.accentYellowHover" }}
                         size="lg"
                         px={8}
                         borderRadius="full"
                         boxShadow="md"
                         onClick={handleProceedToCheckout}
-                        leftIcon={<Icon as={FaShoppingCart} />} 
+                        leftIcon={<Icon as={FaShoppingCart} />}
                     >
                         Proceed to Checkout
                     </Button>
                 </VStack>
             )}
-            {!selectedDesign && ( 
-                 <Text color="brand.textDark" fontStyle="italic" textAlign="center" mt={4}> 
-                    Select your apparel options and a design above to see a preview.
+            {!selectedDesign && (
+                 <Text color="brand.textLight" fontStyle="italic" textAlign="center" mt={6}> {/* Increased margin top */}
+                    Select your apparel options and a design above to see a preview and checkout.
                 </Text>
             )}
         </Box>
