@@ -1,11 +1,11 @@
 // backend/index.js
 
-process.on('uncaughtException', (err) =\> {
+process.on('uncaughtException', (err) => {
 console.error('[Backend Log] Uncaught Exception:', err.stack);
 process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) =\> {
+process.on('unhandledRejection', (reason, promise) => {
 console.error('[Backend Log] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
 process.exit(1);
 });
@@ -30,8 +30,8 @@ const PORT = process.env.PORT || 5000;
 console.log(`[Backend Log] Server starting with PORT: ${PORT}`);
 
 mongoose.connect(process.env.MONGO_URI)
-.then(() =\> console.log('MongoDB connected successfully'))
-.catch(err =\> {
+.then(() => console.log('MongoDB connected successfully'))
+.catch(err => {
 console.error('MongoDB connection error:', err);
 process.exit(1);
 });
@@ -53,15 +53,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
 
-app.get('/', (req, res) =\> {
+app.get('/', (req, res) => {
 console.log('[Backend Log] Root path (/) hit.');
 res.send('Tees From The Past Backend API');
 });
-app.get('/test', (req, res) =\> {
+app.get('/test', (req, res) => {
 console.log('[Backend Log] Test path (/test) hit.');
 res.status(200).send('Backend is running and test route works\!');
 });
-app.get('/health', (req, res) =\> {
+app.get('/health', (req, res) => {
 console.log('[Backend Log] Health path (/health) hit.');
 res.status(200).json({ status: 'OK', message: 'Backend is healthy\!' });
 });
@@ -75,7 +75,7 @@ app.use('/api/contest', contestRoutes);
 app.use('/api/orders', orderRoutes);
 console.log('[Backend Log] All routes configured.');
 
-app.use((err, req, res, next) =\> {
+app.use((err, req, res, next) => {
 console.error('[Backend Log] Global Server Error:', err.stack);
 if (err.type === 'entity.too.large') {
 return res.status(413).json({ message: 'Request payload is too large. Please reduce data size.' });
@@ -86,7 +86,7 @@ return next(err);
 res.status(500).json({ error: 'An unexpected server error occurred\!' });
 });
 
-app.listen(PORT, '0.0.0.0', () =\> {
+app.listen(PORT, '0.0.0.0', () => {
 console.log(`Server running on port ${PORT}`);
 console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
 });
