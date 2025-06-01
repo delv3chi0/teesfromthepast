@@ -1,14 +1,13 @@
 // backend/index.js
-process.on(&#39;uncaughtException&#39;, (err) =&gt; {
-  console.error(&#39;[Backend Log] Uncaught Exception:&#39;, err.stack);
+process.on('uncaughtException', (err) => {
+  console.error('[Backend Log] Uncaught Exception:', err.stack);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) =\> {
-console.error('[Backend Log] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
-process.exit(1);
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Backend Log] Unhandled Rejection at:', promise, 'reason:', reason.stack || reason);
+  process.exit(1);
 });
-
 import express from 'express';
 import mongoose from 'mongoose';
 import 'dotenv/config';
