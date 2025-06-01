@@ -45,7 +45,6 @@ export default function Profile() {
 
       const sa = populatedForm.shippingAddress;
       const ba = populatedForm.billingAddress;
-      // Check if all corresponding fields are identical
       const addressesAreIdentical = user.shippingAddress && user.billingAddress &&
         Object.keys(sa).every(key => sa[key] === ba[key]);
 
@@ -69,7 +68,6 @@ export default function Profile() {
     const { name, value } = e.target;
     setForm(prevForm => {
       const newForm = { ...prevForm, [name]: value };
-      // Auto-update recipientName if "same as" is checked and first/last name changes
       if (billingSameAsShipping && (name === "firstName" || name === "lastName")) {
         const newRecipientName = `${newForm.firstName} ${newForm.lastName}`.trim();
         newForm.shippingAddress.recipientName = newRecipientName || newForm.shippingAddress.recipientName;
@@ -110,7 +108,6 @@ export default function Profile() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    // Ensure recipient name for shipping is explicitly set if first/last name exist
     let finalShippingAddress = { ...form.shippingAddress };
     if (!finalShippingAddress.recipientName && (form.firstName || form.lastName)) {
         finalShippingAddress.recipientName = `${form.firstName} ${form.lastName}`.trim();
@@ -118,10 +115,10 @@ export default function Profile() {
 
     let finalBillingAddress;
     if (billingSameAsShipping) {
-        finalBillingAddress = { ...finalShippingAddress }; // Use potentially updated shipping recipient name
+        finalBillingAddress = { ...finalShippingAddress }; 
     } else {
         finalBillingAddress = { ...form.billingAddress };
-        if (!finalBillingAddress.recipientName) { // If billing is different but recipient is empty, try to fill it too
+        if (!finalBillingAddress.recipientName && (form.firstName || form.lastName)) { 
              finalBillingAddress.recipientName = `${form.firstName} ${form.lastName}`.trim();
         }
     }
@@ -135,14 +132,16 @@ export default function Profile() {
     };
     
     try {
-        const { data: updatedProfileFromServer } = await client.put('/api/auth/profile', updateData);
+        // CORRECTED API PATH HERE:
+        const { data: updatedProfileFromServer } = await client.put('/auth/profile', updateData);
+        
         if (setAuthUser) {
             setAuthUser(updatedProfileFromServer); 
         }
         setEditing(false);
         toast({ title: "Profile Updated", description: "Your changes have been saved.", status: "success", duration: 3000, isClosable: true });
     } catch (error) {
-        console.error("Error saving profile:", error);
+        console.error("Error saving profile:", error.response?.data || error.message || error);
         const errorMessage = error.response?.data?.message || "Could not save profile.";
         toast({ title: "Error Saving Profile", description: errorMessage, status: "error", duration: 5000, isClosable: true});
         if (error.response?.status === 401) { logout(); navigate('/login');}
@@ -162,6 +161,7 @@ export default function Profile() {
         });
         const addressesAreIdentical = user.shippingAddress && user.billingAddress &&
             Object.keys(sa).every(key => sa[key] === ba[key]);
+
         if (addressesAreIdentical) setBillingSameAsShipping(true);
         else if (user.shippingAddress && !user.billingAddress) setBillingSameAsShipping(true);
         else if (!user.shippingAddress && !user.billingAddress) setBillingSameAsShipping(true);
@@ -170,8 +170,12 @@ export default function Profile() {
     setEditing(false);
   };
   
-  if (authStillLoading || isLoading) { /* ... loading spinner ... */ }
-  if (!user) { /* ... not logged in message ... */ }
+  if (authStillLoading || isLoading) { 
+    return <Box textAlign="center" mt={20} py={10}><Spinner size="xl" color="brand.primary" /><Text mt={4} color="brand.textLight">Loading Profile…</Text></Box>;
+  }
+  if (!user) {
+    return <Box textAlign="center" mt={20} px={4}><Text color="brand.textLight" fontSize="lg">Could not load profile. You may need to log in again.</Text><Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/login')}>Go to Login</Button></Box>;
+  }
 
   const renderAddressFields = (addressType, legend, includeNameFields = false) => (
     <VStack spacing={4} align="stretch" w="100%">
@@ -228,14 +232,6 @@ export default function Profile() {
       </FormControl>
     </VStack>
   );
-
-  // Simplified loading and no-user states from your Turn 86 code
-  if (authStillLoading || isLoading) { 
-    return <Box textAlign="center" mt={20} py={10}><Spinner size="xl" color="brand.primary" /><Text mt={4} color="brand.textLight">Loading Profile…</Text></Box>;
-  }
-  if (!user) {
-    return <Box textAlign="center" mt={20} px={4}><Text color="brand.textLight" fontSize="lg">Could not load profile. You may need to log in again.</Text><Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/login')}>Go to Login</Button></Box>;
-  }
 
   return (
     <Box 
