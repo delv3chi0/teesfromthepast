@@ -3,12 +3,11 @@ import React, { useState, useEffect } from 'react';
 import {
     Box, Heading, Text, Spinner, Alert, AlertIcon,
     VStack, Divider, SimpleGrid, useColorModeValue, Image as ChakraImage,
-    Tag, HStack // Added HStack
+    Tag, HStack
 } from '@chakra-ui/react';
-import { client } from '../api/client'; // Your API client
+import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 
-// Updated OrderItemCard
 const OrderItemCard = ({ order }) => {
   const cardBg = useColorModeValue('white', 'gray.700');
   const textColor = useColorModeValue('gray.600', 'gray.400');
@@ -84,39 +83,41 @@ const OrderItemCard = ({ order }) => {
 
 export default function MyOrdersPage() {
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Initial loading state
   const [error, setError] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!user || !user._id) {
-        setLoading(false);
-        return;
-      }
+      // This function will only be called if user and user._id are present
+      setLoading(true); // Set loading true at the start of fetch attempt
+      setError('');     // Clear previous errors
       try {
-        setLoading(true);
-        setError('');
-        console.log("Fetching orders for user:", user._id, "from /orders/myorders"); // Updated log
-        // Corrected API path: removed leading /api/ as baseURL likely includes it
-        const response = await client.get('/orders/myorders'); 
+        console.log("Fetching orders for user:", user._id, "from /orders/myorders");
+        const response = await client.get('/orders/myorders');
         console.log("Orders fetched:", response.data);
         setOrders(response.data);
       } catch (err) {
         console.error("MyOrdersPage - Failed to fetch orders:", err.response?.data || err.message);
-        setError(err.response?.data?.message || 'An error occurred while fetching your orders.');
-        setOrders([]);
+        const errorMessage = err.response?.data?.message || err.response?.data?.error?.message || 'An error occurred while fetching your orders.';
+        setError(errorMessage);
+        setOrders([]); // Clear orders on error
       } finally {
-        setLoading(false);
+        setLoading(false); // Set loading false when fetch is complete (success or fail)
       }
     };
 
     if (user && user._id) {
-        fetchOrders();
-    } else {
-        if (loading && !user) setLoading(false);
+      fetchOrders();
+    } else if (!user) { 
+      // If user is explicitly null (e.g., logged out or not yet loaded by AuthProvider)
+      setLoading(false); // Not loading if there's no user to fetch for
+      setOrders([]);     // Ensure orders are empty
+      // setError("Please log in to view your orders."); // Or let PrivateRoute handle access
     }
-  }, [user, loading]);
+    // The effect depends on the user object (or user._id).
+    // It runs when the user logs in/out or when the component mounts with a user.
+  }, [user]); // Corrected dependency array
 
   if (loading) {
     return (
@@ -144,7 +145,8 @@ export default function MyOrdersPage() {
       <Heading as="h1" size={{ base: "lg", md: "xl" }} color="brand.textLight" textAlign="left" mb={8}>
         My Orders
       </Heading>
-      {orders.length === 0 ? (
+      {/* This condition should now work reliably after loading/error states are resolved */}
+      {!loading && !error && orders.length === 0 ? (
         <Text fontSize="lg" color="brand.textMedium">You haven't placed any orders yet.</Text>
       ) : (
         <SimpleGrid columns={{ base: 1, lg: 1 }} spacing={6}>
