@@ -3,50 +3,62 @@ import express from 'express';
 import Stripe from 'stripe';
 import 'dotenv/config';
 import { protect } from '../middleware/authMiddleware.js';
-// Assume you have a way to get product details and prices, e.g., from a DB or config
-// For example: import Product from '../models/Product.js'; // If you have a Product model for standard items
-// Or import Design from '../models/Design.js'; // If prices depend on design or custom aspects
+// Example: import Design from '../models/Design.js'; // If you need to fetch design details
 
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Placeholder function to get product price (replace with your actual logic)
-// This needs to be secure and fetch prices from your backend data.
+// --- IMPORTANT ---
+// TODO: Replace these placeholder functions with your actual secure backend logic
+// to determine prices and get full item details. Never trust prices from the client.
 async function getPriceInCents(item) {
-  // Example: if item.id is a designId and productType determines base price
-  // This is highly simplified. Your logic will depend on your product structure.
+  console.log('[Checkout] getPriceInCents for item:', item);
+  // This is a placeholder. Implement your pricing logic here.
+  // Example: Fetch product from DB, check variants, apply discounts, etc.
   if (item.productType === 'T-Shirt') return 2500; // $25.00
   if (item.productType === 'Hoodie') return 4000; // $40.00
-  return 2000; // Default price
+  console.warn(`[Checkout] No specific price found for productType: ${item.productType}, defaulting.`);
+  return 2000; // Default price if not found
 }
 
-// Placeholder to get item name/details (you might fetch from Design model)
 async function getItemDetailsForOrder(item) {
-    // Fetch from Design model if item.id is designId, etc.
-    // const design = await Design.findById(item.id);
-    return {
-        productId: item.id, // This would be the designId from your 'items'
-        productName: `Custom ${item.productType} (${item.color}, ${item.size})`, // Be more specific
-        productType: item.productType,
-        size: item.size,
-        color: item.color,
-        // designImageUrl: design ? design.imageDataUrl : item.imageDataUrl, // from your 'items' object passed by client
-        // designPrompt: design ? design.prompt : item.prompt, // from your 'items' object
-    };
+  console.log('[Checkout] getItemDetailsForOrder for item:', item);
+  // This is a placeholder. Fetch actual details from your database (e.g., Design model).
+  // const design = await Design.findById(item.id); // Example
+  // if (!design) {
+  //   console.error(`[Checkout] Design/Product not found for ID: ${item.id}`);
+  //   throw new Error(`Product details not found for item ID ${item.id}`);
+  // }
+  return {
+    productId: item.id, // Should be the unique ID of the design/product
+    productName: `Custom ${item.productType || 'Apparel'} (${item.color || 'N/A'}, ${item.size || 'N/A'})`, // Make this more descriptive
+    productType: item.productType,
+    size: item.size,
+    color: item.color,
+    // designImageUrl: design ? design.imageDataUrl : item.imageDataUrl, // Use actual URL from DB or passed item
+    // designPrompt: design ? design.prompt : item.prompt,
+  };
 }
-
+// --- END IMPORTANT ---
 
 router.post('/create-payment-intent', protect, async (req, res) => {
-  const { items, currency = 'usd', shippingAddress } = req.body; // items from frontend
+  console.log('-----------------------------------------------------');
+  console.log('[Checkout] /create-payment-intent route hit');
+  const { items, currency = 'usd', shippingAddress } = req.body;
+  console.log('[Checkout] Request body items:', items);
+  console.log('[Checkout] Request body currency:', currency);
+  console.log('[Checkout] Request body shippingAddress:', shippingAddress);
 
   if (!process.env.STRIPE_SECRET_KEY) {
-    console.error("[Payment Intent] Stripe secret key not configured.");
+    console.error("[Checkout] CRITICAL ERROR: Stripe secret key not configured.");
     return res.status(500).json({ error: 'Stripe payments are not configured on the server.' });
   }
-  if (!items || items.length === 0) {
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    console.error("[Checkout] ERROR: No items provided or items is not an array.");
     return res.status(400).json({ error: 'No items provided for payment.' });
   }
-  if (!shippingAddress) {
+  if (!shippingAddress || typeof shippingAddress !== 'object' || Object.keys(shippingAddress).length === 0) {
+    console.error("[Checkout] ERROR: Shipping address is missing or invalid.");
     return res.status(400).json({ error: 'Shipping address is required.' });
   }
 
@@ -54,21 +66,33 @@ router.post('/create-payment-intent', protect, async (req, res) => {
     let amountInCents = 0;
     const orderItemsForMetadata = [];
 
+    console.log('[Checkout] Processing items to calculate total and prepare metadata...');
     for (const item of items) {
-      const pricePerItemCents = await getPriceInCents(item); // Implement this!
-      amountInCents += pricePerItemCents * (item.quantity || 1);
-      
-      const itemDetails = await getItemDetailsForOrder(item); // Implement this!
+      if (!item || typeof item !== 'object' || !item.id || !item.productType) {
+        console.error('[Checkout] ERROR: Invalid item structure in items array:', item);
+        throw new Error('Invalid item data received.'); // Or handle more gracefully
+      }
+      console.log('[Checkout] Processing item:', item);
+      const pricePerItemCents = await getPriceInCents(item);
+      const quantity = parseInt(item.quantity, 10) || 1;
+      amountInCents += pricePerItemCents * quantity;
+      console.log(`[Checkout] Item: ${item.id}, Price/Item: ${pricePerItemCents}, Qty: ${quantity}, Subtotal for item: ${pricePerItemCents * quantity}`);
+
+      const itemDetails = await getItemDetailsForOrder(item);
       orderItemsForMetadata.push({
-        ...itemDetails, // Contains productId, productName, productType, size, color etc.
-        quantity: item.quantity || 1,
-        priceAtPurchase: pricePerItemCents, // Price per item in cents
+        ...itemDetails,
+        quantity: quantity,
+        priceAtPurchase: pricePerItemCents,
         designImageUrl: item.imageDataUrl, // Passed from CheckoutPage.jsx designToCheckout
-        designPrompt: item.prompt, // Passed from CheckoutPage.jsx designToCheckout
+        designPrompt: item.prompt,         // Passed from CheckoutPage.jsx designToCheckout
       });
     }
+    console.log('[Checkout] Total calculated amount (cents):', amountInCents);
+    console.log('[Checkout] Items prepared for PaymentIntent metadata:', orderItemsForMetadata);
+
 
     if (amountInCents <= 0) {
+        console.error("[Checkout] ERROR: Invalid order amount calculated (must be > 0). Amount:", amountInCents);
         return res.status(400).json({ error: 'Invalid order amount.'});
     }
 
@@ -78,10 +102,11 @@ router.post('/create-payment-intent', protect, async (req, res) => {
       automatic_payment_methods: { enabled: true },
       metadata: {
         userId: req.user.id,
-        // Store stringified items; Stripe metadata values are strings
         orderDetails: JSON.stringify(orderItemsForMetadata),
+        // Consider adding stringified billingAddress if it can be distinct and is collected
+        // billingAddress: billingAddress ? JSON.stringify(processedBillingAddress) : undefined,
       },
-      shipping: { // Add shipping to PI as you already do
+      shipping: {
         name: shippingAddress.recipientName,
         address: {
           line1: shippingAddress.street1,
@@ -95,18 +120,24 @@ router.post('/create-payment-intent', protect, async (req, res) => {
       },
     };
     
-    console.log(`[Payment Intent] Creating PI for ${amountInCents} ${currency.toUpperCase()} for user ${req.user.id}`);
+    console.log(`[Checkout] Creating PaymentIntent for user ${req.user.id}. Amount: ${amountInCents} ${currency.toUpperCase()}`);
+    console.log('[Checkout] Full PaymentIntent Params to Stripe:', JSON.stringify(paymentIntentParams, null, 2)); // Pretty print
+    
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+    console.log('[Checkout] PaymentIntent created successfully. ID:', paymentIntent.id, 'Client Secret:', paymentIntent.client_secret ? '******' : 'NOT FOUND');
 
     res.send({
       clientSecret: paymentIntent.client_secret,
-      amount: amountInCents, // Send back the calculated amount
+      amount: amountInCents,
       currency: currency,
     });
 
   } catch (error) {
-    console.error("[Payment Intent] Error creating payment intent:", error.message, error.stack);
-    res.status(500).send({ error: { message: 'Failed to create payment intent: ' + error.message } });
+    console.error("[Checkout] CRITICAL ERROR creating payment intent:", error.message, error.stack);
+    res.status(500).send({ error: { message: `Failed to create payment intent: ${error.message}` } });
+  } finally {
+    console.log('[Checkout] /create-payment-intent request finished');
+    console.log('-----------------------------------------------------');
   }
 });
 
