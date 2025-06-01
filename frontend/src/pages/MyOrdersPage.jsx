@@ -97,8 +97,9 @@ export default function MyOrdersPage() {
       try {
         setLoading(true);
         setError('');
-        console.log("Fetching orders for user:", user._id);
-        const response = await client.get('/api/orders/myorders');
+        console.log("Fetching orders for user:", user._id, "from /orders/myorders"); // Updated log
+        // Corrected API path: removed leading /api/ as baseURL likely includes it
+        const response = await client.get('/orders/myorders'); 
         console.log("Orders fetched:", response.data);
         setOrders(response.data);
       } catch (err) {
@@ -113,14 +114,10 @@ export default function MyOrdersPage() {
     if (user && user._id) {
         fetchOrders();
     } else {
-        // If user is null or user._id is not yet available,
-        // set loading to false if not already trying to load.
-        // This prevents showing "no orders" if user is still loading.
         if (loading && !user) setLoading(false);
     }
-  }, [user, loading]); // Added loading to dependency array to handle initial state correctly
+  }, [user, loading]);
 
-  // This is the corrected loading state return
   if (loading) {
     return (
       <VStack justifyContent="center" alignItems="center" minH="60vh">
@@ -130,7 +127,6 @@ export default function MyOrdersPage() {
     );
   }
 
-  // This is the corrected error state return
   if (error) {
     return (
       <Alert status="error" borderRadius="md" bg="red.50" p={4} variant="subtle" w="100%">
