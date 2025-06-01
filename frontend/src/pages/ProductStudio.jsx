@@ -1,12 +1,14 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// No 'fabric' import here - relying on global from script tag in index.html
 
 import { 
     Box, Heading, Text, VStack, Select, 
-    SimpleGrid, Image, Spinner, Alert, AlertIcon, AlertCloseButton, // <-- AlertCloseButton ADDED
+    SimpleGrid, Image, Spinner, 
     Link as ChakraLink, Divider, useToast, Icon, Button
 } from '@chakra-ui/react';
+// Import Alert components separately
+import { Alert, AlertIcon, AlertCloseButton } from '@chakra-ui/alert';
+
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
