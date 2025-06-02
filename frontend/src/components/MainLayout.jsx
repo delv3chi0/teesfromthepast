@@ -2,8 +2,6 @@
 import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
-// If you decide to add icons to navItems, you might import them here, e.g.:
-// import { FiShoppingBag } from 'react-icons/fi';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
@@ -14,8 +12,10 @@ const navItems = [
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'Customize My Shirt', path: '/product-studio' },
   { label: '🏆 Monthly Design Contest', path: '/vote-now' },
-  { label: 'My Orders', path: '/my-orders' }, // This was added based on your request
+  { label: 'My Orders', path: '/my-orders' },
   { label: 'My Profile', path: '/profile' },
+  // Consider adding an "Admin" link here if user is admin
+  // { label: 'Admin Dashboard', path: '/admin', adminOnly: true },
 ];
 
 export default function MainLayout({ children }) {
@@ -24,6 +24,23 @@ export default function MainLayout({ children }) {
   const { user } = useAuth();
 
   const isDesktopView = useBreakpointValue({ base: false, md: true });
+
+  // Filter nav items based on admin status if needed for the Admin link
+  const accessibleNavItems = navItems.filter(item => {
+    if (item.adminOnly) {
+      return user && user.isAdmin;
+    }
+    return true;
+  });
+   // Add Admin link conditionally if user is admin
+   const finalNavItems = [...navItems];
+   if (user && user.isAdmin) {
+       // Check if Admin link already exists to prevent duplicates if manually added to navItems
+       if (!finalNavItems.find(item => item.path === '/admin')) {
+           finalNavItems.push({ label: '⚙️ Admin Dashboard', path: '/admin' });
+       }
+   }
+
 
   const SidebarContent = ({ onClick, inDrawer = false }) => {
     const showInternalLogo = !inDrawer;
@@ -34,7 +51,7 @@ export default function MainLayout({ children }) {
         pos={inDrawer ? "relative" : "fixed"}
         top={inDrawer ? undefined : "0"}
         left={inDrawer ? undefined : "0"}
-        zIndex={inDrawer ? "auto" : 1200}
+        zIndex={inDrawer ? "auto" : 1200} // Ensure fixed sidebar is above some content if needed
         h={inDrawer ? "100%" : "full"}
         pb={inDrawer ? 4 : "10"}
         overflowX="hidden"
@@ -42,7 +59,7 @@ export default function MainLayout({ children }) {
         bg="brand.primary"
         borderColor={inDrawer ? "transparent" : "brand.primaryDark"}
         borderRightWidth={inDrawer ? "0" : "1px"}
-        w={inDrawer ? "100%" : "60"}
+        w={inDrawer ? "100%" : "60"} // This is 240px if theme.space.1 = 4px
       >
         {showInternalLogo && (
           <Flex
@@ -53,7 +70,7 @@ export default function MainLayout({ children }) {
             align="center"
             justifyContent="center"
             _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
-            onClick={onClick}
+            onClick={onClick} // Ensure drawer closes if logo clicked from within drawer
           >
             <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
           </Flex>
@@ -64,7 +81,7 @@ export default function MainLayout({ children }) {
           px="4"
           mt={showInternalLogo ? 8 : 4}
         >
-          {navItems.map((item) => (
+          {finalNavItems.map((item) => ( // Use finalNavItems
             <ChakraLink
               key={item.label}
               as={RouterLink}
@@ -72,10 +89,10 @@ export default function MainLayout({ children }) {
               p={3}
               borderRadius="md"
               fontWeight="medium"
-              color={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/')) || (item.path === '/dashboard' && location.pathname === '/') ? "brand.accentYellow" : "brand.textLight"}
-              bg={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/')) || (item.path === '/dashboard' && location.pathname === '/') ? "brand.primaryLight" : "transparent"}
+              color={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path)) ? "brand.accentYellow" : "brand.textLight"}
+              bg={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path)) ? "brand.primaryLight" : "transparent"}
               _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }}
-              onClick={onClick}
+              onClick={onClick} // Ensure drawer closes on nav item click
             >
               {item.label}
             </ChakraLink>
@@ -87,9 +104,9 @@ export default function MainLayout({ children }) {
 
   return (
     <Flex direction="column" minH="100vh">
-      <Box as="section" display="flex" flexGrow={1}>
+      <Box as="section" display="flex" flexGrow={1} position="relative"> {/* Added position relative for z-index context if needed */}
         {isDesktopView && (
-          <Box as="aside" w="60" flexShrink={0}>
+          <Box as="aside" w="60" flexShrink={0} /* The fixed sidebar takes up this space */>
             <SidebarContent />
           </Box>
         )}
@@ -122,27 +139,30 @@ export default function MainLayout({ children }) {
           </Drawer>
         )}
         
+        {/* Main Content Area Wrapper */}
         <Box
           flexGrow={1}
-          // This is the corrected line for the margin:
-          ml={isDesktopView ? "0" : "0"} 
-          transition=".3s ease"
+          // Corrected margin-left for desktop view to account for fixed sidebar width
+          ml={isDesktopView ? "60" : "0"} // Width of the sidebar ("60" * theme.space unit)
+          transition="margin-left .3s ease" // Keep transition if you like the effect
           display="flex"
           flexDirection="column"
+          width={isDesktopView ? "calc(100% -theme.space.60)" : "100%"} // Ensure it takes remaining width
         >
+          {/* Header */}
           <Flex
             as="header"
             align="center"
-            w="full"
+            w="full" // Takes full width of its parent (the Box above)
             px={6} py={3}
             bg="brand.secondary"
             borderBottomWidth="1px"
             borderColor="brand.primaryDark"
             color="brand.textDark"   
-            h="auto" minH="14"
-            flexShrink={0}
+            h="auto" minH="14" // Or specific height like "70px"
+            flexShrink={0} // Prevent header from shrinking
           >
-            <Flex align="center" flex="0">
+            <Flex align="center" flex="0"> {/* For Hamburger and Mobile Logo */}
               {!isDesktopView && (
                 <IconButton
                   aria-label="Open Menu"
@@ -155,21 +175,23 @@ export default function MainLayout({ children }) {
                   _hover={{ bg: 'brand.primaryLight' }}
                 />
               )}
+              {/* Show text logo in header only on mobile, or if sidebar is collapsed on desktop */}
+              {/* Or always show it if you prefer */}
               <ChakraLink as={RouterLink} to="/dashboard" display="flex" alignItems="center" _hover={{textDecoration: "none"}}>
                 <Image
                   src="/logo-text.png"
                   alt="Tees From The Past Title Logo"
-                  h="50px"
+                  h="50px" // Adjust as needed
                   objectFit="contain"
-                  maxW={{ base: "180px" }}
+                  maxW={{ base: "180px" }} // Ensure it's not too wide on mobile
                 />
               </ChakraLink>
             </Flex>
 
             <Spacer />
 
-            <Flex align="center" flex="0">
-              {user && isDesktopView && (
+            <Flex align="center" flex="0"> {/* For Profile Avatar and Logout */}
+              {user && isDesktopView && ( // Only show avatar on desktop in header
                 <ChakraLink
                   as={RouterLink}
                   to="/profile"
@@ -181,8 +203,17 @@ export default function MainLayout({ children }) {
               <LogoutButton />
             </Flex>
           </Flex>
-          <Box as="main" p={{base: 4, md: 6}} bg="brand.accentOrange" flexGrow={1} width="100%" >
-            {children}
+
+          {/* Page Content (children) */}
+          <Box 
+            as="main" 
+            p={{base: 4, md: 6}} 
+            bg="brand.accentOrange" // This is the orange background
+            flexGrow={1} 
+            width="100%" // Ensure it takes full width of its parent
+            overflowY="auto" // Add scroll for content longer than viewport height
+          >
+            {children} {/* AdminPage or other page content renders here */}
           </Box>
         </Box>
       </Box>
