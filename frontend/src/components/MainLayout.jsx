@@ -23,17 +23,17 @@ export default function MainLayout({ children }) {
 
   const isDesktopView = useBreakpointValue({ base: false, md: true });
 
+   // Add Admin link conditionally if user is admin
    const finalNavItems = [...navItems];
    if (user && user.isAdmin) {
+       // Check if Admin link already exists to prevent duplicates if manually added to navItems
        if (!finalNavItems.find(item => item.path === '/admin')) {
            finalNavItems.push({ label: '⚙️ Admin Dashboard', path: '/admin' });
        }
    }
 
-
   const SidebarContent = ({ onClick, inDrawer = false }) => {
     const showInternalLogo = !inDrawer;
-
     return (
       <Box
         as="nav"
@@ -48,36 +48,24 @@ export default function MainLayout({ children }) {
         bg="brand.primary"
         borderColor={inDrawer ? "transparent" : "brand.primaryDark"}
         borderRightWidth={inDrawer ? "0" : "1px"}
-        w={inDrawer ? "100%" : "60"} 
+        w={inDrawer ? "100%" : "60"} // This corresponds to 240px if theme.space.1 = 4px
       >
         {showInternalLogo && (
           <Flex
             as={RouterLink}
             to="/dashboard"
-            px="4"
-            py="4"
-            align="center"
-            justifyContent="center"
+            px="4" py="4" align="center" justifyContent="center"
             _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
             onClick={onClick} 
           >
             <Image src="/logo.png" alt="Tees From The Past Logo" w="100%" maxW="190px" h="auto" maxH="150px" objectFit="contain" />
           </Flex>
         )}
-        <VStack
-          spacing={3}
-          align="stretch"
-          px="4"
-          mt={showInternalLogo ? 8 : 4}
-        >
+        <VStack spacing={3} align="stretch" px="4" mt={showInternalLogo ? 8 : 4}>
           {finalNavItems.map((item) => ( 
             <ChakraLink
-              key={item.label}
-              as={RouterLink}
-              to={item.path}
-              p={3}
-              borderRadius="md"
-              fontWeight="medium"
+              key={item.label} as={RouterLink} to={item.path}
+              p={3} borderRadius="md" fontWeight="medium"
               color={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path)) ? "brand.accentYellow" : "brand.textLight"}
               bg={location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path)) ? "brand.primaryLight" : "transparent"}
               _hover={{textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow', }}
@@ -92,10 +80,10 @@ export default function MainLayout({ children }) {
   };
 
   return (
-    <Flex direction="column" minH="100vh">
-      <Box as="section" display="flex" flexGrow={1} position="relative"> 
+    <Flex direction="column" minH="100vh" bg="gray.800"> {/* Overall page background */}
+      <Box as="section" display="flex" flexGrow={1} > 
         {isDesktopView && (
-          <Box as="aside" w="60" flexShrink={0}>
+          <Box as="aside" w="60" flexShrink={0} /* This is the fixed sidebar placeholder */ >
             <SidebarContent />
           </Box>
         )}
@@ -103,86 +91,54 @@ export default function MainLayout({ children }) {
         {!isDesktopView && (
           <Drawer isOpen={isOpen} placement="left" onClose={onClose} returnFocusOnClose={false}>
             <DrawerOverlay />
-            <DrawerContent
-              bg="brand.primary"
-              color="brand.textLight"
-            >
+            <DrawerContent bg="brand.primary" color="brand.textLight">
               <DrawerCloseButton />
               <DrawerHeader
-                borderBottomWidth="1px"
-                borderColor="brand.primaryDark"
-                as={RouterLink} to="/dashboard"
-                _hover={{textDecoration: 'none'}}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                py="2.5"
-                onClick={onClose}
+                borderBottomWidth="1px" borderColor="brand.primaryDark"
+                as={RouterLink} to="/dashboard" _hover={{textDecoration: 'none'}}
+                display="flex" alignItems="center" justifyContent="center" py="2.5" onClick={onClose}
               >
                 <Image src="/logo.png" alt="Tees From The Past Logo" maxH="50px" objectFit="contain"/>
               </DrawerHeader>
-              <DrawerBody p={0}>
-                <SidebarContent onClick={onClose} inDrawer={true} />
-              </DrawerBody>
+              <DrawerBody p={0}> <SidebarContent onClick={onClose} inDrawer={true} /> </DrawerBody>
             </DrawerContent>
           </Drawer>
         )}
         
-        {/* Main Content Area Wrapper */}
+        {/* Main Content Column (Header + Page Content) */}
         <Box
-          flexGrow={1} // This should make it take up remaining horizontal space
-          ml={isDesktopView ? "60" : "0"} // Margin for fixed sidebar
-          transition="margin-left .3s ease"
+          flexGrow={1} // Takes up remaining horizontal space
+          ml={isDesktopView ? "60" : "0"} // Margin for fixed sidebar (e.g., 240px)
           display="flex"
           flexDirection="column"
-          // REMOVED explicit width calculation here, relying on flexGrow
         >
           {/* Header */}
           <Flex
             as="header"
             align="center"
-            w="full" 
+            w="100%" // Should take full width of its parent (the Box above)
             px={6} py={3}
-            bg="brand.secondary"
-            borderBottomWidth="1px"
-            borderColor="brand.primaryDark"
+            bg="brand.secondary" // Your brown bar
+            borderBottomWidth="1px" borderColor="brand.primaryDark"
             color="brand.textDark"   
-            h="auto" minH="14" 
+            minH="14" // Use minH for more predictable height
             flexShrink={0} 
           >
             <Flex align="center" flex="0"> 
               {!isDesktopView && (
                 <IconButton
-                  aria-label="Open Menu"
-                  onClick={onOpen}
-                  icon={<HamburgerIcon />}
-                  size="md"
-                  variant="ghost"
-                  mr={2}
-                  color="brand.primaryDark"
-                  _hover={{ bg: 'brand.primaryLight' }}
+                  aria-label="Open Menu" onClick={onOpen} icon={<HamburgerIcon />}
+                  size="md" variant="ghost" mr={2} color="brand.primaryDark" _hover={{ bg: 'brand.primaryLight' }}
                 />
               )}
               <ChakraLink as={RouterLink} to="/dashboard" display="flex" alignItems="center" _hover={{textDecoration: "none"}}>
-                <Image
-                  src="/logo-text.png"
-                  alt="Tees From The Past Title Logo"
-                  h="50px" 
-                  objectFit="contain"
-                  maxW={{ base: "180px" }} 
-                />
+                <Image src="/logo-text.png" alt="Tees From The Past Title Logo" h="50px" objectFit="contain" maxW={{ base: "180px" }} />
               </ChakraLink>
             </Flex>
-
             <Spacer />
-
             <Flex align="center" flex="0"> 
               {user && isDesktopView && ( 
-                <ChakraLink
-                  as={RouterLink}
-                  to="/profile"
-                  mr={4}
-                >
+                <ChakraLink as={RouterLink} to="/profile" mr={4}>
                   <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} bg="brand.primaryDark" color="brand.textLight"/>
                 </ChakraLink>
               )}
@@ -190,16 +146,18 @@ export default function MainLayout({ children }) {
             </Flex>
           </Flex>
 
-          {/* Page Content (children) */}
+          {/* Page Content Area (where children render) */}
           <Box 
             as="main" 
             p={{base: 4, md: 6}} 
             bg="brand.accentOrange" // This is the orange background
-            flexGrow={1} // This makes it take up remaining vertical space in its flex column parent
-            width="100%" 
-            overflowY="auto" 
+            flexGrow={1} // Makes it take up remaining vertical space in this column
+            width="100%" // Takes full width of its parent (the Box with ml="60")
+            overflowY="auto" // Allows scrolling for content taller than viewport
+            minHeight="0" // Important for flex children to shrink if necessary and not overflow parent
           >
-            {children} {/* AdminPage or other page content renders here */}
+            {/* The {children} (e.g., AdminPage) will render here */}
+            {children} 
           </Box>
         </Box>
       </Box>
