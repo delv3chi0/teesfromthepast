@@ -86,9 +86,9 @@ const AdminPage = () => {
     setLoadingOrders(true);
     setOrdersError('');
     try {
-      console.log("[AdminPage] Fetching orders from /api/admin/orders...");
+      console.log("[AdminPage] Fetching orders from /admin/orders...");
       // TODO: Implement pagination if needed: client.get('/api/admin/orders?page=1&limit=20')
-      const response = await client.get('/api/admin/orders', { // Ensure this endpoint exists and is protected
+      const response = await client.get('/admin/orders', { // Ensure this endpoint exists and is protected
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log("[AdminPage] Orders fetched successfully:", response.data);
@@ -112,9 +112,9 @@ const AdminPage = () => {
     setLoadingDesigns(true);
     setDesignsError('');
     try {
-      console.log("[AdminPage] Fetching designs from /api/admin/designs...");
+      console.log("[AdminPage] Fetching designs from /admin/designs...");
       // TODO: Implement pagination if needed
-      const response = await client.get('/api/admin/designs', { // Ensure this endpoint exists and is protected
+      const response = await client.get('/admin/designs', { 
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log("[AdminPage] Designs fetched successfully:", response.data);
