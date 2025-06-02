@@ -22,7 +22,6 @@ const colors = {
 };
 
 const fonts = {
-  // MODIFIED: Heading font is now responsive
   heading: {
     base: "'Montserrat', sans-serif", // Montserrat for mobile (base breakpoint)
     md: "'Bungee', cursive"           // Bungee for desktop (md breakpoint and up)
@@ -47,36 +46,38 @@ const components = {
   Heading: {
     baseStyle: (props) => ({
       fontFamily: {
-        base: fonts.heading.base, // Use Montserrat for base
-        md: fonts.heading.md      // Use Bungee for md and up
+        base: fonts.heading.base,
+        md: fonts.heading.md
       },
       fontWeight: {
-        base: 700,                // Explicitly 'bold' (700) for Montserrat on mobile
-        md: 'normal'              // Bungee is inherently very bold
+        base: 700,
+        md: 'normal'
       },
-      // Assuming headings on accentOrange background should be textLight
       color: props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textLight,
     }),
   },
   Text: {
     baseStyle: (props) => ({
-      fontFamily: 'body', // This ensures Montserrat is used for Text components
+      fontFamily: 'body',
       color: props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textTeal,
     }),
   },
   Link: {
     baseStyle: (props) => ({
-      fontFamily: 'body', // Ensure links also use Montserrat
-      color: props.colorMode === 'dark' ? colors.brand.accentYellow : colors.brand.accentYellow,
-      _hover: { textDecoration: 'underline', color: props.colorMode === 'dark' ? colors.brand.accentYellowHover : colors.brand.accentYellowHover'},
-    }),
-  },
-  Input: { // Added base style for Input to ensure font family
-    baseStyle: {
+      fontFamily: 'body',
+      color: colors.brand.accentYellow, // Simplified: same color for light/dark mode
+      _hover: {
+        textDecoration: 'underline',
+        color: colors.brand.accentYellowHover, // Simplified: same hover color for light/dark
+      }, // Ensure comma is here if more baseStyle properties follow
+    }), // Closing parenthesis for baseStyle's returned object
+  }, // Comma separating Link from the next component (Input)
+  Input: {
+    baseStyle: (props) => ({ // Ensuring props can be passed if needed for colorMode logic later
       field: {
-        fontFamily: 'body', // Ensures regular input state uses Montserrat
+        fontFamily: 'body',
       },
-    },
+    }),
   },
 };
 
@@ -93,32 +94,21 @@ const theme = extendTheme({
   styles: {
     global: (props) => ({
       body: {
-        fontFamily: fonts.body, // Sets Montserrat for the whole body
+        fontFamily: fonts.body,
         bg: props.colorMode === 'dark' ? colors.darkBackground : colors.brand.accentOrange,
-        color: props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textTeal, // Default body text color
+        color: props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textTeal,
       },
-      // *** STYLES FOR AUTOFILL INPUTS ***
       'input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active': {
-        fontFamily: `${fonts.body} !important`, // Force Montserrat font
-        // To control text color and background of autofilled inputs (optional):
-        // Make sure the text color contrasts with your chosen autofill background.
-        // The boxShadow trick is often the most reliable way to change the background.
-        // '-webkit-text-fill-color': `${props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textDark} !important`, // Example: black text on light mode
-        // boxShadow: `0 0 0px 1000px ${props.colorMode === 'dark' ? colors.brand.primaryDark : colors.brand.paper} inset !important`, // Example: paper white background
-        // transition: 'background-color 5000s ease-in-out 0s', // Another trick to "delay" browser override
+        fontFamily: `${fonts.body} !important`,
+        // Optional: Control text color and background
+        // '-webkit-text-fill-color': `${props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textDark} !important`,
+        // boxShadow: `0 0 0px 1000px ${props.colorMode === 'dark' ? colors.brand.primaryDark : colors.brand.paper} inset !important`,
       },
-      // For Firefox, ensuring the input's base font-family is set (as done in components.Input)
-      // and sometimes this more generic selector helps, though its behavior can vary.
-      // 'input:autofill': {
-      //   fontFamily: `${fonts.body} !important`,
-      // }
-      // *** END OF AUTOFILL STYLES ***
     }),
   },
-  // Adding semanticTokens for brandPrimary color scheme if used by Tabs or other components
   semanticTokens: {
     colors: {
-      brandPrimary: { // Used by Tabs in AdminPage colorScheme
+      brandPrimary: {
         default: colors.brand.primary,
         _dark: colors.brand.primaryLight,
       },
