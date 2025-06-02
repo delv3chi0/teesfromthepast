@@ -1,11 +1,12 @@
 // frontend/src/components/AdminRoute.jsx
 import React from 'react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom'; // Removed Outlet if not used for other purposes
 import { useAuth } from '../context/AuthProvider';
-import { Spinner, VStack, Text, Box, Heading, Alert, AlertIcon, Button } from '@chakra-ui/react'; // Added Alert components
-import { FaLock } from 'react-icons/fa'; // Added an icon
+import { Spinner, VStack, Text, Box, Heading, Alert, AlertIcon, Button } from '@chakra-ui/react';
+import { FaLock } from 'react-icons/fa';
 
-const AdminRoute = () => {
+// AdminRoute now accepts 'children' as a prop
+const AdminRoute = ({ children }) => {
   const { user, token, loadingAuth } = useAuth();
   const location = useLocation();
 
@@ -27,19 +28,12 @@ const AdminRoute = () => {
   }
 
   if (!user) {
-    // This case might happen briefly if token exists but user profile is still loading
-    // or if there's an issue fetching the profile.
-    // The loadingAuth check should ideally cover this, but as a fallback:
-    console.log('[AdminRoute Decision] Token exists, but no user object. Auth might still be initializing or profile fetch failed. Redirecting to /login for safety.');
+    console.log('[AdminRoute Decision] Token exists, but no user object. Redirecting to /login for safety.');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (!user.isAdmin) {
-    console.log('[AdminRoute Decision] User is not an admin. Redirecting to dashboard (or showing access denied message).');
-    // Option 1: Redirect to a general page like dashboard
-    // return <Navigate to="/dashboard" state={{ from: location }} replace />;
-
-    // Option 2: Show an "Access Denied" message on the current path or a dedicated page
+    console.log('[AdminRoute Decision] User is not an admin. Rendering Access Denied message.');
     return (
         <Box textAlign="center" py={10} px={6} minH="70vh" display="flex" flexDirection="column" justifyContent="center" alignItems="center">
             <Alert
@@ -52,7 +46,7 @@ const AdminRoute = () => {
                 borderRadius="lg"
                 p={8}
                 maxW="md"
-                bg="brand.paper"
+                bg="brand.paper" // Assuming brand.paper is defined in your theme
                 shadow="xl"
             >
                 <AlertIcon as={FaLock} boxSize="50px" mr={0} color="red.500" />
@@ -63,8 +57,8 @@ const AdminRoute = () => {
                     You do not have the necessary permissions to view this page. This area is restricted to administrators.
                 </Text>
                 <Button
-                    as="a" // Use as="a" if navigating via href, or onClick for react-router navigate
-                    href="/dashboard" // Or use navigate('/dashboard') in an onClick
+                    as="a"
+                    href="/dashboard"
                     bg="brand.primary"
                     color="white"
                     _hover={{ bg: 'brand.primaryDark' }}
@@ -78,8 +72,9 @@ const AdminRoute = () => {
     );
   }
 
-  console.log('[AdminRoute Decision] User is an admin. Rendering child components (Outlet).');
-  return <Outlet />; // User is authenticated and is an admin
+  console.log('[AdminRoute Decision] User is an admin. Rendering children.');
+  // If user is admin, render the children components passed to AdminRoute
+  return children;
 };
 
 export default AdminRoute;
