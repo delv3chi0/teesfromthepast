@@ -11,18 +11,15 @@ import {
   DrawerContent,
   DrawerCloseButton,
   DrawerHeader,
-  DrawerBody,
+  DrawerBody, // Ensured DrawerBody is imported
   Image,
   Avatar,
   HStack,
-  // Icon, // Icon was imported but not used in the provided code. Removed for cleanup.
   Spacer,
   useBreakpointValue,
 } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
-// If you decide to add icons to navItems, you might import them here, e.g.:
-// import { FiShoppingBag } from 'react-icons/fi';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
@@ -74,7 +71,7 @@ export default function MainLayout({ children }) {
             align="center"
             justifyContent="center"
             _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
-            onClick={onClick} // Assuming onClick is for closing drawer, which isn't relevant here
+            onClick={inDrawer ? onClick : undefined} // Only call onClick if it's for closing drawer
           >
             <Image
               src="/logo.png"
@@ -132,12 +129,10 @@ export default function MainLayout({ children }) {
 
   return (
     <Flex direction="column" minH="100vh">
-      {/* This Box is the container for Sidebar + Main Content Area */}
       <Box as="section" display="flex" flexGrow={1}>
         {isDesktopView && (
-          // This aside takes up space in the document flow, pushing the main content.
           <Box as="aside" w="60" flexShrink={0}>
-            <SidebarContent /> {/* SidebarContent itself is position: fixed */}
+            <SidebarContent />
           </Box>
         )}
 
@@ -172,36 +167,31 @@ export default function MainLayout({ children }) {
               </DrawerHeader>
               <DrawerBody p={0}>
                 <SidebarContent onClick={onClose} inDrawer={true} />
-              </DrawerBody
+              </DrawerBody> {/* <<<< CORRECTED THIS LINE */}
             </DrawerContent>
           </Drawer>
         )}
 
-        {/* This is the Main Content Wrapper Box */}
-        {/* It has NO explicit background color set in this "correct" version. */}
-        {/* Its ml="0" is correct on desktop because the <aside> element above already reserves space. */}
         <Box
           flexGrow={1}
           ml={isDesktopView ? "0" : "0"}
           transition=".3s ease"
           display="flex"
           flexDirection="column"
-          // If you want to ensure this area has a specific non-dark background,
-          // you could add, e.g., bg="white" or bg="gray.50" (or a theme color) here.
         >
-          <Flex // Header
+          <Flex 
             as="header"
             align="center"
             w="full"
             px={6}
             py={3}
-            bg="brand.secondary" // Header background
+            bg="brand.secondary"
             borderBottomWidth="1px"
             borderColor="brand.primaryDark"
             color="brand.textDark"
             h="auto"
             minH="14"
-            flexShrink={0} // Header should not shrink
+            flexShrink={0}
           >
             <Flex align="center" flex="0">
               {!isDesktopView && (
@@ -251,14 +241,12 @@ export default function MainLayout({ children }) {
             </Flex>
           </Flex>
 
-          {/* This is where your page content (children) gets rendered */}
-          {/* It has its own background (brand.accentOrange) and padding. */}
           <Box
             as="main"
             p={{ base: 4, md: 6 }}
-            bg="brand.accentOrange" // Main content area background
-            flexGrow={1} // Ensures it tries to fill available vertical space
-            width="100%" // Ensures it tries to fill available horizontal space
+            bg="brand.accentOrange"
+            flexGrow={1}
+            width="100%"
           >
             {children}
           </Box>
