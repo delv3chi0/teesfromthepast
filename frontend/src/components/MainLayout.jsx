@@ -1,4 +1,5 @@
 // frontend/src/components/MainLayout.jsx
+import React, { useMemo } from 'react'; // Added useMemo
 import {
   Box,
   Flex,
@@ -11,37 +12,61 @@ import {
   DrawerContent,
   DrawerCloseButton,
   DrawerHeader,
-  DrawerBody, // Ensured DrawerBody is imported
+  DrawerBody,
   Image,
   Avatar,
   HStack,
+  Icon, // Re-added Icon for potential use in navItems
   Spacer,
   useBreakpointValue,
 } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
+// Example icons if you choose to add them to navItems:
+// import { FiHome, FiSettings, FiGrid, FiShoppingBag, FiGift, FiUser, FiShield } from 'react-icons/fi';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
 
-const navItems = [
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'AI Image Generator', path: '/generate' },
-  { label: 'My Saved Designs', path: '/my-designs' },
-  { label: 'Customize My Shirt', path: '/product-studio' },
-  { label: '🏆 Monthly Design Contest', path: '/vote-now' },
-  { label: 'My Orders', path: '/my-orders' },
-  { label: 'My Profile', path: '/profile' },
-  // If 'Admin Dashboard' is needed, add it here:
-  // { label: 'Admin Dashboard', path: '/admin-dashboard' },
+// Base navigation items available to all authenticated users
+const baseNavItems = [
+  { label: 'Dashboard', path: '/dashboard' /* icon: FiHome */ },
+  { label: 'AI Image Generator', path: '/generate' /* icon: FiGrid */ },
+  { label: 'My Saved Designs', path: '/my-designs' /* icon: FiShoppingBag */ },
+  { label: 'Customize My Shirt', path: '/product-studio' /* icon: FiSettings */ },
+  { label: '🏆 Monthly Design Contest', path: '/vote-now' /* icon: FiGift */ },
+  { label: 'My Orders', path: '/my-orders' /* icon: FiShoppingBag */ },
+  { label: 'My Profile', path: '/profile' /* icon: FiUser */ },
 ];
+
+// Admin-specific navigation item
+const adminNavItem = { label: '🛡️ Admin Console', path: '/admin' /* icon: FiShield */ };
+
 
 export default function MainLayout({ children }) {
   const location = useLocation();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { user } = useAuth();
+  const { user } = useAuth(); // Get user from AuthContext
 
   const isDesktopView = useBreakpointValue({ base: false, md: true });
+
+  // Dynamically generate navItems based on user role
+  const navItems = useMemo(() => {
+    if (user?.isAdmin) {
+      // Find the position of 'My Profile' to insert 'Admin Console' before it, or add to end
+      const profileIndex = baseNavItems.findIndex(item => item.path === '/profile');
+      if (profileIndex !== -1 && profileIndex < baseNavItems.length -1) { // Ensure 'My Profile' is not the last item for this logic
+        const items = [...baseNavItems];
+        items.splice(profileIndex + 1, 0, adminNavItem); // Insert after My Profile
+        return items;
+      } else {
+         // Fallback: add to the end or directly after profile if it's last
+        return [...baseNavItems, adminNavItem];
+      }
+    }
+    return baseNavItems;
+  }, [user]);
+
 
   const SidebarContent = ({ onClick, inDrawer = false }) => {
     const showInternalLogo = !inDrawer;
@@ -71,7 +96,7 @@ export default function MainLayout({ children }) {
             align="center"
             justifyContent="center"
             _hover={{ bg: 'brand.primaryLight', textDecoration: 'none' }}
-            onClick={inDrawer ? onClick : undefined} // Only call onClick if it's for closing drawer
+            onClick={inDrawer ? onClick : undefined}
           >
             <Image
               src="/logo.png"
@@ -98,6 +123,8 @@ export default function MainLayout({ children }) {
               p={3}
               borderRadius="md"
               fontWeight="medium"
+              display="flex" // Added for icon alignment
+              alignItems="center" // Added for icon alignment
               color={
                 location.pathname === item.path ||
                 (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/')) ||
@@ -119,6 +146,7 @@ export default function MainLayout({ children }) {
               }}
               onClick={onClick} // Closes drawer when a nav item is clicked
             >
+              {/* {item.icon && <Icon as={item.icon} mr={3} w={5} h={5} />} */}
               {item.label}
             </ChakraLink>
           ))}
@@ -167,7 +195,7 @@ export default function MainLayout({ children }) {
               </DrawerHeader>
               <DrawerBody p={0}>
                 <SidebarContent onClick={onClose} inDrawer={true} />
-              </DrawerBody> {/* <<<< CORRECTED THIS LINE */}
+              </DrawerBody>
             </DrawerContent>
           </Drawer>
         )}
@@ -179,7 +207,7 @@ export default function MainLayout({ children }) {
           display="flex"
           flexDirection="column"
         >
-          <Flex 
+          <Flex
             as="header"
             align="center"
             w="full"
