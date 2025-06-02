@@ -1,4 +1,4 @@
-k// frontend/src/pages/AdminPage.jsx
+// frontend/src/pages/AdminPage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
