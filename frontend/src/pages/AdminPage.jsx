@@ -1,9 +1,9 @@
-// frontend/src/pages/AdminPage.jsx
+k// frontend/src/pages/AdminPage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
   Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner, Alert, AlertIcon,
-  Button, useToast, Tag, Image, // Added Image for design previews
+  Button, useToast, Tag, Image,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch
 } from '@chakra-ui/react';
@@ -26,13 +26,11 @@ const AdminPage = () => {
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState('');
-  // Add selectedOrder and modal states for orders later
 
   // State for Designs Tab
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [designsError, setDesignsError] = useState('');
-  // Add selectedDesign and modal states for designs later
 
   // Modal disclosures for Users
   const { isOpen: isViewModalOpen, onOpen: onViewModalOpen, onClose: onViewModalClose } = useDisclosure();
@@ -46,7 +44,6 @@ const AdminPage = () => {
     firstName: '',
     lastName: '',
     isAdmin: false,
-    // Add other editable user fields here if needed
   });
 
   // Fetch Users
@@ -59,14 +56,11 @@ const AdminPage = () => {
     setLoadingUsers(true);
     setUsersError('');
     try {
-      console.log("[AdminPage] Fetching users from /api/admin/users...");
       const response = await client.get('/admin/users', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log("[AdminPage] Users fetched successfully:", response.data);
       setUsers(response.data);
     } catch (error) {
-      console.error("[AdminPage] Error fetching users:", error.response?.data?.message || error.message);
       setUsersError(error.response?.data?.message || 'Failed to fetch users.');
       if (error.response?.status === 403) {
         setUsersError('Access Denied. You might not have admin privileges to view users.');
@@ -86,16 +80,11 @@ const AdminPage = () => {
     setLoadingOrders(true);
     setOrdersError('');
     try {
-      console.log("[AdminPage] Fetching orders from /admin/orders...");
-      // TODO: Implement pagination if needed: client.get('/api/admin/orders?page=1&limit=20')
-      const response = await client.get('/admin/orders', { // Ensure this endpoint exists and is protected
+      const response = await client.get('/admin/orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log("[AdminPage] Orders fetched successfully:", response.data);
-      // Adjust 'response.data.orders' if your API returns data differently (e.g., just response.data if it's an array)
       setOrders(response.data.orders || response.data || []);
     } catch (error) {
-      console.error("[AdminPage] Error fetching orders:", error.response?.data?.message || error.message);
       setOrdersError(error.response?.data?.message || 'Failed to fetch orders.');
     } finally {
       setLoadingOrders(false);
@@ -112,16 +101,11 @@ const AdminPage = () => {
     setLoadingDesigns(true);
     setDesignsError('');
     try {
-      console.log("[AdminPage] Fetching designs from /admin/designs...");
-      // TODO: Implement pagination if needed
-      const response = await client.get('/admin/designs', { 
+      const response = await client.get('/admin/designs', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log("[AdminPage] Designs fetched successfully:", response.data);
-      // Adjust 'response.data.designs' if your API returns data differently
       setDesigns(response.data.designs || response.data || []);
     } catch (error) {
-      console.error("[AdminPage] Error fetching designs:", error.response?.data?.message || error.message);
       setDesignsError(error.response?.data?.message || 'Failed to fetch designs.');
     } finally {
       setLoadingDesigns(false);
@@ -129,12 +113,12 @@ const AdminPage = () => {
   }, [token]);
 
   useEffect(() => {
-    if (token) { // Only fetch if token is available
+    if (token) {
       fetchUsers();
       fetchOrders();
       fetchDesigns();
     }
-  }, [token, fetchUsers, fetchOrders, fetchDesigns]); // Add fetch functions to dependency array
+  }, [token, fetchUsers, fetchOrders, fetchDesigns]);
 
   // Handlers for User Actions
   const handleViewUser = (user) => {
@@ -150,7 +134,6 @@ const AdminPage = () => {
       firstName: user.firstName || '',
       lastName: user.lastName || '',
       isAdmin: user.isAdmin,
-      // Pre-fill other editable fields if added
     });
     onEditModalOpen();
   };
@@ -165,7 +148,6 @@ const AdminPage = () => {
 
   const handleSaveChanges = async () => {
     if (!selectedUser) return;
-    console.log(`[AdminPage] Attempting to save changes for user ID: ${selectedUser._id}`, editFormData);
     try {
       const { data: updatedUser } = await client.put(`/admin/users/${selectedUser._id}`, editFormData, {
         headers: { Authorization: `Bearer ${token}` }
@@ -181,7 +163,6 @@ const AdminPage = () => {
       onEditModalClose();
       setSelectedUser(null);
     } catch (error) {
-      console.error("[AdminPage] Error updating user:", error.response?.data?.message || error.message);
       toast({
         title: "Update Failed",
         description: error.response?.data?.message || "Could not update user.",
@@ -199,7 +180,6 @@ const AdminPage = () => {
 
   const confirmDeleteUser = async () => {
     if (!selectedUser) return;
-    console.log(`[AdminPage] Attempting to delete user ID: ${selectedUser._id}`);
     try {
       await client.delete(`/admin/users/${selectedUser._id}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -215,7 +195,6 @@ const AdminPage = () => {
       onDeleteModalClose();
       setSelectedUser(null);
     } catch (error) {
-      console.error("[AdminPage] Error deleting user:", error.response?.data?.message || error.message);
       toast({
         title: "Delete Failed",
         description: error.response?.data?.message || "Could not delete user.",
@@ -252,7 +231,7 @@ const AdminPage = () => {
               <Tr>
                 <Th>ID</Th>
                 <Th>Username</Th>
-                <Th>Email</Th>
+                <Th>Email</Th> {/* Email column is present */}
                 <Th>Name</Th>
                 <Th>Admin</Th>
                 <Th>Joined</Th>
@@ -264,7 +243,7 @@ const AdminPage = () => {
                 <Tr key={user._id}>
                   <Td fontSize="xs" title={user._id}>{user._id.substring(0, 8)}...</Td>
                   <Td>{user.username}</Td>
-                  <Td>{user.email}</Td>
+                  <Td>{user.email}</Td> {/* Displays user.email */}
                   <Td>{user.firstName || ''} {user.lastName || ''}</Td>
                   <Td>
                     <Tag size="sm" colorScheme={user.isAdmin ? 'green' : 'gray'} borderRadius="full">
@@ -328,10 +307,14 @@ const AdminPage = () => {
               {orders.map((order) => (
                 <Tr key={order._id}>
                   <Td fontSize="xs" title={order._id}>{order._id?.substring(0, 8)}...</Td>
-                  {/* Adjust order.user.email based on how your API populates user data for an order */}
                   <Td>{order.user?.email || order.userId || 'N/A'}</Td>
                   <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
-                  <Td>${order.totalAmount?.toFixed(2) || '0.00'}</Td>
+                  <Td>
+                    {/* --- CURRENCY FIX APPLIED HERE --- */}
+                    {typeof order.totalAmount === 'number'
+                      ? `$${(order.totalAmount / 100).toFixed(2)}`
+                      : '$0.00'}
+                  </Td>
                   <Td>
                     <Tag size="sm" colorScheme={
                       order.orderStatus === 'Delivered' ? 'green' :
@@ -347,7 +330,6 @@ const AdminPage = () => {
                     <Button size="xs" variant="ghost" colorScheme="blue" onClick={() => alert(`View Order: ${order._id}`)} mr={1} title="View Order">
                       <Icon as={FaEye} />
                     </Button>
-                    {/* Add Edit Status button later */}
                   </Td>
                 </Tr>
               ))}
@@ -403,7 +385,6 @@ const AdminPage = () => {
                     )}
                   </Td>
                   <Td maxW="200px" whiteSpace="normal" wordBreak="break-word" fontSize="xs">{design.prompt}</Td>
-                  {/* Adjust design.user.username based on how your API populates user data for a design */}
                   <Td>{design.user?.username || design.userId || 'N/A'}</Td>
                   <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
                   <Td>
@@ -436,15 +417,15 @@ const AdminPage = () => {
         <Heading
           as="h1"
           fontSize={{ base: "2xl", md: "3xl" }}
-          color="brand.textLight" // Assuming this is for a dark orange background from MainLayout
+          color="brand.textLight"
           textAlign="left"
           w="100%"
         >
           Admin Dashboard
         </Heading>
 
-        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }}> {/* Ensure brand.paper is defined */}
-          <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy> {/* Ensure brandPrimary colorScheme is defined */}
+        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }}>
+          <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy>
             <TabList mb="1em" flexWrap="wrap">
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }} borderRadius="full" m={1}>
                 <Icon as={FaUsersCog} mr={2} /> Users
@@ -476,13 +457,13 @@ const AdminPage = () => {
               <VStack spacing={3} align="start">
                 <Text><strong>ID:</strong> {selectedUser._id}</Text>
                 <Text><strong>Username:</strong> {selectedUser.username}</Text>
-                <Text><strong>Email:</strong> {selectedUser.email}</Text>
+                <Text><strong>Email:</strong> {selectedUser.email}</Text> {/* Email is displayed here */}
                 <Text><strong>First Name:</strong> {selectedUser.firstName || 'N/A'}</Text>
                 <Text><strong>Last Name:</strong> {selectedUser.lastName || 'N/A'}</Text>
                 <Text><strong>Admin:</strong> <Tag size="sm" colorScheme={selectedUser.isAdmin ? 'green' : 'gray'} borderRadius="full">{selectedUser.isAdmin ? 'Yes' : 'No'}</Tag></Text>
                 <Text><strong>Avatar URL:</strong> {selectedUser.avatarUrl || 'N/A'}</Text>
                 <Text><strong>Stripe Customer ID:</strong> {selectedUser.stripeCustomerId || 'N/A'}</Text>
-                {selectedUser.address && ( // Example for nested address object
+                {selectedUser.address && (
                   <Box border="1px solid" borderColor="gray.200" p={3} borderRadius="md" w="100%">
                     <Text fontWeight="bold" mb={2}>Primary Address:</Text>
                     <Text>Street: {selectedUser.address.street || 'N/A'}</Text>
@@ -494,7 +475,6 @@ const AdminPage = () => {
                 )}
                 <Text><strong>Joined:</strong> {new Date(selectedUser.createdAt).toLocaleString()}</Text>
                 <Text><strong>Last Updated:</strong> {new Date(selectedUser.updatedAt).toLocaleString()}</Text>
-                {/* Add other fields from your User model here */}
               </VStack>
             </ModalBody>
             <ModalFooter>
@@ -535,7 +515,6 @@ const AdminPage = () => {
                   </FormLabel>
                   <Switch id="isAdmin-switch" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} colorScheme="green" />
                 </FormControl>
-                 {/* Add form controls for other editable user fields here */}
               </VStack>
             </ModalBody>
             <ModalFooter>
