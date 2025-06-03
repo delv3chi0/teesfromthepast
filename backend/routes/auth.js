@@ -9,7 +9,7 @@ import {
   updateUserProfile,
   logoutUser,
   requestPasswordReset,
-  resetPassword
+  resetPassword,
   changePassword
 } from '../controllers/authController.js';
 

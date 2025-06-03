@@ -24,7 +24,8 @@ export default function Profile() {
     shippingAddress: { ...initialAddressState },
     billingAddress: { ...initialAddressState },
   });
-  // New state for password change
+
+  // --- NEW STATE FOR PASSWORD CHANGE ---
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -34,7 +35,7 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
-  // ----
+  // --- END NEW STATE ---
 
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,17 +59,24 @@ export default function Profile() {
 
       const sa = populatedForm.shippingAddress;
       const ba = populatedForm.billingAddress;
-      const addressesAreIdentical = user.shippingAddress && user.billingAddress &&
-        Object.keys(sa).every(key => sa[key] === ba[key]);
+      let addressesAreIdentical = false;
+      if (sa && ba && Object.keys(sa).length > 0 && Object.keys(ba).length > 0) {
+         addressesAreIdentical = Object.keys(initialAddressState).every(key => sa[key] === ba[key]);
+      }
+
 
       if (addressesAreIdentical) {
         setBillingSameAsShipping(true);
-      } else if (user.shippingAddress && !user.billingAddress) {
+      } else if (user.shippingAddress && (!user.billingAddress || Object.keys(user.billingAddress).length === 0 )) {
+        // If billing is empty or not present, and shipping is, default to same and copy.
         setBillingSameAsShipping(true);
         setForm(prev => ({...prev, billingAddress: {...prev.shippingAddress}}));
-      } else if (!user.shippingAddress && !user.billingAddress) {
+      } else if ((!user.shippingAddress || Object.keys(user.shippingAddress).length === 0) && 
+                 (!user.billingAddress || Object.keys(user.billingAddress).length === 0)) {
+        // Both empty, default to same
         setBillingSameAsShipping(true);
-      } else {
+      }
+       else {
         setBillingSameAsShipping(false);
       }
       setIsLoading(false);
@@ -77,10 +85,6 @@ export default function Profile() {
     }
   }, [user, authStillLoading]);
 
-  const handleTopLevelChange = (e) => { /* ... (existing code, unchanged) ... */ };
-  const handleAddressChange = (e, addressType) => { /* ... (existing code, unchanged) ... */ };
-  const handleBillingSameAsShippingChange = (e) => { /* ... (existing code, unchanged) ... */ };
-  // --- PASTE YOUR EXISTING handleTopLevelChange, handleAddressChange, handleBillingSameAsShippingChange here ---
   const handleTopLevelChange = (e) => {
     const { name, value } = e.target;
     setForm(prevForm => {
@@ -120,15 +124,14 @@ export default function Profile() {
         ...prevForm,
         billingAddress: { ...prevForm.shippingAddress }
       }));
+    } else { // If unchecked, clear billing address or reset to its original if different
+        setForm(prevForm => ({
+            ...prevForm,
+            billingAddress: { ...initialAddressState, ...(user?.billingAddress && !isChecked ? user.billingAddress : {}) }
+        }));
     }
   };
-  // --- END OF PASTED HANDLERS ---
 
-
-  const handleSave = async () => { /* ... (existing code, unchanged) ... */ };
-  const handleCancel = () => { /* ... (existing code, unchanged) ... */ };
-
-  // --- PASTE YOUR EXISTING handleSave and handleCancel here ---
   const handleSave = async () => {
     setIsSaving(true);
     let finalShippingAddress = { ...form.shippingAddress };
@@ -148,17 +151,17 @@ export default function Profile() {
    
     const updateData = {
         username: form.username,
+        // email: form.email, // Email is read-only and shouldn't be sent for update here
         firstName: form.firstName,
         lastName: form.lastName,
-        // Only send address if it has some data, or send null to clear
-        shippingAddress: Object.values(finalShippingAddress).some(val => val !== '' && val !== undefined) ? finalShippingAddress : null,
-        billingAddress: Object.values(finalBillingAddress).some(val => val !== '' && val !== undefined) ? finalBillingAddress : null,
+        shippingAddress: Object.values(finalShippingAddress).some(val => val && val.toString().trim() !== '') ? finalShippingAddress : null,
+        billingAddress: Object.values(finalBillingAddress).some(val => val && val.toString().trim() !== '') ? finalBillingAddress : null,
     };
-   
+       
     try {
         const { data: updatedProfileFromServer } = await client.put('/auth/profile', updateData);
        
-        if (setAuthUser) {
+        if (setAuthUser) { // Update context
             setAuthUser(prevAuthUser => ({...prevAuthUser, ...updatedProfileFromServer}));
         }
         setEditing(false);
@@ -182,23 +185,24 @@ export default function Profile() {
           firstName: user.firstName || '', lastName: user.lastName || '',
           shippingAddress: sa, billingAddress: ba,
         });
-        const addressesAreIdentical = user.shippingAddress && user.billingAddress &&
-            Object.keys(sa).every(key => sa[key] === ba[key]);
 
+        let addressesAreIdentical = false;
+        if (sa && ba && Object.keys(sa).length > 0 && Object.keys(ba).length > 0) {
+           addressesAreIdentical = Object.keys(initialAddressState).every(key => sa[key] === ba[key]);
+        }
         if (addressesAreIdentical) setBillingSameAsShipping(true);
-        else if (user.shippingAddress && !user.billingAddress) setBillingSameAsShipping(true);
-        else if (!user.shippingAddress && !user.billingAddress) setBillingSameAsShipping(true);
+        else if (user.shippingAddress && (!user.billingAddress || Object.keys(user.billingAddress).length === 0)) setBillingSameAsShipping(true);
+        else if ((!user.shippingAddress || Object.keys(user.shippingAddress).length === 0) && 
+                   (!user.billingAddress || Object.keys(user.billingAddress).length === 0)) setBillingSameAsShipping(true);
         else setBillingSameAsShipping(false);
     }
     setEditing(false);
-    // Reset password form as well
+    // Reset password form as well when main profile edit is cancelled
     setPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
     setShowCurrentPassword(false);
     setShowNewPassword(false);
     setShowConfirmNewPassword(false);
   };
-  // --- END OF PASTED HANDLERS ---
-
 
   // --- NEW: Handle Password Change ---
   const handlePasswordFormChange = (e) => {
@@ -207,7 +211,7 @@ export default function Profile() {
   };
 
   const handleChangePassword = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // Prevent default form submission if it's part of a <form>
     if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmNewPassword) {
       toast({ title: "Missing Fields", description: "Please fill all password fields.", status: "warning", duration: 3000, isClosable: true });
       return;
@@ -223,13 +227,12 @@ export default function Profile() {
 
     setIsPasswordSaving(true);
     try {
-      // You'll need to create this backend endpoint: PUT /api/auth/change-password
       await client.put('/auth/change-password', {
         currentPassword: passwordForm.currentPassword,
         newPassword: passwordForm.newPassword,
       });
       toast({ title: "Password Changed", description: "Your password has been updated successfully.", status: "success", duration: 3000, isClosable: true });
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' }); // Reset form
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
       setShowCurrentPassword(false);
       setShowNewPassword(false);
       setShowConfirmNewPassword(false);
@@ -242,11 +245,6 @@ export default function Profile() {
   };
   // --- END: Handle Password Change ---
 
-  if (authStillLoading || isLoading) { /* ... (existing code, unchanged) ... */ }
-  if (!user) { /* ... (existing code, unchanged) ... */ }
-  const renderAddressFields = (addressType, legend, includeNameFields = false) => (  /* ... (existing code, unchanged) ... */ );
-
-  // --- PASTE YOUR EXISTING LOADING/NO USER RETURN AND renderAddressFields HERE ---
   if (authStillLoading || isLoading) {
     return <Box textAlign="center" mt={20} py={10}><Spinner size="xl" color="brand.primary" /><Text mt={4} color="brand.textLight">Loading Profile…</Text></Box>;
   }
@@ -256,61 +254,59 @@ export default function Profile() {
 
   const renderAddressFields = (addressType, legend, includeNameFields = false) => (
     <VStack spacing={4} align="stretch" w="100%">
-      <Heading as="h3" size="md" color="brand.textDark" mb={2} borderBottomWidth="1px" borderColor="brand.secondary" pb={2} w="100%" textAlign="left">{legend}</Heading>
+      {legend && <Heading as="h3" size="md" color="brand.textDark" mb={2} borderBottomWidth="1px" borderColor="brand.secondary" pb={2} w="100%" textAlign="left">{legend}</Heading>}
      
       {includeNameFields && (
         <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={4}>
-          <FormControl id="firstName">
+          <FormControl id={editing ? "firstName-edit" : "firstName-view"}>
             <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>First Name:</FormLabel>
-            <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleTopLevelChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete="given-name"/>
+            <Input name="firstName" placeholder="First Name" value={form.firstName} onChange={handleTopLevelChange} isDisabled={!editing} bg={editing ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete="given-name"/>
           </FormControl>
-          <FormControl id="lastName">
+          <FormControl id={editing ? "lastName-edit" : "lastName-view"}>
             <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Last Name:</FormLabel>
-            <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleTopLevelChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete="family-name"/>
+            <Input name="lastName" placeholder="Last Name" value={form.lastName} onChange={handleTopLevelChange} isDisabled={!editing} bg={editing ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete="family-name"/>
           </FormControl>
         </SimpleGrid>
       )}
 
       <FormControl id={`${addressType}RecipientName`}>
         <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Recipient Name (for this address):</FormLabel>
-        <Input name="recipientName" placeholder="Full Name for Delivery/Billing" value={form[addressType]?.recipientName || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping name' : 'billing name'}`}/>
+        <Input name="recipientName" placeholder="Full Name for Delivery/Billing" value={form[addressType]?.recipientName || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping name' : 'billing name'}`}/>
       </FormControl>
       <FormControl id={`${addressType}Street1`}>
         <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Street Address 1:</FormLabel>
-        <Input name="street1" placeholder="123 Main St" value={form[addressType]?.street1 || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-line1' : 'billing address-line1'}`}/>
+        <Input name="street1" placeholder="123 Main St" value={form[addressType]?.street1 || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-line1' : 'billing address-line1'}`}/>
       </FormControl>
       <FormControl id={`${addressType}Street2`}>
         <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Street Address 2 (Optional):</FormLabel>
-        <Input name="street2" placeholder="Apt, Suite, Bldg." value={form[addressType]?.street2 || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-line2' : 'billing address-line2'}`}/>
+        <Input name="street2" placeholder="Apt, Suite, Bldg." value={form[addressType]?.street2 || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-line2' : 'billing address-line2'}`}/>
       </FormControl>
      
       <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4}>
         <FormControl id={`${addressType}City`}>
           <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>City:</FormLabel>
-          <Input name="city" placeholder="City" value={form[addressType]?.city || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-level2' : 'billing address-level2'}`}/>
+          <Input name="city" placeholder="City" value={form[addressType]?.city || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-level2' : 'billing address-level2'}`}/>
         </FormControl>
         <FormControl id={`${addressType}State`}>
           <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>State/Province:</FormLabel>
-          <Input name="state" placeholder="State/Province" value={form[addressType]?.state || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-level1' : 'billing address-level1'}`}/>
+          <Input name="state" placeholder="State/Province" value={form[addressType]?.state || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping address-level1' : 'billing address-level1'}`}/>
         </FormControl>
         <FormControl id={`${addressType}ZipCode`}>
           <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Zip/Postal Code:</FormLabel>
-          <Input name="zipCode" placeholder="Zip/Postal Code" value={form[addressType]?.zipCode || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping postal-code' : 'billing postal-code'}`}/>
+          <Input name="zipCode" placeholder="Zip/Postal Code" value={form[addressType]?.zipCode || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping postal-code' : 'billing postal-code'}`}/>
         </FormControl>
       </SimpleGrid>
      
       <FormControl id={`${addressType}Country`}>
         <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Country:</FormLabel>
-        <Input name="country" placeholder="Country" value={form[addressType]?.country || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping country-name' : 'billing country-name'}`}/>
+        <Input name="country" placeholder="Country" value={form[addressType]?.country || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping country-name' : 'billing country-name'}`}/>
       </FormControl>
       <FormControl id={`${addressType}Phone`}>
         <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Phone (Optional but Recommended):</FormLabel>
-        <Input name="phone" type="tel" placeholder="Phone Number" value={form[addressType]?.phone || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping tel' : 'billing tel'}`}/>
+        <Input name="phone" type="tel" placeholder="Phone Number" value={form[addressType]?.phone || ''} onChange={(e) => handleAddressChange(e, addressType)} isDisabled={!editing || (addressType === 'billingAddress' && billingSameAsShipping)} bg={editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete={`${addressType === 'shippingAddress' ? 'shipping tel' : 'billing tel'}`}/>
       </FormControl>
     </VStack>
   );
-  // --- END OF PASTED SECTIONS ---
-
 
   return (
     <Box
@@ -338,11 +334,11 @@ export default function Profile() {
        
         <VStack spacing={4} align="stretch" w="100%">
             <Heading as="h3" size="md" color="brand.textDark" mb={0} borderBottomWidth="1px" borderColor="brand.secondary" pb={2} w="100%" textAlign="left">Account Information</Heading>
-            <FormControl id="username-profile" mt={2}> {/* Updated id for uniqueness */}
+            <FormControl id="username-profile" mt={2}>
                 <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Username:</FormLabel>
-                <Input name="username" value={form.username} onChange={handleTopLevelChange} isDisabled={!editing} bg="white" borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete="username"/>
+                <Input name="username" value={form.username} onChange={handleTopLevelChange} isDisabled={!editing} bg={editing ? "white" : "gray.100"} borderColor="brand.secondary" focusBorderColor="brand.primaryDark" borderRadius="md" size="lg" autoComplete="username"/>
             </FormControl>
-            <FormControl id="email-profile"> {/* Updated id for uniqueness */}
+            <FormControl id="email-profile">
                 <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Email:</FormLabel>
                 <Input name="email" type="email" value={form.email} isReadOnly bg="gray.100" borderColor="brand.secondary" borderRadius="md" size="lg" autoComplete="email"/>
             </FormControl>
@@ -360,7 +356,7 @@ export default function Profile() {
                 isChecked={billingSameAsShipping}
                 onChange={handleBillingSameAsShippingChange}
                 isDisabled={!editing}
-                colorScheme="brandPrimary" // Make sure brandPrimary is defined for Checkbox
+                colorScheme="brandPrimary"
                 size="lg"
             >
                 Billing address is the same as shipping address
@@ -384,16 +380,16 @@ export default function Profile() {
             </>
           )}
         </Stack>
-      </VStack>
+      </VStack> {/* End of Profile Details Form VStack */}
 
       {/* --- NEW: Change Password Section --- */}
       <Divider my={{ base: 6, md: 8 }} />
-      <Box as="form" onSubmit={handleChangePassword}>
-        <VStack spacing={4} align="stretch" w="100%">
+      <Box as="form" onSubmit={handleChangePassword} w="100%"> {/* Added w="100%" */}
+        <VStack spacing={4} align="stretch"> {/* Removed w="100%" from here, parent Box has it */}
           <Heading as="h3" size="md" color="brand.textDark" mb={2} borderBottomWidth="1px" borderColor="brand.secondary" pb={2} w="100%" textAlign="left">
             <Icon as={FaKey} mr={2} /> Change Password
           </Heading>
-          <FormControl id="currentPassword">
+          <FormControl id="currentPassword-profile"> {/* Unique ID */}
             <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Current Password:</FormLabel>
             <InputGroup size="lg">
               <Input
@@ -414,7 +410,7 @@ export default function Profile() {
               </InputRightElement>
             </InputGroup>
           </FormControl>
-          <FormControl id="newPasswordProfile"> {/* Unique ID */}
+          <FormControl id="newPassword-profile"> {/* Unique ID */}
             <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>New Password:</FormLabel>
             <InputGroup size="lg">
               <Input
@@ -435,7 +431,7 @@ export default function Profile() {
               </InputRightElement>
             </InputGroup>
           </FormControl>
-          <FormControl id="confirmNewPasswordProfile"> {/* Unique ID */}
+          <FormControl id="confirmNewPassword-profile"> {/* Unique ID */}
             <FormLabel fontWeight="bold" color="brand.textDark" fontSize={{ base: "sm", md: "md" }}>Confirm New Password:</FormLabel>
             <InputGroup size="lg">
               <Input
@@ -457,10 +453,10 @@ export default function Profile() {
             </InputGroup>
           </FormControl>
           <Button
-            type="submit"
-            {...primaryButtonStyle} // Use your existing button style
+            type="submit" // This button submits the password change form
+            {...primaryButtonStyle}
             w={{ base: "full", md: "auto" }}
-            alignSelf={{base: "stretch", md: "flex-start"}} // Align button to start on md+
+            alignSelf={{base: "stretch", md: "flex-start"}}
             isLoading={isPasswordSaving}
             loadingText="Updating Password..."
             leftIcon={<Icon as={FaSave} />}
@@ -471,12 +467,11 @@ export default function Profile() {
       </Box>
       {/* --- END: Change Password Section --- */}
 
-
       <Button
           variant="link"
           onClick={() => navigate('/dashboard')}
           leftIcon={<Icon as={FaTachometerAlt} />}
-          mt={{base: 8, md: 10}} // Increased margin
+          mt={{base: 8, md: 10}}
           color="brand.primaryDark"
           size="lg"
       >Dashboard</Button>
