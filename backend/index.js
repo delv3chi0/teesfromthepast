@@ -23,11 +23,12 @@ import checkoutRoutes from './routes/checkout.js';
 import designRoutes from './routes/designs.js'; // User's own designs
 import contestRoutes from './routes/contest.js';
 import orderRoutes from './routes/orders.js'; // User's own orders
+import formRoutes from './routes/formRoutes.js'; // <-- IMPORT NEW FORM ROUTES
 
 // Admin Routes
 import adminUserRoutes from './routes/adminUserRoutes.js';
-import adminOrderRoutes from './routes/adminOrderRoutes.js';   // <-- IMPORT new admin order routes
-import adminDesignRoutes from './routes/adminDesignRoutes.js'; // <-- IMPORT new admin design routes
+import adminOrderRoutes from './routes/adminOrderRoutes.js';
+import adminDesignRoutes from './routes/adminDesignRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -81,12 +82,13 @@ app.use('/api/checkout', checkoutRoutes);
 app.use('/api/mydesigns', designRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/forms', formRoutes); // <-- MOUNT NEW FORM ROUTES (for contact form)
 
 // Admin-facing routes
 app.use('/api/admin/users', adminUserRoutes);
-app.use('/api/admin/orders', adminOrderRoutes);   // <-- MOUNT new admin order routes
-app.use('/api/admin/designs', adminDesignRoutes); // <-- MOUNT new admin design routes
-console.log('[Backend Log] All routes configured, including admin orders and designs.');
+app.use('/api/admin/orders', adminOrderRoutes);
+app.use('/api/admin/designs', adminDesignRoutes);
+console.log('[Backend Log] All routes configured, including admin and form routes.');
 
 // Global Error Handler
 app.use((err, req, res, next) => {
