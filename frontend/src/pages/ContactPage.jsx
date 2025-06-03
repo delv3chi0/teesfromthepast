@@ -16,12 +16,11 @@ import {
   useToast,
   Image,
   Icon,
-  Link as ChakraLink, // For linking back to home or other pages
+  Link as ChakraLink,
 } from '@chakra-ui/react';
-import { Link as RouterLink } from 'react-router-dom'; // For navigation
+import { Link as RouterLink } from 'react-router-dom';
 import { FaPaperPlane, FaHome } from 'react-icons/fa';
-// We'll use the existing Axios client, assuming contact form submission will be an API call
-// import { client } from '../api/client'; 
+import { client } from '../api/client'; // Ensure your Axios client is imported
 
 const ContactPage = () => {
   const [formData, setFormData] = useState({
@@ -83,46 +82,31 @@ const ContactPage = () => {
     }
 
     setIsLoading(true);
-    // TODO: Implement API call to backend
-    console.log("Form data to submit:", formData);
+    try {
+      // API call to your backend endpoint
+      const response = await client.post('/forms/contact', formData); 
 
-    // Simulate API call for now
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Placeholder for actual API call logic
-    // try {
-    //   await client.post('/api/contact', formData); // Example endpoint
-    //   toast({
-    //     title: 'Message Sent!',
-    //     description: "Thanks for reaching out. We'll get back to you soon.",
-    //     status: 'success',
-    //     duration: 5000,
-    //     isClosable: true,
-    //   });
-    //   setFormData({ name: '', email: '', reason: '', message: '' }); // Clear form
-    // } catch (error) {
-    //   toast({
-    //     title: 'Error Sending Message',
-    //     description: error.response?.data?.message || "Sorry, we couldn't send your message. Please try again later.",
-    //     status: 'error',
-    //     duration: 5000,
-    //     isClosable: true,
-    //   });
-    // } finally {
-    //   setIsLoading(false);
-    // }
-
-    // --- TEMPORARY SUCCESS SIMULATION ---
-    toast({
-      title: 'Message Sent! (Simulated)',
-      description: "Thanks for reaching out. We'll get back to you soon. (This is a frontend simulation)",
-      status: 'success',
-      duration: 5000,
-      isClosable: true,
-    });
-    setFormData({ name: '', email: '', reason: '', message: '' });
-    setIsLoading(false);
-    // --- END TEMPORARY SIMULATION ---
+      toast({
+        title: 'Message Sent!',
+        description: response.data.message || "Thanks for reaching out. We'll get back to you soon.",
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      setFormData({ name: '', email: '', reason: '', message: '' }); // Clear form
+      setErrors({}); // Clear any previous validation errors
+    } catch (error) {
+      toast({
+        title: 'Error Sending Message',
+        description: error.response?.data?.message || "Sorry, we couldn't send your message. Please try again later.",
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      console.error("Error submitting contact form:", error.response?.data || error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -136,7 +120,7 @@ const ContactPage = () => {
             p={{ base: 6, md: 10 }}
             borderWidth={1}
             borderRadius="xl"
-            boxShadow="2xl" // Enhanced shadow for a "cool" effect
+            boxShadow="2xl"
             bg="brand.paper"
             w="100%"
           >
@@ -226,7 +210,7 @@ const ContactPage = () => {
                 type="submit"
                 isLoading={isLoading}
                 loadingText="Sending..."
-                colorScheme="brandPrimary" // Assuming brandPrimary is defined in your theme for Button
+                colorScheme="brandPrimary"
                 w="full"
                 size="lg"
                 py={6}
