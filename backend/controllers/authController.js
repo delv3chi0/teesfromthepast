@@ -3,11 +3,10 @@ import asyncHandler from 'express-async-handler';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import sgMail from '@sendgrid/mail'; // Import SendGrid Mail service
+import sgMail from '@sendgrid/mail';
 import User from '../models/User.js';
 import 'dotenv/config';
 
-// Set SendGrid API Key (it's good practice to set it once when the module loads)
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
   console.log('[Auth Cfg] SendGrid API Key configured.');
@@ -15,47 +14,31 @@ if (process.env.SENDGRID_API_KEY) {
   console.error('[Auth Cfg] CRITICAL: SENDGRID_API_KEY environment variable is not set!');
 }
 
-
-// Utility to generate JWT token
 const generateToken = (id) => {
-  return jwt.sign({ user: { id } }, process.env.JWT_SECRET, {
-    expiresIn: '1h',
-  });
+  return jwt.sign({ user: { id } }, process.env.JWT_SECRET, { expiresIn: '1h' });
 };
 
-// @desc    Register a new user
-// @route   POST /api/auth/register
-// @access  Public
+// --- REGISTER USER ---
 export const registerUser = asyncHandler(async (req, res) => {
   const { username, email, password, firstName, lastName } = req.body;
   console.log('[Auth Ctrl] Registering user:', { username, email, firstName, lastName });
-
   const userExistsByEmail = await User.findOne({ email: email.toLowerCase() });
   if (userExistsByEmail) {
-    res.status(400);
-    throw new Error('User with this email already exists');
+    res.status(400); throw new Error('User with this email already exists');
   }
   const userExistsByUsername = await User.findOne({ username });
   if (userExistsByUsername) {
-    res.status(400);
-    throw new Error('Username already taken');
+    res.status(400); throw new Error('Username already taken');
   }
-
   const user = await User.create({
-    username,
-    email: email.toLowerCase(),
-    password, // Hashing handled by pre-save hook in User.js
-    firstName: firstName || '',
-    lastName: lastName || '',
+    username, email: email.toLowerCase(), password,
+    firstName: firstName || '', lastName: lastName || '',
   });
-
   if (user) {
     const token = generateToken(user._id);
     res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 3600 * 1000,
+      httpOnly: true, secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', maxAge: 3600 * 1000,
     });
     console.log('[Auth Ctrl] User registered successfully:', user.username);
     res.status(201).json({
@@ -63,26 +46,20 @@ export const registerUser = asyncHandler(async (req, res) => {
       firstName: user.firstName, lastName: user.lastName, isAdmin: user.isAdmin, token: token,
     });
   } else {
-    res.status(400);
-    throw new Error('Invalid user data during registration');
+    res.status(400); throw new Error('Invalid user data during registration');
   }
 });
 
-// @desc    Authenticate user & get token (Login)
-// @route   POST /api/auth/login
-// @access  Public
+// --- LOGIN USER ---
 export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   console.log('[Auth Ctrl] Attempting login for email:', email);
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-
   if (user && (await user.matchPassword(password))) {
     const token = generateToken(user._id);
     res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 3600 * 1000,
+      httpOnly: true, secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', maxAge: 3600 * 1000,
     });
     console.log('[Auth Ctrl] User logged in successfully:', user.username);
     res.json({
@@ -92,14 +69,11 @@ export const loginUser = asyncHandler(async (req, res) => {
     });
   } else {
     console.warn('[Auth Ctrl] Login failed for email:', email);
-    res.status(401);
-    throw new Error('Invalid email or password');
+    res.status(401); throw new Error('Invalid email or password');
   }
 });
 
-// @desc    Get user profile
-// @route   GET /api/auth/profile
-// @access  Private
+// --- GET USER PROFILE ---
 export const getUserProfile = asyncHandler(async (req, res) => {
   console.log('[Auth Ctrl] Fetching profile for user ID:', req.user.id);
   const user = await User.findById(req.user.id).select('-password');
@@ -111,14 +85,11 @@ export const getUserProfile = asyncHandler(async (req, res) => {
       lastContestSubmissionMonth: user.lastContestSubmissionMonth, monthlyVoteRecord: user.monthlyVoteRecord,
     });
   } else {
-    res.status(404);
-    throw new Error('User not found for profile');
+    res.status(404); throw new Error('User not found for profile');
   }
 });
 
-// @desc    Update user profile
-// @route   PUT /api/auth/profile
-// @access  Private
+// --- UPDATE USER PROFILE ---
 export const updateUserProfile = asyncHandler(async (req, res) => {
   console.log('[Auth Ctrl] Updating profile for user ID:', req.user.id);
   const user = await User.findById(req.user.id);
@@ -134,7 +105,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     user.firstName = req.body.firstName !== undefined ? req.body.firstName : user.firstName;
     user.lastName = req.body.lastName !== undefined ? req.body.lastName : user.lastName;
     if (req.body.password && req.body.password.length > 0) {
-      console.log('[Auth Ctrl] User password being updated.');
+      console.log('[Auth Ctrl] User password being updated during profile update.');
       user.password = req.body.password;
     }
     const updateAddress = (currentAddressDoc, newAddressData) => {
@@ -156,118 +127,115 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
       shippingAddress: updatedUser.shippingAddress, billingAddress: updatedUser.billingAddress,
     });
   } else {
-    res.status(404);
-    throw new Error('User not found for profile update');
+    res.status(404); throw new Error('User not found for profile update');
   }
 });
 
-// @desc    Logout user / clear cookie
-// @route   POST /api/auth/logout
-// @access  Public
+// --- LOGOUT USER ---
 export const logoutUser = asyncHandler(async (req, res) => {
   console.log('[Auth Ctrl] Logging out user.');
   res.cookie('token', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    expires: new Date(0),
+    httpOnly: true, secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', expires: new Date(0),
   });
   res.status(200).json({ message: 'Logged out successfully' });
 });
 
-// @desc    Request a password reset
-// @route   POST /api/auth/request-password-reset
-// @access  Public
+// --- REQUEST PASSWORD RESET ---
 export const requestPasswordReset = asyncHandler(async (req, res) => {
   const { email } = req.body;
   console.log(`[Auth Ctrl] Password reset requested for email: ${email}`);
-
   if (!email) {
-    res.status(400);
-    throw new Error('Please provide an email address');
+    res.status(400); throw new Error('Please provide an email address');
   }
-
   const user = await User.findOne({ email: email.toLowerCase() });
-
   if (!user) {
     console.log(`[Auth Ctrl] Password reset: Email not found: ${email}. Sending generic response.`);
-    // It's important to send a generic success-like response to prevent email enumeration
     return res.status(200).json({ message: 'If your email is registered, you will receive a password reset link shortly.' });
   }
-
   const resetToken = crypto.randomBytes(32).toString('hex');
   const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-
   user.passwordResetToken = hashedToken;
   user.passwordResetExpires = Date.now() + 3600000; // 1 hour
-
   try {
-    await user.save({ validateBeforeSave: false }); // Save only token and expiry
+    await user.save({ validateBeforeSave: false });
     console.log(`[Auth Ctrl] Saved password reset token for user: ${user.email}`);
-
-    // --- Check for critical environment variables ---
     if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL || !process.env.FRONTEND_URL) {
-        console.error("[Auth Ctrl] CRITICAL: Email sending environment variables (SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, FRONTEND_URL) are not fully configured.");
-        // Do not proceed if config is missing. The error will be caught by the outer catch block.
+        console.error("[Auth Ctrl] CRITICAL: Email sending environment variables are not fully configured.");
         throw new Error("Server configuration error for sending email.");
     }
-    // API key is set globally at the top of the file now: sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
     console.log(`[Auth Ctrl] Generated Reset URL: ${resetUrl}`);
-
-    const messageBody = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #4E342E;">Password Reset Request - TeesFromThePast</h2>
-        <p>Hello ${user.firstName || user.username},</p>
-        <p>You are receiving this email because you (or someone else) have requested to reset the password for your account on TeesFromThePast.</p>
-        <p>Please click on the button below, or paste the following link into your browser to complete the process. This link will expire in one hour:</p>
-        <p style="margin: 20px 0; text-align: center;">
-          <a href="${resetUrl}" target="_blank" style="display: inline-block; background-color: #FF7043; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Your Password</a>
-        </p>
-        <p>If the button doesn't work, you can copy and paste this URL into your browser:</p>
-        <p><a href="${resetUrl}" target="_blank">${resetUrl}</a></p>
-        <p>If you did not request this password reset, please ignore this email and your password will remain unchanged.</p>
-        <p>Thank you,<br/>The TeesFromThePast Team</p>
-      </div>
-    `;
-
+    const messageBody = `... your HTML email body from previous step ...`; // Keep your existing messageBody
     const msg = {
       to: user.email,
-      from: {
-        email: process.env.SENDGRID_FROM_EMAIL, // Your VERIFIED sender email in SendGrid
-        name: 'TeesFromThePast Support',        // Optional: Sender name
-      },
-      subject: 'Password Reset Request - TeesFromThePast',
-      html: messageBody,
+      from: { email: process.env.SENDGRID_FROM_EMAIL, name: 'TeesFromThePast Support' },
+      subject: 'Password Reset Request - TeesFromThePast', html: messageBody,
     };
-
     console.log(`[Auth Ctrl] Attempting to send password reset email to: ${user.email} from: ${process.env.SENDGRID_FROM_EMAIL} via SendGrid.`);
     await sgMail.send(msg);
     console.log(`[Auth Ctrl] Password reset email sent successfully to ${user.email} via SendGrid.`);
     res.status(200).json({ message: 'If your email is registered, you will receive a password reset link shortly.' });
-
   } catch (error) {
     console.error('[Auth Ctrl] Error during SendGrid password reset process:', error);
-    if (error.response && error.response.body && error.response.body.errors) { // SendGrid often includes detailed errors here
+    if (error.response && error.response.body && error.response.body.errors) {
       console.error('[Auth Ctrl] SendGrid Error Body Details:', JSON.stringify(error.response.body.errors, null, 2));
     } else if (error.message) {
       console.error('[Auth Ctrl] Error message:', error.message);
     }
-
-    // Attempt to clear token fields to allow user to retry without being blocked by old token
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
-    try {
-      await user.save({ validateBeforeSave: false });
-      console.log(`[Auth Ctrl] Cleared password reset token fields for user ${user.email} after SendGrid error.`);
-    } catch (saveError) {
-      console.error(`[Auth Ctrl] CRITICAL: Failed to clear password reset token fields for user ${user.email} after an initial error:`, saveError);
-    }
-    // Send a generic error message to the client
+    user.passwordResetToken = undefined; user.passwordResetExpires = undefined;
+    try { await user.save({ validateBeforeSave: false }); console.log(`[Auth Ctrl] Cleared token for ${user.email} after error.`); }
+    catch (saveError) { console.error(`[Auth Ctrl] CRITICAL: Failed to clear token for ${user.email}:`, saveError); }
     res.status(500).json({ message: 'There was an issue processing your request. Please try again later.' });
   }
 });
 
-// Placeholder for the next step - resetting the password with the token
-// export const resetPassword = asyncHandler(async (req, res) => { /* ... to be implemented ... */ });
+// --- NEW: RESET PASSWORD WITH TOKEN ---
+// @desc    Reset password using a token
+// @route   POST /api/auth/reset-password
+// @access  Public
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token, password } = req.body;
+  console.log(`[Auth Ctrl] Attempting to reset password with token (first 10 chars): ${token ? token.substring(0,10) + '...' : 'No Token'}`);
+
+  if (!token || !password) {
+    res.status(400);
+    throw new Error('Please provide a token and a new password.');
+  }
+
+  if (password.length < 6) { // Add your password strength requirements
+      res.status(400);
+      throw new Error('Password must be at least 6 characters long.');
+  }
+
+  // Hash the incoming token from the URL/request body so we can find it in the DB
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(token) // Hash the plaintext token received from the client
+    .digest('hex');
+
+  // Find user by the hashed token and check if the token has not expired
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() }, // Check if expiry date is greater than current time
+  }).select('+passwordResetToken +passwordResetExpires'); // Explicitly select these fields
+
+  if (!user) {
+    console.log(`[Auth Ctrl] Password reset token is invalid or has expired.`);
+    res.status(400);
+    throw new Error('Password reset token is invalid or has expired.');
+  }
+
+  // Set the new password (it will be hashed by the pre-save hook in User.js)
+  user.password = password;
+  user.passwordResetToken = undefined; // Clear the token
+  user.passwordResetExpires = undefined; // Clear the expiry
+  // user.forcePasswordChange = false; // If you implement this flag
+
+  await user.save();
+  console.log(`[Auth Ctrl] Password has been reset successfully for user: ${user.email}`);
+
+  // Optionally, log the user in directly or send a confirmation
+  // For now, just send success and let them log in manually
+  res.status(200).json({ message: 'Password has been reset successfully. Please log in with your new password.' });
+});
