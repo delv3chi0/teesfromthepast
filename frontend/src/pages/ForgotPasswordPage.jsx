@@ -90,7 +90,7 @@ const ForgotPasswordPage = () => {
 
             <form onSubmit={handleSubmit} style={{ width: '100%' }}>
               <VStack spacing={4}>
-                <FormControl id="email-forgot" isRequired> {/* Changed id for clarity */}
+                <FormControl id="email-forgot" isRequired>
                   <FormLabel color="brand.textDark">Email address</FormLabel>
                   <Input
                     type="email"
@@ -101,10 +101,8 @@ const ForgotPasswordPage = () => {
                     borderColor="gray.300" // Or your theme's input border color e.g. brand.secondary
                     _hover={{ borderColor: 'gray.400' }} // Or theme equivalent
                     focusBorderColor="brand.primaryDark" // This sets the border color on focus
-                    // The boxShadow will use the focusBorderColor by default with 'outline'
-                    // Or you can use a specific color token for the shadow:
-                    // _focus={{ boxShadow: `0 0 0 1px var(--chakra-colors-brand-primaryDark)` }}
-                    // Using Chakra's default outline which respects focusBorderColor is often best:
+                    // The following _focus style uses Chakra's default outline which respects focusBorderColor
+                    // This was the corrected part and should not cause 'colors is not defined'
                     _focus={{ boxShadow: 'outline' }}
                     size="lg"
                   />
@@ -131,7 +129,7 @@ const ForgotPasswordPage = () => {
               </Text>
             )}
 
-            <Text color="brand.textDark" mt={4}> {/* Added mt for spacing */}
+            <Text color="brand.textDark" mt={4}>
               Remember your password?{' '}
               <ChakraLink as={RouterLink} to="/login" color="brand.primaryDark" fontWeight="bold" _hover={{ textDecoration: 'underline', color: 'brand.primary'}}>
                 Login here
