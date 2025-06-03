@@ -5,9 +5,9 @@ import {
     Box, Heading, Input, Button, Text, Stack, useToast, VStack, Icon,
     FormControl, FormLabel, Spinner, Checkbox, Divider, SimpleGrid,
     InputGroup, InputRightElement, IconButton as ChakraIconButton,
-    Collapse, // For collapsible password section
-    useDisclosure, // For Collapse component
-    Flex // For password section header
+    Collapse,
+    useDisclosure,
+    Flex
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -44,7 +44,7 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
-  const { isOpen: isPasswordSectionOpen, onToggle: onPasswordSectionToggle } = useDisclosure(); // For password collapse
+  const { isOpen: isPasswordSectionOpen, onToggle: onPasswordSectionToggle } = useDisclosure();
 
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,7 +78,7 @@ export default function Profile() {
           const addressesAreIdentical = Object.keys(initialAddressState).every(key => sa[key] === ba[key]);
           setBillingSameAsShipping(addressesAreIdentical);
       } else {
-          setBillingSameAsShipping(false); // Default if one is defined and the other isn't (and not covered above)
+          setBillingSameAsShipping(false);
       }
       setIsLoading(false);
     } else if (!authStillLoading && !user) {
@@ -92,8 +92,6 @@ export default function Profile() {
       const newForm = { ...prevForm, [name]: value };
       if (name === "firstName" || name === "lastName") {
         const newRecipientName = `${newForm.firstName} ${newForm.lastName}`.trim();
-        // If recipient name is empty or was derived, update it.
-        // Check if current recipient name is empty or matches the old derived name
         const oldRecipientName = `${prevForm.firstName} ${prevForm.lastName}`.trim();
 
         if (billingSameAsShipping) {
@@ -105,7 +103,6 @@ export default function Profile() {
             if (prevForm.shippingAddress && (!prevForm.shippingAddress.recipientName || prevForm.shippingAddress.recipientName === oldRecipientName)) {
                 newForm.shippingAddress.recipientName = newRecipientName;
             }
-            // Independent update for billing if not same as shipping
         }
       }
       return newForm;
@@ -141,7 +138,6 @@ export default function Profile() {
     } else {
         setForm(prevForm => ({
             ...prevForm,
-            // Reset billing to its original state from user prop, or to initial if nothing was there
             billingAddress: { ...initialAddressState, ...(user?.billingAddress || {}) }
         }));
     }
@@ -215,7 +211,7 @@ export default function Profile() {
     setEditing(false);
     setPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
     setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmNewPassword(false);
-    if (isPasswordSectionOpen) onPasswordSectionToggle(); // Close password section if open
+    if (isPasswordSectionOpen) onPasswordSectionToggle();
   };
 
   const handlePasswordFormChange = (e) => {
@@ -246,7 +242,7 @@ export default function Profile() {
       toast({ title: "Password Changed", description: "Your password has been updated successfully.", status: "success", duration: 3000, isClosable: true });
       setPasswordForm({ currentPassword: '', newPassword: '', confirmNewPassword: '' });
       setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmNewPassword(false);
-      onPasswordSectionToggle(); // Close the section after successful change
+      if (isPasswordSectionOpen) onPasswordSectionToggle(); // Close section on success
     } catch (error) {
       const errorMessage = error.response?.data?.message || "Could not change password. Please check your current password.";
       toast({ title: "Password Change Failed", description: errorMessage, status: "error", duration: 5000, isClosable: true });
@@ -316,9 +312,7 @@ export default function Profile() {
 
   return (
     <Box maxW="xl" p={{base: 4, md: 8}} borderWidth="1px" borderRadius="xl" shadow="xl" bg="brand.paper" mx="auto">
-      <Heading as="h1" size={{ base: "lg", md: "xl" }} mb={6} textAlign="center" color="brand.textDark">
-        My Profile
-      </Heading>
+      {/* Main "My Profile" Heading REMOVED */}
 
       {/* Profile Details Form */}
       <VStack spacing={6} as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); else e.preventDefault(); }}>
@@ -353,7 +347,7 @@ export default function Profile() {
                         isChecked={billingSameAsShipping}
                         onChange={handleBillingSameAsShippingChange}
                         isDisabled={!editing}
-                        colorScheme="brandPrimary" // Ensure brandPrimary is defined for Checkbox in your theme
+                        colorScheme="brandPrimary"
                         size="lg"
                     >
                         <Text fontSize="md" color="brand.textDark">Billing address is the same as shipping</Text>
@@ -362,7 +356,6 @@ export default function Profile() {
                 {!billingSameAsShipping && renderAddressFields('billingAddress', '', false)} 
             </VStack>
         </Box>
-
 
         <Stack direction={{ base: 'column', sm: 'row' }} spacing={4} mt={6} w="100%">
           {!editing ? (
@@ -400,7 +393,7 @@ export default function Profile() {
         </Flex>
 
         <Collapse in={isPasswordSectionOpen} animateOpacity>
-          <Box as="form" onSubmit={handleChangePassword} py={4} px={2}>
+          <Box as="form" onSubmit={handleChangePassword} py={4} px={2}> {/* Added some padding to the content */}
             <VStack spacing={4} align="stretch">
               <FormControl id="currentPassword-profile">
                 <FormLabel fontWeight="semibold" color="brand.textDark">Current Password:</FormLabel>
@@ -466,9 +459,9 @@ export default function Profile() {
 
 const primaryButtonStyle = {
   bg: "brand.accentYellow", color: "brand.textDark", _hover:{ bg: "brand.accentYellowHover" },
-  borderRadius:"full", px:8, size:"lg" // size:"lg" was already here
+  borderRadius:"full", px:8, size:"lg"
 };
 const secondaryButtonStyle = {
   variant:"outline", borderColor:"brand.primary", color:"brand.primary",
-  _hover:{ bg: 'blackAlpha.50' }, borderRadius:"full", px:8, size:"lg" // size:"lg" was already here
+  _hover:{ bg: 'blackAlpha.50' }, borderRadius:"full", px:8, size:"lg"
 };
