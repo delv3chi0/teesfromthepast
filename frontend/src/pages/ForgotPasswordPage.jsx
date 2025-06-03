@@ -20,7 +20,7 @@ import { client } from '../api/client'; // Your Axios client
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState(''); // To display success/error messages
+  const [message, setMessage] = useState('');
   const toast = useToast();
 
   const handleSubmit = async (e) => {
@@ -41,24 +41,22 @@ const ForgotPasswordPage = () => {
     }
 
     try {
-      // This matches the conceptual backend endpoint
       await client.post('/auth/request-password-reset', { email });
       setMessage('If an account with that email address exists, a password reset link has been sent. Please check your inbox (and spam folder).');
       toast({
         title: 'Request Sent',
         description: 'If your email is registered, you will receive a reset link shortly.',
         status: 'success',
-        duration: 7000, // Longer duration for this message
+        duration: 7000,
         isClosable: true,
       });
-      setEmail(''); // Clear the input field
+      setEmail('');
     } catch (error) {
-      // Even on error, show a generic message to prevent email enumeration
       setMessage('If an account with that email address exists, a password reset link has been sent. If you continue to have trouble, please contact support.');
       toast({
         title: 'Request Processed',
         description: 'If your email is registered, you will receive instructions. Otherwise, please check the email entered or contact support if issues persist.',
-        status: 'info', // Use info or warning to avoid implying a system error to the user
+        status: 'info',
         duration: 7000,
         isClosable: true,
       });
@@ -92,7 +90,7 @@ const ForgotPasswordPage = () => {
 
             <form onSubmit={handleSubmit} style={{ width: '100%' }}>
               <VStack spacing={4}>
-                <FormControl id="email" isRequired>
+                <FormControl id="email-forgot" isRequired> {/* Changed id for clarity */}
                   <FormLabel color="brand.textDark">Email address</FormLabel>
                   <Input
                     type="email"
@@ -100,9 +98,15 @@ const ForgotPasswordPage = () => {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     bg="white"
-                    borderColor="gray.300"
-                    _hover={{ borderColor: 'gray.400' }}
-                    _focus={{ borderColor: 'brand.primary', boxShadow: `0 0 0 1px ${colors.brand.primary}` }}
+                    borderColor="gray.300" // Or your theme's input border color e.g. brand.secondary
+                    _hover={{ borderColor: 'gray.400' }} // Or theme equivalent
+                    focusBorderColor="brand.primaryDark" // This sets the border color on focus
+                    // The boxShadow will use the focusBorderColor by default with 'outline'
+                    // Or you can use a specific color token for the shadow:
+                    // _focus={{ boxShadow: `0 0 0 1px var(--chakra-colors-brand-primaryDark)` }}
+                    // Using Chakra's default outline which respects focusBorderColor is often best:
+                    _focus={{ boxShadow: 'outline' }}
+                    size="lg"
                   />
                 </FormControl>
 
@@ -110,9 +114,11 @@ const ForgotPasswordPage = () => {
                   type="submit"
                   isLoading={isLoading}
                   loadingText="Sending..."
-                  colorScheme="brandPrimary" // Use your primary button color scheme
+                  colorScheme="brandPrimary" // Ensure this color scheme is defined in your theme for buttons
                   w="100%"
                   py={6}
+                  size="lg" // Make button size consistent
+                  borderRadius="full" // If your buttons are typically full radius
                 >
                   Send Password Reset Link
                 </Button>
@@ -120,14 +126,14 @@ const ForgotPasswordPage = () => {
             </form>
 
             {message && (
-              <Text mt={4} textAlign="center" color={message.startsWith('Error') ? 'red.500' : 'brand.textDark'}>
+              <Text mt={4} textAlign="center" color={message.startsWith('Error requesting') ? 'red.500' : 'brand.textDark'}>
                 {message}
               </Text>
             )}
 
-            <Text color="brand.textDark">
+            <Text color="brand.textDark" mt={4}> {/* Added mt for spacing */}
               Remember your password?{' '}
-              <ChakraLink as={RouterLink} to="/login" color="brand.primary" fontWeight="bold">
+              <ChakraLink as={RouterLink} to="/login" color="brand.primaryDark" fontWeight="bold" _hover={{ textDecoration: 'underline', color: 'brand.primary'}}>
                 Login here
               </ChakraLink>
             </Text>
