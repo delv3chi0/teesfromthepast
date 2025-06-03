@@ -3,10 +3,13 @@ import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
 import theme from './theme';
 
+// Context and Auth Pages
 import { AuthProvider } from './context/AuthProvider';
-import Login from './Login';
+import Login from './Login'; // Assuming Login.jsx is directly in src/
 import RegistrationPage from './pages/RegistrationPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage'; // <-- IMPORTED
 
+// Main Application Layout and Pages
 import MainLayout from './components/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Generate from "./pages/Generate";
@@ -18,9 +21,10 @@ import CheckoutPage from './pages/CheckoutPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import MyOrdersPage from './pages/MyOrdersPage';
 
+// Route Protection and Admin Area
 import PrivateRoute from './components/PrivateRoute';
-import AdminRoute from './components/AdminRoute'; // <-- IMPORT AdminRoute
-import AdminPage from './pages/AdminPage';     // <-- IMPORT AdminPage (will be created next)
+import AdminRoute from './components/AdminRoute';
+import AdminPage from './pages/AdminPage';
 
 export default function App() {
   return (
@@ -31,6 +35,8 @@ export default function App() {
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegistrationPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} /> {/* <-- NEW ROUTE ADDED HERE */}
+
 
           {/* Protected Routes - these will now use the MainLayout */}
           <Route
@@ -74,18 +80,16 @@ export default function App() {
           <Route
             path="/admin"
             element={
-              <AdminRoute>  {/* Protects with AdminRoute */}
-                <MainLayout> {/* Uses the same MainLayout */}
+              <AdminRoute>
+                <MainLayout>
                   <AdminPage />
                 </MainLayout>
               </AdminRoute>
             }
           />
-          {/* We can add more nested admin routes later, e.g., /admin/users, /admin/orders */}
-
-
-          {/* Fallback route - navigates to login or dashboard depending on auth state could be more robust */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          
+          {/* Fallback route - navigates to login */}
+          <Route path="*" element={<Navigate to="/login" replace />} /> {/* Changed fallback to /login for unauthenticated users */}
         </Routes>
       </AuthProvider>
     </ChakraProvider>
