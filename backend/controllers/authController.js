@@ -12,7 +12,9 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
   console.log('[Auth Cfg] SendGrid API Key configured.');
 } else {
-  console.error('[Auth Cfg] CRITICAL: SENDGRID_API_KEY environment variable is not set!');
+  // This log will appear if the key is missing when the server starts.
+  // The requestPasswordReset function also has a runtime check.
+  console.error('[Auth Cfg] WARNING: SENDGRID_API_KEY environment variable is not set! Email sending will fail.');
 }
 
 
@@ -133,10 +135,16 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     }
     user.firstName = req.body.firstName !== undefined ? req.body.firstName : user.firstName;
     user.lastName = req.body.lastName !== undefined ? req.body.lastName : user.lastName;
-    if (req.body.password && req.body.password.length > 0) {
-      console.log('[Auth Ctrl] User password being updated during profile update.');
-      user.password = req.body.password;
-    }
+    
+    // Note: This endpoint is for profile details. Password change is handled by /api/auth/change-password
+    // If a password field is sent here, it should ideally be ignored or handled explicitly if intended.
+    // For clarity, we assume password changes are separate. If you want to allow password change here too,
+    // you'd add the logic like:
+    // if (req.body.password && req.body.password.length > 0) {
+    //   console.log('[Auth Ctrl] User password being updated during profile update (not recommended here, use /change-password).');
+    //   user.password = req.body.password;
+    // }
+
     const updateAddress = (currentAddressDoc, newAddressData) => {
       if (!newAddressData && newAddressData !== null) return currentAddressDoc;
       if (newAddressData === null) return undefined;
@@ -148,6 +156,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     };
     if (req.body.shippingAddress !== undefined) user.shippingAddress = updateAddress(user.shippingAddress, req.body.shippingAddress);
     if (req.body.billingAddress !== undefined) user.billingAddress = updateAddress(user.billingAddress, req.body.billingAddress);
+    
     const updatedUser = await user.save();
     console.log('[Auth Ctrl] Profile updated successfully for:', updatedUser.username);
     res.json({
@@ -160,6 +169,50 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     throw new Error('User not found for profile update');
   }
 });
+
+// @desc    Change user password (when logged in)
+// @route   PUT /api/auth/change-password
+// @access  Private (user must be logged in)
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  // req.user.id comes from the 'protect' middleware
+  console.log('[Auth Ctrl] Attempting to change password for user ID:', req.user.id);
+
+  if (!currentPassword || !newPassword) {
+    res.status(400);
+    throw new Error('Please provide current and new passwords.');
+  }
+
+  if (newPassword.length < 6) { // Consistent with frontend/registration validation
+    res.status(400);
+    throw new Error('New password must be at least 6 characters long.');
+  }
+
+  // We need to fetch the user and explicitly select the password to compare the current one
+  const user = await User.findById(req.user.id).select('+password');
+
+  if (!user) {
+    // This should not happen if 'protect' middleware is working correctly
+    res.status(404);
+    throw new Error('User not found.');
+  }
+
+  // Check if currentPassword matches
+  const isMatch = await user.matchPassword(currentPassword);
+  if (!isMatch) {
+    console.warn('[Auth Ctrl] Change password failed - current password incorrect for user:', user.email);
+    res.status(401); // Unauthorized or Bad credentials
+    throw new Error('Incorrect current password.');
+  }
+
+  // Set new password (pre-save hook in User model will hash it)
+  user.password = newPassword;
+  await user.save(); // This will trigger the pre-save hook to hash the new password
+
+  console.log('[Auth Ctrl] Password changed successfully for user:', user.email);
+  res.status(200).json({ message: 'Password changed successfully.' });
+});
+
 
 // @desc    Logout user / clear cookie
 // @route   POST /api/auth/logout
@@ -200,8 +253,6 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     }
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
     console.log(`[Auth Ctrl] Generated Reset URL: ${resetUrl}`);
-
-    // --- HTML Email Body ---
     const messageBody = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
         <h2 style="color: #4E342E;">Password Reset Request - TeesFromThePast</h2>
@@ -217,8 +268,6 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
         <p>Thank you,<br/>The TeesFromThePast Team</p>
       </div>
     `;
-    // --- End of HTML Email Body ---
-
     const msg = {
       to: user.email,
       from: { email: process.env.SENDGRID_FROM_EMAIL, name: 'TeesFromThePast Support' },
@@ -248,39 +297,25 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
 export const resetPassword = asyncHandler(async (req, res) => {
   const { token, password } = req.body;
   console.log(`[Auth Ctrl] Attempting to reset password with token (first 10 chars): ${token ? token.substring(0,10) + '...' : 'No Token'}`);
-
   if (!token || !password) {
-    res.status(400);
-    throw new Error('Please provide a token and a new password.');
+    res.status(400); throw new Error('Please provide a token and a new password.');
   }
-
-  if (password.length < 6) { // Example: Enforce minimum password length
-      res.status(400);
-      throw new Error('Password must be at least 6 characters long.');
+  if (password.length < 6) {
+      res.status(400); throw new Error('Password must be at least 6 characters long.');
   }
-
-  const hashedToken = crypto
-    .createHash('sha256')
-    .update(token)
-    .digest('hex');
-
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
   const user = await User.findOne({
     passwordResetToken: hashedToken,
     passwordResetExpires: { $gt: Date.now() },
-  }).select('+passwordResetToken +passwordResetExpires'); // Explicitly select to check them
-
+  }).select('+passwordResetToken +passwordResetExpires');
   if (!user) {
     console.log(`[Auth Ctrl] Password reset token is invalid or has expired for token (hashed): ${hashedToken.substring(0,10)}...`);
-    res.status(400);
-    throw new Error('Password reset token is invalid or has expired.');
+    res.status(400); throw new Error('Password reset token is invalid or has expired.');
   }
-
-  user.password = password; // New password, will be hashed by pre-save hook
+  user.password = password;
   user.passwordResetToken = undefined;
   user.passwordResetExpires = undefined;
-
   await user.save();
   console.log(`[Auth Ctrl] Password has been reset successfully for user: ${user.email}`);
-
   res.status(200).json({ message: 'Password has been reset successfully. You can now log in with your new password.' });
 });

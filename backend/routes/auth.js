@@ -9,7 +9,8 @@ import {
   updateUserProfile,
   logoutUser,
   requestPasswordReset,
-  resetPassword // <-- IMPORT NEW CONTROLLER FUNCTION
+  resetPassword
+  changePassword
 } from '../controllers/authController.js';
 
 const router = express.Router();
@@ -21,6 +22,7 @@ router.route('/profile').get(protect, getUserProfile).put(protect, updateUserPro
 
 // Password Reset Routes
 router.post('/request-password-reset', requestPasswordReset);
-router.post('/reset-password', resetPassword); // <-- ADD THIS NEW ROUTE
+router.post('/reset-password', resetPassword); 
+router.put('/change-password', protect, changePassword); 
 
 export default router;
