@@ -5,9 +5,10 @@ import theme from './theme';
 
 // Context and Auth Pages
 import { AuthProvider } from './context/AuthProvider';
-import Login from './Login'; // Assuming Login.jsx is directly in src/
+import Login from './Login';
 import RegistrationPage from './pages/RegistrationPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage'; // <-- IMPORTED
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage'; // <-- IMPORT NEW PAGE
 
 // Main Application Layout and Pages
 import MainLayout from './components/MainLayout';
@@ -31,14 +32,15 @@ export default function App() {
     <ChakraProvider theme={theme}>
       <AuthProvider>
         <Routes>
-          {/* Public routes - no MainLayout */}
+          {/* Public routes */}
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegistrationPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} /> {/* <-- NEW ROUTE ADDED HERE */}
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} /> {/* <-- ADD THIS NEW ROUTE */}
 
-
-          {/* Protected Routes - these will now use the MainLayout */}
+          {/* Protected Routes */}
+          {/* ... your existing protected routes ... */}
           <Route
             path="/dashboard"
             element={<PrivateRoute><MainLayout><Dashboard/></MainLayout></PrivateRoute>}
@@ -76,20 +78,15 @@ export default function App() {
             element={<PrivateRoute><MainLayout><MyOrdersPage/></MainLayout></PrivateRoute>}
           />
 
+
           {/* ADMIN ROUTE */}
           <Route
             path="/admin"
-            element={
-              <AdminRoute>
-                <MainLayout>
-                  <AdminPage />
-                </MainLayout>
-              </AdminRoute>
-            }
+            element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>}
           />
           
-          {/* Fallback route - navigates to login */}
-          <Route path="*" element={<Navigate to="/login" replace />} /> {/* Changed fallback to /login for unauthenticated users */}
+          {/* Fallback route */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </AuthProvider>
     </ChakraProvider>
