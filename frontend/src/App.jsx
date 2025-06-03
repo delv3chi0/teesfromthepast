@@ -8,7 +8,8 @@ import { AuthProvider } from './context/AuthProvider';
 import Login from './Login';
 import RegistrationPage from './pages/RegistrationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage'; // <-- IMPORT NEW PAGE
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import ContactPage from './pages/ContactPage'; // <-- IMPORTED ContactPage
 
 // Main Application Layout and Pages
 import MainLayout from './components/MainLayout';
@@ -37,10 +38,10 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} /> {/* <-- ADD THIS NEW ROUTE */}
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/contact" element={<ContactPage />} /> {/* <-- NEW ROUTE FOR CONTACT PAGE */}
 
           {/* Protected Routes */}
-          {/* ... your existing protected routes ... */}
           <Route
             path="/dashboard"
             element={<PrivateRoute><MainLayout><Dashboard/></MainLayout></PrivateRoute>}
@@ -77,7 +78,6 @@ export default function App() {
             path="/my-orders"
             element={<PrivateRoute><MainLayout><MyOrdersPage/></MainLayout></PrivateRoute>}
           />
-
 
           {/* ADMIN ROUTE */}
           <Route
