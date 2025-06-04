@@ -1,6 +1,5 @@
 // frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef } from 'react';
-// NO 'fabric' import here. We rely on window.fabric from the script tag in index.html.
 
 import {
     Box, Heading, Text, VStack, Select,
