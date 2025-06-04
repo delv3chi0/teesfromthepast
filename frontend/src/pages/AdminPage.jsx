@@ -6,7 +6,7 @@ import {
   Button, useToast, Tag, Image,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider,
+  Divider, Tooltip // Added Tooltip
 } from '@chakra-ui/react';
 import { FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash } from 'react-icons/fa';
 import { client } from '../api/client';
@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthProvider';
 const AdminPage = () => {
   console.log("[AdminPage] Rendering Admin Page...");
   const toast = useToast();
-  const { token } = useAuth(); // Assuming token is sufficient for admin actions
+  const { token } = useAuth();
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -37,9 +37,8 @@ const AdminPage = () => {
   const [editFormData, setEditFormData] = useState({
     username: '', email: '', firstName: '', lastName: '', isAdmin: false, newPassword: '', confirmNewPassword: '',
   });
-  const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false); // Renamed for clarity
-  const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false); // Renamed for clarity
-
+  const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
+  const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     if (!token) { setUsersError("Auth token missing."); setLoadingUsers(false); return; }
@@ -78,7 +77,7 @@ const AdminPage = () => {
       firstName: user.firstName || '', lastName: user.lastName || '',
       isAdmin: user.isAdmin, newPassword: '', confirmNewPassword: '',
     });
-    setShowNewPasswordInModal(false); setShowConfirmNewPasswordInModal(false); // Use new state var names
+    setShowNewPasswordInModal(false); setShowConfirmNewPasswordInModal(false);
     onEditModalOpen();
   };
 
@@ -92,15 +91,14 @@ const AdminPage = () => {
     if (editFormData.newPassword && editFormData.newPassword !== editFormData.confirmNewPassword) {
       toast({ title: "Password Mismatch", description: "New passwords do not match.", status: "error", duration: 3000, isClosable: true }); return;
     }
-    if (editFormData.newPassword && editFormData.newPassword.length < 6) { // Basic validation
+    if (editFormData.newPassword && editFormData.newPassword.length < 6) {
       toast({ title: "Password Too Short", description: "New password must be at least 6 characters.", status: "error", duration: 3000, isClosable: true }); return;
     }
     const payload = { ...editFormData };
-    // Only send password if newPassword is set. confirmNewPassword is not needed by backend.
     if (!payload.newPassword) { 
       delete payload.newPassword;
     }
-    delete payload.confirmNewPassword; // Always remove confirm from payload
+    delete payload.confirmNewPassword; 
 
     try {
       const { data: updatedUser } = await client.put(`/admin/users/${selectedUser._id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
@@ -128,12 +126,7 @@ const AdminPage = () => {
     }
   };
 
-  // Panel Components
-  const UsersPanel = () => ( /* ... Same as previous correct version ... */ );
-  const OrdersPanel = () => ( /* ... Same as previous correct version ... */ );
-  const DesignsPanel = () => ( /* ... Same as previous correct version ... */ );
-
-  // --- PASTE PREVIOUSLY PROVIDED UsersPanel, OrdersPanel, DesignsPanel here ---
+  // --- Panel Components ---
   const UsersPanel = () => (
     <Box p={{ base: 2, md: 4 }}>
       <Heading size="md" mb={4} color="brand.textDark">User Management</Heading>
@@ -226,11 +219,10 @@ const AdminPage = () => {
       )}
     </Box>
   );
-  // --- END OF PASTED PANELS ---
-
+  // --- END OF PANEL COMPONENTS ---
 
   return (
-    <Box /* pt and px removed, MainLayout handles padding */ w="100%" pb={10}>
+    <Box w="100%" pb={10}> {/* Removed pt and px, relying on MainLayout */}
       <VStack spacing={6} align="stretch">
         <Heading
           as="h1"
