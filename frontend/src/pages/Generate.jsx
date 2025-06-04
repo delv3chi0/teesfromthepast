@@ -1,5 +1,5 @@
 // frontend/src/pages/Generate.jsx
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, HStack, Icon, Alert, AlertIcon } from "@chakra-ui/react";
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon } from "@chakra-ui/react";
 import { useState } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -8,17 +8,16 @@ import { FaMagic, FaSave } from 'react-icons/fa';
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); // Correct state variable
+  const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const toast = useToast();
-  const { logout } = useAuth(); 
-  const navigate = useNavigate(); 
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
-    // The console.error here is likely where your "Generate.jsx:20" log comes from
-    console.error(`[${actionType} Error]`, err.response?.data || err.message || err); 
+    console.error(`[${actionType} Error]`, err.response?.data || err.message || err);
     let message = defaultMessage;
     if (err.response) {
       message = err.response.data?.message || err.response.data?.error?.message || err.response.data?.error || defaultMessage;
@@ -32,7 +31,7 @@ export default function Generate() {
         });
         logout();
         navigate('/login');
-        return; 
+        return;
       }
     } else if (err.message) {
       message = err.message;
@@ -56,7 +55,7 @@ export default function Generate() {
     setImageUrl("");
     setError("");
     try {
-      const response = await client.post('/designs/create', { prompt }); 
+      const response = await client.post('/designs/create', { prompt });
       if (response.data && response.data.imageDataUrl) {
         setImageUrl(response.data.imageDataUrl);
         toast({ title: 'Image Generated!', description: 'Your retro design is ready.', status: 'success', duration: 3000, isClosable: true });
@@ -71,15 +70,14 @@ export default function Generate() {
   };
 
   const handleSaveDesign = async () => {
-    if (!imageUrl) { // Check against the correct state variable
-        toast({ title: 'No Image', description: 'Generate an image first before saving.', status: 'warning', duration: 3000, isClosable: true });
-        return;
+    if (!imageUrl) {
+      toast({ title: 'No Image', description: 'Generate an image first before saving.', status: 'warning', duration: 3000, isClosable: true });
+      return;
     }
     setIsSaving(true);
     setError("");
     try {
-      // CORRECTED: Send 'imageUrl' from state as 'imageDataUrl' in the request body
-      await client.post('/mydesigns', { prompt: prompt, imageDataUrl: imageUrl }); 
+      await client.post('/mydesigns', { prompt: prompt, imageDataUrl: imageUrl });
       toast({ title: 'Design Saved!', description: 'Your masterpiece is saved to "My Designs".', status: 'success', duration: 3000, isClosable: true });
     } catch (err) {
       handleApiError(err, 'Failed to save design.', 'Save Design');
@@ -89,70 +87,92 @@ export default function Generate() {
   };
 
   return (
-    <VStack spacing={8} w="100%" maxW="4xl" mx="auto" mt={{base: 4, md: 6}} px={{base:2, md:4}} pb={10}>
-      <Heading as="h1" size="xl" color="brand.textLight" textAlign="left" w="100%" mb={6}> 
-        AI Image Generator 
+    <VStack spacing={8} w="100%" maxW="4xl" mx="auto" /*mt removed, MainLayout provides padding*/ px={{base:2, md:0}} pb={10}>
+      {/* Page Title - UPDATED FOR CONSISTENCY */}
+      <Heading
+        as="h1"
+        size="pageTitle" // Using the new custom size from theme.js
+        color="brand.textLight"
+        textAlign="left"
+        w="100%"
+        mb={{ base: 4, md: 6 }} // Consistent bottom margin
+      >
+        AI Image Generator
       </Heading>
       
-      <VStack spacing={5} w="100%" bg="brand.paper" p={6} borderRadius="xl" shadow="lg">
-        <Textarea 
-          placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
-          value={prompt} 
-          onChange={(e) => setPrompt(e.target.value)} 
+      <VStack spacing={5} w="100%" bg="brand.paper" p={{base:4, md:6}} borderRadius="xl" shadow="lg">
+        <Textarea
+          placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot navigating a pixelated cityscape'"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
           isDisabled={loading || isSaving}
           size="lg"
           minHeight="120px"
-          color="brand.textDark" 
+          color="brand.textDark"
           borderColor="brand.secondary"
           focusBorderColor="brand.primaryDark"
           _placeholder={{ color: 'gray.500' }}
+          borderRadius="md"
         />
-        <Button 
-          onClick={handleGenerate} 
+        <Button
+          onClick={handleGenerate}
           bg="brand.accentYellow"
           color="brand.textDark"
           _hover={{bg: "brand.accentYellowHover"}}
           isLoading={loading}
           loadingText="Generating..."
           isDisabled={isSaving || loading}
-          size="lg" 
-          px={8} 
+          size="lg"
+          px={8}
           borderRadius="full"
           leftIcon={<Icon as={FaMagic} />}
+          boxShadow="md"
+          _active={{ boxShadow: "inner" }}
         >
           Generate Image
         </Button>
       </VStack>
 
       {error && (
-        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%">
+        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%" variant="subtle">
             <AlertIcon color="red.600"/>
             <Text color="red.800" wordBreak="break-word">{error}</Text>
         </Alert>
       )}
       
-      {imageUrl && !error && (
-        <VStack 
-          mt={6} spacing={5} p={6} 
-          bg="brand.paper" 
-          borderRadius="xl" shadow="xl" w="100%" maxW="580px" 
+      {/* Display loading spinner centrally below the generate button if loading */}
+      {loading && (
+        <VStack justifyContent="center" alignItems="center" py={10}>
+          <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
+          <Text mt={3} color="brand.textLight" fontSize="lg">Conjuring up your retro vision...</Text>
+        </VStack>
+      )}
+
+      {imageUrl && !error && !loading && ( // Only show image section if not loading and no error
+        <VStack
+          mt={6} spacing={5} p={6}
+          bg="brand.paper"
+          borderRadius="xl" shadow="xl" w="100%" maxW="580px" // Max width for the image container
           transition="all 0.2s ease-in-out"
           _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.01)"}}
         >
-          <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="512px" maxH="512px" borderRadius="lg" shadow="md" />
+          <Heading as="h3" size="lg" color="brand.textDark" textAlign="center">Your Generated Image:</Heading>
+          <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="512px" maxH="512px" borderRadius="lg" shadow="md" objectFit="contain"/>
           <Button
-            mt={3} 
+            mt={3}
             bg="brand.accentYellow"
             color="brand.textDark"
             _hover={{bg: "brand.accentYellowHover"}}
             onClick={handleSaveDesign}
-            isLoading={isSaving} 
-            loadingText="Saving..." 
-            isDisabled={loading || !imageUrl}
-            size="lg" 
-            px={8} 
+            isLoading={isSaving}
+            loadingText="Saving..."
+            isDisabled={loading || !imageUrl} // imageUrl check is redundant if section only shows when imageUrl exists
+            size="lg"
+            px={8}
             borderRadius="full"
             leftIcon={<Icon as={FaSave} />}
+            boxShadow="md"
+            _active={{ boxShadow: "inner" }}
           >
             Save This Design
           </Button>

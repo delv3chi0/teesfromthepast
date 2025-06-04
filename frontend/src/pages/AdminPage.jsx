@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthProvider';
 const AdminPage = () => {
   console.log("[AdminPage] Rendering Admin Page...");
   const toast = useToast();
-  const { token } = useAuth();
+  const { token } = useAuth(); // Assuming token is sufficient for admin actions
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -37,8 +37,9 @@ const AdminPage = () => {
   const [editFormData, setEditFormData] = useState({
     username: '', email: '', firstName: '', lastName: '', isAdmin: false, newPassword: '', confirmNewPassword: '',
   });
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false); // Renamed for clarity
+  const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false); // Renamed for clarity
+
 
   const fetchUsers = useCallback(async () => {
     if (!token) { setUsersError("Auth token missing."); setLoadingUsers(false); return; }
@@ -73,10 +74,11 @@ const AdminPage = () => {
   const handleOpenEditUser = (user) => {
     setSelectedUser(user);
     setEditFormData({
-      username: user.username, email: user.email, firstName: user.firstName || '', lastName: user.lastName || '',
+      username: user.username, email: user.email, 
+      firstName: user.firstName || '', lastName: user.lastName || '',
       isAdmin: user.isAdmin, newPassword: '', confirmNewPassword: '',
     });
-    setShowNewPassword(false); setShowConfirmNewPassword(false);
+    setShowNewPasswordInModal(false); setShowConfirmNewPasswordInModal(false); // Use new state var names
     onEditModalOpen();
   };
 
@@ -88,20 +90,27 @@ const AdminPage = () => {
   const handleSaveChanges = async () => {
     if (!selectedUser) return;
     if (editFormData.newPassword && editFormData.newPassword !== editFormData.confirmNewPassword) {
-      toast({ title: "Password Mismatch", status: "error", duration: 3000, isClosable: true }); return;
+      toast({ title: "Password Mismatch", description: "New passwords do not match.", status: "error", duration: 3000, isClosable: true }); return;
     }
-    if (editFormData.newPassword && editFormData.newPassword.length < 6) {
-      toast({ title: "Password Too Short", description: "Min 6 characters.", status: "error", duration: 3000, isClosable: true }); return;
+    if (editFormData.newPassword && editFormData.newPassword.length < 6) { // Basic validation
+      toast({ title: "Password Too Short", description: "New password must be at least 6 characters.", status: "error", duration: 3000, isClosable: true }); return;
     }
     const payload = { ...editFormData };
-    if (!payload.newPassword) { delete payload.newPassword; delete payload.confirmNewPassword; }
-    if (payload.confirmNewPassword) delete payload.confirmNewPassword;
+    // Only send password if newPassword is set. confirmNewPassword is not needed by backend.
+    if (!payload.newPassword) { 
+      delete payload.newPassword;
+    }
+    delete payload.confirmNewPassword; // Always remove confirm from payload
+
     try {
       const { data: updatedUser } = await client.put(`/admin/users/${selectedUser._id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      toast({ title: "User Updated", status: "success", duration: 3000, isClosable: true });
+      toast({ title: "User Updated", description: `User ${updatedUser.username}'s details have been updated. ${payload.newPassword ? 'Password was changed.' : ''}`, status: "success", duration: 4000, isClosable: true });
       setUsers(prev => prev.map(u => u._id === updatedUser._id ? updatedUser : u));
       onEditModalClose(); setSelectedUser(null);
-    } catch (e) { toast({ title: "Update Failed", description: e.response?.data?.message || "Error.", status: "error", duration: 3000, isClosable: true }); }
+    } catch (e) { 
+      toast({ title: "Update Failed", description: e.response?.data?.message || "Could not update user details.", status: "error", duration: 5000, isClosable: true });
+      console.error("Admin User Update Error:", e.response?.data || e.message);
+    }
   };
 
   const handleOpenDeleteUser = (user) => { setSelectedUser(user); onDeleteModalOpen(); };
@@ -110,19 +119,27 @@ const AdminPage = () => {
     if (!selectedUser) return;
     try {
       await client.delete(`/admin/users/${selectedUser._id}`, { headers: { Authorization: `Bearer ${token}` } });
-      toast({ title: "User Deleted", status: "success", duration: 3000, isClosable: true });
+      toast({ title: "User Deleted", description: `User ${selectedUser.username} has been removed.`, status: "success", duration: 3000, isClosable: true });
       setUsers(prev => prev.filter(u => u._id !== selectedUser._id));
       onDeleteModalClose(); setSelectedUser(null);
-    } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message || "Error.", status: "error", duration: 3000, isClosable: true }); }
+    } catch (e) { 
+      toast({ title: "Delete Failed", description: e.response?.data?.message || "Could not delete user.", status: "error", duration: 5000, isClosable: true });
+      console.error("Admin User Delete Error:", e.response?.data || e.message);
+    }
   };
 
-  // Panel Components - Ensure these are complete and correct
+  // Panel Components
+  const UsersPanel = () => ( /* ... Same as previous correct version ... */ );
+  const OrdersPanel = () => ( /* ... Same as previous correct version ... */ );
+  const DesignsPanel = () => ( /* ... Same as previous correct version ... */ );
+
+  // --- PASTE PREVIOUSLY PROVIDED UsersPanel, OrdersPanel, DesignsPanel here ---
   const UsersPanel = () => (
     <Box p={{ base: 2, md: 4 }}>
-      <Heading size="md" mb={4}>User Management</Heading>
-      {loadingUsers && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" /><Text>Loading users...</Text></VStack> )}
+      <Heading size="md" mb={4} color="brand.textDark">User Management</Heading>
+      {loadingUsers && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" color="brand.primary" /><Text mt={2} color="brand.textDark">Loading users...</Text></VStack> )}
       {!loadingUsers && usersError && ( <Alert status="error" borderRadius="md"><AlertIcon />{usersError}</Alert> )}
-      {!loadingUsers && !usersError && users.length === 0 && ( <Text>No users found.</Text> )}
+      {!loadingUsers && !usersError && users.length === 0 && ( <Text color="brand.textDark">No users found.</Text> )}
       {!loadingUsers && !usersError && users.length > 0 && (
         <TableContainer>
           <Table variant="simple" size="sm">
@@ -136,9 +153,9 @@ const AdminPage = () => {
                   <Td><Tag size="sm" colorScheme={user.isAdmin ? 'green' : 'gray'} borderRadius="full">{user.isAdmin ? 'Yes' : 'No'}</Tag></Td>
                   <Td fontSize="xs">{new Date(user.createdAt).toLocaleDateString()}</Td>
                   <Td>
-                    <Button size="xs" variant="ghost" colorScheme="blue" onClick={() => handleViewUser(user)} mr={1} title="View"><Icon as={FaEye} /></Button>
-                    <Button size="xs" variant="ghost" colorScheme="yellow" onClick={() => handleOpenEditUser(user)} mr={1} title="Edit"><Icon as={FaEdit} /></Button>
-                    <Button size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteUser(user)} title="Delete"><Icon as={FaTrashAlt} /></Button>
+                    <Tooltip label="View User Details" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)} mr={1} aria-label="View User"/></Tooltip>
+                    <Tooltip label="Edit User" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="yellow" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)} mr={1} aria-label="Edit User"/></Tooltip>
+                    <Tooltip label="Delete User" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteUser(user)} aria-label="Delete User"/></Tooltip>
                   </Td>
                 </Tr>
               ))}
@@ -151,10 +168,10 @@ const AdminPage = () => {
 
   const OrdersPanel = () => (
     <Box p={{ base: 2, md: 4 }}>
-      <Heading size="md" mb={4}>Order Management</Heading>
-      {loadingOrders && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" /><Text>Loading orders...</Text></VStack> )}
+      <Heading size="md" mb={4} color="brand.textDark">Order Management</Heading>
+      {loadingOrders && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" color="brand.primary" /><Text mt={2} color="brand.textDark">Loading orders...</Text></VStack> )}
       {!loadingOrders && ordersError && ( <Alert status="error" borderRadius="md"><AlertIcon />{ordersError}</Alert> )}
-      {!loadingOrders && !ordersError && orders.length === 0 && ( <Text>No orders found.</Text> )}
+      {!loadingOrders && !ordersError && orders.length === 0 && ( <Text color="brand.textDark">No orders found. (Backend API for admin/orders needs implementation)</Text> )}
       {!loadingOrders && !ordersError && orders.length > 0 && (
         <TableContainer>
           <Table variant="simple" size="sm">
@@ -168,7 +185,7 @@ const AdminPage = () => {
                   <Td>{typeof order.totalAmount === 'number' ? `$${(order.totalAmount / 100).toFixed(2)}` : '$0.00'}</Td>
                   <Td><Tag size="sm" colorScheme={order.orderStatus === 'Delivered' ? 'green' : order.orderStatus === 'Shipped' ? 'blue' : order.orderStatus === 'Processing' ? 'yellow' : order.orderStatus === 'Pending' ? 'orange' : 'gray'} borderRadius="full">{order.orderStatus || 'N/A'}</Tag></Td>
                   <Td>{order.items?.length || 0}</Td>
-                  <Td><Button size="xs" variant="ghost" colorScheme="blue" onClick={() => alert(`View Order: ${order._id}`)} title="View Order"><Icon as={FaEye} /></Button></Td>
+                  <Td><Tooltip label="View Order Details" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => alert(`View Order: ${order._id}`)} aria-label="View Order"/></Tooltip></Td>
                 </Tr>
               ))}
             </Tbody>
@@ -180,10 +197,10 @@ const AdminPage = () => {
 
   const DesignsPanel = () => (
     <Box p={{ base: 2, md: 4 }}>
-      <Heading size="md" mb={4}>Design Management</Heading>
-      {loadingDesigns && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" /><Text>Loading designs...</Text></VStack> )}
+      <Heading size="md" mb={4} color="brand.textDark">Design Management</Heading>
+      {loadingDesigns && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" color="brand.primary" /><Text mt={2} color="brand.textDark">Loading designs...</Text></VStack> )}
       {!loadingDesigns && designsError && ( <Alert status="error" borderRadius="md"><AlertIcon />{designsError}</Alert> )}
-      {!loadingDesigns && !designsError && designs.length === 0 && ( <Text>No designs found.</Text> )}
+      {!loadingDesigns && !designsError && designs.length === 0 && ( <Text color="brand.textDark">No designs found. (Backend API for admin/designs needs implementation)</Text> )}
       {!loadingDesigns && !designsError && designs.length > 0 && (
         <TableContainer>
           <Table variant="simple" size="sm">
@@ -191,15 +208,15 @@ const AdminPage = () => {
             <Tbody>
               {designs.map((design) => (
                 <Tr key={design._id}>
-                  <Td><Image src={design.imageDataUrl} fallbackSrc="https://via.placeholder.com/50" alt="Design" boxSize="50px" objectFit="cover" borderRadius="md"/></Td>
+                  <Td><Image src={design.imageDataUrl} fallbackSrc="https://via.placeholder.com/50?text=Design" alt="Design" boxSize="50px" objectFit="cover" borderRadius="md"/></Td>
                   <Td maxW="200px" whiteSpace="normal" wordBreak="break-word" fontSize="xs">{design.prompt}</Td>
                   <Td>{design.user?.username || design.userId || 'N/A'}</Td>
                   <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
                   <Td><Tag size="sm" colorScheme={design.isContestSubmission ? 'purple' : 'gray'} borderRadius="full">{design.isContestSubmission ? 'Yes' : 'No'}</Tag></Td>
                   <Td>{design.votes || 0}</Td>
                   <Td>
-                    <Button size="xs" variant="ghost" colorScheme="blue" onClick={() => alert(`View Design: ${design._id}`)} mr={1} title="View Design"><Icon as={FaEye} /></Button>
-                    <Button size="xs" variant="ghost" colorScheme="red" onClick={() => alert(`Delete Design: ${design._id}`)} title="Delete Design"><Icon as={FaTrashAlt} /></Button>
+                    <Tooltip label="View Design" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => alert(`View Design: ${design._id}`)} mr={1} aria-label="View Design"/></Tooltip>
+                    <Tooltip label="Delete Design" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => alert(`Delete Design: ${design._id}`)} aria-label="Delete Design"/></Tooltip>
                   </Td>
                 </Tr>
               ))}
@@ -209,11 +226,22 @@ const AdminPage = () => {
       )}
     </Box>
   );
+  // --- END OF PASTED PANELS ---
+
 
   return (
-    <Box pt={{ base: "20px", md: "20px", xl: "20px" }} px={{ base: "2", md: "4" }} w="100%">
+    <Box /* pt and px removed, MainLayout handles padding */ w="100%" pb={10}>
       <VStack spacing={6} align="stretch">
-        <Heading as="h1" fontSize={{ base: "2xl", md: "3xl" }} color="brand.textLight" textAlign="left" w="100%">Admin Dashboard</Heading>
+        <Heading
+          as="h1"
+          size="pageTitle" // Uniform page title style
+          color="brand.textLight"
+          textAlign="left"
+          w="100%"
+          mb={{ base: 4, md: 6 }}
+        >
+          Admin Dashboard
+        </Heading>
         <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }}>
           <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy>
             <TabList mb="1em" flexWrap="wrap">
@@ -230,63 +258,69 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
-      {selectedUser && (
-        <Modal isOpen={isViewModalOpen} onClose={onViewModalClose} size="xl" scrollBehavior="inside">
-          <ModalOverlay />
-          <ModalContent bg="brand.paper"><ModalHeader color="brand.textDark">User Details: {selectedUser.username}</ModalHeader><ModalCloseButton />
-            <ModalBody color="brand.textDark">
-              <VStack spacing={3} align="start">
-                <Text><strong>ID:</strong> {selectedUser._id}</Text><Text><strong>Username:</strong> {selectedUser.username}</Text>
-                <Text><strong>Email:</strong> {selectedUser.email}</Text><Text><strong>First Name:</strong> {selectedUser.firstName||'N/A'}</Text>
-                <Text><strong>Last Name:</strong> {selectedUser.lastName||'N/A'}</Text>
-                <Text><strong>Admin:</strong> <Tag size="sm" colorScheme={selectedUser.isAdmin ? 'green' : 'gray'} borderRadius="full">{selectedUser.isAdmin ? 'Yes' : 'No'}</Tag></Text>
-                <Text><strong>Avatar URL:</strong> {selectedUser.avatarUrl||'N/A'}</Text><Text><strong>Stripe Customer ID:</strong> {selectedUser.stripeCustomerId||'N/A'}</Text>
-                {selectedUser.address && (<Box border="1px solid" borderColor="gray.200" p={3} borderRadius="md" w="100%"><Text fontWeight="bold" mb={2}>Primary Address:</Text><Text>Street: {selectedUser.address.street||'N/A'}</Text><Text>City: {selectedUser.address.city||'N/A'}</Text><Text>State: {selectedUser.address.state||'N/A'}</Text><Text>Zip Code: {selectedUser.address.zipCode||'N/A'}</Text><Text>Country: {selectedUser.address.country||'N/A'}</Text></Box>)}
-                <Text><strong>Joined:</strong> {new Date(selectedUser.createdAt).toLocaleString()}</Text><Text><strong>Last Updated:</strong> {new Date(selectedUser.updatedAt).toLocaleString()}</Text>
-              </VStack>
-            </ModalBody>
-            <ModalFooter><Button onClick={onViewModalClose} bg="brand.secondary" _hover={{bg: "brand.secondaryDark"}}>Close</Button></ModalFooter>
-          </ModalContent>
-        </Modal>
-      )}
+    {/* View User Modal */}
+    {selectedUser && (
+      <Modal isOpen={isViewModalOpen} onClose={onViewModalClose} size="xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent bg="brand.paper"><ModalHeader color="brand.textDark">User Details: {selectedUser.username}</ModalHeader><ModalCloseButton />
+          <ModalBody color="brand.textDark">
+            <VStack spacing={3} align="start">
+              <Text><strong>ID:</strong> {selectedUser._id}</Text><Text><strong>Username:</strong> {selectedUser.username}</Text>
+              <Text><strong>Email:</strong> {selectedUser.email}</Text><Text><strong>First Name:</strong> {selectedUser.firstName||'N/A'}</Text>
+              <Text><strong>Last Name:</strong> {selectedUser.lastName||'N/A'}</Text>
+              <Text><strong>Admin:</strong> <Tag size="sm" colorScheme={selectedUser.isAdmin ? 'green' : 'gray'} borderRadius="full">{selectedUser.isAdmin ? 'Yes' : 'No'}</Tag></Text>
+              <Text><strong>Avatar URL:</strong> {selectedUser.avatarUrl||'N/A'}</Text><Text><strong>Stripe Customer ID:</strong> {selectedUser.stripeCustomerId||'N/A'}</Text>
+              {selectedUser.address && (<Box border="1px solid" borderColor="gray.200" p={3} borderRadius="md" w="100%"><Text fontWeight="bold" mb={2}>Primary Address:</Text><Text>Street: {selectedUser.address.street||'N/A'}</Text><Text>City: {selectedUser.address.city||'N/A'}</Text><Text>State: {selectedUser.address.state||'N/A'}</Text><Text>Zip Code: {selectedUser.address.zipCode||'N/A'}</Text><Text>Country: {selectedUser.address.country||'N/A'}</Text></Box>)}
+              <Text><strong>Joined:</strong> {new Date(selectedUser.createdAt).toLocaleString()}</Text><Text><strong>Last Updated:</strong> {new Date(selectedUser.updatedAt).toLocaleString()}</Text>
+            </VStack>
+          </ModalBody>
+          <ModalFooter><Button onClick={onViewModalClose} colorScheme="brandPrimary">Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+    )}
 
-      {selectedUser && (
-        <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="xl">
-          <ModalOverlay />
-          <ModalContent bg="brand.paper"><ModalHeader color="brand.textDark">Edit User: {selectedUser.username}</ModalHeader><ModalCloseButton />
-            <ModalBody color="brand.textDark" overflowY="auto" maxHeight="70vh">
-              <VStack spacing={4} align="stretch">
-                <FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
-                <FormControl><FormLabel>Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
-                <FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
-                <FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
-                <FormControl display="flex" alignItems="center"><FormLabel htmlFor="isAdmin-switch-edit" mb="0">Admin Status</FormLabel><Switch id="isAdmin-switch-edit" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} colorScheme="green" /></FormControl>
-                <Divider my={4} /><Heading size="sm" color="brand.textDark">Change Password (Optional)</Heading>
-                <Text fontSize="xs" color="gray.500">Only fill if changing password.</Text>
-                <FormControl><FormLabel htmlFor="newPassword">New Password</FormLabel><InputGroup>
-                    <Input id="newPassword" name="newPassword" type={showNewPassword ? 'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange} placeholder="New password" bg="white" borderColor="gray.300"/>
-                    <InputRightElement><ChakraIconButton variant="ghost" icon={showNewPassword ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowNewPassword(!showNewPassword)} /></InputRightElement>
-                </InputGroup></FormControl>
-                <FormControl><FormLabel htmlFor="confirmNewPassword">Confirm New Password</FormLabel><InputGroup>
-                    <Input id="confirmNewPassword" name="confirmNewPassword" type={showConfirmNewPassword ? 'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} placeholder="Confirm password" bg="white" borderColor="gray.300"/>
-                    <InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPassword ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowConfirmNewPassword(!showConfirmNewPassword)} /></InputRightElement>
-                </InputGroup></FormControl>
-              </VStack>
-            </ModalBody>
-            <ModalFooter><Button onClick={onEditModalClose} mr={3} variant="ghost">Cancel</Button><Button onClick={handleSaveChanges} bg="brand.primary" color="white" _hover={{bg:"brand.primaryDark"}}>Save Changes</Button></ModalFooter>
-          </ModalContent>
-        </Modal>
-      )}
+    {/* Edit User Modal */}
+    {selectedUser && (
+      <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="xl">
+        <ModalOverlay />
+        <ModalContent bg="brand.paper"><ModalHeader color="brand.textDark">Edit User: {selectedUser.username}</ModalHeader><ModalCloseButton />
+          <ModalBody color="brand.textDark" overflowY="auto" maxHeight="70vh">
+            <VStack spacing={4} align="stretch">
+              <FormControl><FormLabel color="brand.textDark">Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
+              <FormControl><FormLabel color="brand.textDark">Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
+              <FormControl><FormLabel color="brand.textDark">First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
+              <FormControl><FormLabel color="brand.textDark">Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} bg="white" borderColor="gray.300"/></FormControl>
+              <FormControl display="flex" alignItems="center"><FormLabel htmlFor="isAdmin-switch-adminedit" mb="0" color="brand.textDark">Admin Status</FormLabel><Switch id="isAdmin-switch-adminedit" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} colorScheme="green" /></FormControl>
+              <Divider my={4} /><Heading size="sm" color="brand.textDark">Change Password (Optional)</Heading>
+              <Text fontSize="xs" color="gray.500">Only fill if changing this user's password.</Text>
+              <FormControl><FormLabel htmlFor="adminNewPass" color="brand.textDark">New Password</FormLabel><InputGroup>
+                  <Input id="adminNewPass" name="newPassword" type={showNewPasswordInModal ? 'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange} placeholder="New password (min. 6 chars)" bg="white" borderColor="gray.300"/>
+                  <InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)} aria-label="Toggle new password visibility"/></InputRightElement>
+              </InputGroup></FormControl>
+              <FormControl><FormLabel htmlFor="adminConfirmNewPass" color="brand.textDark">Confirm New Password</FormLabel><InputGroup>
+                  <Input id="adminConfirmNewPass" name="confirmNewPassword" type={showConfirmNewPasswordInModal ? 'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} placeholder="Confirm new password" bg="white" borderColor="gray.300"/>
+                  <InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)} aria-label="Toggle confirm password visibility"/></InputRightElement>
+              </InputGroup></FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onEditModalClose} mr={3} variant="ghost">Cancel</Button>
+            <Button onClick={handleSaveChanges} colorScheme="brandPrimary">Save Changes</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    )}
 
-      {selectedUser && (
-        <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose} isCentered>
-          <ModalOverlay />
-          <ModalContent bg="brand.paper"><ModalHeader color="brand.textDark">Confirm Deletion</ModalHeader><ModalCloseButton />
-            <ModalBody color="brand.textDark"><Text>Delete <strong>{selectedUser.username}</strong>?</Text><Text mt={2} color="red.500" fontWeight="bold">This action cannot be undone.</Text></ModalBody>
-            <ModalFooter><Button onClick={onDeleteModalClose} mr={3} variant="ghost">Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete User</Button></ModalFooter>
-          </ModalContent>
-        </Modal>
-      )}
+    {/* Delete User Confirmation Modal */}
+    {selectedUser && (
+      <Modal isOpen={isDeleteModalOpen} onClose={onDeleteModalClose} isCentered>
+        <ModalOverlay />
+        <ModalContent bg="brand.paper"><ModalHeader color="brand.textDark">Confirm Deletion</ModalHeader><ModalCloseButton />
+          <ModalBody color="brand.textDark"><Text>Delete <strong>{selectedUser.username}</strong>?</Text><Text mt={2} color="red.500" fontWeight="bold">This action cannot be undone.</Text></ModalBody>
+          <ModalFooter><Button onClick={onDeleteModalClose} mr={3} variant="ghost">Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete User</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+    )}
     </Box>
   );
 };

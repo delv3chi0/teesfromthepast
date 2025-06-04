@@ -22,9 +22,9 @@ const colors = {
 };
 
 const fonts = {
-  heading: {
-    base: "'Montserrat', sans-serif", // Montserrat for mobile (base breakpoint)
-    md: "'Bungee', cursive"           // Bungee for desktop (md breakpoint and up)
+  heading: { // This is your general heading font definition
+    base: "'Montserrat', sans-serif",
+    md: "'Bungee', cursive"
   },
   body: "'Montserrat', sans-serif",
 };
@@ -44,17 +44,45 @@ const components = {
     },
   },
   Heading: {
-    baseStyle: (props) => ({
+    baseStyle: (props) => ({ // General base style for all headings
       fontFamily: {
-        base: fonts.heading.base,
-        md: fonts.heading.md
+        base: fonts.heading.base, // Montserrat on mobile
+        md: fonts.heading.md      // Bungee on desktop
       },
       fontWeight: {
-        base: 700,
-        md: 'normal'
+        base: 700,                // Bold for Montserrat
+        md: 'normal'              // Normal for Bungee (it's inherently bold)
       },
+      // Default color for headings (can be overridden by specific page title style)
       color: props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textLight,
     }),
+    sizes: {
+      // You can define other sizes like '2xl', 'xl', 'lg', 'md', 'sm', 'xs' here if needed,
+      // or let Chakra's defaults apply for those.
+
+      // --- NEW CUSTOM SIZE FOR PAGE TITLES ---
+      'pageTitle': {
+        fontSize: { base: '2xl', md: '3xl' }, // e.g., 24px on mobile, 30px on desktop
+        fontFamily: fonts.body, // Consistently use 'Montserrat'
+        fontWeight: 'bold',     // Ensure it's bold
+        lineHeight: 'shorter',  // Good for multi-line titles
+        // color: colors.brand.textLight, // You can set a default color here or on the component itself
+                                        // For now, we'll set it on the component to ensure it uses textLight
+                                        // against the accentOrange background.
+      },
+      // --- END NEW CUSTOM SIZE ---
+    },
+    // You could also create a variant, e.g., variant: 'pageTitle'
+    // variants: {
+    //   'pageTitle': {
+    //      fontSize: { base: '2xl', md: '3xl' },
+    //      fontFamily: fonts.body,
+    //      fontWeight: 'bold',
+    //      color: colors.brand.textLight, // Default color for this variant
+    //      textAlign: 'left', // Default alignment
+    //      mb: 6, // Default bottom margin
+    //   }
+    // }
   },
   Text: {
     baseStyle: (props) => ({
@@ -63,21 +91,21 @@ const components = {
     }),
   },
   Link: {
-    baseStyle: (props) => ({
-      fontFamily: 'body',
-      color: colors.brand.accentYellow, // Simplified: same color for light/dark mode
+    baseStyle: {
+      fontFamily: fonts.body,
+      color: colors.brand.accentYellow,
       _hover: {
         textDecoration: 'underline',
-        color: colors.brand.accentYellowHover, // Simplified: same hover color for light/dark
-      }, // Ensure comma is here if more baseStyle properties follow
-    }), // Closing parenthesis for baseStyle's returned object
-  }, // Comma separating Link from the next component (Input)
+        color: colors.brand.accentYellowHover,
+      },
+    },
+  },
   Input: {
-    baseStyle: (props) => ({ // Ensuring props can be passed if needed for colorMode logic later
+    baseStyle: {
       field: {
         fontFamily: 'body',
       },
-    }),
+    },
   },
 };
 
@@ -100,9 +128,6 @@ const theme = extendTheme({
       },
       'input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active': {
         fontFamily: `${fonts.body} !important`,
-        // Optional: Control text color and background
-        // '-webkit-text-fill-color': `${props.colorMode === 'dark' ? colors.brand.textLight : colors.brand.textDark} !important`,
-        // boxShadow: `0 0 0px 1000px ${props.colorMode === 'dark' ? colors.brand.primaryDark : colors.brand.paper} inset !important`,
       },
     }),
   },
