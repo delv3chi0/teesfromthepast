@@ -9,7 +9,9 @@ import Login from './Login';
 import RegistrationPage from './pages/RegistrationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import ContactPage from './pages/ContactPage'; // <-- IMPORTED ContactPage
+import ContactPage from './pages/ContactPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'; // Added
+import TermsOfServicePage from './pages/TermsOfServicePage'; // Added
 
 // Main Application Layout and Pages
 import MainLayout from './components/MainLayout';
@@ -39,7 +41,10 @@ export default function App() {
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/contact" element={<ContactPage />} /> {/* <-- NEW ROUTE FOR CONTACT PAGE */}
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} /> {/* Ensures this route is present */}
+          <Route path="/terms-of-service" element={<TermsOfServicePage />} /> {/* Ensures this route is present */}
+
 
           {/* Protected Routes */}
           <Route
