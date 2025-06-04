@@ -6,7 +6,7 @@ import {
     useToast,
     Stat, StatLabel, StatNumber, Tooltip, Icon
 } from '@chakra-ui/react';
-import { useNavigate } => from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaRegSadCry, FaVoteYea } from 'react-icons/fa';
