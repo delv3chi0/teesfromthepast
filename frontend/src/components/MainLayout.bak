@@ -1,5 +1,5 @@
 // frontend/src/components/MainLayout.jsx
-import React, { useMemo } from 'react';
+import React, { useMemo } from 'react'; // Added useMemo
 import {
   Box,
   Flex,
@@ -16,48 +16,57 @@ import {
   Image,
   Avatar,
   HStack,
-  Icon,
+  Icon, // Re-added Icon for potential use in navItems
   Spacer,
   useBreakpointValue,
 } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
+// Example icons if you choose to add them to navItems:
+// import { FiHome, FiSettings, FiGrid, FiShoppingBag, FiGift, FiUser, FiShield } from 'react-icons/fi';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
 
+// Base navigation items available to all authenticated users
 const baseNavItems = [
-  { label: 'Dashboard', path: '/dashboard' },
-  { label: 'AI Image Generator', path: '/generate' },
-  { label: 'My Saved Designs', path: '/my-designs' },
-  { label: 'Customize My Shirt', path: '/product-studio' },
-  { label: '🏆 Monthly Design Contest', path: '/vote-now' },
-  { label: 'My Orders', path: '/my-orders' },
-  { label: 'My Profile', path: '/profile' },
+  { label: 'Dashboard', path: '/dashboard' /* icon: FiHome */ },
+  { label: 'AI Image Generator', path: '/generate' /* icon: FiGrid */ },
+  { label: 'My Saved Designs', path: '/my-designs' /* icon: FiShoppingBag */ },
+  { label: 'Customize My Shirt', path: '/product-studio' /* icon: FiSettings */ },
+  { label: '🏆 Monthly Design Contest', path: '/vote-now' /* icon: FiGift */ },
+  { label: 'My Orders', path: '/my-orders' /* icon: FiShoppingBag */ },
+  { label: 'My Profile', path: '/profile' /* icon: FiUser */ },
 ];
 
-const adminNavItem = { label: '🛡️ Admin Console', path: '/admin' };
+// Admin-specific navigation item
+const adminNavItem = { label: '🛡️ Admin Console', path: '/admin' /* icon: FiShield */ };
+
 
 export default function MainLayout({ children }) {
   const location = useLocation();
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { user } = useAuth();
+  const { user } = useAuth(); // Get user from AuthContext
 
   const isDesktopView = useBreakpointValue({ base: false, md: true });
 
+  // Dynamically generate navItems based on user role
   const navItems = useMemo(() => {
     if (user?.isAdmin) {
+      // Find the position of 'My Profile' to insert 'Admin Console' before it, or add to end
       const profileIndex = baseNavItems.findIndex(item => item.path === '/profile');
-      if (profileIndex !== -1 && profileIndex < baseNavItems.length -1 ) {
+      if (profileIndex !== -1 && profileIndex < baseNavItems.length -1) { // Ensure 'My Profile' is not the last item for this logic
         const items = [...baseNavItems];
-        items.splice(profileIndex + 1, 0, adminNavItem);
+        items.splice(profileIndex + 1, 0, adminNavItem); // Insert after My Profile
         return items;
       } else {
+         // Fallback: add to the end or directly after profile if it's last
         return [...baseNavItems, adminNavItem];
       }
     }
     return baseNavItems;
   }, [user]);
+
 
   const SidebarContent = ({ onClick, inDrawer = false }) => {
     const showInternalLogo = !inDrawer;
@@ -68,7 +77,7 @@ export default function MainLayout({ children }) {
         pos={inDrawer ? 'relative' : 'fixed'}
         top={inDrawer ? undefined : '0'}
         left={inDrawer ? undefined : '0'}
-        zIndex={inDrawer ? 'auto' : 1200} // Ensure fixed sidebar is above content but below modals (typically zIndex 1400 for Chakra modals)
+        zIndex={inDrawer ? 'auto' : 1200}
         h={inDrawer ? '100%' : 'full'}
         pb={inDrawer ? 4 : '10'}
         overflowX="hidden"
@@ -76,7 +85,7 @@ export default function MainLayout({ children }) {
         bg="brand.primary"
         borderColor={inDrawer ? 'transparent' : 'brand.primaryDark'}
         borderRightWidth={inDrawer ? '0' : '1px'}
-        w={inDrawer ? '100%' : '60'} // Chakra unit (60 * 4px = 240px)
+        w={inDrawer ? '100%' : '60'}
       >
         {showInternalLogo && (
           <Flex
@@ -114,8 +123,8 @@ export default function MainLayout({ children }) {
               p={3}
               borderRadius="md"
               fontWeight="medium"
-              display="flex"
-              alignItems="center"
+              display="flex" // Added for icon alignment
+              alignItems="center" // Added for icon alignment
               color={
                 location.pathname === item.path ||
                 (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/')) ||
@@ -135,8 +144,9 @@ export default function MainLayout({ children }) {
                 bg: 'brand.primaryLight',
                 color: 'brand.accentYellow',
               }}
-              onClick={onClick}
+              onClick={onClick} // Closes drawer when a nav item is clicked
             >
+              {/* {item.icon && <Icon as={item.icon} mr={3} w={5} h={5} />} */}
               {item.label}
             </ChakraLink>
           ))}
@@ -149,7 +159,7 @@ export default function MainLayout({ children }) {
     <Flex direction="column" minH="100vh">
       <Box as="section" display="flex" flexGrow={1}>
         {isDesktopView && (
-          <Box as="aside" w="60" flexShrink={0}> {/* Placeholder for fixed sidebar width */}
+          <Box as="aside" w="60" flexShrink={0}>
             <SidebarContent />
           </Box>
         )}
@@ -192,35 +202,31 @@ export default function MainLayout({ children }) {
 
         <Box
           flexGrow={1}
-          // ml for desktop view is handled by the <Box as="aside" w="60"> for the fixed sidebar
+          ml={isDesktopView ? "0" : "0"}
           transition=".3s ease"
           display="flex"
           flexDirection="column"
-          // The actual page content area will have its own background (e.g., brand.accentOrange)
-          // This Box itself can remain transparent or have a base page background if needed
         >
-          <Flex // Header
+          <Flex
             as="header"
             align="center"
             w="full"
-            px={{ base: 4, md: 6 }} // Responsive padding
-            py={2} // Adjusted padding a bit if logo is taller
+            px={6}
+            py={3}
             bg="brand.secondary"
             borderBottomWidth="1px"
             borderColor="brand.primaryDark"
             color="brand.textDark"
-            minH={{base: "68px", md: "90px"}} // Adjusted minH to accommodate larger logo
+            h="auto"
+            minH="14"
             flexShrink={0}
-            position="sticky" // Make header sticky
-            top={0}
-            zIndex={1100} // Ensure header is above content, but below fixed sidebar/modals
           >
             <Flex align="center" flex="0">
               {!isDesktopView && (
                 <IconButton
                   aria-label="Open Menu"
                   onClick={onOpen}
-                  icon={<HamburgerIcon w={6} h={6} />} // Slightly larger icon
+                  icon={<HamburgerIcon />}
                   size="md"
                   variant="ghost"
                   mr={2}
@@ -235,14 +241,12 @@ export default function MainLayout({ children }) {
                 alignItems="center"
                 _hover={{ textDecoration: 'none' }}
               >
-                {/* LOGO-TEXT UPDATED HERE */}
                 <Image
                   src="/logo-text.png"
                   alt="Tees From The Past Title Logo"
-                  h={{ base: "60px", md: "80px" }} // Approx 60-75% increase (from 50px -> 80px is 60%)
-                                                    // 87.5px was the 75% target, 80px is a round number.
-                  maxW={{ base: "240px", md: "300px" }} // Increased maxW
+                  h="50px"
                   objectFit="contain"
+                  maxW={{ base: '180px' }}
                 />
               </ChakraLink>
             </Flex>
@@ -267,11 +271,10 @@ export default function MainLayout({ children }) {
 
           <Box
             as="main"
-            p={{ base: 4, md: 6 }} // Padding for the content area of each page
-            bg="brand.accentOrange" // Background for the content area
+            p={{ base: 4, md: 6 }}
+            bg="brand.accentOrange"
             flexGrow={1}
             width="100%"
-            overflowY="auto" // Ensure content scrolls if it exceeds viewport
           >
             {children}
           </Box>
