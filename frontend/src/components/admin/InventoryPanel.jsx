@@ -9,32 +9,23 @@ import {
   TabPanels,
   TabPanel,
   Icon,
-  Text, // For remaining placeholders
+  Text, // For remaining placeholder
 } from '@chakra-ui/react';
 import { FaTags, FaShapes, FaTshirt } from 'react-icons/fa';
 
-// --- IMPORT THE ACTUAL ProductCategoryManager ---
-// Make sure this path is correct based on your file structure.
-// Assuming InventoryPanel.jsx and ProductCategoryManager.jsx are both in frontend/src/components/admin/
 import ProductCategoryManager from './ProductCategoryManager.jsx';
+// --- IMPORT THE ACTUAL ProductTypeManager ---
+import ProductTypeManager from './ProductTypeManager.jsx';
 
-// --- Placeholders for components we will create in the next steps ---
-// We'll replace these with actual imports when the files are created.
 
-const ProductTypeManager = () => (
-  <Box p={4} borderWidth="1px" borderRadius="md" shadow="sm">
-    <Heading size="md" mb={4}>Product Type Management</Heading>
-    <Text>Product Type Manager will be implemented here.</Text>
-  </Box>
-);
-
+// --- Placeholder for ProductManager ---
 const ProductManager = () => (
   <Box p={4} borderWidth="1px" borderRadius="md" shadow="sm">
     <Heading size="md" mb={4}>Product Management</Heading>
     <Text>Product Manager (including variants and POD info) will be implemented here.</Text>
   </Box>
 );
-// --- End of Placeholders ---
+// --- End of Placeholder ---
 
 
 const InventoryPanel = () => {
@@ -57,10 +48,10 @@ const InventoryPanel = () => {
         </TabList>
         <TabPanels>
           <TabPanel px={0} py={4}>
-            {/* Now using the imported ProductCategoryManager */}
             <ProductCategoryManager />
           </TabPanel>
           <TabPanel px={0} py={4}>
+            {/* Now using the imported ProductTypeManager */}
             <ProductTypeManager />
           </TabPanel>
           <TabPanel px={0} py={4}>
