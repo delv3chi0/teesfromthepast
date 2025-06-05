@@ -33,6 +33,7 @@ import {
   HStack,
   Tooltip,
   Icon,
+  Tag, // <--- ADDED Tag HERE
 } from '@chakra-ui/react';
 import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 import { client } from '../../api/client'; // Adjust path if your client.js is elsewhere
