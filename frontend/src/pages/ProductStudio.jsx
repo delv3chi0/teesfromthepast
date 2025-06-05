@@ -1,16 +1,14 @@
 // frontend/src/pages/ProductStudio.jsx
-import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Select,
-  SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton as ChakraCloseButton, // Renamed CloseButton to ChakraCloseButton to avoid conflict
+  SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton as ChakraCloseButton,
   Link as ChakraLink, Divider, useToast, Icon, Button
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaShoppingCart } from 'react-icons/fa';
-
-// REMOVE Hardcoded arrays: productTypes, productColors, productSizes (will be fetched or derived)
 
 const CANVAS_WIDTH = 400;
 const CANVAS_HEIGHT = 400;
@@ -21,36 +19,27 @@ export default function ProductStudio() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  // --- STATE FOR USER'S SAVED DESIGNS ---
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [designsError, setDesignsError] = useState('');
-  const [selectedDesign, setSelectedDesign] = useState(null); // Stores the full design object
+  const [selectedDesign, setSelectedDesign] = useState(null);
 
-  // --- NEW STATE FOR DYNAMIC PRODUCT DATA ---
-  const [availableProductTypes, setAvailableProductTypes] = useState([]); // e.g., [{_id: "1", name: "T-Shirt"}, ...]
+  const [availableProductTypes, setAvailableProductTypes] = useState([]);
   const [loadingProductTypes, setLoadingProductTypes] = useState(true);
-
-  const [productsOfType, setProductsOfType] = useState([]); // Actual products for selected type, e.g., ["Men's Premium Tee", "Women's Basic Tee"]
+  const [productsOfType, setProductsOfType] = useState([]);
   const [loadingProductsOfType, setLoadingProductsOfType] = useState(false);
 
-  // --- NEW STATE FOR USER SELECTIONS ---
-  const [selectedProductTypeId, setSelectedProductTypeId] = useState(''); // ID of selected ProductType (e.g., "T-Shirt")
-  const [selectedProductId, setSelectedProductId] = useState('');       // ID of selected Product (e.g., "Men's Premium Tee")
-  
-  const [availableColors, setAvailableColors] = useState([]); // Derived from selectedProduct's variants
-  const [selectedProductColor, setSelectedProductColor] = useState(''); // e.g., "Vintage Black" (colorName from variant)
+  const [selectedProductTypeId, setSelectedProductTypeId] = useState('');
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [availableColors, setAvailableColors] = useState([]);
+  const [selectedProductColor, setSelectedProductColor] = useState('');
+  const [availableSizes, setAvailableSizes] = useState([]);
+  const [selectedProductSize, setSelectedProductSize] = useState('');
+  const [selectedVariant, setSelectedVariant] = useState(null);
 
-  const [availableSizes, setAvailableSizes] = useState([]);   // Derived from selectedProduct's variants, filtered by color
-  const [selectedProductSize, setSelectedProductSize] = useState(''); // e.g., "M" (size from variant)
-
-  const [selectedVariant, setSelectedVariant] = useState(null); // The fully chosen variant object {_id, sku, colorName, size, imageMockupFront, etc.}
-
-  // --- EXISTING UI STATE ---
   const [showInfoAlert, setShowInfoAlert] = useState(false);
-
   const canvasEl = useRef(null);
-  const fabricCanvas = useRef(null); // For Fabric.js instance
+  const fabricCanvas = useRef(null);
 
   useEffect(() => {
     const dismissed = localStorage.getItem(INFO_ALERT_DISMISSED_KEY);
@@ -59,7 +48,6 @@ export default function ProductStudio() {
     }
   }, []);
 
-  // Fetch User's Saved Designs (Existing Logic)
   const fetchUserDesigns = useCallback(() => {
     if (!user) {
       setLoadingDesigns(false); setDesigns([]); setDesignsError(''); return;
@@ -82,17 +70,11 @@ export default function ProductStudio() {
     fetchUserDesigns();
   }, [fetchUserDesigns]);
 
-
-  // --- NEW: FETCH AVAILABLE PRODUCT TYPES ---
   useEffect(() => {
     setLoadingProductTypes(true);
-    client.get('/storefront/product-types') // API endpoint we created
+    client.get('/storefront/product-types')
       .then(response => {
         setAvailableProductTypes(response.data || []);
-        if (response.data && response.data.length > 0) {
-          // Optionally auto-select first type, or leave it for user
-          // setSelectedProductTypeId(response.data[0]._id); 
-        }
       })
       .catch(err => {
         console.error("[ProductStudio] Error fetching product types:", err);
@@ -101,23 +83,18 @@ export default function ProductStudio() {
       .finally(() => setLoadingProductTypes(false));
   }, [toast]);
 
-  // --- NEW: FETCH PRODUCTS WHEN A PRODUCT TYPE IS SELECTED ---
   useEffect(() => {
     if (!selectedProductTypeId) {
       setProductsOfType([]);
-      setSelectedProductId(''); // Clear selected product if type changes
+      setSelectedProductId('');
       return;
     }
     setLoadingProductsOfType(true);
-    setProductsOfType([]); // Clear previous
-    setSelectedProductId(''); // Clear previous
-    client.get(`/storefront/products/type/${selectedProductTypeId}`) // API endpoint
+    setProductsOfType([]);
+    setSelectedProductId('');
+    client.get(`/storefront/products/type/${selectedProductTypeId}`)
       .then(response => {
         setProductsOfType(response.data || []);
-         if (response.data && response.data.length > 0) {
-          // Optionally auto-select first product for the type
-          // setSelectedProductId(response.data[0]._id);
-        }
       })
       .catch(err => {
         console.error(`[ProductStudio] Error fetching products for type ${selectedProductTypeId}:`, err);
@@ -126,7 +103,6 @@ export default function ProductStudio() {
       .finally(() => setLoadingProductsOfType(false));
   }, [selectedProductTypeId, toast]);
 
-  // --- NEW: DERIVE AVAILABLE COLORS WHEN A PRODUCT IS SELECTED ---
   useEffect(() => {
     if (!selectedProductId || productsOfType.length === 0) {
       setAvailableColors([]);
@@ -142,9 +118,8 @@ export default function ProductStudio() {
         return acc;
       }, []);
       setAvailableColors(uniqueColorObjects);
-      // Reset color if current selection no longer valid or if it was empty
       if (uniqueColorObjects.length > 0 && (!selectedProductColor || !uniqueColorObjects.find(c => c.value === selectedProductColor))) {
-         // setSelectedProductColor(uniqueColorObjects[0].value); // Optionally auto-select first color
+        // Optionally auto-select: setSelectedProductColor(uniqueColorObjects[0].value);
       } else if (uniqueColorObjects.length === 0) {
         setSelectedProductColor('');
       }
@@ -152,9 +127,8 @@ export default function ProductStudio() {
       setAvailableColors([]);
       setSelectedProductColor('');
     }
-  }, [selectedProductId, productsOfType, selectedProductColor]); // Added selectedProductColor to dependencies to re-evaluate if it becomes invalid
+  }, [selectedProductId, productsOfType, selectedProductColor]);
 
-  // --- NEW: DERIVE AVAILABLE SIZES WHEN PRODUCT AND COLOR ARE SELECTED ---
   useEffect(() => {
     if (!selectedProductId || !selectedProductColor || productsOfType.length === 0) {
       setAvailableSizes([]);
@@ -166,12 +140,10 @@ export default function ProductStudio() {
       const sizesForColor = currentProduct.variants
         .filter(variant => variant.colorName === selectedProductColor)
         .map(variant => variant.size)
-        .filter((value, index, self) => self.indexOf(value) === index); // Unique sizes
-      
+        .filter((value, index, self) => self.indexOf(value) === index);
       setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
-      // Reset size if current selection no longer valid or if it was empty
       if (sizesForColor.length > 0 && (!selectedProductSize || !sizesForColor.includes(selectedProductSize))) {
-        // setSelectedProductSize(sizesForColor[0]); // Optionally auto-select first size
+        // Optionally auto-select: setSelectedProductSize(sizesForColor[0]);
       } else if (sizesForColor.length === 0) {
         setSelectedProductSize('');
       }
@@ -179,9 +151,8 @@ export default function ProductStudio() {
       setAvailableSizes([]);
       setSelectedProductSize('');
     }
-  }, [selectedProductId, selectedProductColor, productsOfType, selectedProductSize]); // Added selectedProductSize for re-evaluation
+  }, [selectedProductId, selectedProductColor, productsOfType, selectedProductSize]);
 
-  // --- NEW: DETERMINE THE FULL SELECTED VARIANT OBJECT ---
   useEffect(() => {
     if (selectedProductId && selectedProductColor && selectedProductSize && productsOfType.length > 0) {
       const product = productsOfType.find(p => p._id === selectedProductId);
@@ -196,6 +167,20 @@ export default function ProductStudio() {
 
   // --- FABRIC.JS CANVAS SETUP ---
   useEffect(() => {
+    // --- ADDED CONSOLE LOGS FOR DEBUGGING ---
+    if (selectedVariant) {
+        console.log("--- VARIANT FOR CANVAS ---");
+        console.log("Selected Variant SKU:", selectedVariant.sku);
+        console.log("Selected Variant Color:", selectedVariant.colorName);
+        console.log("Selected Variant Size:", selectedVariant.size);
+        console.log("Selected Variant Mockup URL:", selectedVariant.imageMockupFront);
+        console.log("Full Selected Variant Object:", selectedVariant);
+        console.log("--- END VARIANT FOR CANVAS ---");
+    } else {
+        console.log("[ProductStudio Canvas] No selectedVariant yet or it's null for canvas update.");
+    }
+    // --- END OF ADDED CONSOLE LOGS ---
+
     const fabricScriptPollInterval = 100;
     const maxPolls = 50;
     let pollCount = 0;
@@ -210,7 +195,7 @@ export default function ProductStudio() {
       if (!FCanvas) return;
 
       FCanvas.clear();
-      const mockupSrc = selectedVariant?.imageMockupFront; // Use the selected variant's mockup
+      const mockupSrc = selectedVariant?.imageMockupFront;
 
       if (mockupSrc) {
         fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
@@ -233,7 +218,7 @@ export default function ProductStudio() {
           if (!designImg || designImg.width === 0) { console.error("[ProductStudio] Design image error"); return; }
           const designWidth = CANVAS_WIDTH * 0.33; designImg.scaleToWidth(designWidth);
           const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) * 0.5;
-          const designTop = CANVAS_HEIGHT * 0.24; // Adjust based on mockup type/variant later
+          const designTop = CANVAS_HEIGHT * 0.24;
           designImg.set({ top: designTop, left: designLeft });
           FCanvas.add(designImg); FCanvas.renderAll();
         }, { crossOrigin: 'anonymous' });
@@ -255,7 +240,7 @@ export default function ProductStudio() {
       }
     };
     if (canvasEl.current) pollForFabric();
-  }, [selectedDesign, selectedVariant, toast]); // Key dependencies for re-rendering canvas
+  }, [selectedDesign, selectedVariant, toast]);
 
   const handleProceedToCheckout = () => {
     if (!selectedDesign || !selectedDesign._id) {
@@ -274,20 +259,19 @@ export default function ProductStudio() {
 
     const productDetailsForCheckout = {
       designId: selectedDesign._id,
-      productId: productObject._id,          // ID of the base Product (e.g., "Men's Premium Tee")
+      productId: productObject._id,
       productName: productObject.name,
-      variantSku: selectedVariant.sku,         // SKU of the specific chosen variant
-      productType: productTypeObject.name,   // e.g., "T-Shirt"
+      variantSku: selectedVariant.sku,
+      productType: productTypeObject.name,
       size: selectedVariant.size,
       color: selectedVariant.colorName,
-      // Price will be calculated on backend using productObject.basePrice + selectedVariant.priceModifier
       prompt: selectedDesign.prompt,
-      imageDataUrl: selectedDesign.imageDataUrl, // AI-generated design image
-      productImage: selectedVariant.imageMockupFront, // Mockup of the selected variant for summary display
+      imageDataUrl: selectedDesign.imageDataUrl,
+      productImage: selectedVariant.imageMockupFront,
     };
 
     console.log("[ProductStudio] Data being sent to checkout:", JSON.stringify(productDetailsForCheckout, null, 2));
-    navigate('/checkout', { state: { itemToCheckout: productDetailsForCheckout } }); // Changed key to itemToCheckout for clarity
+    navigate('/checkout', { state: { itemToCheckout: productDetailsForCheckout } });
   };
 
   const handleDismissInfoAlert = () => {
@@ -295,7 +279,6 @@ export default function ProductStudio() {
     localStorage.setItem(INFO_ALERT_DISMISSED_KEY, 'true');
   };
   
-  // Handler functions for select changes
   const handleProductTypeChange = (e) => {
     setSelectedProductTypeId(e.target.value);
     setSelectedProductId(''); setSelectedProductColor(''); setSelectedProductSize(''); setSelectedVariant(null); setSelectedDesign(null);
@@ -306,13 +289,11 @@ export default function ProductStudio() {
   };
   const handleColorChange = (e) => {
     setSelectedProductColor(e.target.value);
-    setSelectedProductSize(''); setSelectedVariant(null); setSelectedDesign(null); // Also reset design if appearance changes
+    setSelectedProductSize(''); setSelectedVariant(null); setSelectedDesign(null);
   };
    const handleSizeChange = (e) => {
     setSelectedProductSize(e.target.value);
-    // selectedVariant will be updated by useEffect
   };
-
 
   return (
     <Box maxW="container.xl" mx="auto" px={{base: 4, md: 0}} pb={10}>
@@ -337,7 +318,7 @@ export default function ProductStudio() {
 
         <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">1. Choose Your Apparel</Heading>
-          <SimpleGrid columns={{ base: 1, md: 2, lg:4 }} spacing={6}> {/* Changed to 4 columns for new Product dropdown */}
+          <SimpleGrid columns={{ base: 1, md: 2, lg:4 }} spacing={6}>
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Product Type:</Text>
               <Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes || availableProductTypes.length === 0} size="lg" bg="white">
