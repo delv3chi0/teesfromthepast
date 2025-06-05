@@ -9,25 +9,22 @@ import {
   TabPanels,
   TabPanel,
   Icon,
-  Text, // Added for placeholder text
+  Text, // For remaining placeholders
 } from '@chakra-ui/react';
 import { FaTags, FaShapes, FaTshirt } from 'react-icons/fa';
 
-// --- Placeholders for components we will create in the next steps ---
+// --- IMPORT THE ACTUAL ProductCategoryManager ---
+// Make sure this path is correct based on your file structure.
+// Assuming InventoryPanel.jsx and ProductCategoryManager.jsx are both in frontend/src/components/admin/
+import ProductCategoryManager from './ProductCategoryManager.jsx';
 
-const ProductCategoryManager = () => (
-  <Box p={4} borderWidth="1px" borderRadius="md" shadow="sm">
-    <Heading size="md" mb={4}>Product Category Management</Heading>
-    <Text>Product Category Manager will be implemented here.</Text>
-    {/* TODO: Implement UI for CRUD operations on Product Categories */}
-  </Box>
-);
+// --- Placeholders for components we will create in the next steps ---
+// We'll replace these with actual imports when the files are created.
 
 const ProductTypeManager = () => (
   <Box p={4} borderWidth="1px" borderRadius="md" shadow="sm">
     <Heading size="md" mb={4}>Product Type Management</Heading>
     <Text>Product Type Manager will be implemented here.</Text>
-    {/* TODO: Implement UI for CRUD operations on Product Types */}
   </Box>
 );
 
@@ -35,7 +32,6 @@ const ProductManager = () => (
   <Box p={4} borderWidth="1px" borderRadius="md" shadow="sm">
     <Heading size="md" mb={4}>Product Management</Heading>
     <Text>Product Manager (including variants and POD info) will be implemented here.</Text>
-    {/* TODO: Implement UI for CRUD operations on Products and their Variants */}
   </Box>
 );
 // --- End of Placeholders ---
@@ -61,6 +57,7 @@ const InventoryPanel = () => {
         </TabList>
         <TabPanels>
           <TabPanel px={0} py={4}>
+            {/* Now using the imported ProductCategoryManager */}
             <ProductCategoryManager />
           </TabPanel>
           <TabPanel px={0} py={4}>
