@@ -9,23 +9,14 @@ import {
   TabPanels,
   TabPanel,
   Icon,
-  Text, // For remaining placeholder
+  // Text, // No longer needed for placeholders here
 } from '@chakra-ui/react';
 import { FaTags, FaShapes, FaTshirt } from 'react-icons/fa';
 
 import ProductCategoryManager from './ProductCategoryManager.jsx';
-// --- IMPORT THE ACTUAL ProductTypeManager ---
 import ProductTypeManager from './ProductTypeManager.jsx';
-
-
-// --- Placeholder for ProductManager ---
-const ProductManager = () => (
-  <Box p={4} borderWidth="1px" borderRadius="md" shadow="sm">
-    <Heading size="md" mb={4}>Product Management</Heading>
-    <Text>Product Manager (including variants and POD info) will be implemented here.</Text>
-  </Box>
-);
-// --- End of Placeholder ---
+// --- IMPORT THE ACTUAL ProductManager ---
+import ProductManager from './ProductManager.jsx';
 
 
 const InventoryPanel = () => {
@@ -51,10 +42,10 @@ const InventoryPanel = () => {
             <ProductCategoryManager />
           </TabPanel>
           <TabPanel px={0} py={4}>
-            {/* Now using the imported ProductTypeManager */}
             <ProductTypeManager />
           </TabPanel>
           <TabPanel px={0} py={4}>
+            {/* Now using the imported ProductManager */}
             <ProductManager />
           </TabPanel>
         </TabPanels>
