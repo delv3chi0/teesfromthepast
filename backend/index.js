@@ -29,12 +29,14 @@ import formRoutes from './routes/formRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
-
-// --- IMPORT NEW ADMIN INVENTORY ROUTES ---
 import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js';
 import adminProductTypeRoutes from './routes/adminProductTypeRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
-// --- END OF NEW ADMIN INVENTORY ROUTE IMPORTS ---
+
+// --- IMPORT NEW PUBLIC STOREFRONT PRODUCT ROUTES ---
+import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
+// --- END OF NEW PUBLIC STOREFRONT PRODUCT ROUTE IMPORTS ---
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,7 +63,7 @@ app.use(cookieParser());
 
 // Stripe webhook must be before express.json() for raw body
 app.use('/api/stripe', stripeWebhookRoutes);
-console.log('[Backend Log] Stripe webhook route configured at /api/stripe.'); // Corrected log for base path
+console.log('[Backend Log] Stripe webhook route configured at /api/stripe.');
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -83,25 +85,27 @@ app.get('/health', (req, res) => {
 console.log('[Backend Log] Setting up API routes...');
 // User-facing routes
 app.use('/api/auth', authRoutes);
-app.use('/api', generateImageRoutes); // Note: might be good to prefix with /images or /generate
+app.use('/api', generateImageRoutes);
 app.use('/api/checkout', checkoutRoutes);
 app.use('/api/mydesigns', designRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/forms', formRoutes);
 
+// --- MOUNT NEW PUBLIC STOREFRONT PRODUCT ROUTES ---
+app.use('/api/storefront', storefrontProductRoutes); // e.g. /api/storefront/product-types
+// --- END OF MOUNTING NEW PUBLIC STOREFRONT PRODUCT ROUTES ---
+
 // Admin-facing routes
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
-
-// --- MOUNT NEW ADMIN INVENTORY ROUTES ---
 app.use('/api/admin/product-categories', adminProductCategoryRoutes);
 app.use('/api/admin/product-types', adminProductTypeRoutes);
 app.use('/api/admin/products', adminProductRoutes);
-// --- END OF MOUNTING NEW ADMIN INVENTORY ROUTES ---
 
-console.log('[Backend Log] All routes configured, including admin inventory routes.'); // Updated log
+
+console.log('[Backend Log] All routes configured, including admin inventory and public storefront routes.'); // Updated log
 
 // Global Error Handler
 app.use((err, req, res, next) => {
