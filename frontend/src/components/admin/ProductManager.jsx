@@ -7,9 +7,9 @@ import {
   useDisclosure, FormControl, FormLabel, Input, Select, Switch, HStack, Tooltip, Icon,
   Tag, SimpleGrid, Textarea, NumberInput, NumberInputField, NumberInputStepper,
   NumberIncrementStepper, NumberDecrementStepper, Divider, CloseButton as ChakraCloseButton,
-  Image, // Added Image for previews
+  Image,
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff, FaBox, FaSyncAlt } from 'react-icons/fa'; // Added FaSyncAlt for repeat
+import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff, FaBox, FaSyncAlt } from 'react-icons/fa';
 import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
@@ -27,8 +27,31 @@ const initialVariantState = {
   podVariantId: '',
 };
 
-// --- NEW: Predefined list of sizes for the dropdown ---
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "One Size", "6M", "12M", "18M", "24M"];
+
+// --- NEW: Predefined list of core colors for the dropdown ---
+const CORE_COLORS = [
+  // Essentials
+  "Black",
+  "White",
+  "Navy Blue",
+  "Heather Grey",
+  // Retro & Vintage Palette
+  "Cream / Natural",
+  "Mustard Yellow",
+  "Olive Green",
+  "Maroon",
+  "Burnt Orange",
+  "Heather Forest",
+  "Royal Blue",
+  // Versatile Neutrals
+  "Charcoal",
+  "Sand",
+  "Light Blue",
+  // Accent Colors
+  "Cardinal Red",
+  "Teal",
+];
 
 const ProductManager = () => {
   const { token } = useAuth();
@@ -46,7 +69,7 @@ const ProductManager = () => {
     description: '',
     productType: '',
     basePrice: 0,
-    tags: '', // --- CHANGED: Handle tags as a single string in the form for better UX ---
+    tags: '',
     isActive: true,
     variants: [],
   });
@@ -91,7 +114,7 @@ const ProductManager = () => {
         description: product.description || '',
         productType: product.productType?._id || '',
         basePrice: product.basePrice || 0,
-        tags: Array.isArray(product.tags) ? product.tags.join(', ') : '', // --- CHANGED: Join array to string for editing ---
+        tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
         isActive: product.isActive,
         variants: product.variants ? JSON.parse(JSON.stringify(product.variants)) : [],
       });
@@ -108,7 +131,6 @@ const ProductManager = () => {
 
   const handleFormChange = (e) => {
     const { name, value, type, checked } = e.target;
-    // --- CHANGED: Simplified tags handling ---
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value }));
   };
   
@@ -128,27 +150,25 @@ const ProductManager = () => {
   const addVariantToList = () => {
     if (!currentVariant.sku || !currentVariant.colorName || !currentVariant.size || !currentVariant.imageMockupFront) {
       toast({ title: "Variant Incomplete", description: "SKU, Color, Size, and Front Mockup URL are required.", status: "warning", duration: 4000 });
-      return false; // Indicate failure
+      return false;
     }
     if (formData.variants.find(v => v.sku === currentVariant.sku)) {
       toast({ title: "Duplicate SKU", description: "This SKU already exists in the list for this product.", status: "warning", duration: 4000 });
-      return false; // Indicate failure
+      return false;
     }
     setFormData(prev => ({ ...prev, variants: [...prev.variants, { ...currentVariant }] }));
-    return true; // Indicate success
+    return true;
   };
 
   const handleAddVariant = () => {
     const success = addVariantToList();
     if (success) {
-      setCurrentVariant(initialVariantState); // Reset for next variant
+      setCurrentVariant(initialVariantState);
     }
   };
 
-  // --- NEW: Handler for "Add & Repeat" button ---
   const handleAddAndRepeatVariant = () => {
     addVariantToList();
-    // Does NOT reset the currentVariant form, allowing for quick edits for the next variant
   };
 
   const handleRemoveVariant = (skuToRemove) => {
@@ -163,7 +183,6 @@ const ProductManager = () => {
     const method = isEditing ? 'put' : 'post';
     const url = isEditing ? `/admin/products/${selectedProduct._id}` : '/admin/products';
     
-    // --- CHANGED: Convert tags string to array on submit ---
     const payload = {
         ...formData,
         tags: (formData.tags || '').split(',').map(tag => tag.trim()).filter(tag => tag),
@@ -262,16 +281,20 @@ const ProductManager = () => {
                 <Box p={3} borderWidth="1px" borderRadius="md" mb={4} borderColor="gray.300">
                     <Heading size="xs" mb={3} color="brand.textSlightlyDark">Add New Variant</Heading>
                     <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={3}>
-                        <FormControl isRequired><FormLabel fontSize="sm">Color Name</FormLabel><Input size="sm" name="colorName" value={currentVariant.colorName} onChange={handleVariantFormChange} bg="white"/></FormControl>
-                        <FormControl><FormLabel fontSize="sm">Color Hex</FormLabel><Input size="sm" name="colorHex" value={currentVariant.colorHex} onChange={handleVariantFormChange} bg="white"/></FormControl>
                         
-                        {/* --- CHANGED: Size input is now a dropdown --- */}
+                        {/* --- CHANGED: Color Name input is now a dropdown --- */}
+                        <FormControl isRequired><FormLabel fontSize="sm">Color Name</FormLabel>
+                          <Select size="sm" name="colorName" value={currentVariant.colorName} onChange={handleVariantFormChange} placeholder="Select color" bg="white">
+                            {CORE_COLORS.map(c => <option key={c} value={c}>{c}</option>)}
+                          </Select>
+                        </FormControl>
+
+                        <FormControl><FormLabel fontSize="sm">Color Hex</FormLabel><Input size="sm" name="colorHex" value={currentVariant.colorHex} onChange={handleVariantFormChange} placeholder="e.g. #FFFFFF" bg="white"/></FormControl>
                         <FormControl isRequired><FormLabel fontSize="sm">Size</FormLabel>
                           <Select size="sm" name="size" value={currentVariant.size} onChange={handleVariantFormChange} placeholder="Select size" bg="white">
                             {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
                           </Select>
                         </FormControl>
-
                         <FormControl isRequired><FormLabel fontSize="sm">SKU (Unique)</FormLabel><Input size="sm" name="sku" value={currentVariant.sku} onChange={handleVariantFormChange} bg="white"/></FormControl>
                         <FormControl isRequired><FormLabel fontSize="sm">Stock</FormLabel>
                             <NumberInput size="sm" name="stock" value={currentVariant.stock} onChange={(valStr, valNum) => handleVariantNumberChange('stock', valStr, valNum)} min={0} bg="white">
@@ -283,8 +306,6 @@ const ProductManager = () => {
                                 <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                             </NumberInput>
                         </FormControl>
-
-                        {/* --- CHANGED: Added Image Previews --- */}
                         <FormControl isRequired><FormLabel fontSize="sm">Mockup Front URL</FormLabel>
                             <HStack><Input size="sm" name="imageMockupFront" value={currentVariant.imageMockupFront} onChange={handleVariantFormChange} bg="white"/>
                                 {currentVariant.imageMockupFront && <Image src={currentVariant.imageMockupFront} boxSize="32px" objectFit="cover" borderRadius="sm" bg="gray.200" />}
@@ -295,13 +316,10 @@ const ProductManager = () => {
                                 {currentVariant.imageMockupBack && <Image src={currentVariant.imageMockupBack} boxSize="32px" objectFit="cover" borderRadius="sm" bg="gray.200" />}
                             </HStack>
                         </FormControl>
-
                         <FormControl><FormLabel fontSize="sm">POD Service</FormLabel><Input size="sm" name="podService" value={currentVariant.podService} onChange={handleVariantFormChange} placeholder="e.g., Printify" bg="white"/></FormControl>
                         <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" name="podProductId" value={currentVariant.podProductId} onChange={handleVariantFormChange} bg="white"/></FormControl>
                         <FormControl><FormLabel fontSize="sm">POD Variant ID</FormLabel><Input size="sm" name="podVariantId" value={currentVariant.podVariantId} onChange={handleVariantFormChange} bg="white"/></FormControl>
                     </SimpleGrid>
-
-                    {/* --- CHANGED: Added second "Add & Repeat" button --- */}
                     <HStack spacing={4} mt={4}>
                         <Button size="sm" colorScheme="teal" onClick={handleAddVariant}>Add Variant & Clear</Button>
                         <Button size="sm" colorScheme="blue" leftIcon={<Icon as={FaSyncAlt}/>} onClick={handleAddAndRepeatVariant}>Add Variant & Repeat</Button>
