@@ -6,11 +6,14 @@ import {
   Button, useToast, Tag, Image,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider, Tooltip // Added Tooltip
+  Divider, Tooltip
 } from '@chakra-ui/react';
-import { FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash } from 'react-icons/fa';
+import { FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash, FaWarehouse } from 'react-icons/fa'; // Added FaWarehouse
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
+
+// We will create this component in the next step
+import InventoryPanel from '../components/admin/InventoryPanel.jsx'; 
 
 const AdminPage = () => {
   console.log("[AdminPage] Rendering Admin Page...");
@@ -51,7 +54,7 @@ const AdminPage = () => {
   const fetchOrders = useCallback(async () => {
     if (!token) { setOrdersError("Auth token missing."); setLoadingOrders(false); return; }
     setLoadingOrders(true); setOrdersError('');
-    try { const r = await client.get('/admin/orders', { headers: { Authorization: `Bearer ${token}` } }); setOrders(r.data.orders || r.data || []); }
+    try { const r = await client.get('/admin/orders', { headers: { Authorization: `Bearer ${token}` } }); setOrders(r.data || []); } // Adjusted to handle direct array or object with .orders
     catch (e) { setOrdersError(e.response?.data?.message || 'Failed to fetch orders.'); }
     finally { setLoadingOrders(false); }
   }, [token]);
@@ -59,7 +62,7 @@ const AdminPage = () => {
   const fetchDesigns = useCallback(async () => {
     if (!token) { setDesignsError("Auth token missing."); setLoadingDesigns(false); return; }
     setLoadingDesigns(true); setDesignsError('');
-    try { const r = await client.get('/admin/designs', { headers: { Authorization: `Bearer ${token}` } }); setDesigns(r.data.designs || r.data || []); }
+    try { const r = await client.get('/admin/designs', { headers: { Authorization: `Bearer ${token}` } }); setDesigns(r.data || []); } // Adjusted to handle direct array or object with .designs
     catch (e) { setDesignsError(e.response?.data?.message || 'Failed to fetch designs.'); }
     finally { setLoadingDesigns(false); }
   }, [token]);
@@ -73,7 +76,7 @@ const AdminPage = () => {
   const handleOpenEditUser = (user) => {
     setSelectedUser(user);
     setEditFormData({
-      username: user.username, email: user.email, 
+      username: user.username, email: user.email,
       firstName: user.firstName || '', lastName: user.lastName || '',
       isAdmin: user.isAdmin, newPassword: '', confirmNewPassword: '',
     });
@@ -95,17 +98,17 @@ const AdminPage = () => {
       toast({ title: "Password Too Short", description: "New password must be at least 6 characters.", status: "error", duration: 3000, isClosable: true }); return;
     }
     const payload = { ...editFormData };
-    if (!payload.newPassword) { 
+    if (!payload.newPassword) {
       delete payload.newPassword;
     }
-    delete payload.confirmNewPassword; 
+    delete payload.confirmNewPassword;
 
     try {
       const { data: updatedUser } = await client.put(`/admin/users/${selectedUser._id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: "User Updated", description: `User ${updatedUser.username}'s details have been updated. ${payload.newPassword ? 'Password was changed.' : ''}`, status: "success", duration: 4000, isClosable: true });
       setUsers(prev => prev.map(u => u._id === updatedUser._id ? updatedUser : u));
       onEditModalClose(); setSelectedUser(null);
-    } catch (e) { 
+    } catch (e) {
       toast({ title: "Update Failed", description: e.response?.data?.message || "Could not update user details.", status: "error", duration: 5000, isClosable: true });
       console.error("Admin User Update Error:", e.response?.data || e.message);
     }
@@ -120,7 +123,7 @@ const AdminPage = () => {
       toast({ title: "User Deleted", description: `User ${selectedUser.username} has been removed.`, status: "success", duration: 3000, isClosable: true });
       setUsers(prev => prev.filter(u => u._id !== selectedUser._id));
       onDeleteModalClose(); setSelectedUser(null);
-    } catch (e) { 
+    } catch (e) {
       toast({ title: "Delete Failed", description: e.response?.data?.message || "Could not delete user.", status: "error", duration: 5000, isClosable: true });
       console.error("Admin User Delete Error:", e.response?.data || e.message);
     }
@@ -164,21 +167,22 @@ const AdminPage = () => {
       <Heading size="md" mb={4} color="brand.textDark">Order Management</Heading>
       {loadingOrders && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" color="brand.primary" /><Text mt={2} color="brand.textDark">Loading orders...</Text></VStack> )}
       {!loadingOrders && ordersError && ( <Alert status="error" borderRadius="md"><AlertIcon />{ordersError}</Alert> )}
-      {!loadingOrders && !ordersError && orders.length === 0 && ( <Text color="brand.textDark">No orders found. (Backend API for admin/orders needs implementation)</Text> )}
+      {!loadingOrders && !ordersError && orders.length === 0 && ( <Text color="brand.textDark">No orders found.</Text> )}
       {!loadingOrders && !ordersError && orders.length > 0 && (
         <TableContainer>
           <Table variant="simple" size="sm">
-            <Thead><Tr><Th>Order ID</Th><Th>User Email</Th><Th>Date</Th><Th>Total</Th><Th>Status</Th><Th># Items</Th><Th>Actions</Th></Tr></Thead>
+            <Thead><Tr><Th>Order ID</Th><Th>User Email</Th><Th>Date</Th><Th>Total</Th><Th>Pay Status</Th><Th>Order Status</Th><Th># Items</Th><Th>Actions</Th></Tr></Thead>
             <Tbody>
               {orders.map((order) => (
                 <Tr key={order._id}>
                   <Td fontSize="xs" title={order._id}>{order._id?.substring(0, 8)}...</Td>
                   <Td>{order.user?.email || order.userId || 'N/A'}</Td>
                   <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
-                  <Td>{typeof order.totalAmount === 'number' ? `$${(order.totalAmount / 100).toFixed(2)}` : '$0.00'}</Td>
+                  <Td>{typeof order.totalAmount === 'number' ? `$${(order.totalAmount).toFixed(2)}` : '$0.00'}</Td> {/* Assuming totalAmount is already in dollars, not cents */}
+                  <Td><Tag size="sm" colorScheme={order.paymentStatus === 'Succeeded' ? 'green' : 'orange'} borderRadius="full">{order.paymentStatus || 'N/A'}</Tag></Td>
                   <Td><Tag size="sm" colorScheme={order.orderStatus === 'Delivered' ? 'green' : order.orderStatus === 'Shipped' ? 'blue' : order.orderStatus === 'Processing' ? 'yellow' : order.orderStatus === 'Pending' ? 'orange' : 'gray'} borderRadius="full">{order.orderStatus || 'N/A'}</Tag></Td>
-                  <Td>{order.items?.length || 0}</Td>
-                  <Td><Tooltip label="View Order Details" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => alert(`View Order: ${order._id}`)} aria-label="View Order"/></Tooltip></Td>
+                  <Td>{order.orderItems?.length || 0}</Td>
+                  <Td><Tooltip label="View Order Details (Not Implemented)" placement="top"><ChakraIconButton isDisabled size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => alert(`View Order: ${order._id}`)} aria-label="View Order"/></Tooltip></Td>
                 </Tr>
               ))}
             </Tbody>
@@ -193,7 +197,7 @@ const AdminPage = () => {
       <Heading size="md" mb={4} color="brand.textDark">Design Management</Heading>
       {loadingDesigns && ( <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" color="brand.primary" /><Text mt={2} color="brand.textDark">Loading designs...</Text></VStack> )}
       {!loadingDesigns && designsError && ( <Alert status="error" borderRadius="md"><AlertIcon />{designsError}</Alert> )}
-      {!loadingDesigns && !designsError && designs.length === 0 && ( <Text color="brand.textDark">No designs found. (Backend API for admin/designs needs implementation)</Text> )}
+      {!loadingDesigns && !designsError && designs.length === 0 && ( <Text color="brand.textDark">No designs found.</Text> )}
       {!loadingDesigns && !designsError && designs.length > 0 && (
         <TableContainer>
           <Table variant="simple" size="sm">
@@ -208,8 +212,8 @@ const AdminPage = () => {
                   <Td><Tag size="sm" colorScheme={design.isContestSubmission ? 'purple' : 'gray'} borderRadius="full">{design.isContestSubmission ? 'Yes' : 'No'}</Tag></Td>
                   <Td>{design.votes || 0}</Td>
                   <Td>
-                    <Tooltip label="View Design" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => alert(`View Design: ${design._id}`)} mr={1} aria-label="View Design"/></Tooltip>
-                    <Tooltip label="Delete Design" placement="top"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => alert(`Delete Design: ${design._id}`)} aria-label="Delete Design"/></Tooltip>
+                    <Tooltip label="View Design (Not Implemented)" placement="top"><ChakraIconButton isDisabled size="xs" variant="ghost" colorScheme="blue" icon={<Icon as={FaEye} />} onClick={() => alert(`View Design: ${design._id}`)} mr={1} aria-label="View Design"/></Tooltip>
+                    <Tooltip label="Delete Design (Not Implemented)" placement="top"><ChakraIconButton isDisabled size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => alert(`Delete Design: ${design._id}`)} aria-label="Delete Design"/></Tooltip>
                   </Td>
                 </Tr>
               ))}
@@ -240,11 +244,17 @@ const AdminPage = () => {
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }} borderRadius="full" m={1}><Icon as={FaUsersCog} mr={2} /> Users</Tab>
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }} borderRadius="full" m={1}><Icon as={FaBoxOpen} mr={2} /> Orders</Tab>
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }} borderRadius="full" m={1}><Icon as={FaPalette} mr={2} /> Designs</Tab>
+              {/* --- NEW INVENTORY TAB --- */}
+              <Tab _selected={{ color: 'white', bg: 'brand.primary' }} borderRadius="full" m={1}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
             </TabList>
             <TabPanels>
               <TabPanel px={0} py={2}><UsersPanel /></TabPanel>
               <TabPanel px={0} py={2}><OrdersPanel /></TabPanel>
               <TabPanel px={0} py={2}><DesignsPanel /></TabPanel>
+              {/* --- NEW INVENTORY TAB PANEL --- */}
+              <TabPanel px={0} py={2}>
+                <InventoryPanel />
+              </TabPanel>
             </TabPanels>
           </Tabs>
         </Box>
@@ -286,12 +296,12 @@ const AdminPage = () => {
               <Divider my={4} /><Heading size="sm" color="brand.textDark">Change Password (Optional)</Heading>
               <Text fontSize="xs" color="gray.500">Only fill if changing this user's password.</Text>
               <FormControl><FormLabel htmlFor="adminNewPass" color="brand.textDark">New Password</FormLabel><InputGroup>
-                  <Input id="adminNewPass" name="newPassword" type={showNewPasswordInModal ? 'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange} placeholder="New password (min. 6 chars)" bg="white" borderColor="gray.300"/>
-                  <InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)} aria-label="Toggle new password visibility"/></InputRightElement>
+                <Input id="adminNewPass" name="newPassword" type={showNewPasswordInModal ? 'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange} placeholder="New password (min. 6 chars)" bg="white" borderColor="gray.300"/>
+                <InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)} aria-label="Toggle new password visibility"/></InputRightElement>
               </InputGroup></FormControl>
               <FormControl><FormLabel htmlFor="adminConfirmNewPass" color="brand.textDark">Confirm New Password</FormLabel><InputGroup>
-                  <Input id="adminConfirmNewPass" name="confirmNewPassword" type={showConfirmNewPasswordInModal ? 'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} placeholder="Confirm new password" bg="white" borderColor="gray.300"/>
-                  <InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)} aria-label="Toggle confirm password visibility"/></InputRightElement>
+                <Input id="adminConfirmNewPass" name="confirmNewPassword" type={showConfirmNewPasswordInModal ? 'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} placeholder="Confirm new password" bg="white" borderColor="gray.300"/>
+                <InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal ? <FaEyeSlash />:<FaEye />} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)} aria-label="Toggle confirm password visibility"/></InputRightElement>
               </InputGroup></FormControl>
             </VStack>
           </ModalBody>
