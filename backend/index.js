@@ -20,9 +20,9 @@ import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
 import checkoutRoutes from './routes/checkout.js';
-import designRoutes from './routes/designs.js'; // User's own designs
+import designRoutes from './routes/designs.js';
 import contestRoutes from './routes/contest.js';
-import orderRoutes from './routes/orders.js'; // User's own orders
+import orderRoutes from './routes/orders.js';
 import formRoutes from './routes/formRoutes.js';
 
 // Admin Routes
@@ -33,10 +33,8 @@ import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js';
 import adminProductTypeRoutes from './routes/adminProductTypeRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
 
-// --- IMPORT NEW PUBLIC STOREFRONT PRODUCT ROUTES ---
+// Public Storefront Routes
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
-// --- END OF NEW PUBLIC STOREFRONT PRODUCT ROUTE IMPORTS ---
-
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,15 +48,24 @@ mongoose.connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
-app.use(cors({
+// --- THIS IS THE FIX: Define CORS options and apply them more explicitly ---
+const corsOptions = {
   origin: [
     'https://teesfromthepast.vercel.app',
     'https://teesfromthepast-git-main-delv3chios-projects.vercel.app',
     'http://localhost:5173'
   ],
   credentials: true,
-}));
-console.log('[Backend Log] CORS middleware applied with updated origin list.');
+};
+
+// Handle preflight requests for all routes
+app.options('*', cors(corsOptions));
+
+// Use CORS for all other requests
+app.use(cors(corsOptions));
+// --- END OF FIX ---
+
+console.log('[Backend Log] CORS middleware applied explicitly.');
 app.use(cookieParser());
 
 // Stripe webhook must be before express.json() for raw body
@@ -72,10 +79,6 @@ console.log('[Backend Log] Express JSON and URLencoded middleware applied with i
 app.get('/', (req, res) => {
   console.log('[Backend Log] Root path (/) hit.');
   res.send('Tees From The Past Backend API');
-});
-app.get('/test', (req, res) => {
-  console.log('[Backend Log] Test path (/test) hit.');
-  res.status(200).send('Backend is running and test route works!');
 });
 app.get('/health', (req, res) => {
   console.log('[Backend Log] Health path (/health) hit.');
@@ -91,10 +94,7 @@ app.use('/api/mydesigns', designRoutes);
 app.use('/api/contest', contestRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/forms', formRoutes);
-
-// --- MOUNT NEW PUBLIC STOREFRONT PRODUCT ROUTES ---
-app.use('/api/storefront', storefrontProductRoutes); // e.g. /api/storefront/product-types
-// --- END OF MOUNTING NEW PUBLIC STOREFRONT PRODUCT ROUTES ---
+app.use('/api/storefront', storefrontProductRoutes);
 
 // Admin-facing routes
 app.use('/api/admin/users', adminUserRoutes);
@@ -104,8 +104,7 @@ app.use('/api/admin/product-categories', adminProductCategoryRoutes);
 app.use('/api/admin/product-types', adminProductTypeRoutes);
 app.use('/api/admin/products', adminProductRoutes);
 
-
-console.log('[Backend Log] All routes configured, including admin inventory and public storefront routes.'); // Updated log
+console.log('[Backend Log] All routes configured.');
 
 // Global Error Handler
 app.use((err, req, res, next) => {
