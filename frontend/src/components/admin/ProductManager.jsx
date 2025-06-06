@@ -61,7 +61,8 @@ const ProductManager = () => {
       setProducts(productsResponse.data);
       setProductTypes(typesResponse.data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to fetch products.');
+      console.error("Error fetching products/types:", err);
+      setError(err.response?.data?.message || 'Failed to fetch products or product types.');
     } finally {
       setLoading(false);
     }
@@ -230,7 +231,7 @@ const ProductManager = () => {
               {products.map((p) => (
                 <Tr key={p._id}>
                   <Td fontWeight="medium">{p.name}</Td>
-                  <Td>{p.productType?.name || 'N/A'}</Td>
+                  <Td>{(productTypes.find(pt => pt._id === p.productType))?.name || 'N/A'}</Td>
                   <Td>${p.basePrice?.toFixed(2)}</Td>
                   <Td>{p.variants?.length || 0}</Td>
                   <Td><Tag size="sm" colorScheme={p.isActive ? 'green' : 'red'} borderRadius="full"><Icon as={p.isActive ? FaToggleOn : FaToggleOff} mr={1}/>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
@@ -314,12 +315,12 @@ const ProductManager = () => {
                         </FormControl>
                         <FormControl isRequired><FormLabel fontSize="sm">Mockup Front URL</FormLabel>
                             <HStack><Input size="sm" name="imageMockupFront" value={currentVariant.imageMockupFront} onChange={handleVariantFormChange} bg="white"/>
-                                {currentVariant.imageMockupFront && <Image src={currentVariant.imageMockupFront} boxSize="32px" objectFit="cover" borderRadius="sm" bg="gray.200" />}
+                                {currentVariant.imageMockupFront && <Image src={currentVariant.imageMockupFront} boxSize="32px" objectFit="cover" borderRadius="sm" bg="gray.200" onError={(e) => e.target.style.display = 'none'} onLoad={(e) => e.target.style.display = 'block'} />}
                             </HStack>
                         </FormControl>
                         <FormControl><FormLabel fontSize="sm">Mockup Back URL</FormLabel>
                              <HStack><Input size="sm" name="imageMockupBack" value={currentVariant.imageMockupBack} onChange={handleVariantFormChange} bg="white"/>
-                                {currentVariant.imageMockupBack && <Image src={currentVariant.imageMockupBack} boxSize="32px" objectFit="cover" borderRadius="sm" bg="gray.200" />}
+                                {currentVariant.imageMockupBack && <Image src={currentVariant.imageMockupBack} boxSize="32px" objectFit="cover" borderRadius="sm" bg="gray.200" onError={(e) => e.target.style.display = 'none'} onLoad={(e) => e.target.style.display = 'block'} />}
                             </HStack>
                         </FormControl>
                         <FormControl><FormLabel fontSize="sm">POD Service</FormLabel><Input size="sm" name="podService" value={currentVariant.podService} onChange={handleVariantFormChange} placeholder="e.g., Printify" bg="white"/></FormControl>
