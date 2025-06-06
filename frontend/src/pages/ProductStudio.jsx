@@ -165,22 +165,17 @@ export default function ProductStudio() {
     }
   }, [selectedProductId, selectedProductColor, selectedProductSize, productsOfType]);
 
-  // --- FABRIC.JS CANVAS SETUP ---
   useEffect(() => {
-    // --- ADDED CONSOLE LOGS FOR DEBUGGING ---
     if (selectedVariant) {
         console.log("--- VARIANT FOR CANVAS ---");
         console.log("Selected Variant SKU:", selectedVariant.sku);
-        console.log("Selected Variant Color:", selectedVariant.colorName);
-        console.log("Selected Variant Size:", selectedVariant.size);
         console.log("Selected Variant Mockup URL:", selectedVariant.imageMockupFront);
         console.log("Full Selected Variant Object:", selectedVariant);
         console.log("--- END VARIANT FOR CANVAS ---");
     } else {
         console.log("[ProductStudio Canvas] No selectedVariant yet or it's null for canvas update.");
     }
-    // --- END OF ADDED CONSOLE LOGS ---
-
+    
     const fabricScriptPollInterval = 100;
     const maxPolls = 50;
     let pollCount = 0;
@@ -270,8 +265,15 @@ export default function ProductStudio() {
       productImage: selectedVariant.imageMockupFront,
     };
 
-    console.log("[ProductStudio] Data being sent to checkout:", JSON.stringify(productDetailsForCheckout, null, 2));
-    navigate('/checkout', { state: { itemToCheckout: productDetailsForCheckout } });
+    // --- CHANGED: Use localStorage instead of location.state ---
+    try {
+        localStorage.setItem('itemToCheckout', JSON.stringify(productDetailsForCheckout));
+        console.log("[ProductStudio] Item saved to localStorage and navigating to checkout.");
+        navigate('/checkout'); // No longer need to pass state here
+    } catch (error) {
+        console.error("Error saving to localStorage:", error);
+        toast({ title: "Error", description: "Could not prepare item for checkout.", status: "error" });
+    }
   };
 
   const handleDismissInfoAlert = () => {
@@ -354,7 +356,7 @@ export default function ProductStudio() {
         <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">2. Choose Your Saved Design</Heading>
           {loadingDesigns && <Box textAlign="center" py={10}><Spinner size="xl" color="brand.primary" thickness="4px"/><Text mt={3}>Loading designs...</Text></Box>}
-          {!loadingDesigns && designsError && <Alert status="error" /* ... */ >{designsError}</Alert>}
+          {!loadingDesigns && designsError && <Alert status="error">{designsError}</Alert>}
           {!loadingDesigns && !designsError && designs.length === 0 && <Text textAlign="center" py={10}>You have no saved designs. Go <ChakraLink as={RouterLink} to="/generate" color="brand.primaryDark" fontWeight="bold">generate</ChakraLink> some!</Text>}
           {!loadingDesigns && !designsError && designs.length > 0 && (
             <SimpleGrid columns={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing={4}>
