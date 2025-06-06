@@ -1,3 +1,4 @@
+
 // backend/controllers/adminController.js
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
@@ -99,8 +100,6 @@ const getAllOrdersAdmin = asyncHandler(async (req, res) => {
         res.json([]);
     }
 });
-
-// --- THIS IS THE NEW FUNCTION ---
 const deleteOrderAdmin = asyncHandler(async (req, res) => {
     const orderId = req.params.id;
     console.log(`[Admin Controller] DELETE /orders/${orderId} - Attempting to delete order.`);
@@ -114,7 +113,6 @@ const deleteOrderAdmin = asyncHandler(async (req, res) => {
         throw new Error('Order not found');
     }
 });
-// --- END OF NEW FUNCTION ---
 
 // --- DESIGN MANAGEMENT CONTROLLERS ---
 const getAllDesignsAdmin = asyncHandler(async (req, res) => {
@@ -327,12 +325,26 @@ const createProductAdmin = asyncHandler(async (req, res) => {
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
 });
+
+// --- THIS IS THE FIX ---
 const getProductsAdmin = asyncHandler(async (req, res) => {
-    const products = await Product.find({}).populate({ path: 'productType', select: 'name category isActive', populate: { path: 'category', select: 'name isActive' } }).sort({ name: 1 });
+    console.log('[Admin Controller] GET /products - Fetching all products.');
+    const products = await Product.find({})
+      .populate('productType', 'name') // SIMPLIFIED: Only populate the product type's name.
+      .sort({ name: 1 });
+    console.log(`[Admin Controller] GET /products - Found ${products.length} products.`);
     res.json(products);
 });
+// --- END OF FIX ---
+
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
-    const product = await Product.findById(req.params.id).populate({ path: 'productType', select: 'name category isActive', populate: { path: 'category', select: 'name isActive' } });
+    const productId = req.params.id;
+    console.log(`[Admin Controller] GET /products/${productId} - Fetching product by ID.`);
+    const product = await Product.findById(productId)
+        .populate({
+            path: 'productType',
+            populate: { path: 'category', select: 'name' }
+        });
     if (product) {
         res.json(product);
     } else {
@@ -386,7 +398,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             product.variants = variants;
         }
         const updatedProduct = await product.save();
-        await updatedProduct.populate({ path: 'productType', select: 'name category isActive', populate: { path: 'category', select: 'name isActive' } });
+        await updatedProduct.populate({ path: 'productType', select: 'name category', populate: { path: 'category', select: 'name' } });
         res.json(updatedProduct);
     } else {
         res.status(404);
