@@ -50,7 +50,7 @@ const ProductManager = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
-  const fetchProducts = useCallback(async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -61,8 +61,8 @@ const ProductManager = () => {
       setProducts(productsResponse.data);
       setProductTypes(typesResponse.data);
     } catch (err) {
-      console.error("Error fetching products/types:", err);
-      setError(err.response?.data?.message || 'Failed to fetch products or product types.');
+      console.error("Error fetching initial admin data:", err);
+      setError(err.response?.data?.message || 'Failed to fetch product data.');
     } finally {
       setLoading(false);
     }
@@ -70,46 +70,37 @@ const ProductManager = () => {
 
   useEffect(() => {
     if (token) {
-      fetchProducts();
+      fetchAllData();
     }
-  }, [fetchProducts, token]);
+  }, [fetchAllData, token]);
 
-  const handleOpenModal = async (product = null) => {
+  const handleOpenModal = (product = null) => {
     setEditingVariantSku(null);
-    setIsModalLoading(true);
-    onOpen();
-    try {
-      const typesResponse = await client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } });
-      const activeTypes = typesResponse.data.filter(pt => pt.isActive);
-      setProductTypes(activeTypes);
+    setCurrentVariant(initialVariantState);
+    // Use the already-fetched productTypes for the dropdown
+    const activeTypes = productTypes.filter(pt => pt.isActive);
 
-      setCurrentVariant(initialVariantState);
-      if (product) {
-        setIsEditing(true);
-        setSelectedProduct(product);
-        setFormData({
-          name: product.name,
-          description: product.description || '',
-          productType: product.productType?._id || product.productType,
-          basePrice: product.basePrice || 0,
-          tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
-          isActive: product.isActive,
-          variants: product.variants ? JSON.parse(JSON.stringify(product.variants)) : [],
-        });
-      } else {
-        setIsEditing(false);
-        setSelectedProduct(null);
-        setFormData({
-          name: '', description: '', productType: activeTypes.length > 0 ? activeTypes[0]._id : '',
-          basePrice: 0, tags: '', isActive: true, variants: [],
-        });
-      }
-    } catch (err) {
-      toast({ title: "Error", description: "Could not load data for the form.", status: "error" });
-      onClose();
-    } finally {
-      setIsModalLoading(false);
+    if (product) {
+      setIsEditing(true);
+      setSelectedProduct(product);
+      setFormData({
+        name: product.name,
+        description: product.description || '',
+        productType: product.productType?._id || product.productType,
+        basePrice: product.basePrice || 0,
+        tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
+        isActive: product.isActive,
+        variants: product.variants ? JSON.parse(JSON.stringify(product.variants)) : [],
+      });
+    } else {
+      setIsEditing(false);
+      setSelectedProduct(null);
+      setFormData({
+        name: '', description: '', productType: activeTypes.length > 0 ? activeTypes[0]._id : '',
+        basePrice: 0, tags: '', isActive: true, variants: [],
+      });
     }
+    onOpen();
   };
 
   const handleFormChange = (e) => {
@@ -187,7 +178,7 @@ const ProductManager = () => {
     try {
       const response = await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, description: `Product "${response.data.name}" saved.`, status: "success" });
-      fetchProducts();
+      fetchAllData();
       onClose();
     } catch (err) {
       toast({ title: `Error ${isEditing ? 'Saving' : 'Creating'} Product`, description: err.response?.data?.message || `Could not save product.` });
@@ -201,7 +192,7 @@ const ProductManager = () => {
     try {
       await client.delete(`/admin/products/${selectedProduct._id}`, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: "Product Deleted", description: `Product "${selectedProduct.name}" removed.`, status: "success" });
-      fetchProducts();
+      fetchAllData();
       onDeleteClose();
     } catch (err) {
       toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete product." });
@@ -221,7 +212,7 @@ const ProductManager = () => {
         </Button>
       </HStack>
 
-      {products.length === 0 ? (
+      {products.length === 0 && !loading ? (
         <Text>No products found. Click "Add New Product" to start.</Text>
       ) : (
         <TableContainer>
@@ -231,7 +222,8 @@ const ProductManager = () => {
               {products.map((p) => (
                 <Tr key={p._id}>
                   <Td fontWeight="medium">{p.name}</Td>
-                  <Td>{p.productType?.name || 'N/A'}</Td>
+                  {/* --- THIS IS THE FIX --- */}
+                  <Td>{p.productType ? p.productType.name : <Text as="span" color="red.500">Deleted Type</Text>}</Td>
                   <Td>${p.basePrice?.toFixed(2)}</Td>
                   <Td>{p.variants?.length || 0}</Td>
                   <Td><Tag size="sm" colorScheme={p.isActive ? 'green' : 'red'} borderRadius="full"><Icon as={p.isActive ? FaToggleOn : FaToggleOff} mr={1}/>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
