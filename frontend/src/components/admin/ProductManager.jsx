@@ -37,7 +37,7 @@ const ProductManager = () => {
   const [productTypes, setProductTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [isModalLoading, setIsModalLoading] = useState(false); // Spinner for modal data
+  const [isModalLoading, setIsModalLoading] = useState(false);
 
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -46,28 +46,30 @@ const ProductManager = () => {
   });
   const [currentVariant, setCurrentVariant] = useState(initialVariantState);
 
+  // --- NEW: State to track which variant we are editing ---
+  const [editingVariantSku, setEditingVariantSku] = useState(null);
+
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
-  // --- CHANGED: This now ONLY fetches products ---
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError('');
-    console.log("[ProductManager] Starting to fetch products...");
     try {
-      const response = await client.get('/admin/products', { headers: { Authorization: `Bearer ${token}` } });
-      console.log(`[ProductManager] Products fetched successfully with ${response.data.length} items.`);
-      setProducts(response.data);
+      // We need the types available to display the product type name in the table
+      const [productsResponse, typesResponse] = await Promise.all([
+          client.get('/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
+          client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      setProducts(productsResponse.data);
+      setProductTypes(typesResponse.data); // Store all types
     } catch (err) {
       console.error("Error fetching products:", err);
-      const errMsg = err.response?.data?.message || 'Failed to fetch products.';
-      setError(errMsg);
-      toast({ title: "Error", description: errMsg, status: "error", duration: 7000 });
+      setError(err.response?.data?.message || 'Failed to fetch products.');
     } finally {
-      console.log("[ProductManager] Fetch products complete. Setting loading to false.");
       setLoading(false);
     }
-  }, [token, toast]);
+  }, [token]);
 
   useEffect(() => {
     if (token) {
@@ -75,18 +77,16 @@ const ProductManager = () => {
     }
   }, [fetchProducts, token]);
 
-  // --- CHANGED: Logic to open modal now fetches product types on demand ---
   const handleOpenModal = async (product = null) => {
-    setIsModalLoading(true); // Show spinner in modal
-    onOpen(); // Open modal immediately
-
-    // Fetch the latest product types every time the modal is opened
+    setEditingVariantSku(null); // Always reset variant editing state when modal opens
+    setIsModalLoading(true);
+    onOpen();
     try {
       const typesResponse = await client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } });
       const activeTypes = typesResponse.data.filter(pt => pt.isActive);
-      setProductTypes(activeTypes);
+      // We set the productTypes state here so the dropdown is always up-to-date
+      setProductTypes(activeTypes); 
 
-      // Now set up the form data
       setCurrentVariant(initialVariantState);
       if (product) {
         setIsEditing(true);
@@ -94,7 +94,7 @@ const ProductManager = () => {
         setFormData({
           name: product.name,
           description: product.description || '',
-          productType: product.productType?._id || product.productType || '', // Handle populated vs non-populated
+          productType: product.productType?._id || product.productType || '',
           basePrice: product.basePrice || 0,
           tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
           isActive: product.isActive,
@@ -110,9 +110,9 @@ const ProductManager = () => {
       }
     } catch (err) {
       toast({ title: "Error", description: "Could not load data for the form.", status: "error" });
-      onClose(); // Close the modal if data fetching fails
+      onClose();
     } finally {
-      setIsModalLoading(false); // Hide spinner in modal
+      setIsModalLoading(false);
     }
   };
 
@@ -144,7 +144,8 @@ const ProductManager = () => {
       toast({ title: "Variant Incomplete", description: "SKU, Color, Size, and Front Mockup URL are required.", status: "warning", duration: 4000 });
       return false;
     }
-    if (formData.variants.find(v => v.sku === currentVariant.sku)) {
+    // Allow duplicate SKU only if it's the one we're currently editing
+    if (formData.variants.find(v => v.sku === currentVariant.sku) && currentVariant.sku !== editingVariantSku) {
       toast({ title: "Duplicate SKU", description: "This SKU already exists in the list for this product.", status: "warning", duration: 4000 });
       return false;
     }
@@ -155,11 +156,31 @@ const ProductManager = () => {
   const handleAddVariant = () => {
     if (addVariantToList()) {
       setCurrentVariant(initialVariantState);
+      setEditingVariantSku(null); // Clear editing state after adding/updating
     }
   };
-  const handleAddAndRepeatVariant = () => { addVariantToList(); };
+  
+  const handleAddAndRepeatVariant = () => {
+    if (addVariantToList()) {
+        setEditingVariantSku(null); // Clear editing state but keep form data
+    }
+  };
+  
   const handleRemoveVariant = (skuToRemove) => {
     setFormData(prev => ({ ...prev, variants: prev.variants.filter(v => v.sku !== skuToRemove) }));
+  };
+
+  // --- NEW: Function to load a variant into the form for editing ---
+  const handleEditVariant = (skuToEdit) => {
+    const variantToEdit = formData.variants.find(v => v.sku === skuToEdit);
+    if (variantToEdit) {
+      // Set the form with this variant's data
+      setCurrentVariant(variantToEdit);
+      // Set the SKU of the variant we are editing
+      setEditingVariantSku(skuToEdit);
+      // Remove it from the list temporarily. It will be re-added when they click "Update Variant"
+      handleRemoveVariant(skuToEdit);
+    }
   };
 
   const handleSubmit = async () => {
@@ -184,6 +205,7 @@ const ProductManager = () => {
   };
 
   const handleOpenDeleteDialog = (product) => { setSelectedProduct(product); onDeleteOpen(); };
+
   const handleDelete = async () => {
     if (!selectedProduct) return;
     try {
@@ -198,7 +220,6 @@ const ProductManager = () => {
     }
   };
 
-  // Main component render
   if (loading) { return <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" color="brand.primary" /><Text mt={2}>Loading Products...</Text></VStack>; }
   if (error) { return <Alert status="error"><AlertIcon />{error}</Alert>; }
 
@@ -221,8 +242,8 @@ const ProductManager = () => {
               {products.map((p) => (
                 <Tr key={p._id}>
                   <Td fontWeight="medium">{p.name}</Td>
-                  {/* Since we simplified the query, p.productType is now just an ID. We find the name from our state. */}
-                  <Td>{productTypes.find(pt => pt._id === p.productType)?.name || 'N/A'}</Td>
+                  {/* Now that we fetch types with products, this should work better */}
+                  <Td>{p.productType?.name || 'N/A'}</Td>
                   <Td>${p.basePrice?.toFixed(2)}</Td>
                   <Td>{p.variants?.length || 0}</Td>
                   <Td><Tag size="sm" colorScheme={p.isActive ? 'green' : 'red'} borderRadius="full"><Icon as={p.isActive ? FaToggleOn : FaToggleOff} mr={1}/>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
@@ -276,31 +297,31 @@ const ProductManager = () => {
               <Box p={4} borderWidth="1px" borderRadius="md" bg="brand.paper" shadow="sm">
                 <Heading size="sm" mb={4} color="brand.textDark">Product Variants</Heading>
                 <Box p={3} borderWidth="1px" borderRadius="md" mb={4} borderColor="gray.300">
-                    <Heading size="xs" mb={3} color="brand.textSlightlyDark">Add New Variant</Heading>
-                    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={3}>
-                        <FormControl isRequired><FormLabel fontSize="sm">Color Name</FormLabel>
-                          <Select size="sm" name="colorName" value={currentVariant.colorName} onChange={handleVariantFormChange} placeholder="Select color" bg="white">
-                            {CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                          </Select>
-                        </FormControl>
-                        <FormControl><FormLabel fontSize="sm">Color Hex</FormLabel>
-                            <HStack>
-                                <Input size="sm" name="colorHex" value={currentVariant.colorHex} onChange={handleVariantFormChange} placeholder="e.g. #FFFFFF" bg="white"/>
-                                <Box w="32px" h="32px" bg={currentVariant.colorHex || 'transparent'} borderRadius="sm" border="1px solid" borderColor="gray.200" />
-                            </HStack>
-                        </FormControl>
-                        <FormControl isRequired><FormLabel fontSize="sm">Size</FormLabel>
-                          <Select size="sm" name="size" value={currentVariant.size} onChange={handleVariantFormChange} placeholder="Select size" bg="white">
-                            {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </Select>
-                        </FormControl>
-                        <FormControl isRequired><FormLabel fontSize="sm">SKU (Unique)</FormLabel><Input size="sm" name="sku" value={currentVariant.sku} onChange={handleVariantFormChange} bg="white"/></FormControl>
-                        <FormControl isRequired><FormLabel fontSize="sm">Stock</FormLabel>
-                            <NumberInput size="sm" name="stock" value={currentVariant.stock} onChange={(valStr, valNum) => handleVariantNumberChange('stock', valStr, valNum)} min={0} bg="white">
-                                <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
-                            </NumberInput>
-                        </FormControl>
-                        <FormControl><FormLabel fontSize="sm">Price Modifier ($)</FormLabel>
+                    <Heading size="xs" mb={3} color="brand.textSlightlyDark">{editingVariantSku ? `Editing Variant (SKU: <span class="math-inline">\{editingVariantSku\}\)\` \: 'Add New Variant'\}</Heading\>
+<SimpleGrid columns\=\{\{ base\: 1, md\: 2, lg\: 3 \}\} spacing\=\{3\}\>
+<FormControl isRequired\><FormLabel fontSize\="sm"\>Color Name</FormLabel\>
+<Select size\="sm" name\="colorName" value\=\{currentVariant\.colorName\} onChange\=\{handleVariantFormChange\} placeholder\="Select color" bg\="white"\>
+\{CORE\_COLORS\.map\(c \=\> <option key\=\{c\.name\} value\=\{c\.name\}\>\{c\.name\}</option\>\)\}
+</Select\>
+</FormControl\>
+<FormControl\><FormLabel fontSize\="sm"\>Color Hex</FormLabel\>
+<HStack\>
+<Input size\="sm" name\="colorHex" value\=\{currentVariant\.colorHex\} onChange\=\{handleVariantFormChange\} placeholder\="e\.g\. \#FFFFFF" bg\="white"/\>
+<Box w\="32px" h\="32px" bg\=\{currentVariant\.colorHex \|\| 'transparent'\} borderRadius\="sm" border\="1px solid" borderColor\="gray\.200" /\>
+</HStack\>
+</FormControl\>
+<FormControl isRequired\><FormLabel fontSize\="sm"\>Size</FormLabel\>
+<Select size\="sm" name\="size" value\=\{currentVariant\.size\} onChange\=\{handleVariantFormChange\} placeholder\="Select size" bg\="white"\>
+\{SIZES\.map\(s \=\> <option key\=\{s\} value\=\{s\}\>\{s\}</option\>\)\}
+</Select\>
+</FormControl\>
+<FormControl isRequired\><FormLabel fontSize\="sm"\>SKU \(Unique\)</FormLabel\><Input size\="sm" name\="sku" value\=\{currentVariant\.sku\} onChange\=\{handleVariantFormChange\} bg\="white" isDisabled\=\{\!\!editingVariantSku\} /\></FormControl\>
+<FormControl isRequired\><FormLabel fontSize\="sm"\>Stock</FormLabel\>
+<NumberInput size\="sm" name\="stock" value\=\{currentVariant\.stock\} onChange\=\{\(valStr, valNum\) \=\> handleVariantNumberChange\('stock', valStr, valNum\)\} min\=\{0\} bg\="white"\>
+<NumberInputField /\><NumberInputStepper\><NumberIncrementStepper /\><NumberDecrementStepper /\></NumberInputStepper\>
+</NumberInput\>
+</FormControl\>
+<FormControl\><FormLabel fontSize\="sm"\>Price Modifier \(</span>)</FormLabel>
                             <NumberInput size="sm" name="priceModifier" value={currentVariant.priceModifier} onChange={(valStr, valNum) => handleVariantNumberChange('priceModifier', valStr, valNum)} precision={2} step={0.01} bg="white">
                                 <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                             </NumberInput>
@@ -320,8 +341,8 @@ const ProductManager = () => {
                         <FormControl><FormLabel fontSize="sm">POD Variant ID</FormLabel><Input size="sm" name="podVariantId" value={currentVariant.podVariantId} onChange={handleVariantFormChange} bg="white"/></FormControl>
                     </SimpleGrid>
                     <HStack spacing={4} mt={4}>
-                        <Button size="sm" colorScheme="teal" onClick={handleAddVariant}>Add Variant & Clear</Button>
-                        <Button size="sm" colorScheme="blue" leftIcon={<Icon as={FaSyncAlt}/>} onClick={handleAddAndRepeatVariant}>Add Variant & Repeat</Button>
+                        <Button size="sm" colorScheme={editingVariantSku ? 'green' : 'teal'} onClick={handleAddVariant}>{editingVariantSku ? 'Update Variant & Clear' : 'Add Variant & Clear'}</Button>
+                        <Button size="sm" colorScheme="blue" leftIcon={<Icon as={FaSyncAlt}/>} onClick={handleAddAndRepeatVariant}>{editingVariantSku ? 'Update Variant & Repeat' : 'Add Variant & Repeat'}</Button>
                     </HStack>
                 </Box>
                 <Divider my={4} />
@@ -329,13 +350,16 @@ const ProductManager = () => {
                 {formData.variants.length === 0 ? <Text fontSize="sm">No variants added yet.</Text> : (
                     <VStack spacing={2} align="stretch">
                         {formData.variants.map((variant, index) => (
-                            <Box key={variant.sku || index} p={2} borderWidth="1px" borderRadius="md" bg="gray.50" position="relative">
-                                <ChakraCloseButton size="sm" position="absolute" top="5px" right="5px" onClick={() => handleRemoveVariant(variant.sku)} />
-                                <Text fontSize="sm"><strong>SKU:</strong> {variant.sku} | <strong>Color:</strong> {variant.colorName} | <strong>Size:</strong> {variant.size}</Text>
-                                <Text fontSize="xs"><strong>Stock:</strong> {variant.stock} | <strong>Price Mod:</strong> ${variant.priceModifier.toFixed(2)}</Text>
-                                <Text fontSize="xs" noOfLines={1}><strong>Mockup:</strong> {variant.imageMockupFront}</Text>
-                                {variant.podService && <Text fontSize="xs"><strong>POD:</strong> {variant.podService} - {variant.podProductId} / {variant.podVariantId}</Text>}
-                            </Box>
+                            <HStack key={variant.sku || index} p={2} borderWidth="1px" borderRadius="md" bg="gray.50" position="relative" spacing={4} align="center">
+                                <Tooltip label="Edit this variant"><ChakraIconButton size="xs" icon={<Icon as={FaEdit} />} onClick={() => handleEditVariant(variant.sku)}/></Tooltip>
+                                <VStack align="start" spacing={0} flex={1}>
+                                    <Text fontSize="sm"><strong>SKU:</strong> {variant.sku} | <strong>Color:</strong> {variant.colorName} | <strong>Size:</strong> {variant.size}</Text>
+                                    <Text fontSize="xs"><strong>Stock:</strong> {variant.stock} | <strong>Price Mod:</strong> ${variant.priceModifier.toFixed(2)}</Text>
+                                    <Text fontSize="xs" noOfLines={1}><strong>Mockup:</strong> {variant.imageMockupFront}</Text>
+                                    {variant.podService && <Text fontSize="xs"><strong>POD:</strong> {variant.podService} - {variant.podProductId} / {variant.podVariantId}</Text>}
+                                </VStack>
+                                <ChakraCloseButton size="sm" onClick={() => handleRemoveVariant(variant.sku)} />
+                            </HStack>
                         ))}
                     </VStack>
                 )}
