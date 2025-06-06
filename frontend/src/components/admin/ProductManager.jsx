@@ -1,3 +1,4 @@
+// frontend/src/components/admin/ProductManager.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Heading, Button, Table, Thead, Tbody, Tr, Th, Td, TableContainer,
@@ -60,7 +61,6 @@ const ProductManager = () => {
       setProducts(productsResponse.data);
       setProductTypes(typesResponse.data);
     } catch (err) {
-      console.error("Error fetching products:", err);
       setError(err.response?.data?.message || 'Failed to fetch products.');
     } finally {
       setLoading(false);
@@ -220,7 +220,7 @@ const ProductManager = () => {
         </Button>
       </HStack>
 
-      {products.length === 0 ? (
+      {products.length === 0 && !loading ? (
         <Text>No products found. Click "Add New Product" to start.</Text>
       ) : (
         <TableContainer>
@@ -230,43 +230,44 @@ const ProductManager = () => {
               {products.map((p) => (
                 <Tr key={p._id}>
                   <Td fontWeight="medium">{p.name}</Td>
-                  <Td>{(productTypes.find(pt => pt._id === (p.productType?._id || p.productType)))?.name || 'N/A'}</Td>
-                  <Td><span class="math-inline">\{p\.basePrice?\.toFixed\(2\)\}</Td\>
-<Td\>\{p\.variants?\.length \|\| 0\}</Td\>
-<Td\><Tag size\="sm" colorScheme\=\{p\.isActive ? 'green' \: 'red'\} borderRadius\="full"\><Icon as\=\{p\.isActive ? FaToggleOn \: FaToggleOff\} mr\=\{1\}/\>\{p\.isActive ? 'Active' \: 'Inactive'\}</Tag\></Td\>
-<Td\>
-<Tooltip label\="Edit Product"\><ChakraIconButton icon\=\{<Icon as\=\{FaEdit\}/\>\} size\="xs" variant\="ghost" colorScheme\="yellow" mr\=\{2\} onClick\=\{\(\) \=\> handleOpenModal\(p\)\}/\></Tooltip\>
-<Tooltip label\="Delete Product"\><ChakraIconButton icon\=\{<Icon as\=\{FaTrashAlt\}/\>\} size\="xs" variant\="ghost" colorScheme\="red" onClick\=\{\(\) \=\> handleOpenDeleteDialog\(p\)\}/\></Tooltip\>
-</Td\>
-</Tr\>
-\)\)\}
-</Tbody\>
-</Table\>
-</TableContainer\>
-\)\}
-<Modal isOpen\=\{isOpen\} onClose\=\{onClose\} size\="4xl" scrollBehavior\="inside"\>
-<ModalOverlay /\>
-<ModalContent bg\="brand\.paperMaxContrast"\>
-<ModalHeader color\="brand\.textDark"\>\{isEditing ? 'Edit' \: 'Add New'\} Product</ModalHeader\>
-<ModalCloseButton /\>
-<ModalBody pb\=\{6\} \>
-\{isModalLoading ? \(
-<VStack justifyContent\="center" alignItems\="center" minH\="400px"\>
-<Spinner size\="xl" /\>
-<Text\>Loading Form Data\.\.\.</Text\>
-</VStack\>
-\) \: \(
-<VStack spacing\=\{6\} align\="stretch"\>
-<Box p\=\{4\} borderWidth\="1px" borderRadius\="md" bg\="brand\.paper" shadow\="sm"\>
-<Heading size\="sm" mb\=\{4\} color\="brand\.textDark"\>Product Details</Heading\>
-<SimpleGrid columns\=\{\{ base\: 1, md\: 2 \}\} spacing\=\{4\}\>
-<FormControl isRequired\><FormLabel\>Name</FormLabel\><Input name\="name" value\=\{formData\.name\} onChange\=\{handleFormChange\} bg\="white"/\></FormControl\>
-<FormControl isRequired\><FormLabel\>Product Type</FormLabel\>
-<Select name\="productType" value\=\{formData\.productType\} onChange\=\{handleFormChange\} placeholder\="Select type" bg\="white" isDisabled\=\{productTypes\.length \=\=\= 0\}\>
-\{productTypes\.map\(pt \=\> \(<option key\=\{pt\.\_id\} value\=\{pt\.\_id\}\>\{pt\.name\}</option\>\)\)\}
-</Select\>
-</FormControl\>
-<FormControl isRequired\><FormLabel\>Base Price \(</span>)</FormLabel>
+                  <Td>{p.productType?.name || 'N/A'}</Td>
+                  <Td>${p.basePrice?.toFixed(2)}</Td>
+                  <Td>{p.variants?.length || 0}</Td>
+                  <Td><Tag size="sm" colorScheme={p.isActive ? 'green' : 'red'} borderRadius="full"><Icon as={p.isActive ? FaToggleOn : FaToggleOff} mr={1}/>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
+                  <Td>
+                    <Tooltip label="Edit Product"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" colorScheme="yellow" mr={2} onClick={() => handleOpenModal(p)}/></Tooltip>
+                    <Tooltip label="Delete Product"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip>
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </TableContainer>
+      )}
+
+      <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent bg="brand.paperMaxContrast">
+          <ModalHeader color="brand.textDark">{isEditing ? 'Edit' : 'Add New'} Product</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6} >
+            {isModalLoading ? (
+              <VStack justifyContent="center" alignItems="center" minH="400px">
+                <Spinner size="xl" />
+                <Text>Loading Form Data...</Text>
+              </VStack>
+            ) : (
+            <VStack spacing={6} align="stretch">
+              <Box p={4} borderWidth="1px" borderRadius="md" bg="brand.paper" shadow="sm">
+                <Heading size="sm" mb={4} color="brand.textDark">Product Details</Heading>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                  <FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange} bg="white"/></FormControl>
+                  <FormControl isRequired><FormLabel>Product Type</FormLabel>
+                    <Select name="productType" value={formData.productType} onChange={handleFormChange} placeholder="Select type" bg="white" isDisabled={productTypes.length === 0}>
+                      {productTypes.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}
+                    </Select>
+                  </FormControl>
+                  <FormControl isRequired><FormLabel>Base Price ($)</FormLabel>
                     <NumberInput name="basePrice" value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2} step={0.01} bg="white">
                         <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                     </NumberInput>
