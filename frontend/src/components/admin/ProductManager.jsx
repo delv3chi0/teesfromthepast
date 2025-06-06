@@ -50,7 +50,7 @@ const ProductManager = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
 
-  const fetchProducts = useCallback(async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -61,8 +61,8 @@ const ProductManager = () => {
       setProducts(productsResponse.data);
       setProductTypes(typesResponse.data);
     } catch (err) {
-      console.error("Error fetching products/types:", err);
-      setError(err.response?.data?.message || 'Failed to fetch products or product types.');
+      console.error("Error fetching initial data:", err);
+      setError(err.response?.data?.message || 'Failed to fetch initial product data.');
     } finally {
       setLoading(false);
     }
@@ -70,9 +70,9 @@ const ProductManager = () => {
 
   useEffect(() => {
     if (token) {
-      fetchProducts();
+      fetchAllData();
     }
-  }, [fetchProducts, token]);
+  }, [fetchAllData, token]);
 
   const handleOpenModal = async (product = null) => {
     setEditingVariantSku(null);
@@ -81,7 +81,8 @@ const ProductManager = () => {
     try {
       const typesResponse = await client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } });
       const activeTypes = typesResponse.data.filter(pt => pt.isActive);
-      setProductTypes(activeTypes);
+      // Re-set the product types state in case it was modified since page load
+      setProductTypes(typesResponse.data); 
 
       setCurrentVariant(initialVariantState);
       if (product) {
@@ -187,7 +188,7 @@ const ProductManager = () => {
     try {
       const response = await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, description: `Product "${response.data.name}" saved.`, status: "success" });
-      fetchProducts();
+      fetchAllData();
       onClose();
     } catch (err) {
       toast({ title: `Error ${isEditing ? 'Saving' : 'Creating'} Product`, description: err.response?.data?.message || `Could not save product.` });
@@ -201,7 +202,7 @@ const ProductManager = () => {
     try {
       await client.delete(`/admin/products/${selectedProduct._id}`, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: "Product Deleted", description: `Product "${selectedProduct.name}" removed.`, status: "success" });
-      fetchProducts();
+      fetchAllData();
       onDeleteClose();
     } catch (err) {
       toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete product." });
@@ -216,7 +217,7 @@ const ProductManager = () => {
     <Box p={{ base: 2, md: 4 }} borderWidth="1px" borderRadius="md" shadow="sm" bg="white">
       <HStack justifyContent="space-between" mb={6}>
         <Heading size="md" color="brand.textDark">Manage Products</Heading>
-        <Button leftIcon={<Icon as={FaPlus} />} bg="brand.primary" color="white" _hover={{ bg: "brand.primaryDark" }} onClick={() => handleOpenModal()} size="sm">
+        <Button leftIcon={<Icon as={FaPlus} />} bg="brand.primary" color="white" _hover={{ bg: "brand.primaryDark" }} onClick={() => handleOpenModal()}>
           Add New Product
         </Button>
       </HStack>
@@ -231,7 +232,8 @@ const ProductManager = () => {
               {products.map((p) => (
                 <Tr key={p._id}>
                   <Td fontWeight="medium">{p.name}</Td>
-                  <Td>{(productTypes.find(pt => pt._id === p.productType))?.name || 'N/A'}</Td>
+                  {/* --- THIS IS THE FIX --- */}
+                  <Td>{p.productType ? p.productType.name : <Text as="span" color="red.500">Deleted Type</Text>}</Td>
                   <Td>${p.basePrice?.toFixed(2)}</Td>
                   <Td>{p.variants?.length || 0}</Td>
                   <Td><Tag size="sm" colorScheme={p.isActive ? 'green' : 'red'} borderRadius="full"><Icon as={p.isActive ? FaToggleOn : FaToggleOff} mr={1}/>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
