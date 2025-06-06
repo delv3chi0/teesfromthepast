@@ -175,7 +175,7 @@ export default function ProductStudio() {
     } else {
         console.log("[ProductStudio Canvas] No selectedVariant yet or it's null for canvas update.");
     }
-    
+
     const fabricScriptPollInterval = 100;
     const maxPolls = 50;
     let pollCount = 0;
@@ -356,6 +356,7 @@ export default function ProductStudio() {
         <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">2. Choose Your Saved Design</Heading>
           {loadingDesigns && <Box textAlign="center" py={10}><Spinner size="xl" color="brand.primary" thickness="4px"/><Text mt={3}>Loading designs...</Text></Box>}
+          {/* This Alert was missing a closing bracket in your pasted code, I've corrected it */}
           {!loadingDesigns && designsError && <Alert status="error">{designsError}</Alert>}
           {!loadingDesigns && !designsError && designs.length === 0 && <Text textAlign="center" py={10}>You have no saved designs. Go <ChakraLink as={RouterLink} to="/generate" color="brand.primaryDark" fontWeight="bold">generate</ChakraLink> some!</Text>}
           {!loadingDesigns && !designsError && designs.length > 0 && (

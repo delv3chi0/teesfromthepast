@@ -25,7 +25,6 @@ export default function CheckoutPage() {
     const navigate = useNavigate();
     const toast = useToast();
     
-    // --- CHANGED: Initialize itemToCheckout with state ---
     const [itemToCheckout, setItemToCheckout] = useState(null);
 
     const [step, setStep] = useState(1);
@@ -41,7 +40,6 @@ export default function CheckoutPage() {
     const [error, setError] = useState('');
     const [paymentDetails, setPaymentDetails] = useState({ amount: 0, currency: 'usd' });
 
-    // --- CHANGED: This useEffect now reads from localStorage ---
     useEffect(() => {
         setLoadingPageData(true);
         setError('');
@@ -367,3 +365,4 @@ export default function CheckoutPage() {
         </Box>
     );
 }
+
