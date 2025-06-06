@@ -1,4 +1,3 @@
-// frontend/src/components/admin/ProductManager.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Heading, Button, Table, Thead, Tbody, Tr, Th, Td, TableContainer,
@@ -45,8 +44,6 @@ const ProductManager = () => {
     name: '', description: '', productType: '', basePrice: 0, tags: '', isActive: true, variants: [],
   });
   const [currentVariant, setCurrentVariant] = useState(initialVariantState);
-
-  // --- NEW: State to track which variant we are editing ---
   const [editingVariantSku, setEditingVariantSku] = useState(null);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -56,13 +53,12 @@ const ProductManager = () => {
     setLoading(true);
     setError('');
     try {
-      // We need the types available to display the product type name in the table
       const [productsResponse, typesResponse] = await Promise.all([
           client.get('/admin/products', { headers: { Authorization: `Bearer ${token}` } }),
           client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } })
       ]);
       setProducts(productsResponse.data);
-      setProductTypes(typesResponse.data); // Store all types
+      setProductTypes(typesResponse.data);
     } catch (err) {
       console.error("Error fetching products:", err);
       setError(err.response?.data?.message || 'Failed to fetch products.');
@@ -78,14 +74,13 @@ const ProductManager = () => {
   }, [fetchProducts, token]);
 
   const handleOpenModal = async (product = null) => {
-    setEditingVariantSku(null); // Always reset variant editing state when modal opens
+    setEditingVariantSku(null);
     setIsModalLoading(true);
     onOpen();
     try {
       const typesResponse = await client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } });
       const activeTypes = typesResponse.data.filter(pt => pt.isActive);
-      // We set the productTypes state here so the dropdown is always up-to-date
-      setProductTypes(activeTypes); 
+      setProductTypes(activeTypes);
 
       setCurrentVariant(initialVariantState);
       if (product) {
@@ -94,7 +89,7 @@ const ProductManager = () => {
         setFormData({
           name: product.name,
           description: product.description || '',
-          productType: product.productType?._id || product.productType || '',
+          productType: product.productType?._id || product.productType,
           basePrice: product.basePrice || 0,
           tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
           isActive: product.isActive,
@@ -141,12 +136,11 @@ const ProductManager = () => {
   
   const addVariantToList = () => {
     if (!currentVariant.sku || !currentVariant.colorName || !currentVariant.size || !currentVariant.imageMockupFront) {
-      toast({ title: "Variant Incomplete", description: "SKU, Color, Size, and Front Mockup URL are required.", status: "warning", duration: 4000 });
+      toast({ title: "Variant Incomplete", description: "SKU, Color, Size, and Front Mockup URL are required.", status: "warning" });
       return false;
     }
-    // Allow duplicate SKU only if it's the one we're currently editing
     if (formData.variants.find(v => v.sku === currentVariant.sku) && currentVariant.sku !== editingVariantSku) {
-      toast({ title: "Duplicate SKU", description: "This SKU already exists in the list for this product.", status: "warning", duration: 4000 });
+      toast({ title: "Duplicate SKU", description: "This SKU already exists in the list for this product.", status: "warning" });
       return false;
     }
     setFormData(prev => ({ ...prev, variants: [...prev.variants, { ...currentVariant }] }));
@@ -156,13 +150,13 @@ const ProductManager = () => {
   const handleAddVariant = () => {
     if (addVariantToList()) {
       setCurrentVariant(initialVariantState);
-      setEditingVariantSku(null); // Clear editing state after adding/updating
+      setEditingVariantSku(null);
     }
   };
   
   const handleAddAndRepeatVariant = () => {
     if (addVariantToList()) {
-        setEditingVariantSku(null); // Clear editing state but keep form data
+      setEditingVariantSku(null);
     }
   };
   
@@ -170,23 +164,19 @@ const ProductManager = () => {
     setFormData(prev => ({ ...prev, variants: prev.variants.filter(v => v.sku !== skuToRemove) }));
   };
 
-  // --- NEW: Function to load a variant into the form for editing ---
   const handleEditVariant = (skuToEdit) => {
     const variantToEdit = formData.variants.find(v => v.sku === skuToEdit);
     if (variantToEdit) {
-      // Set the form with this variant's data
       setCurrentVariant(variantToEdit);
-      // Set the SKU of the variant we are editing
       setEditingVariantSku(skuToEdit);
-      // Remove it from the list temporarily. It will be re-added when they click "Update Variant"
       handleRemoveVariant(skuToEdit);
     }
   };
 
   const handleSubmit = async () => {
-    if (!formData.name.trim()) { toast({ title: "Validation Error", description: "Product name is required.", status: "error" }); return; }
-    if (!formData.productType) { toast({ title: "Validation Error", description: "Product type is required.", status: "error" }); return; }
-    if (formData.variants.length === 0) { toast({ title: "Validation Error", description: "At least one product variant is required.", status: "error" }); return; }
+    if (!formData.name.trim()) { toast({ title: "Validation Error", description: "Product name is required." }); return; }
+    if (!formData.productType) { toast({ title: "Validation Error", description: "Product type is required." }); return; }
+    if (formData.variants.length === 0) { toast({ title: "Validation Error", description: "At least one product variant is required." }); return; }
 
     const method = isEditing ? 'put' : 'post';
     const url = isEditing ? `/admin/products/${selectedProduct._id}` : '/admin/products';
@@ -195,12 +185,11 @@ const ProductManager = () => {
 
     try {
       const response = await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } });
-      toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, description: `Product "${response.data.name}" saved successfully.`, status: "success" });
+      toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, description: `Product "${response.data.name}" saved.`, status: "success" });
       fetchProducts();
       onClose();
     } catch (err) {
-      console.error(`Error ${isEditing ? 'saving' : 'creating'} product:`, err);
-      toast({ title: `Error ${isEditing ? 'Saving' : 'Creating'} Product`, description: err.response?.data?.message || `Could not save product.`, status: "error" });
+      toast({ title: `Error ${isEditing ? 'Saving' : 'Creating'} Product`, description: err.response?.data?.message || `Could not save product.` });
     }
   };
 
@@ -214,8 +203,7 @@ const ProductManager = () => {
       fetchProducts();
       onDeleteClose();
     } catch (err) {
-      console.error("Error deleting product:", err);
-      toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete product.", status: "error" });
+      toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete product." });
       onDeleteClose();
     }
   };
@@ -242,46 +230,43 @@ const ProductManager = () => {
               {products.map((p) => (
                 <Tr key={p._id}>
                   <Td fontWeight="medium">{p.name}</Td>
-                  {/* Now that we fetch types with products, this should work better */}
-                  <Td>{p.productType?.name || 'N/A'}</Td>
-                  <Td>${p.basePrice?.toFixed(2)}</Td>
-                  <Td>{p.variants?.length || 0}</Td>
-                  <Td><Tag size="sm" colorScheme={p.isActive ? 'green' : 'red'} borderRadius="full"><Icon as={p.isActive ? FaToggleOn : FaToggleOff} mr={1}/>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
-                  <Td>
-                    <Tooltip label="Edit Product"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" colorScheme="yellow" mr={2} onClick={() => handleOpenModal(p)}/></Tooltip>
-                    <Tooltip label="Delete Product"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip>
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {/* Add/Edit Product Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
-        <ModalOverlay />
-        <ModalContent bg="brand.paperMaxContrast">
-          <ModalHeader color="brand.textDark">{isEditing ? 'Edit' : 'Add New'} Product</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6} >
-            {isModalLoading ? (
-              <VStack justifyContent="center" alignItems="center" minH="400px">
-                <Spinner size="xl" />
-                <Text>Loading Form Data...</Text>
-              </VStack>
-            ) : (
-            <VStack spacing={6} align="stretch">
-              <Box p={4} borderWidth="1px" borderRadius="md" bg="brand.paper" shadow="sm">
-                <Heading size="sm" mb={4} color="brand.textDark">Product Details</Heading>
-                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                  <FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange} bg="white"/></FormControl>
-                  <FormControl isRequired><FormLabel>Product Type</FormLabel>
-                    <Select name="productType" value={formData.productType} onChange={handleFormChange} placeholder="Select type" bg="white" isDisabled={productTypes.length === 0}>
-                      {productTypes.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}
-                    </Select>
-                  </FormControl>
-                  <FormControl isRequired><FormLabel>Base Price ($)</FormLabel>
+                  <Td>{(productTypes.find(pt => pt._id === (p.productType?._id || p.productType)))?.name || 'N/A'}</Td>
+                  <Td><span class="math-inline">\{p\.basePrice?\.toFixed\(2\)\}</Td\>
+<Td\>\{p\.variants?\.length \|\| 0\}</Td\>
+<Td\><Tag size\="sm" colorScheme\=\{p\.isActive ? 'green' \: 'red'\} borderRadius\="full"\><Icon as\=\{p\.isActive ? FaToggleOn \: FaToggleOff\} mr\=\{1\}/\>\{p\.isActive ? 'Active' \: 'Inactive'\}</Tag\></Td\>
+<Td\>
+<Tooltip label\="Edit Product"\><ChakraIconButton icon\=\{<Icon as\=\{FaEdit\}/\>\} size\="xs" variant\="ghost" colorScheme\="yellow" mr\=\{2\} onClick\=\{\(\) \=\> handleOpenModal\(p\)\}/\></Tooltip\>
+<Tooltip label\="Delete Product"\><ChakraIconButton icon\=\{<Icon as\=\{FaTrashAlt\}/\>\} size\="xs" variant\="ghost" colorScheme\="red" onClick\=\{\(\) \=\> handleOpenDeleteDialog\(p\)\}/\></Tooltip\>
+</Td\>
+</Tr\>
+\)\)\}
+</Tbody\>
+</Table\>
+</TableContainer\>
+\)\}
+<Modal isOpen\=\{isOpen\} onClose\=\{onClose\} size\="4xl" scrollBehavior\="inside"\>
+<ModalOverlay /\>
+<ModalContent bg\="brand\.paperMaxContrast"\>
+<ModalHeader color\="brand\.textDark"\>\{isEditing ? 'Edit' \: 'Add New'\} Product</ModalHeader\>
+<ModalCloseButton /\>
+<ModalBody pb\=\{6\} \>
+\{isModalLoading ? \(
+<VStack justifyContent\="center" alignItems\="center" minH\="400px"\>
+<Spinner size\="xl" /\>
+<Text\>Loading Form Data\.\.\.</Text\>
+</VStack\>
+\) \: \(
+<VStack spacing\=\{6\} align\="stretch"\>
+<Box p\=\{4\} borderWidth\="1px" borderRadius\="md" bg\="brand\.paper" shadow\="sm"\>
+<Heading size\="sm" mb\=\{4\} color\="brand\.textDark"\>Product Details</Heading\>
+<SimpleGrid columns\=\{\{ base\: 1, md\: 2 \}\} spacing\=\{4\}\>
+<FormControl isRequired\><FormLabel\>Name</FormLabel\><Input name\="name" value\=\{formData\.name\} onChange\=\{handleFormChange\} bg\="white"/\></FormControl\>
+<FormControl isRequired\><FormLabel\>Product Type</FormLabel\>
+<Select name\="productType" value\=\{formData\.productType\} onChange\=\{handleFormChange\} placeholder\="Select type" bg\="white" isDisabled\=\{productTypes\.length \=\=\= 0\}\>
+\{productTypes\.map\(pt \=\> \(<option key\=\{pt\.\_id\} value\=\{pt\.\_id\}\>\{pt\.name\}</option\>\)\)\}
+</Select\>
+</FormControl\>
+<FormControl isRequired\><FormLabel\>Base Price \(</span>)</FormLabel>
                     <NumberInput name="basePrice" value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2} step={0.01} bg="white">
                         <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                     </NumberInput>
@@ -297,31 +282,31 @@ const ProductManager = () => {
               <Box p={4} borderWidth="1px" borderRadius="md" bg="brand.paper" shadow="sm">
                 <Heading size="sm" mb={4} color="brand.textDark">Product Variants</Heading>
                 <Box p={3} borderWidth="1px" borderRadius="md" mb={4} borderColor="gray.300">
-                    <Heading size="xs" mb={3} color="brand.textSlightlyDark">{editingVariantSku ? `Editing Variant (SKU: <span class="math-inline">\{editingVariantSku\}\)\` \: 'Add New Variant'\}</Heading\>
-<SimpleGrid columns\=\{\{ base\: 1, md\: 2, lg\: 3 \}\} spacing\=\{3\}\>
-<FormControl isRequired\><FormLabel fontSize\="sm"\>Color Name</FormLabel\>
-<Select size\="sm" name\="colorName" value\=\{currentVariant\.colorName\} onChange\=\{handleVariantFormChange\} placeholder\="Select color" bg\="white"\>
-\{CORE\_COLORS\.map\(c \=\> <option key\=\{c\.name\} value\=\{c\.name\}\>\{c\.name\}</option\>\)\}
-</Select\>
-</FormControl\>
-<FormControl\><FormLabel fontSize\="sm"\>Color Hex</FormLabel\>
-<HStack\>
-<Input size\="sm" name\="colorHex" value\=\{currentVariant\.colorHex\} onChange\=\{handleVariantFormChange\} placeholder\="e\.g\. \#FFFFFF" bg\="white"/\>
-<Box w\="32px" h\="32px" bg\=\{currentVariant\.colorHex \|\| 'transparent'\} borderRadius\="sm" border\="1px solid" borderColor\="gray\.200" /\>
-</HStack\>
-</FormControl\>
-<FormControl isRequired\><FormLabel fontSize\="sm"\>Size</FormLabel\>
-<Select size\="sm" name\="size" value\=\{currentVariant\.size\} onChange\=\{handleVariantFormChange\} placeholder\="Select size" bg\="white"\>
-\{SIZES\.map\(s \=\> <option key\=\{s\} value\=\{s\}\>\{s\}</option\>\)\}
-</Select\>
-</FormControl\>
-<FormControl isRequired\><FormLabel fontSize\="sm"\>SKU \(Unique\)</FormLabel\><Input size\="sm" name\="sku" value\=\{currentVariant\.sku\} onChange\=\{handleVariantFormChange\} bg\="white" isDisabled\=\{\!\!editingVariantSku\} /\></FormControl\>
-<FormControl isRequired\><FormLabel fontSize\="sm"\>Stock</FormLabel\>
-<NumberInput size\="sm" name\="stock" value\=\{currentVariant\.stock\} onChange\=\{\(valStr, valNum\) \=\> handleVariantNumberChange\('stock', valStr, valNum\)\} min\=\{0\} bg\="white"\>
-<NumberInputField /\><NumberInputStepper\><NumberIncrementStepper /\><NumberDecrementStepper /\></NumberInputStepper\>
-</NumberInput\>
-</FormControl\>
-<FormControl\><FormLabel fontSize\="sm"\>Price Modifier \(</span>)</FormLabel>
+                    <Heading size="xs" mb={3} color="brand.textSlightlyDark">{editingVariantSku ? `Editing Variant (SKU: ${editingVariantSku})` : 'Add New Variant'}</Heading>
+                    <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={3}>
+                        <FormControl isRequired><FormLabel fontSize="sm">Color Name</FormLabel>
+                          <Select size="sm" name="colorName" value={currentVariant.colorName} onChange={handleVariantFormChange} placeholder="Select color" bg="white">
+                            {CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                          </Select>
+                        </FormControl>
+                        <FormControl><FormLabel fontSize="sm">Color Hex</FormLabel>
+                            <HStack>
+                                <Input size="sm" name="colorHex" value={currentVariant.colorHex} onChange={handleVariantFormChange} placeholder="e.g. #FFFFFF" bg="white"/>
+                                <Box w="32px" h="32px" bg={currentVariant.colorHex || 'transparent'} borderRadius="sm" border="1px solid" borderColor="gray.200" />
+                            </HStack>
+                        </FormControl>
+                        <FormControl isRequired><FormLabel fontSize="sm">Size</FormLabel>
+                          <Select size="sm" name="size" value={currentVariant.size} onChange={handleVariantFormChange} placeholder="Select size" bg="white">
+                            {SIZES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </Select>
+                        </FormControl>
+                        <FormControl isRequired><FormLabel fontSize="sm">SKU (Unique)</FormLabel><Input size="sm" name="sku" value={currentVariant.sku} onChange={handleVariantFormChange} bg="white" isDisabled={!!editingVariantSku} /></FormControl>
+                        <FormControl isRequired><FormLabel fontSize="sm">Stock</FormLabel>
+                            <NumberInput size="sm" name="stock" value={currentVariant.stock} onChange={(valStr, valNum) => handleVariantNumberChange('stock', valStr, valNum)} min={0} bg="white">
+                                <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
+                            </NumberInput>
+                        </FormControl>
+                        <FormControl><FormLabel fontSize="sm">Price Modifier ($)</FormLabel>
                             <NumberInput size="sm" name="priceModifier" value={currentVariant.priceModifier} onChange={(valStr, valNum) => handleVariantNumberChange('priceModifier', valStr, valNum)} precision={2} step={0.01} bg="white">
                                 <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                             </NumberInput>
@@ -349,8 +334,8 @@ const ProductManager = () => {
                 <Heading size="xs" mb={3} color="brand.textSlightlyDark">Current Variants for this Product ({formData.variants.length})</Heading>
                 {formData.variants.length === 0 ? <Text fontSize="sm">No variants added yet.</Text> : (
                     <VStack spacing={2} align="stretch">
-                        {formData.variants.map((variant, index) => (
-                            <HStack key={variant.sku || index} p={2} borderWidth="1px" borderRadius="md" bg="gray.50" position="relative" spacing={4} align="center">
+                        {formData.variants.map((variant) => (
+                            <HStack key={variant.sku} p={2} borderWidth="1px" borderRadius="md" bg="gray.50" spacing={4} align="center">
                                 <Tooltip label="Edit this variant"><ChakraIconButton size="xs" icon={<Icon as={FaEdit} />} onClick={() => handleEditVariant(variant.sku)}/></Tooltip>
                                 <VStack align="start" spacing={0} flex={1}>
                                     <Text fontSize="sm"><strong>SKU:</strong> {variant.sku} | <strong>Color:</strong> {variant.colorName} | <strong>Size:</strong> {variant.size}</Text>
@@ -376,9 +361,7 @@ const ProductManager = () => {
         </ModalContent>
       </Modal>
 
-      {/* Delete Product Confirmation Modal */}
-      {selectedProduct && (
-        <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
+      <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
            <ModalOverlay />
             <ModalContent bg="brand.paper"><ModalHeader>Confirm Deletion</ModalHeader><ModalCloseButton />
                 <ModalBody><Text>Delete "<strong>{selectedProduct.name}</strong>"? This will delete the product and all its variants.</Text>
