@@ -1,4 +1,3 @@
-delv3chio@delv3chio-laptop:~/Desktop/tees$ cat frontend/src/components/admin/ProductManager.jsx 
 // frontend/src/components/admin/ProductManager.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
