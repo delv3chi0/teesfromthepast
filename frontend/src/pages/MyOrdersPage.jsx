@@ -14,7 +14,7 @@ const OrderItemCard = ({ order }) => {
     const textColor = useColorModeValue('gray.600', 'gray.400');
     const headingColor = useColorModeValue('brand.textDark', 'whiteAlpha.900');
 
-    // --- FIX: Safely format the total amount. Use optional chaining (?.) and provide a fallback. ---
+    // Safely format the total amount. Use optional chaining (?.) and provide a fallback.
     const formattedTotal = typeof order.totalAmount === 'number'
         ? `$${(order.totalAmount / 100).toFixed(2)} ${order.currency?.toUpperCase() || 'USD'}`
         : 'N/A';
