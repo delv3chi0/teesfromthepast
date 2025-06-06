@@ -10,23 +10,13 @@ import Product from '../models/Product.js';
 
 // --- USER MANAGEMENT CONTROLLERS ---
 const getAllUsersAdmin = asyncHandler(async (req, res) => {
-    console.log('[Admin Controller] GET /users - Fetching all users.');
     const users = await User.find({}).select('-password');
-    if (users) {
-        console.log(`[Admin Controller] GET /users - Found ${users.length} users.`);
-        res.json(users);
-    } else {
-        res.status(404).json({ message: 'No users found' });
-    }
+    res.json(users || []);
 });
 const getUserByIdAdmin = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id).select('-password');
-    if (user) {
-        res.json(user);
-    } else {
-        res.status(404);
-        throw new Error('User not found');
-    }
+    if (user) { res.json(user); } 
+    else { res.status(404); throw new Error('User not found'); }
 });
 const updateUserAdmin = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id);
@@ -106,20 +96,15 @@ const getProductCategoriesAdmin = asyncHandler(async (req, res) => {
 });
 const getProductCategoryByIdAdmin = asyncHandler(async (req, res) => {
     const category = await ProductCategory.findById(req.params.id);
-    if (category) {
-        res.json(category);
-    } else {
-        res.status(404);
-        throw new Error('Product category not found');
-    }
+    if (category) { res.json(category); } 
+    else { res.status(404); throw new Error('Product category not found'); }
 });
 const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
-    const categoryId = req.params.id;
     const { name, description, isActive } = req.body;
-    const category = await ProductCategory.findById(categoryId);
+    const category = await ProductCategory.findById(req.params.id);
     if (category) {
         if (name && name !== category.name) {
-            const categoryExists = await ProductCategory.findOne({ name: name, _id: { $ne: categoryId } });
+            const categoryExists = await ProductCategory.findOne({ name: name, _id: { $ne: req.params.id } });
             if (categoryExists) {
                 res.status(400);
                 throw new Error(`Product category name '${name}' already exists.`);
@@ -136,15 +121,14 @@ const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
     }
 });
 const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
-    const categoryId = req.params.id;
-    const category = await ProductCategory.findById(categoryId);
+    const category = await ProductCategory.findById(req.params.id);
     if (category) {
-        const productTypeUsingCategory = await ProductType.findOne({ category: categoryId });
+        const productTypeUsingCategory = await ProductType.findOne({ category: req.params.id });
         if (productTypeUsingCategory) {
             res.status(400);
             throw new Error('Cannot delete category. It is currently in use by one or more product types.');
         }
-        await ProductCategory.deleteOne({ _id: categoryId });
+        await ProductCategory.deleteOne({ _id: req.params.id });
         res.json({ message: 'Product category removed' });
     } else {
         res.status(404);
@@ -179,12 +163,8 @@ const getProductTypesAdmin = asyncHandler(async (req, res) => {
 });
 const getProductTypeByIdAdmin = asyncHandler(async (req, res) => {
     const productType = await ProductType.findById(req.params.id).populate('category', 'name description');
-    if (productType) {
-        res.json(productType);
-    } else {
-        res.status(404);
-        throw new Error('Product type not found');
-    }
+    if (productType) { res.json(productType); } 
+    else { res.status(404); throw new Error('Product type not found'); }
 });
 const updateProductTypeAdmin = asyncHandler(async (req, res) => {
     const { name, category: categoryId, description, isActive } = req.body;
@@ -237,17 +217,53 @@ const deleteProductTypeAdmin = asyncHandler(async (req, res) => {
 });
 
 // --- PRODUCT MANAGEMENT ---
-const createProductAdmin = asyncHandler(async (req, res) => { /* ...existing code... */ });
+const createProductAdmin = asyncHandler(async (req, res) => {
+    const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
+        res.status(400);
+        throw new Error('Invalid Product Type ID format.');
+    }
+    const productTypeExists = await ProductType.findById(productTypeId);
+    if (!productTypeExists) {
+        res.status(400);
+        throw new Error('Selected product type does not exist.');
+    }
+    if (variants && !Array.isArray(variants)) {
+        res.status(400);
+        throw new Error('Variants must be an array.');
+    }
+    if (variants) {
+        const skusInRequest = [];
+        for (const v of variants) {
+            if (!v.sku || !v.colorName || !v.size || v.stock === undefined || !v.imageMockupFront) {
+                res.status(400);
+                throw new Error('Each variant must have sku, colorName, size, stock, and imageMockupFront.');
+            }
+            if (skusInRequest.includes(v.sku)) {
+                res.status(400);
+                throw new Error(`Duplicate SKU '${v.sku}' found within the submitted variants. SKUs must be unique per product creation.`);
+            }
+            skusInRequest.push(v.sku);
+            const skuExistsGlobally = await Product.findOne({ 'variants.sku': v.sku });
+            if (skuExistsGlobally) {
+                res.status(400);
+                throw new Error(`SKU '${v.sku}' already exists. SKUs must be globally unique.`);
+            }
+        }
+    }
+    const product = new Product({ name, productType: productTypeId, description, basePrice, tags: tags || [], isActive: isActive !== undefined ? isActive : true, variants: variants || [] });
+    const createdProduct = await product.save();
+    res.status(201).json(createdProduct);
+});
 
 // --- THIS IS THE FIX ---
-// This version is simplified to be more robust for debugging.
+// This version removes ALL .populate() calls to be as simple and robust as possible for debugging.
 const getProductsAdmin = asyncHandler(async (req, res) => {
-    console.log('[Admin Controller] GET /products - Fetching all products (simplified query).');
+    console.log('[Admin Controller] GET /products - Fetching all products (ULTRA-SIMPLIFIED query).');
     try {
-        const products = await Product.find({})
-          .populate('productType', 'name') // Only populate the product type's name.
-          .sort({ name: 1 })
-          .lean(); // Use lean for a plain JS object, which can be faster.
+        const products = await Product.find({}) // NO .populate() AT ALL
+            .sort({ name: 1 })
+            .lean();
         console.log(`[Admin Controller] GET /products - Found ${products.length} products.`);
         res.json(products);
     } catch (error) {
@@ -255,7 +271,6 @@ const getProductsAdmin = asyncHandler(async (req, res) => {
         res.status(500).json({ message: 'Server error while fetching products.' });
     }
 });
-// --- END OF FIX ---
 
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id).populate({ path: 'productType', populate: { path: 'category', select: 'name' } });
@@ -266,8 +281,69 @@ const getProductByIdAdmin = asyncHandler(async (req, res) => {
         throw new Error('Product not found');
     }
 });
-const updateProductAdmin = asyncHandler(async (req, res) => { /* ...existing code... */ });
-const deleteProductAdmin = asyncHandler(async (req, res) => { /* ...existing code... */ });
+const updateProductAdmin = asyncHandler(async (req, res) => {
+    const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
+    const product = await Product.findById(req.params.id);
+    if (product) {
+        product.name = name || product.name;
+        product.description = description !== undefined ? description : product.description;
+        product.basePrice = basePrice !== undefined ? basePrice : product.basePrice;
+        product.tags = tags !== undefined ? tags : product.tags;
+        product.isActive = isActive !== undefined ? isActive : product.isActive;
+        if (productTypeId) {
+            if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
+                res.status(400);
+                throw new Error('Invalid Product Type ID format for update.');
+            }
+            const productTypeExists = await ProductType.findById(productTypeId);
+            if (!productTypeExists) {
+                res.status(400);
+                throw new Error('Selected product type for update does not exist.');
+            }
+            product.productType = productTypeId;
+        }
+        if (variants !== undefined) {
+            if (!Array.isArray(variants)) {
+                res.status(400);
+                throw new Error('Variants must be an array.');
+            }
+            const newSkusInRequest = [];
+            for (const v of variants) {
+                if (!v.sku || !v.colorName || !v.size || v.stock === undefined || !v.imageMockupFront) {
+                    res.status(400);
+                    throw new Error('Each variant must have sku, colorName, size, stock, and imageMockupFront.');
+                }
+                if (newSkusInRequest.includes(v.sku)) {
+                    res.status(400);
+                    throw new Error(`Duplicate SKU '${v.sku}' found within the submitted variants for update.`);
+                }
+                newSkusInRequest.push(v.sku);
+                const skuExistsElsewhere = await Product.findOne({ 'variants.sku': v.sku, _id: { $ne: req.params.id } });
+                if (skuExistsElsewhere) {
+                    res.status(400);
+                    throw new Error(`SKU '${v.sku}' already exists in another product. SKUs must be globally unique.`);
+                }
+            }
+            product.variants = variants;
+        }
+        const updatedProduct = await product.save();
+        await updatedProduct.populate({ path: 'productType', select: 'name category', populate: { path: 'category', select: 'name' } });
+        res.json(updatedProduct);
+    } else {
+        res.status(404);
+        throw new Error('Product not found');
+    }
+});
+const deleteProductAdmin = asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id);
+    if (product) {
+        await Product.deleteOne({ _id: req.params.id });
+        res.json({ message: 'Product removed' });
+    } else {
+        res.status(404);
+        throw new Error('Product not found');
+    }
+});
 
 export {
     getAllUsersAdmin, getUserByIdAdmin, updateUserAdmin, deleteUserAdmin,
