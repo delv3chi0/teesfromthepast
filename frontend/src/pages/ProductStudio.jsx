@@ -117,7 +117,6 @@ export default function ProductStudio() {
         }
         return acc;
       }, []);
-
       setAvailableColors(uniqueColorObjects);
       if (uniqueColorObjects.length === 0) {
         setSelectedProductColor('');
@@ -136,23 +135,21 @@ export default function ProductStudio() {
     }
     const currentProduct = productsOfType.find(p => p._id === selectedProductId);
     let sizesForColor = [];
-
     if (currentProduct && currentProduct.variants && currentProduct.variants.length > 0) {
         const isNewFormat = currentProduct.variants[0].sizes !== undefined;
-
         if (isNewFormat) {
             const selectedColorVariant = currentProduct.variants.find(v => v.colorName === selectedProductColor);
             if (selectedColorVariant && Array.isArray(selectedColorVariant.sizes)) {
                 sizesForColor = selectedColorVariant.sizes.map(sizeInfo => sizeInfo.size);
             }
         } else {
+            // This gracefully handles corrupted old data by checking for a size property before mapping
             sizesForColor = currentProduct.variants
                 .filter(variant => variant.colorName === selectedProductColor && variant.size)
                 .map(variant => variant.size)
                 .filter((value, index, self) => self.indexOf(value) === index);
         }
     }
-    
     setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
     if (!sizesForColor.includes(selectedProductSize)) {
       setSelectedProductSize('');
@@ -166,10 +163,8 @@ export default function ProductStudio() {
           setSelectedVariant(null);
           return;
       }
-      
       const isNewFormat = product.variants[0].sizes !== undefined;
       let finalVariant = null;
-
       if (isNewFormat) {
           const colorVariant = product.variants.find(v => v.colorName === selectedProductColor);
           if (colorVariant) {
