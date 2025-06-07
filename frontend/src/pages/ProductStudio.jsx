@@ -143,7 +143,6 @@ export default function ProductStudio() {
                 sizesForColor = selectedColorVariant.sizes.map(sizeInfo => sizeInfo.size);
             }
         } else {
-            // This gracefully handles corrupted old data by checking for a size property before mapping
             sizesForColor = currentProduct.variants
                 .filter(variant => variant.colorName === selectedProductColor && variant.size)
                 .map(variant => variant.size)
@@ -181,7 +180,6 @@ export default function ProductStudio() {
       setSelectedVariant(null);
     }
   }, [selectedProductId, selectedProductColor, selectedProductSize, productsOfType]);
-
 
   useEffect(() => {
     const fabricScriptPollInterval = 100;

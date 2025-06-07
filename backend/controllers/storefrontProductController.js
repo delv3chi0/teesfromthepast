@@ -2,7 +2,6 @@
 import asyncHandler from 'express-async-handler';
 import ProductType from '../models/ProductType.js';
 import Product from '../models/Product.js';
-import ProductCategory from '../models/ProductCategory.js'; // May not be directly needed by ProductStudio but good for context
 import mongoose from 'mongoose';
 
 
@@ -10,31 +9,22 @@ import mongoose from 'mongoose';
 // @route   GET /api/storefront/product-types
 // @access  Public
 const getActiveProductTypes = asyncHandler(async (req, res) => {
-  console.log('[StorefrontProductCtrl] GET /product-types - Fetching active product types with active products.');
-
-  // Find active product types
-  const activeTypes = await ProductType.find({ isActive: true }).lean(); // .lean() for plain JS objects
-
+  // This function is fine, no changes needed.
+  const activeTypes = await ProductType.find({ isActive: true }).lean();
   if (!activeTypes.length) {
-    console.log('[StorefrontProductCtrl] No active product types found.');
     return res.json([]);
   }
-
-  // For each active type, check if it has any active products with active variants
   const typesWithProducts = [];
   for (const type of activeTypes) {
     const count = await Product.countDocuments({
       productType: type._id,
       isActive: true,
-      'variants.0': { $exists: true } // Ensures there's at least one variant
-      // Optionally: add 'variants.stock': { $gt: 0 } if you only want to show types with in-stock variants
+      'variants.0': { $exists: true }
     });
     if (count > 0) {
-      typesWithProducts.push({ _id: type._id, name: type.name }); // Send only necessary fields
+      typesWithProducts.push({ _id: type._id, name: type.name });
     }
   }
-
-  console.log(`[StorefrontProductCtrl] Found ${typesWithProducts.length} active product types with products.`);
   res.json(typesWithProducts);
 });
 
@@ -44,52 +34,82 @@ const getActiveProductTypes = asyncHandler(async (req, res) => {
 // @access  Public
 const getActiveProductsByType = asyncHandler(async (req, res) => {
   const { productTypeId } = req.params;
-  console.log(`[StorefrontProductCtrl] GET /products/type/${productTypeId} - Fetching active products for type.`);
-
   if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
     res.status(400);
     throw new Error('Invalid Product Type ID.');
   }
 
-  // Find active products of the given type that have at least one variant.
-  // We only select fields needed by Product Studio to keep payload small.
+  // The initial query is fine.
   const products = await Product.find({
     productType: productTypeId,
     isActive: true,
-    'variants.0': { $exists: true } // Ensure product has variants defined
+    'variants.0': { $exists: true }
   })
-  .select('name description basePrice variants productType') // Select necessary fields
-  .lean(); // Use .lean() for performance if not modifying docs
+  .select('name description basePrice variants productType')
+  .lean();
 
   if (!products.length) {
-    console.log(`[StorefrontProductCtrl] No active products found for type ${productTypeId}.`);
     return res.json([]);
   }
   
-  // Further filter variants: e.g., only return variants that are considered "active" or in stock if needed.
-  // For now, we return all variants of active products. ProductStudio will handle UI based on stock if that field is available.
-  // Ensure variants have the necessary fields for ProductStudio (sku, colorName, size, imageMockupFront, priceModifier, stock if used by frontend)
-  
-  const productsWithFilteredVariants = products.map(product => {
-    return {
-      ...product,
-      variants: product.variants.map(variant => ({ // Explicitly select variant fields
-        sku: variant.sku,
-        colorName: variant.colorName,
-        colorHex: variant.colorHex,
-        size: variant.size,
-        stock: variant.stock, // ProductStudio might use this
-        priceModifier: variant.priceModifier,
-        imageMockupFront: variant.imageMockupFront,
-        imageMockupBack: variant.imageMockupBack,
-        // Do NOT send POD info to the frontend here
-      }))
-    };
+  // ==================== MODIFICATION START ====================
+  // This block is now updated to handle both NEW and OLD variant structures.
+
+  const productsWithCleanedVariants = products.map(product => {
+    if (!product.variants || product.variants.length === 0) {
+      return { ...product, variants: [] };
+    }
+
+    // Check the format of the FIRST variant to decide which logic to use.
+    const isNewFormat = product.variants[0].sizes !== undefined;
+
+    if (isNewFormat) {
+      // NEW FORMAT: Process nested variants
+      const newFormatVariants = product.variants.map(colorVariant => {
+        // For each color, only include sizes that are marked as inStock.
+        const availableSizes = colorVariant.sizes
+          .filter(size => size.inStock)
+          .map(size => ({ // Select only the fields safe to send to the public
+            size: size.size,
+            sku: size.sku,
+            priceModifier: size.priceModifier,
+          }));
+        
+        // Only include this color if it has at least one size available
+        if (availableSizes.length > 0) {
+          return {
+            colorName: colorVariant.colorName,
+            colorHex: colorVariant.colorHex,
+            imageMockupFront: colorVariant.imageMockupFront,
+            imageMockupBack: colorVariant.imageMockupBack,
+            sizes: availableSizes // Send the filtered, nested sizes array
+          };
+        }
+        return null; // Return null for colors with no available sizes
+      }).filter(Boolean); // Filter out any null entries
+
+      return { ...product, variants: newFormatVariants };
+
+    } else {
+      // OLD FORMAT: Gracefully handle flat variants, only sending what's in stock.
+      const oldFormatVariants = product.variants
+        .filter(variant => variant.stock > 0) // Only send variants with stock > 0
+        .map(variant => ({ // Selectively map the fields to ensure consistency
+          sku: variant.sku,
+          colorName: variant.colorName,
+          colorHex: variant.colorHex,
+          size: variant.size,
+          priceModifier: variant.priceModifier,
+          imageMockupFront: variant.imageMockupFront,
+          imageMockupBack: variant.imageMockupBack,
+        }));
+      
+      return { ...product, variants: oldFormatVariants };
+    }
   });
+  // ==================== MODIFICATION END ====================
 
-
-  console.log(`[StorefrontProductCtrl] Found ${productsWithFilteredVariants.length} active products for type ${productTypeId}.`);
-  res.json(productsWithFilteredVariants);
+  res.json(productsWithCleanedVariants);
 });
 
 export {
