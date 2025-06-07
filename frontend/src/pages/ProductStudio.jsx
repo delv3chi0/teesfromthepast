@@ -103,8 +103,8 @@ export default function ProductStudio() {
       .finally(() => setLoadingProductsOfType(false));
   }, [selectedProductTypeId, toast]);
 
-  // ==================== MODIFICATION START: Reading Colors ====================
-  // This logic is now simpler because the new data structure is already grouped by color.
+  // === MODIFICATION 1: Reading Colors (Backwards Compatible) ===
+  // This logic now correctly finds unique colors from both OLD and NEW data formats.
   useEffect(() => {
     if (!selectedProductId || productsOfType.length === 0) {
       setAvailableColors([]);
@@ -113,14 +113,16 @@ export default function ProductStudio() {
     }
     const currentProduct = productsOfType.find(p => p._id === selectedProductId);
     if (currentProduct && currentProduct.variants) {
-      const colors = currentProduct.variants.map(variant => ({
-        value: variant.colorName,
-        label: variant.colorName,
-        hex: variant.colorHex
-      }));
-      setAvailableColors(colors);
+      // Use reduce to get unique color names, which works for both flat and nested arrays.
+      const uniqueColorObjects = currentProduct.variants.reduce((acc, variant) => {
+        if (!acc.find(c => c.value === variant.colorName)) {
+          acc.push({ value: variant.colorName, label: variant.colorName, hex: variant.colorHex });
+        }
+        return acc;
+      }, []);
 
-      if (colors.length === 0) {
+      setAvailableColors(uniqueColorObjects);
+      if (uniqueColorObjects.length === 0) {
         setSelectedProductColor('');
       }
     } else {
@@ -128,12 +130,9 @@ export default function ProductStudio() {
       setSelectedProductColor('');
     }
   }, [selectedProductId, productsOfType]);
-  // ==================== MODIFICATION END: Reading Colors ====================
 
-
-  // ==================== MODIFICATION START: Reading Sizes ====================
-  // This logic now finds the selected color first, then looks inside its `sizes` array.
-  // It also filters to only show sizes that are marked as `inStock`.
+  // === MODIFICATION 2: Reading Sizes (Backwards Compatible) ===
+  // This logic now checks the variant format and gets sizes accordingly.
   useEffect(() => {
     if (!selectedProductId || !selectedProductColor || productsOfType.length === 0) {
       setAvailableSizes([]);
@@ -141,93 +140,88 @@ export default function ProductStudio() {
       return;
     }
     const currentProduct = productsOfType.find(p => p._id === selectedProductId);
-    if (currentProduct && currentProduct.variants) {
-      const selectedColorVariant = currentProduct.variants.find(
-        variant => variant.colorName === selectedProductColor
-      );
+    let sizesForColor = [];
 
-      const sizesForColor = selectedColorVariant
-        ? selectedColorVariant.sizes
-            .filter(sizeInfo => sizeInfo.inStock) // Only show in-stock sizes
-            .map(sizeInfo => sizeInfo.size)
-        : [];
-      
-      setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
-      
-      // If the previously selected size is not available for this new color, reset it.
-      if (!sizesForColor.includes(selectedProductSize)) {
-        setSelectedProductSize('');
-      }
-      
-    } else {
-      setAvailableSizes([]);
+    if (currentProduct && currentProduct.variants && currentProduct.variants.length > 0) {
+        const isNewFormat = currentProduct.variants[0].sizes !== undefined;
+
+        if (isNewFormat) {
+            // NEW FORMAT: Find the color object and get its nested `sizes` array.
+            const selectedColorVariant = currentProduct.variants.find(v => v.colorName === selectedProductColor);
+            if (selectedColorVariant && Array.isArray(selectedColorVariant.sizes)) {
+                sizesForColor = selectedColorVariant.sizes
+                    .filter(sizeInfo => sizeInfo.inStock) // Only show in-stock sizes
+                    .map(sizeInfo => sizeInfo.size);
+            }
+        } else {
+            // OLD FORMAT: Filter the flat list for the selected color and get unique sizes.
+            sizesForColor = currentProduct.variants
+                .filter(variant => variant.colorName === selectedProductColor && variant.stock > 0)
+                .map(variant => variant.size)
+                .filter((value, index, self) => self.indexOf(value) === index); // De-duplicate
+        }
+    }
+    
+    setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
+    if (!sizesForColor.includes(selectedProductSize)) {
       setSelectedProductSize('');
     }
+
   }, [selectedProductId, selectedProductColor, productsOfType, selectedProductSize]);
-  // ==================== MODIFICATION END: Reading Sizes ====================
 
-
-  // ==================== MODIFICATION START: Finding the Selected Variant ====================
-  // This logic now creates a "combined" variant object from the selected color and size info.
+  // === MODIFICATION 3: Finding the Selected Variant (Backwards Compatible) ===
+  // This logic finds the correct variant details from both OLD and NEW data formats.
   useEffect(() => {
     if (selectedProductId && selectedProductColor && selectedProductSize && productsOfType.length > 0) {
       const product = productsOfType.find(p => p._id === selectedProductId);
-      const colorVariant = product?.variants.find(v => v.colorName === selectedProductColor);
-
-      if (colorVariant) {
-        const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
-        if (sizeVariant) {
-          // Combine info from both levels into a single, convenient object
-          const combinedVariant = {
-            ...sizeVariant, // Contains sku, size, inStock, priceModifier
-            colorName: colorVariant.colorName,
-            colorHex: colorVariant.colorHex,
-            imageMockupFront: colorVariant.imageMockupFront,
-            imageMockupBack: colorVariant.imageMockupBack,
-          };
-          setSelectedVariant(combinedVariant);
-        } else {
+      if (!product || !product.variants || product.variants.length === 0) {
           setSelectedVariant(null);
-        }
-      } else {
-        setSelectedVariant(null);
+          return;
       }
+      
+      const isNewFormat = product.variants[0].sizes !== undefined;
+      let finalVariant = null;
+
+      if (isNewFormat) {
+          const colorVariant = product.variants.find(v => v.colorName === selectedProductColor);
+          if (colorVariant) {
+              const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
+              if (sizeVariant) {
+                  finalVariant = { ...sizeVariant, colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageMockupFront: colorVariant.imageMockupFront, imageMockupBack: colorVariant.imageMockupBack };
+              }
+          }
+      } else {
+          finalVariant = product.variants.find(v => v.colorName === selectedProductColor && v.size === selectedProductSize);
+      }
+      setSelectedVariant(finalVariant || null);
     } else {
       setSelectedVariant(null);
     }
   }, [selectedProductId, selectedProductColor, selectedProductSize, productsOfType]);
-  // ==================== MODIFICATION END: Finding the Selected Variant ====================
 
 
   useEffect(() => {
-    // This canvas logic does not need to change because the `selectedVariant` object
-    // we create above contains all the necessary properties (`imageMockupFront`, etc.).
+    // This canvas logic does not need to change.
     const fabricScriptPollInterval = 100;
     const maxPolls = 50;
     let pollCount = 0;
-
     const setupCanvas = (fabricInstance) => {
       if (!fabricCanvas.current && canvasEl.current) {
         fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT });
       }
       const FCanvas = fabricCanvas.current;
       if (!FCanvas) return;
-
       FCanvas.clear();
       const mockupSrc = selectedVariant?.imageMockupFront;
-
       if (mockupSrc) {
         fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => {
-          if (!mockupImg || mockupImg.width === 0) {
-            FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); return;
-          }
+          if (!mockupImg || mockupImg.width === 0) { FCanvas.setBackgroundColor('lightgrey', FCanvas.renderAll.bind(FCanvas)); return; }
           FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), { scaleX: CANVAS_WIDTH / mockupImg.width, scaleY: CANVAS_HEIGHT / mockupImg.height, selectable: false, evented: false });
         }, { crossOrigin: 'anonymous' });
       } else {
         FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
         FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas));
       }
-
       if (selectedDesign?.imageDataUrl) {
         fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
           if (!designImg || designImg.width === 0) { return; }
@@ -241,49 +235,26 @@ export default function ProductStudio() {
         if (FCanvas.backgroundImage || FCanvas.backgroundColor) FCanvas.renderAll();
       }
     };
-
     const pollForFabric = () => {
       const fabricInstance = window.fabric;
       if (fabricInstance && fabricInstance.Canvas) setupCanvas(fabricInstance);
       else {
         pollCount++;
         if (pollCount < maxPolls) setTimeout(pollForFabric, fabricScriptPollInterval);
-        else {
-          toast({ title: "Preview Error", description: "Cannot initialize product preview.", status: "error" });
-        }
+        else { toast({ title: "Preview Error", description: "Cannot initialize product preview.", status: "error" }); }
       }
     };
     if (canvasEl.current) pollForFabric();
   }, [selectedDesign, selectedVariant, toast]);
 
   const handleProceedToCheckout = () => {
-    // This checkout logic does not need changes because the `selectedVariant` object has all the properties.
-    if (!selectedDesign || !selectedDesign._id) {
-      toast({ title: "Design Not Selected", description: "Please select one of your saved designs.", status: "warning" }); return;
-    }
-    if (!selectedVariant || !selectedVariant.sku || !selectedProductId || !selectedProductTypeId) {
-      toast({ title: "Product Incomplete", description: "Please ensure product type, specific product, color, and size are selected.", status: "warning" }); return;
-    }
+    // This checkout logic does not need changes.
+    if (!selectedDesign || !selectedDesign._id) { toast({ title: "Design Not Selected", description: "Please select one of your saved designs.", status: "warning" }); return; }
+    if (!selectedVariant || !selectedVariant.sku || !selectedProductId || !selectedProductTypeId) { toast({ title: "Product Incomplete", description: "Please ensure product type, specific product, color, and size are selected.", status: "warning" }); return; }
     const productTypeObject = availableProductTypes.find(pt => pt._id === selectedProductTypeId);
     const productObject = productsOfType.find(p => p._id === selectedProductId);
-
-    if (!productTypeObject || !productObject) {
-      toast({ title: "Error", description: "Invalid product selection details.", status: "error" }); return;
-    }
-
-    const productDetailsForCheckout = {
-      designId: selectedDesign._id,
-      productId: productObject._id,
-      productName: productObject.name,
-      variantSku: selectedVariant.sku,
-      productType: productTypeObject.name,
-      size: selectedVariant.size,
-      color: selectedVariant.colorName,
-      prompt: selectedDesign.prompt,
-      imageDataUrl: selectedDesign.imageDataUrl,
-      productImage: selectedVariant.imageMockupFront,
-    };
-
+    if (!productTypeObject || !productObject) { toast({ title: "Error", description: "Invalid product selection details.", status: "error" }); return; }
+    const productDetailsForCheckout = { designId: selectedDesign._id, productId: productObject._id, productName: productObject.name, variantSku: selectedVariant.sku, productType: productTypeObject.name, size: selectedVariant.size, color: selectedVariant.colorName, prompt: selectedDesign.prompt, imageDataUrl: selectedDesign.imageDataUrl, productImage: selectedVariant.imageMockupFront };
     try {
       localStorage.setItem('itemToCheckout', JSON.stringify(productDetailsForCheckout));
       navigate('/checkout');
@@ -296,7 +267,6 @@ export default function ProductStudio() {
     setShowInfoAlert(false);
     localStorage.setItem(INFO_ALERT_DISMISSED_KEY, 'true');
   };
-
   const handleProductTypeChange = (e) => {
     setSelectedProductTypeId(e.target.value);
     setSelectedProductId(''); setSelectedProductColor(''); setSelectedProductSize(''); setSelectedVariant(null);
@@ -307,10 +277,9 @@ export default function ProductStudio() {
   };
   const handleColorChange = (e) => {
     setSelectedProductColor(e.target.value);
-    // Reset size when color changes, as available sizes might be different
     setSelectedProductSize(''); setSelectedVariant(null);
   };
-   const handleSizeChange = (e) => {
+  const handleSizeChange = (e) => {
     setSelectedProductSize(e.target.value);
   };
 
@@ -320,7 +289,6 @@ export default function ProductStudio() {
         <Heading as="h1" size="pageTitle" color="brand.textLight" textAlign="left" w="100%" mb={{ base: 4, md: 6 }}>
           👕 Customize Your Apparel!
         </Heading>
-        
         {showInfoAlert && (
           <Alert status="info" borderRadius="md" bg="brand.paper" color="brand.textDark" variant="subtle" alignItems="flex-start">
             <AlertIcon color="blue.500" mt={1} />
@@ -334,7 +302,6 @@ export default function ProductStudio() {
             <ChakraCloseButton size="md" onClick={handleDismissInfoAlert} position="relative" right="-8px" top="-8px" />
           </Alert>
         )}
-
         <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">1. Choose Your Apparel</Heading>
           <SimpleGrid columns={{ base: 1, md: 2, lg:4 }} spacing={6}>
@@ -344,21 +311,18 @@ export default function ProductStudio() {
                 {availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}
               </Select>
             </VStack>
-
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Specific Product:</Text>
               <Select value={selectedProductId} onChange={handleProductChange} placeholder={loadingProductsOfType ? "Loading..." : "Select Product"} isDisabled={!selectedProductTypeId || loadingProductsOfType || productsOfType.length === 0} size="lg" bg="white">
                 {productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
               </Select>
             </VStack>
-
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Color:</Text>
               <Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId || availableColors.length === 0} size="lg" bg="white">
                 {availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}
               </Select>
             </VStack>
-
             <VStack align="stretch">
               <Text fontWeight="medium" color="brand.textDark">Size:</Text>
               <Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor || availableSizes.length === 0} size="lg" bg="white">
@@ -367,9 +331,7 @@ export default function ProductStudio() {
             </VStack>
           </SimpleGrid>
         </Box>
-
         <Divider my={4} borderColor="brand.secondary"/>
-
         <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
           <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">2. Choose Your Saved Design</Heading>
           {loadingDesigns && <Box textAlign="center" py={10}><Spinner size="xl" color="brand.primary" thickness="4px"/><Text mt={3}>Loading designs...</Text></Box>}
@@ -388,9 +350,7 @@ export default function ProductStudio() {
             </SimpleGrid>
           )}
         </Box>
-        
         <Divider my={4} borderColor="brand.secondary"/>
-
         <Box p={{base: 4, md: 6}} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
             <Heading as="h2" fontSize={{ base: "lg", md: "xl" }} mb={6} color="brand.textDark">3. Preview Your Masterpiece!</Heading>
             <Box w={`${CANVAS_WIDTH}px`} h={`${CANVAS_HEIGHT}px`} bg="gray.200" mx="auto" borderWidth="1px" borderColor="brand.secondary" borderRadius="md" overflow="hidden" position="relative">
