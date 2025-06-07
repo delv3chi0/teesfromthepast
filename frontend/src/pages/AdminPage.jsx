@@ -167,7 +167,10 @@ const AdminPage = () => {
     const originalOrders = [...orders];
     setOrders(prevOrders => prevOrders.map(o => (o._id === orderId ? { ...o, orderStatus: newStatus } : o)));
     try {
-      await client.put(`/api/admin/orders/${orderId}/status`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+      // === THE FIX IS HERE: Removed the extra `/api` prefix ===
+      await client.put(`/admin/orders/${orderId}/status`, { status: newStatus }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       toast({ title: "Status Updated", description: `Order status changed to ${newStatus}.`, status: "success", duration: 2000 });
     } catch (e) {
       setOrders(originalOrders);
