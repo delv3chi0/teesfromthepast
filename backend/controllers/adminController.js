@@ -72,6 +72,22 @@ const deleteOrderAdmin = asyncHandler(async (req, res) => {
     }
 });
 
+// === NEW FUNCTION START ===
+const getOrderByIdAdmin = asyncHandler(async (req, res) => {
+    const order = await Order.findById(req.params.id)
+        .populate('user', 'username email firstName lastName') // Get user details
+        .populate('orderItems.designId', 'imageDataUrl prompt'); // Get the design image and prompt for each item
+
+    if (order) {
+        res.json(order);
+    } else {
+        res.status(404);
+        throw new Error('Order not found');
+    }
+});
+// === NEW FUNCTION END ===
+
+
 // --- DESIGN MANAGEMENT CONTROLLERS ---
 const getAllDesignsAdmin = asyncHandler(async (req, res) => {
     const designs = await Design.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
@@ -272,32 +288,14 @@ const createProductAdmin = asyncHandler(async (req, res) => {
         }
     }
 
-    const product = new Product({
-        name,
-        productType: productTypeId,
-        description,
-        basePrice,
-        tags: tags || [],
-        isActive: isActive !== undefined ? isActive : true,
-        variants: variants || []
-    });
-
+    const product = new Product({ name, productType: productTypeId, description, basePrice, tags: tags || [], isActive: isActive !== undefined ? isActive : true, variants: variants || [] });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
 });
 
 const getProductsAdmin = asyncHandler(async (req, res) => {
-    console.log('[Admin Controller] GET /products - Fetching all products (ULTRA-SIMPLIFIED query).');
-    try {
-        const products = await Product.find({})
-            .sort({ name: 1 })
-            .lean();
-        console.log(`[Admin Controller] GET /products - Found ${products.length} products.`);
-        res.json(products);
-    } catch (error) {
-        console.error('[Admin Controller] CRITICAL ERROR in getProductsAdmin:', error);
-        res.status(500).json({ message: 'Server error while fetching products.' });
-    }
+    const products = await Product.find({}).sort({ name: 1 }).lean();
+    res.json(products);
 });
 
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
@@ -309,6 +307,7 @@ const getProductByIdAdmin = asyncHandler(async (req, res) => {
         throw new Error('Product not found');
     }
 });
+
 const updateProductAdmin = asyncHandler(async (req, res) => {
     const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
     const product = await Product.findById(req.params.id);
@@ -363,10 +362,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             }
 
             if (allSkus.length > 0) {
-                const skuExistsElsewhere = await Product.findOne({
-                    'variants.sizes.sku': { $in: allSkus },
-                    _id: { $ne: req.params.id }
-                });
+                const skuExistsElsewhere = await Product.findOne({ 'variants.sizes.sku': { $in: allSkus }, _id: { $ne: req.params.id } });
                 if (skuExistsElsewhere) {
                     res.status(400);
                     throw new Error(`One or more SKUs already exist in another product ('${skuExistsElsewhere.name}').`);
@@ -383,7 +379,6 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
         throw new Error('Product not found');
     }
 });
-
 const deleteProductAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
@@ -397,7 +392,7 @@ const deleteProductAdmin = asyncHandler(async (req, res) => {
 
 export {
     getAllUsersAdmin, getUserByIdAdmin, updateUserAdmin, deleteUserAdmin,
-    getAllOrdersAdmin, deleteOrderAdmin,
+    getAllOrdersAdmin, deleteOrderAdmin, getOrderByIdAdmin, // <-- Added getOrderByIdAdmin here
     getAllDesignsAdmin,
     createProductCategoryAdmin, getProductCategoriesAdmin, getProductCategoryByIdAdmin, updateProductCategoryAdmin, deleteProductCategoryAdmin,
     createProductTypeAdmin, getProductTypesAdmin, getProductTypeByIdAdmin, updateProductTypeAdmin, deleteProductTypeAdmin,

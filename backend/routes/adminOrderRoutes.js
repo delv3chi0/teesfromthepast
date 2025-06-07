@@ -5,7 +5,8 @@ import { admin } from '../middleware/adminMiddleware.js';
 
 import { 
     getAllOrdersAdmin,
-    deleteOrderAdmin // --- IMPORT new controller function ---
+    deleteOrderAdmin,
+    getOrderByIdAdmin // --- IMPORT new controller function ---
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -13,9 +14,9 @@ const router = express.Router();
 router.route('/')
     .get(protect, admin, getAllOrdersAdmin);
 
-// --- ADD THIS NEW ROUTE ---
+// --- UPDATED to handle both GET and DELETE for a specific order ID ---
 router.route('/:id')
+    .get(protect, admin, getOrderByIdAdmin) // Added this line
     .delete(protect, admin, deleteOrderAdmin);
-// --- END OF NEW ROUTE ---
 
 export default router;
