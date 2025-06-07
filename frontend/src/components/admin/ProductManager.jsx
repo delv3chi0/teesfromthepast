@@ -15,8 +15,9 @@ import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
 
-// UNCHANGED: Constants
-const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL", "One Size", "6M", "12M", "18M", "24M"];
+// CHANGED: Sizes larger than XXL have been removed.
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "One Size", "6M", "12M", "18M", "24M"];
+
 const CORE_COLORS = [
   { name: "Black", hex: "#000000" }, { name: "White", hex: "#FFFFFF" }, { name: "Navy Blue", hex: "#000080" },
   { name: "Heather Grey", hex: "#B2BEB5" }, { name: "Cream / Natural", hex: "#FFFDD0" }, { name: "Mustard Yellow", hex: "#FFDB58" },
@@ -26,7 +27,6 @@ const CORE_COLORS = [
   { name: "Teal", hex: "#008080" },
 ];
 
-// NEW: Initial state for the "Add Color" form
 const initialColorVariantState = {
   colorName: '',
   colorHex: '',
@@ -49,12 +49,10 @@ const ProductManager = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
 
-  // CHANGED: formData now reflects the new nested variant structure
   const [formData, setFormData] = useState({
     name: '', description: '', productType: '', basePrice: 0, tags: '', isActive: true, variants: [],
   });
 
-  // NEW: State for the "Add New Color Variant" form
   const [newColorVariant, setNewColorVariant] = useState(initialColorVariantState);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -81,7 +79,6 @@ const ProductManager = () => {
     }
   }, [fetchProducts, token]);
   
-  // Pre-fetch product types when the component mounts to populate the main table
   useEffect(() => {
     const fetchTypes = async () => {
         if (!token) return;
@@ -100,11 +97,11 @@ const ProductManager = () => {
     onOpen();
     setIsModalLoading(true);
     
-    // Refresh types just in case they were changed in another tab
     try {
       const typesResponse = await client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } });
       const activeTypes = typesResponse.data.filter(pt => pt.isActive);
-      setProductTypes(activeTypes);
+      // We set product types on the main state, but also use the active list here
+      setProductTypes(typesResponse.data.filter(pt => pt.isActive));
 
       setNewColorVariant(initialColorVariantState);
       if (product) {
@@ -117,7 +114,6 @@ const ProductManager = () => {
           basePrice: product.basePrice || 0,
           tags: Array.isArray(product.tags) ? product.tags.join(', ') : '',
           isActive: product.isActive,
-          // IMPORTANT: Deep copy variants to prevent mutation issues
           variants: product.variants ? JSON.parse(JSON.stringify(product.variants)) : [],
         });
       } else {
@@ -145,8 +141,6 @@ const ProductManager = () => {
     setFormData(prev => ({ ...prev, basePrice: valueAsNumber || 0 }));
   };
 
-  // --- NEW VARIANT LOGIC ---
-
   const handleNewColorFormChange = (e) => {
     const { name, value } = e.target;
     if (name === "colorName") {
@@ -171,15 +165,17 @@ const ProductManager = () => {
       ...newColorVariant,
       sizes: SIZES.map(s => ({
         size: s,
-        sku: '', // To be filled in by the user
-        inStock: false, // Default to out of stock
+        // CHANGED: Auto-generate a suggested SKU. Handles spaces and slashes in color names.
+        sku: `${formData.name.substring(0, 5).toUpperCase().replace(/\s+/g, '')}-${newColorVariant.colorName.toUpperCase().replace(/[\s/]+/g, '')}-${s}`,
+        // CHANGED: Default to IN stock
+        inStock: true, 
         priceModifier: 0,
         podVariantId: '',
       }))
     };
 
     setFormData(prev => ({ ...prev, variants: [...prev.variants, newVariantGroup] }));
-    setNewColorVariant(initialColorVariantState); // Reset form
+    setNewColorVariant(initialColorVariantState);
   };
   
   const handleRemoveColorVariant = (colorNameToRemove) => {
@@ -190,7 +186,8 @@ const ProductManager = () => {
   };
 
   const handleSizeDetailChange = (colorIndex, sizeIndex, field, value) => {
-    const newVariants = [...formData.variants];
+    // Create a deep copy to avoid direct state mutation
+    const newVariants = JSON.parse(JSON.stringify(formData.variants));
     newVariants[colorIndex].sizes[sizeIndex][field] = value;
     setFormData(prev => ({ ...prev, variants: newVariants }));
   };
@@ -201,7 +198,6 @@ const ProductManager = () => {
     if (!formData.productType) { toast({ title: "Validation Error", description: "Product type is required.", status: "error" }); return; }
     if (formData.variants.length === 0) { toast({ title: "Validation Error", description: "At least one product color variant is required.", status: "error" }); return; }
 
-    // Validation: Ensure any "inStock" size has a SKU
     for (const variant of formData.variants) {
       for (const size of variant.sizes) {
         if (size.inStock && !size.sku) {
@@ -219,9 +215,8 @@ const ProductManager = () => {
     const method = isEditing ? 'put' : 'post';
     const url = isEditing ? `/admin/products/${selectedProduct._id}` : '/admin/products';
     
-    const payload = { ...formData, tags: (formData.tags || '').split(',').map(tag => tag.trim()).filter(tag => tag) };
+    const payload = { ...formData, tags: (formData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
     
-    // Filter out sizes that are not in stock and have no SKU to keep DB clean
     const cleanedPayload = {
       ...payload,
       variants: payload.variants.map(colorVariant => ({
@@ -231,7 +226,7 @@ const ProductManager = () => {
     };
 
     try {
-      const response = await client[method](url, cleanedPayload, { headers: { Authorization: `Bearer ${token}` } });
+      await client[method](url, cleanedPayload, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, status: "success" });
       fetchProducts();
       onClose();
@@ -242,7 +237,18 @@ const ProductManager = () => {
   };
 
   const handleOpenDeleteDialog = (product) => { setSelectedProduct(product); onDeleteOpen(); };
-  const handleDelete = async () => { /* ... (no changes needed here) ... */ };
+  const handleDelete = async () => {
+    if (!selectedProduct) return;
+    try {
+      await client.delete(`/admin/products/${selectedProduct._id}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "Product Deleted", status: "success" });
+      fetchProducts();
+      onDeleteClose();
+    } catch (err) {
+      toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete.", status: "error" });
+      onDeleteClose();
+    }
+   };
   
   if (loading) { return <VStack justifyContent="center" alignItems="center" minH="200px"><Spinner size="xl" /><Text>Loading Products...</Text></VStack>; }
   if (error) { return <Alert status="error"><AlertIcon />{error}</Alert>; }
@@ -277,7 +283,6 @@ const ProductManager = () => {
         </Table>
       </TableContainer>
 
-      {/* Add/Edit Product Modal */}
       <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent bg="brand.paperMaxContrast">
@@ -288,16 +293,31 @@ const ProductManager = () => {
               <VStack justifyContent="center" alignItems="center" minH="400px"><Spinner size="xl" /><Text>Loading Form Data...</Text></VStack>
             ) : (
             <VStack spacing={6} align="stretch">
-                {/* Product Details Section (Unchanged) */}
                 <Box p={4} borderWidth="1px" borderRadius="md" bg="brand.paper" shadow="sm">
-                    {/* ... (all the code for Name, Product Type, Price, etc. No changes here) ... */}
+                    <Heading size="sm" mb={4} color="brand.textDark">Product Details</Heading>
+                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                        <FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange} bg="white"/></FormControl>
+                        <FormControl isRequired><FormLabel>Product Type</FormLabel>
+                          <Select name="productType" value={formData.productType} onChange={handleFormChange} placeholder="Select type" bg="white" isDisabled={productTypes.length === 0}>
+                            {productTypes.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}
+                          </Select>
+                        </FormControl>
+                        <FormControl isRequired><FormLabel>Base Price ($)</FormLabel>
+                          <NumberInput name="basePrice" value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2} step={0.01} bg="white">
+                              <NumberInputField /><NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
+                          </NumberInput>
+                        </FormControl>
+                        <FormControl><FormLabel>Tags (comma-separated)</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange} placeholder="e.g. retro, vintage" bg="white"/></FormControl>
+                    </SimpleGrid>
+                    <FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange} bg="white"/></FormControl>
+                    <FormControl display="flex" alignItems="center" mt={4}><FormLabel htmlFor="isActive-product" mb="0">Active:</FormLabel>
+                      <Switch id="isActive-product" name="isActive" isChecked={formData.isActive} onChange={handleFormChange} colorScheme="green" ml={3}/>
+                    </FormControl>
                 </Box>
                 
-                {/* REDESIGNED: Product Variants Section */}
                 <Box p={4} borderWidth="1px" borderRadius="md" bg="brand.paper" shadow="sm">
                     <Heading size="sm" mb={4} color="brand.textDark">Product Variants</Heading>
                     
-                    {/* Add New Color Form */}
                     <Box p={4} borderWidth="1px" borderRadius="md" mb={6} borderColor="gray.300">
                         <Heading size="xs" mb={3} color="brand.textSlightlyDark">Add New Color Variant</Heading>
                         <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
@@ -306,8 +326,7 @@ const ProductManager = () => {
                                 {CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                                 </Select>
                             </FormControl>
-                            <FormControl>
-                                <FormLabel fontSize="sm">Color Hex</FormLabel>
+                            <FormControl><FormLabel fontSize="sm">Color Hex</FormLabel>
                                 <HStack>
                                     <Input size="sm" name="colorHex" value={newColorVariant.colorHex} onChange={handleNewColorFormChange} placeholder="#FFFFFF" bg="white" />
                                     <Box w="32px" h="32px" bg={newColorVariant.colorHex || 'transparent'} borderRadius="sm" border="1px solid" borderColor="gray.200" />
@@ -317,12 +336,11 @@ const ProductManager = () => {
                             <FormControl isRequired gridColumn={{ base: 1, lg: "1 / span 2" }}><FormLabel fontSize="sm">Mockup Front URL</FormLabel><Input size="sm" name="imageMockupFront" value={newColorVariant.imageMockupFront} onChange={handleNewColorFormChange} bg="white"/></FormControl>
                             <FormControl gridColumn={{ base: 1, lg: "1 / span 2" }}><FormLabel fontSize="sm">Mockup Back URL</FormLabel><Input size="sm" name="imageMockupBack" value={newColorVariant.imageMockupBack} onChange={handleNewColorFormChange} bg="white"/></FormControl>
                         </SimpleGrid>
-                        <Button mt={4} size="sm" colorScheme="teal" onClick={handleAddColorVariant} leftIcon={<Icon as={FaPlus}/>}>Add Color</Button>
+                        <Button mt={4} size="sm" colorScheme="teal" onClick={handleAddColorVariant} leftIcon={<Icon as={FaPlus}/>} isDisabled={!newColorVariant.colorName}>Add Color</Button>
                     </Box>
 
                     <Divider my={6} />
                     
-                    {/* Display Current Color Variants */}
                     <Heading size="xs" mb={3} color="brand.textSlightlyDark">Manage Colors & Sizes ({formData.variants.length})</Heading>
                     {formData.variants.length === 0 ? <Text fontSize="sm">No color variants added yet.</Text> : (
                         <Accordion allowMultiple defaultIndex={[0]}>
@@ -334,7 +352,7 @@ const ProductManager = () => {
                                                 <Image src={variant.imageMockupFront} fallback={<Icon as={FaImage} color="gray.400" />} boxSize="40px" objectFit="cover" borderRadius="md" bg="gray.200" />
                                                 <Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="gray.300" />
                                                 <Text fontWeight="bold">{variant.colorName}</Text>
-                                                <Tag size="sm" colorScheme="blue">{variant.sizes.filter(s => s.inStock).length} Sizes In Stock</Tag>
+                                                <Tag size="sm" colorScheme="blue">{variant.sizes.filter(s => s.inStock).length} of {variant.sizes.length} Sizes In Stock</Tag>
                                             </HStack>
                                             <AccordionIcon />
                                         </AccordionButton>
@@ -345,26 +363,25 @@ const ProductManager = () => {
                                             <ChakraCloseButton size="sm" colorScheme="red" onClick={() => handleRemoveColorVariant(variant.colorName)} />
                                         </HStack>
                                         
-                                        <Wrap spacing={4}>
+                                        <Wrap spacing={4} justify="start">
                                             {variant.sizes.map((size, sizeIndex) => (
                                                 <WrapItem key={size.size}>
-                                                     <VStack p={3} borderWidth="1px" borderRadius="md" spacing={2} align="stretch" minW="180px" bg={size.inStock ? 'green.50' : 'red.50'}>
+                                                     <VStack p={3} borderWidth="1px" borderRadius="md" spacing={2} align="stretch" minW="200px" bg={size.inStock ? 'green.50' : 'red.50'}>
                                                         <HStack justifyContent="space-between">
                                                             <Text fontWeight="bold" fontSize="md">{size.size}</Text>
                                                             <Switch isChecked={size.inStock} onChange={(e) => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)} />
                                                         </HStack>
-                                                        <FormControl>
+                                                        <FormControl isDisabled={!size.inStock}>
                                                             <FormLabel fontSize="xs">SKU</FormLabel>
                                                             <Input 
                                                                 size="xs" 
                                                                 placeholder="Enter SKU"
                                                                 value={size.sku}
                                                                 onChange={(e) => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)}
-                                                                isDisabled={!size.inStock}
                                                                 bg="white"
                                                             />
                                                         </FormControl>
-                                                        <FormControl>
+                                                        <FormControl isDisabled={!size.inStock}>
                                                             <FormLabel fontSize="xs">Price Mod ($)</FormLabel>
                                                             <NumberInput 
                                                                 size="xs" 
@@ -372,7 +389,6 @@ const ProductManager = () => {
                                                                 onChange={(valStr, valNum) => handleSizeDetailChange(colorIndex, sizeIndex, 'priceModifier', valNum)} 
                                                                 precision={2} 
                                                                 step={0.01}
-                                                                isDisabled={!size.inStock}
                                                                 bg="white"
                                                             >
                                                                 <NumberInputField />
@@ -400,10 +416,15 @@ const ProductManager = () => {
         </ModalContent>
       </Modal>
       
-      {/* Delete Modal (Unchanged) */}
       {selectedProduct && (
         <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
-           {/* ... (no changes here) ... */}
+           <ModalOverlay />
+            <ModalContent bg="brand.paper"><ModalHeader>Confirm Deletion</ModalHeader><ModalCloseButton />
+                <ModalBody><Text>Delete "<strong>{selectedProduct.name}</strong>"? This will delete the product and all its variants.</Text>
+                    <Text mt={2} color="red.500" fontWeight="bold">This action cannot be undone.</Text>
+                </ModalBody>
+                <ModalFooter><Button variant="ghost" onClick={onDeleteClose} mr={3}>Cancel</Button><Button colorScheme="red" onClick={handleDelete}>Delete Product</Button></ModalFooter>
+            </ModalContent>
         </Modal>
       )}
     </Box>
