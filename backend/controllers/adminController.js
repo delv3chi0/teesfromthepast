@@ -71,15 +71,36 @@ const deleteOrderAdmin = asyncHandler(async (req, res) => {
         throw new Error('Order not found');
     }
 });
-
-// === NEW FUNCTION START ===
 const getOrderByIdAdmin = asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id)
-        .populate('user', 'username email firstName lastName') // Get user details
-        .populate('orderItems.designId', 'imageDataUrl prompt'); // Get the design image and prompt for each item
-
+        .populate('user', 'username email firstName lastName')
+        .populate('orderItems.designId', 'imageDataUrl prompt');
     if (order) {
         res.json(order);
+    } else {
+        res.status(404);
+        throw new Error('Order not found');
+    }
+});
+
+// === NEW FUNCTION START: updateOrderStatusAdmin ===
+const updateOrderStatusAdmin = asyncHandler(async (req, res) => {
+    const { status } = req.body;
+    
+    // Ensure the provided status is one of the allowed values.
+    // NOTE: These values should match the `enum` in your Order.js model schema.
+    const allowedStatuses = ['Processing', 'Shipped', 'Delivered', 'Cancelled'];
+    if (!status || !allowedStatuses.includes(status)) {
+        res.status(400);
+        throw new Error(`Invalid status. Must be one of: ${allowedStatuses.join(', ')}`);
+    }
+
+    const order = await Order.findById(req.params.id);
+
+    if (order) {
+        order.orderStatus = status;
+        const updatedOrder = await order.save();
+        res.json(updatedOrder);
     } else {
         res.status(404);
         throw new Error('Order not found');
@@ -235,7 +256,6 @@ const deleteProductTypeAdmin = asyncHandler(async (req, res) => {
 // --- PRODUCT MANAGEMENT ---
 const createProductAdmin = asyncHandler(async (req, res) => {
     const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
-
     if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
         res.status(400);
         throw new Error('Invalid Product Type ID format.');
@@ -249,7 +269,6 @@ const createProductAdmin = asyncHandler(async (req, res) => {
         res.status(400);
         throw new Error('Variants must be an array.');
     }
-
     if (variants) {
         const allSkus = [];
         for (const colorVariant of variants) {
@@ -261,7 +280,6 @@ const createProductAdmin = asyncHandler(async (req, res) => {
                 res.status(400);
                 throw new Error(`Color variant '${colorVariant.colorName}' must have a 'sizes' array.`);
             }
-
             for (const sizeVariant of colorVariant.sizes) {
                 if (sizeVariant.inStock || sizeVariant.sku) {
                     if (!sizeVariant.sku) {
@@ -272,13 +290,11 @@ const createProductAdmin = asyncHandler(async (req, res) => {
                 }
             }
         }
-
         const uniqueSkus = new Set(allSkus);
         if (uniqueSkus.size !== allSkus.length) {
             res.status(400);
             throw new Error('Duplicate SKUs found within the submitted variants. SKUs must be unique.');
         }
-
         if (allSkus.length > 0) {
             const existingProductWithSku = await Product.findOne({ 'variants.sizes.sku': { $in: allSkus } });
             if (existingProductWithSku) {
@@ -287,17 +303,14 @@ const createProductAdmin = asyncHandler(async (req, res) => {
             }
         }
     }
-
     const product = new Product({ name, productType: productTypeId, description, basePrice, tags: tags || [], isActive: isActive !== undefined ? isActive : true, variants: variants || [] });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
 });
-
 const getProductsAdmin = asyncHandler(async (req, res) => {
     const products = await Product.find({}).sort({ name: 1 }).lean();
     res.json(products);
 });
-
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id).populate({ path: 'productType', populate: { path: 'category', select: 'name' } });
     if (product) {
@@ -307,18 +320,15 @@ const getProductByIdAdmin = asyncHandler(async (req, res) => {
         throw new Error('Product not found');
     }
 });
-
 const updateProductAdmin = asyncHandler(async (req, res) => {
     const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
     const product = await Product.findById(req.params.id);
-
     if (product) {
         product.name = name || product.name;
         product.description = description !== undefined ? description : product.description;
         product.basePrice = basePrice !== undefined ? basePrice : product.basePrice;
         product.tags = tags !== undefined ? tags : product.tags;
         product.isActive = isActive !== undefined ? isActive : product.isActive;
-
         if (productTypeId) {
             if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
                 res.status(400);
@@ -331,13 +341,11 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             }
             product.productType = productTypeId;
         }
-
         if (variants !== undefined) {
             if (!Array.isArray(variants)) {
                 res.status(400);
                 throw new Error('Variants must be an array.');
             }
-
             const allSkus = [];
             for (const colorVariant of variants) {
                 if (!colorVariant.colorName || !colorVariant.imageMockupFront) {
@@ -354,13 +362,11 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
                     }
                 }
             }
-
             const uniqueSkus = new Set(allSkus);
             if (uniqueSkus.size !== allSkus.length) {
                 res.status(400);
                 throw new Error('Duplicate SKUs found within the submitted variants for update.');
             }
-
             if (allSkus.length > 0) {
                 const skuExistsElsewhere = await Product.findOne({ 'variants.sizes.sku': { $in: allSkus }, _id: { $ne: req.params.id } });
                 if (skuExistsElsewhere) {
@@ -370,7 +376,6 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             }
             product.variants = variants;
         }
-
         const updatedProduct = await product.save();
         await updatedProduct.populate({ path: 'productType', select: 'name category', populate: { path: 'category', select: 'name' } });
         res.json(updatedProduct);
@@ -392,7 +397,7 @@ const deleteProductAdmin = asyncHandler(async (req, res) => {
 
 export {
     getAllUsersAdmin, getUserByIdAdmin, updateUserAdmin, deleteUserAdmin,
-    getAllOrdersAdmin, deleteOrderAdmin, getOrderByIdAdmin, // <-- Added getOrderByIdAdmin here
+    getAllOrdersAdmin, deleteOrderAdmin, getOrderByIdAdmin, updateOrderStatusAdmin, // <-- Added updateOrderStatusAdmin here
     getAllDesignsAdmin,
     createProductCategoryAdmin, getProductCategoriesAdmin, getProductCategoryByIdAdmin, updateProductCategoryAdmin, deleteProductCategoryAdmin,
     createProductTypeAdmin, getProductTypesAdmin, getProductTypeByIdAdmin, updateProductTypeAdmin, deleteProductTypeAdmin,

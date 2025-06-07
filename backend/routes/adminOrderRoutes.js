@@ -6,7 +6,8 @@ import { admin } from '../middleware/adminMiddleware.js';
 import { 
     getAllOrdersAdmin,
     deleteOrderAdmin,
-    getOrderByIdAdmin // --- IMPORT new controller function ---
+    getOrderByIdAdmin,
+    updateOrderStatusAdmin // --- IMPORT new controller function ---
 } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -14,9 +15,14 @@ const router = express.Router();
 router.route('/')
     .get(protect, admin, getAllOrdersAdmin);
 
-// --- UPDATED to handle both GET and DELETE for a specific order ID ---
 router.route('/:id')
-    .get(protect, admin, getOrderByIdAdmin) // Added this line
+    .get(protect, admin, getOrderByIdAdmin)
     .delete(protect, admin, deleteOrderAdmin);
+
+// === NEW ROUTE START ===
+// Route to update just the order status
+router.route('/:id/status')
+    .put(protect, admin, updateOrderStatusAdmin);
+// === NEW ROUTE END ===
 
 export default router;
