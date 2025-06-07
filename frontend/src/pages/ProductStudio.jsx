@@ -1,4 +1,4 @@
-// frontend/src/pages/ProductStudio.jsx (DEBUG VERSION)
+// frontend/src/pages/ProductStudio.jsx (FINAL DEBUG VERSION)
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Select,
@@ -131,7 +131,6 @@ export default function ProductStudio() {
   useEffect(() => {
     console.log("%c[Size Debug] Running effect to calculate sizes...", "color: blue; font-weight: bold;");
     if (!selectedProductId || !selectedProductColor || productsOfType.length === 0) {
-      console.log("[Size Debug] Bailing out early: Missing product ID, color, or products list.");
       setAvailableSizes([]);
       setSelectedProductSize('');
       return;
@@ -157,8 +156,12 @@ export default function ProductStudio() {
             }
         } else {
             console.log("[Size Debug] 3. Using OLD format logic.");
-            sizesForColor = currentProduct.variants
-                .filter(variant => variant.colorName === selectedProductColor)
+            const filteredByColor = currentProduct.variants.filter(variant => variant.colorName === selectedProductColor);
+            
+            // This is the new, crucial debug line
+            console.log("%c[Size Debug] 3.5. Here are the variant objects found for the selected color:", "color: green; font-weight: bold;", filteredByColor);
+            
+            sizesForColor = filteredByColor
                 .map(variant => variant.size)
                 .filter((value, index, self) => self.indexOf(value) === index);
         }
