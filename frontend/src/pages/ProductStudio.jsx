@@ -1,4 +1,4 @@
-// frontend/src/pages/ProductStudio.jsx (FINAL DEBUG VERSION)
+// frontend/src/pages/ProductStudio.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Select,
@@ -129,47 +129,31 @@ export default function ProductStudio() {
   }, [selectedProductId, productsOfType]);
 
   useEffect(() => {
-    console.log("%c[Size Debug] Running effect to calculate sizes...", "color: blue; font-weight: bold;");
     if (!selectedProductId || !selectedProductColor || productsOfType.length === 0) {
       setAvailableSizes([]);
       setSelectedProductSize('');
       return;
     }
-
     const currentProduct = productsOfType.find(p => p._id === selectedProductId);
-    console.log("[Size Debug] 1. The full product object being inspected:", currentProduct);
-    
     let sizesForColor = [];
+
     if (currentProduct && currentProduct.variants && currentProduct.variants.length > 0) {
         const isNewFormat = currentProduct.variants[0].sizes !== undefined;
-        console.log("[Size Debug] 2. Is this product using the new data format?", isNewFormat);
 
         if (isNewFormat) {
             const selectedColorVariant = currentProduct.variants.find(v => v.colorName === selectedProductColor);
-            console.log("[Size Debug] 3. Found the specific object for the selected color:", selectedColorVariant);
-            
             if (selectedColorVariant && Array.isArray(selectedColorVariant.sizes)) {
-                console.log("[Size Debug] 4. The nested 'sizes' array found:", selectedColorVariant.sizes);
                 sizesForColor = selectedColorVariant.sizes.map(sizeInfo => sizeInfo.size);
-            } else {
-                console.log("%c[Size Debug] 4. FAILED: Could not find the nested 'sizes' array on the color object.", "color: red;");
             }
         } else {
-            console.log("[Size Debug] 3. Using OLD format logic.");
-            const filteredByColor = currentProduct.variants.filter(variant => variant.colorName === selectedProductColor);
-            
-            // This is the new, crucial debug line
-            console.log("%c[Size Debug] 3.5. Here are the variant objects found for the selected color:", "color: green; font-weight: bold;", filteredByColor);
-            
-            sizesForColor = filteredByColor
+            sizesForColor = currentProduct.variants
+                .filter(variant => variant.colorName === selectedProductColor && variant.size)
                 .map(variant => variant.size)
                 .filter((value, index, self) => self.indexOf(value) === index);
         }
     }
     
-    console.log("[Size Debug] 5. Final list of size strings calculated:", sizesForColor);
     setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
-    
     if (!sizesForColor.includes(selectedProductSize)) {
       setSelectedProductSize('');
     }
