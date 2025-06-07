@@ -1,4 +1,4 @@
-// frontend/src/pages/ProductStudio.jsx
+// frontend/src/pages/ProductStudio.jsx (DEBUG VERSION)
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Select,
@@ -111,7 +111,6 @@ export default function ProductStudio() {
     }
     const currentProduct = productsOfType.find(p => p._id === selectedProductId);
     if (currentProduct && currentProduct.variants) {
-      // Use reduce to get unique color names, which works for both OLD and NEW data formats.
       const uniqueColorObjects = currentProduct.variants.reduce((acc, variant) => {
         if (!acc.find(c => c.value === variant.colorName)) {
           acc.push({ value: variant.colorName, label: variant.colorName, hex: variant.colorHex });
@@ -130,27 +129,34 @@ export default function ProductStudio() {
   }, [selectedProductId, productsOfType]);
 
   useEffect(() => {
+    console.log("%c[Size Debug] Running effect to calculate sizes...", "color: blue; font-weight: bold;");
     if (!selectedProductId || !selectedProductColor || productsOfType.length === 0) {
+      console.log("[Size Debug] Bailing out early: Missing product ID, color, or products list.");
       setAvailableSizes([]);
       setSelectedProductSize('');
       return;
     }
-    const currentProduct = productsOfType.find(p => p._id === selectedProductId);
-    let sizesForColor = [];
 
+    const currentProduct = productsOfType.find(p => p._id === selectedProductId);
+    console.log("[Size Debug] 1. The full product object being inspected:", currentProduct);
+    
+    let sizesForColor = [];
     if (currentProduct && currentProduct.variants && currentProduct.variants.length > 0) {
-        // Check if the product uses the new data format (`sizes` array exists)
         const isNewFormat = currentProduct.variants[0].sizes !== undefined;
+        console.log("[Size Debug] 2. Is this product using the new data format?", isNewFormat);
 
         if (isNewFormat) {
-            // NEW FORMAT LOGIC: Find the color and map its nested sizes.
             const selectedColorVariant = currentProduct.variants.find(v => v.colorName === selectedProductColor);
+            console.log("[Size Debug] 3. Found the specific object for the selected color:", selectedColorVariant);
+            
             if (selectedColorVariant && Array.isArray(selectedColorVariant.sizes)) {
-                // We trust the API to only send available sizes, so we don't filter by `inStock` here.
+                console.log("[Size Debug] 4. The nested 'sizes' array found:", selectedColorVariant.sizes);
                 sizesForColor = selectedColorVariant.sizes.map(sizeInfo => sizeInfo.size);
+            } else {
+                console.log("%c[Size Debug] 4. FAILED: Could not find the nested 'sizes' array on the color object.", "color: red;");
             }
         } else {
-            // OLD FORMAT LOGIC: Filter the flat list for the selected color.
+            console.log("[Size Debug] 3. Using OLD format logic.");
             sizesForColor = currentProduct.variants
                 .filter(variant => variant.colorName === selectedProductColor)
                 .map(variant => variant.size)
@@ -158,8 +164,9 @@ export default function ProductStudio() {
         }
     }
     
+    console.log("[Size Debug] 5. Final list of size strings calculated:", sizesForColor);
     setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
-    // If the current size isn't in the new list of sizes, reset it
+    
     if (!sizesForColor.includes(selectedProductSize)) {
       setSelectedProductSize('');
     }
@@ -177,23 +184,14 @@ export default function ProductStudio() {
       let finalVariant = null;
 
       if (isNewFormat) {
-          // NEW FORMAT: Find the color, then find the size inside it
           const colorVariant = product.variants.find(v => v.colorName === selectedProductColor);
           if (colorVariant) {
               const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
               if (sizeVariant) {
-                  // Combine details from the color and size level into one convenient object
-                  finalVariant = { 
-                      ...sizeVariant, 
-                      colorName: colorVariant.colorName, 
-                      colorHex: colorVariant.colorHex, 
-                      imageMockupFront: colorVariant.imageMockupFront, 
-                      imageMockupBack: colorVariant.imageMockupBack 
-                  };
+                  finalVariant = { ...sizeVariant, colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageMockupFront: colorVariant.imageMockupFront, imageMockupBack: colorVariant.imageMockupBack };
               }
           }
       } else {
-          // OLD FORMAT: Find the single flat variant that matches both color and size
           finalVariant = product.variants.find(v => v.colorName === selectedProductColor && v.size === selectedProductSize);
       }
       setSelectedVariant(finalVariant || null);
