@@ -15,7 +15,7 @@ const getAllUsersAdmin = asyncHandler(async (req, res) => {
 });
 const getUserByIdAdmin = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id).select('-password');
-    if (user) { res.json(user); } 
+    if (user) { res.json(user); }
     else { res.status(404); throw new Error('User not found'); }
 });
 const updateUserAdmin = asyncHandler(async (req, res) => {
@@ -96,7 +96,7 @@ const getProductCategoriesAdmin = asyncHandler(async (req, res) => {
 });
 const getProductCategoryByIdAdmin = asyncHandler(async (req, res) => {
     const category = await ProductCategory.findById(req.params.id);
-    if (category) { res.json(category); } 
+    if (category) { res.json(category); }
     else { res.status(404); throw new Error('Product category not found'); }
 });
 const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
@@ -163,7 +163,7 @@ const getProductTypesAdmin = asyncHandler(async (req, res) => {
 });
 const getProductTypeByIdAdmin = asyncHandler(async (req, res) => {
     const productType = await ProductType.findById(req.params.id).populate('category', 'name description');
-    if (productType) { res.json(productType); } 
+    if (productType) { res.json(productType); }
     else { res.status(404); throw new Error('Product type not found'); }
 });
 const updateProductTypeAdmin = asyncHandler(async (req, res) => {
@@ -219,6 +219,7 @@ const deleteProductTypeAdmin = asyncHandler(async (req, res) => {
 // --- PRODUCT MANAGEMENT ---
 const createProductAdmin = asyncHandler(async (req, res) => {
     const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
+
     if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
         res.status(400);
         throw new Error('Invalid Product Type ID format.');
@@ -232,36 +233,63 @@ const createProductAdmin = asyncHandler(async (req, res) => {
         res.status(400);
         throw new Error('Variants must be an array.');
     }
+
     if (variants) {
-        const skusInRequest = [];
-        for (const v of variants) {
-            if (!v.sku || !v.colorName || !v.size || v.stock === undefined || !v.imageMockupFront) {
+        const allSkus = [];
+        for (const colorVariant of variants) {
+            if (!colorVariant.colorName || !colorVariant.imageMockupFront) {
                 res.status(400);
-                throw new Error('Each variant must have sku, colorName, size, stock, and imageMockupFront.');
+                throw new Error('Each color variant must have a colorName and imageMockupFront.');
             }
-            if (skusInRequest.includes(v.sku)) {
+            if (!colorVariant.sizes || !Array.isArray(colorVariant.sizes)) {
                 res.status(400);
-                throw new Error(`Duplicate SKU '${v.sku}' found within the submitted variants. SKUs must be unique per product creation.`);
+                throw new Error(`Color variant '${colorVariant.colorName}' must have a 'sizes' array.`);
             }
-            skusInRequest.push(v.sku);
-            const skuExistsGlobally = await Product.findOne({ 'variants.sku': v.sku });
-            if (skuExistsGlobally) {
+
+            for (const sizeVariant of colorVariant.sizes) {
+                if (sizeVariant.inStock || sizeVariant.sku) {
+                    if (!sizeVariant.sku) {
+                        res.status(400);
+                        throw new Error(`Size '${sizeVariant.size}' for color '${colorVariant.colorName}' is in stock but has no SKU.`);
+                    }
+                    allSkus.push(sizeVariant.sku);
+                }
+            }
+        }
+
+        const uniqueSkus = new Set(allSkus);
+        if (uniqueSkus.size !== allSkus.length) {
+            res.status(400);
+            throw new Error('Duplicate SKUs found within the submitted variants. SKUs must be unique.');
+        }
+
+        if (allSkus.length > 0) {
+            const existingProductWithSku = await Product.findOne({ 'variants.sizes.sku': { $in: allSkus } });
+            if (existingProductWithSku) {
                 res.status(400);
-                throw new Error(`SKU '${v.sku}' already exists. SKUs must be globally unique.`);
+                throw new Error(`One or more SKUs already exist in another product (e.g., in product '${existingProductWithSku.name}'). SKUs must be globally unique.`);
             }
         }
     }
-    const product = new Product({ name, productType: productTypeId, description, basePrice, tags: tags || [], isActive: isActive !== undefined ? isActive : true, variants: variants || [] });
+
+    const product = new Product({
+        name,
+        productType: productTypeId,
+        description,
+        basePrice,
+        tags: tags || [],
+        isActive: isActive !== undefined ? isActive : true,
+        variants: variants || []
+    });
+
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
 });
 
-// --- THIS IS THE FIX ---
-// This version removes ALL .populate() calls to be as simple and robust as possible for debugging.
 const getProductsAdmin = asyncHandler(async (req, res) => {
     console.log('[Admin Controller] GET /products - Fetching all products (ULTRA-SIMPLIFIED query).');
     try {
-        const products = await Product.find({}) // NO .populate() AT ALL
+        const products = await Product.find({})
             .sort({ name: 1 })
             .lean();
         console.log(`[Admin Controller] GET /products - Found ${products.length} products.`);
@@ -284,12 +312,14 @@ const getProductByIdAdmin = asyncHandler(async (req, res) => {
 const updateProductAdmin = asyncHandler(async (req, res) => {
     const { name, productType: productTypeId, description, basePrice, tags, isActive, variants } = req.body;
     const product = await Product.findById(req.params.id);
+
     if (product) {
         product.name = name || product.name;
         product.description = description !== undefined ? description : product.description;
         product.basePrice = basePrice !== undefined ? basePrice : product.basePrice;
         product.tags = tags !== undefined ? tags : product.tags;
         product.isActive = isActive !== undefined ? isActive : product.isActive;
+
         if (productTypeId) {
             if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
                 res.status(400);
@@ -302,30 +332,49 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             }
             product.productType = productTypeId;
         }
+
         if (variants !== undefined) {
             if (!Array.isArray(variants)) {
                 res.status(400);
                 throw new Error('Variants must be an array.');
             }
-            const newSkusInRequest = [];
-            for (const v of variants) {
-                if (!v.sku || !v.colorName || !v.size || v.stock === undefined || !v.imageMockupFront) {
+
+            const allSkus = [];
+            for (const colorVariant of variants) {
+                if (!colorVariant.colorName || !colorVariant.imageMockupFront) {
                     res.status(400);
-                    throw new Error('Each variant must have sku, colorName, size, stock, and imageMockupFront.');
+                    throw new Error('Each color variant must have a colorName and imageMockupFront.');
                 }
-                if (newSkusInRequest.includes(v.sku)) {
-                    res.status(400);
-                    throw new Error(`Duplicate SKU '${v.sku}' found within the submitted variants for update.`);
+                for (const sizeVariant of colorVariant.sizes) {
+                    if (sizeVariant.inStock || sizeVariant.sku) {
+                        if (!sizeVariant.sku) {
+                            res.status(400);
+                            throw new Error(`Size '${sizeVariant.size}' for color '${colorVariant.colorName}' is in stock but has no SKU.`);
+                        }
+                        allSkus.push(sizeVariant.sku);
+                    }
                 }
-                newSkusInRequest.push(v.sku);
-                const skuExistsElsewhere = await Product.findOne({ 'variants.sku': v.sku, _id: { $ne: req.params.id } });
+            }
+
+            const uniqueSkus = new Set(allSkus);
+            if (uniqueSkus.size !== allSkus.length) {
+                res.status(400);
+                throw new Error('Duplicate SKUs found within the submitted variants for update.');
+            }
+
+            if (allSkus.length > 0) {
+                const skuExistsElsewhere = await Product.findOne({
+                    'variants.sizes.sku': { $in: allSkus },
+                    _id: { $ne: req.params.id }
+                });
                 if (skuExistsElsewhere) {
                     res.status(400);
-                    throw new Error(`SKU '${v.sku}' already exists in another product. SKUs must be globally unique.`);
+                    throw new Error(`One or more SKUs already exist in another product ('${skuExistsElsewhere.name}').`);
                 }
             }
             product.variants = variants;
         }
+
         const updatedProduct = await product.save();
         await updatedProduct.populate({ path: 'productType', select: 'name category', populate: { path: 'category', select: 'name' } });
         res.json(updatedProduct);
@@ -334,6 +383,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
         throw new Error('Product not found');
     }
 });
+
 const deleteProductAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {

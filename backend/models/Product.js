@@ -1,68 +1,66 @@
 // backend/models/Product.js
 import mongoose from 'mongoose';
 
-const productVariantSchema = new mongoose.Schema({
-  colorName: { // e.g., "Vintage Black", "Heather Grey", "Baby Blue"
+// NEW: Blueprint for a specific size within a color (e.g., "S", "M", "L")
+const sizeVariantSchema = new mongoose.Schema({
+  size: {
     type: String,
     required: true,
     trim: true,
   },
-  colorHex: { // Optional: For UI pickers, e.g., "#333333", "#B2BEB5"
-    type: String,
-    trim: true,
-  },
-  size: { // e.g., "S", "M", "L", "XL", "One Size", "6 Months"
+  sku: { // Must be unique across the entire store. Checked in the controller.
     type: String,
     required: true,
     trim: true,
   },
-  sku: { // Your internal Stock Keeping Unit for this specific variant. MUST BE UNIQUE.
-    type: String,
-    required: true,
-    unique: true, // Ensures no two variants (even across different products) have the same SKU.
-    trim: true,
+  inStock: { // Replaces the old 'stock' field. True if available, false if not.
+    type: Boolean,
+    default: true,
   },
-  stock: { // How many you have (can be a high number if purely POD, or actual if you hold inventory)
+  priceModifier: { // Amount to add/subtract from the product's base price for this specific size.
     type: Number,
+    default: 0,
+  },
+  podVariantId: { // The specific ID for this size/color combo from the POD provider.
+    type: String,
+    trim: true,
+  },
+}, { _id: false });
+
+// NEW: Blueprint for a color, which holds all its size information.
+const colorVariantSchema = new mongoose.Schema({
+  colorName: {
+    type: String,
     required: true,
-    default: 0,
-    min: 0,
+    trim: true,
   },
-  priceModifier: { // Amount to add to (or subtract from) the base product's price for this variant
-    type: Number,         // e.g., 0 for standard, 2 for XXL, -5 for a sale variant.
-    default: 0,
-  },
-  imageMockupFront: { // URL to the front mockup image for this specific variant (e.g., black shirt mockup)
-    type: String,
-    required: true, // Essential for Product Studio
-  },
-  imageMockupBack: { // Optional: URL to the back mockup image for this variant
-    type: String,
-  },
-  // --- Print-on-Demand (POD) Fields ---
-  podService: { // e.g., "Printify", "Printful", "InHouse"
+  colorHex: {
     type: String,
     trim: true,
   },
-  podProductId: { // The ID or SKU of this blank product variant FROM the POD provider's catalog
-    type: String,   // (e.g., Printify's "blueprint_id" + "provider_id" + "variant_id" might be combined or specific fields used)
-    trim: true,
+  imageMockupFront: { // URL for the front mockup image for this color.
+    type: String,
+    required: true,
   },
-  podVariantId: { // Some POD services have a specific variant ID for size/color combination.
+  imageMockupBack: { // Optional URL for the back mockup image for this color.
+    type: String,
+  },
+  podProductId: { // The general product ID from the POD provider for this color.
     type: String,
     trim: true,
   },
-  // You might add other POD-specific fields later if needed, like print area dimensions.
+  sizes: [sizeVariantSchema], // An array of all available sizes for this color.
 });
+
 
 const productSchema = new mongoose.Schema(
   {
-    name: { // e.g., "Men's Premium Crewneck T-Shirt", "Unisex Classic Hoodie"
+    name: {
       type: String,
       required: true,
       trim: true,
     },
-    productType: { // Links to a "T-Shirt", "Hoodie", etc. from ProductType model
+    productType: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'ProductType',
       required: true,
@@ -72,32 +70,25 @@ const productSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    basePrice: { // The starting price for this product before any variant-specific adjustments
+    basePrice: {
       type: Number,
       required: true,
       min: 0,
     },
-    tags: [{ type: String, trim: true }], // For searching/filtering, e.g., "retro", "summer", "cotton"
-    isActive: { // Controls if this product (and its variants) are shown to customers
+    tags: [{ type: String, trim: true }],
+    isActive: {
       type: Boolean,
       default: true,
     },
-    // defaultProductImage: { // A generic image for the product before a variant is selected (less important if variants always have mockups)
-    //   type: String,
-    // },
-    variants: [productVariantSchema], // An array of different versions (e.g., Small Red, Medium Blue)
+    // This now uses the new nested colorVariantSchema
+    variants: [colorVariantSchema],
   },
   {
     timestamps: true,
   }
 );
 
-// Optional: Index for searching products by name or tags
 productSchema.index({ name: 'text', description: 'text', tags: 'text' });
-
-// Ensure that within a single product, the combination of colorName and size is unique for variants.
-// This is a more complex validation, usually handled at the application level when adding/updating variants.
-// Mongoose unique indexes on subdocuments work differently. The `sku` unique global index is more critical.
 
 const Product = mongoose.model('Product', productSchema);
 
