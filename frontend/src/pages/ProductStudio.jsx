@@ -103,8 +103,6 @@ export default function ProductStudio() {
       .finally(() => setLoadingProductsOfType(false));
   }, [selectedProductTypeId, toast]);
 
-  // === MODIFICATION 1: Reading Colors (Backwards Compatible) ===
-  // This logic now correctly finds unique colors from both OLD and NEW data formats.
   useEffect(() => {
     if (!selectedProductId || productsOfType.length === 0) {
       setAvailableColors([]);
@@ -113,7 +111,7 @@ export default function ProductStudio() {
     }
     const currentProduct = productsOfType.find(p => p._id === selectedProductId);
     if (currentProduct && currentProduct.variants) {
-      // Use reduce to get unique color names, which works for both flat and nested arrays.
+      // Use reduce to get unique color names, which works for both OLD and NEW data formats.
       const uniqueColorObjects = currentProduct.variants.reduce((acc, variant) => {
         if (!acc.find(c => c.value === variant.colorName)) {
           acc.push({ value: variant.colorName, label: variant.colorName, hex: variant.colorHex });
@@ -131,8 +129,6 @@ export default function ProductStudio() {
     }
   }, [selectedProductId, productsOfType]);
 
-  // === MODIFICATION 2: Reading Sizes (Backwards Compatible) ===
-  // This logic now checks the variant format and gets sizes accordingly.
   useEffect(() => {
     if (!selectedProductId || !selectedProductColor || productsOfType.length === 0) {
       setAvailableSizes([]);
@@ -143,34 +139,32 @@ export default function ProductStudio() {
     let sizesForColor = [];
 
     if (currentProduct && currentProduct.variants && currentProduct.variants.length > 0) {
+        // Check if the product uses the new data format (`sizes` array exists)
         const isNewFormat = currentProduct.variants[0].sizes !== undefined;
 
         if (isNewFormat) {
-            // NEW FORMAT: Find the color object and get its nested `sizes` array.
+            // NEW FORMAT LOGIC: Find the color and map its nested sizes.
             const selectedColorVariant = currentProduct.variants.find(v => v.colorName === selectedProductColor);
             if (selectedColorVariant && Array.isArray(selectedColorVariant.sizes)) {
-                sizesForColor = selectedColorVariant.sizes
-                    .filter(sizeInfo => sizeInfo.inStock) // Only show in-stock sizes
-                    .map(sizeInfo => sizeInfo.size);
+                // We trust the API to only send available sizes, so we don't filter by `inStock` here.
+                sizesForColor = selectedColorVariant.sizes.map(sizeInfo => sizeInfo.size);
             }
         } else {
-            // OLD FORMAT: Filter the flat list for the selected color and get unique sizes.
+            // OLD FORMAT LOGIC: Filter the flat list for the selected color.
             sizesForColor = currentProduct.variants
-                .filter(variant => variant.colorName === selectedProductColor && variant.stock > 0)
+                .filter(variant => variant.colorName === selectedProductColor)
                 .map(variant => variant.size)
-                .filter((value, index, self) => self.indexOf(value) === index); // De-duplicate
+                .filter((value, index, self) => self.indexOf(value) === index);
         }
     }
     
     setAvailableSizes(sizesForColor.map(s => ({ value: s, label: s })));
+    // If the current size isn't in the new list of sizes, reset it
     if (!sizesForColor.includes(selectedProductSize)) {
       setSelectedProductSize('');
     }
+  }, [selectedProductId, selectedProductColor, productsOfType]);
 
-  }, [selectedProductId, selectedProductColor, productsOfType, selectedProductSize]);
-
-  // === MODIFICATION 3: Finding the Selected Variant (Backwards Compatible) ===
-  // This logic finds the correct variant details from both OLD and NEW data formats.
   useEffect(() => {
     if (selectedProductId && selectedProductColor && selectedProductSize && productsOfType.length > 0) {
       const product = productsOfType.find(p => p._id === selectedProductId);
@@ -183,14 +177,23 @@ export default function ProductStudio() {
       let finalVariant = null;
 
       if (isNewFormat) {
+          // NEW FORMAT: Find the color, then find the size inside it
           const colorVariant = product.variants.find(v => v.colorName === selectedProductColor);
           if (colorVariant) {
               const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
               if (sizeVariant) {
-                  finalVariant = { ...sizeVariant, colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageMockupFront: colorVariant.imageMockupFront, imageMockupBack: colorVariant.imageMockupBack };
+                  // Combine details from the color and size level into one convenient object
+                  finalVariant = { 
+                      ...sizeVariant, 
+                      colorName: colorVariant.colorName, 
+                      colorHex: colorVariant.colorHex, 
+                      imageMockupFront: colorVariant.imageMockupFront, 
+                      imageMockupBack: colorVariant.imageMockupBack 
+                  };
               }
           }
       } else {
+          // OLD FORMAT: Find the single flat variant that matches both color and size
           finalVariant = product.variants.find(v => v.colorName === selectedProductColor && v.size === selectedProductSize);
       }
       setSelectedVariant(finalVariant || null);
@@ -201,7 +204,6 @@ export default function ProductStudio() {
 
 
   useEffect(() => {
-    // This canvas logic does not need to change.
     const fabricScriptPollInterval = 100;
     const maxPolls = 50;
     let pollCount = 0;
@@ -248,7 +250,6 @@ export default function ProductStudio() {
   }, [selectedDesign, selectedVariant, toast]);
 
   const handleProceedToCheckout = () => {
-    // This checkout logic does not need changes.
     if (!selectedDesign || !selectedDesign._id) { toast({ title: "Design Not Selected", description: "Please select one of your saved designs.", status: "warning" }); return; }
     if (!selectedVariant || !selectedVariant.sku || !selectedProductId || !selectedProductTypeId) { toast({ title: "Product Incomplete", description: "Please ensure product type, specific product, color, and size are selected.", status: "warning" }); return; }
     const productTypeObject = availableProductTypes.find(pt => pt._id === selectedProductTypeId);
