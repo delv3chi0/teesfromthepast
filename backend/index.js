@@ -16,6 +16,10 @@ import 'dotenv/config';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 
+// === SECURITY: Import new packages ===
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+
 import authRoutes from './routes/auth.js';
 import generateImageRoutes from './routes/generateImage.js';
 import stripeWebhookRoutes from './routes/stripeWebhook.js';
@@ -48,7 +52,12 @@ mongoose.connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
-// --- THIS IS THE FIX: Define CORS options and apply them more explicitly ---
+// === SECURITY: Apply Helmet for security headers ===
+// Apply this early to ensure all responses are protected.
+app.use(helmet());
+console.log('[Backend Log] Helmet security headers middleware applied.');
+
+
 const corsOptions = {
   origin: [
     'https://teesfromthepast.vercel.app',
@@ -58,14 +67,10 @@ const corsOptions = {
   credentials: true,
 };
 
-// Handle preflight requests for all routes
 app.options('*', cors(corsOptions));
-
-// Use CORS for all other requests
 app.use(cors(corsOptions));
-// --- END OF FIX ---
-
 console.log('[Backend Log] CORS middleware applied explicitly.');
+
 app.use(cookieParser());
 
 // Stripe webhook must be before express.json() for raw body
@@ -75,6 +80,18 @@ console.log('[Backend Log] Stripe webhook route configured at /api/stripe.');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 console.log('[Backend Log] Express JSON and URLencoded middleware applied with increased limits.');
+
+// === SECURITY: Apply Rate Limiter to all API requests ===
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+});
+app.use('/api', limiter);
+console.log('[Backend Log] Rate limiting middleware applied to /api routes.');
+
 
 app.get('/', (req, res) => {
   console.log('[Backend Log] Root path (/) hit.');
