@@ -7,7 +7,7 @@ const ProductCard = ({ product }) => {
   if (!product) {
     return (
       <Box>
-        <Skeleton height="220px" />
+        <Skeleton height="220px" borderRadius="lg"/>
         <Skeleton height="20px" mt="4" />
         <Skeleton height="20px" mt="2" />
       </Box>
@@ -27,24 +27,23 @@ const ProductCard = ({ product }) => {
       bg="white"
     >
       <Image
-        src={product.defaultImage || 'https://via.placeholder.com/400?text=No+Image'}
+        src={product.defaultImage}
         alt={`Image of ${product.name}`}
         objectFit="cover"
         w="100%"
         h="220px" // Made image smaller
         fallback={<Skeleton height="220px" />}
-        htmlWidth="400" // Provide hints to browser for better quality
+        htmlWidth="400" // Hint for browser on image quality
         htmlHeight="400"
       />
       <Box p="4"> {/* Reduced padding */}
         <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name}>
           {product.name}
         </Heading>
-        {/* Added description */}
-        <Text fontSize="sm" color="gray.500" mt={1} noOfLines={2}>
+        <Text fontSize="sm" color="gray.600" mt={1} noOfLines={2} h="40px">
           {product.description}
         </Text>
-        <Text mt={2} fontSize="lg" color="brand.textDark" fontWeight="bold">
+        <Text mt={2} fontSize="xl" color="brand.textDark" fontWeight="bold">
           ${product.basePrice.toFixed(2)}
         </Text>
       </Box>

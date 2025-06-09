@@ -26,7 +26,14 @@ const getActiveProductsByType = asyncHandler(async (req, res) => {
     if (isNewFormat) {
       const newFormatVariants = product.variants.map(colorVariant => {
         const availableSizes = (colorVariant.sizes || []).filter(size => size.inStock).map(size => ({ size: size.size, sku: size.sku, priceModifier: size.priceModifier }));
-        if (availableSizes.length > 0) { return { colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageSet: colorVariant.imageSet, sizes: availableSizes }; }
+        if (availableSizes.length > 0) {
+          return {
+            colorName: colorVariant.colorName,
+            colorHex: colorVariant.colorHex,
+            imageSet: colorVariant.imageSet,
+            sizes: availableSizes
+          };
+        }
         return null;
       }).filter(Boolean);
       return { ...product, variants: newFormatVariants };
@@ -38,45 +45,56 @@ const getActiveProductsByType = asyncHandler(async (req, res) => {
   res.json(productsWithCleanedVariants);
 });
 
+// === REWRITTEN AND CORRECTED to be more robust and include all necessary data ===
 const getShopData = asyncHandler(async (req, res) => {
-    const productTypes = await ProductType.find({ isActive: true }).sort('name').lean();
-    const productPromises = productTypes.map(type => {
-        return Product.aggregate([
-            { $match: { isActive: true, productType: type._id } },
-            // === THE FIX: Add description and slug to the first projection ===
-            {
-                $project: {
-                    name: 1, slug: 1, basePrice: 1, description: 1,
-                    defaultVariant: { $arrayElemAt: [ { $filter: { input: '$variants', as: 'v', cond: { $eq: ['$$v.isDefaultDisplay', true] } } }, 0 ] },
-                    firstVariant: { $arrayElemAt: [ '$variants', 0 ]} // Fallback
-                }
-            },
-            {
-                $addFields: {
-                    displayVariant: { $ifNull: [ "$defaultVariant", "$firstVariant" ] }
-                }
-            },
-            {
-                $project: {
-                    name: 1, slug: 1, basePrice: 1, description: 1,
-                    defaultImage: {
-                       $let: {
-                           vars: { primaryImage: { $arrayElemAt: [ { $filter: { input: '$displayVariant.imageSet', as: 'img', cond: { $eq: ['$$img.isPrimary', true] } } }, 0] } },
-                           in: '$$primaryImage.url'
-                       }
+    const categoriesWithProducts = await ProductType.aggregate([
+        { $match: { isActive: true } },
+        {
+            $lookup: {
+                from: 'products',
+                let: { typeId: '$_id' },
+                pipeline: [
+                    { $match: { $expr: { $and: [ { $eq: ['$productType', '$$typeId'] }, { $eq: ['$isActive', true] } ] } } },
+                    {
+                        $project: {
+                            name: 1, slug: 1, basePrice: 1, description: 1,
+                            displayVariant: { $ifNull: [ { $arrayElemAt: [ { $filter: { input: '$variants', as: 'v', cond: { $eq: ['$$v.isDefaultDisplay', true] } } }, 0 ] }, { $arrayElemAt: [ '$variants', 0 ] } ] }
+                        }
+                    },
+                    {
+                        $project: {
+                            name: 1, slug: 1, basePrice: 1, description: 1,
+                            defaultImage: {
+                                $let: {
+                                    vars: { primaryImage: { $ifNull: [ { $arrayElemAt: [ { $filter: { input: '$displayVariant.imageSet', as: 'img', cond: { $eq: ['$$img.isPrimary', true] } } }, 0 ] }, { $arrayElemAt: [ '$displayVariant.imageSet', 0 ] } ] } },
+                                    in: '$$primaryImage.url'
+                                }
+                            }
+                        }
+                    }
+                ],
+                as: 'products'
+            }
+        },
+        {
+            $project: {
+                categoryId: '$_id',
+                categoryName: '$name',
+                products: {
+                    $filter: {
+                        input: '$products',
+                        as: 'product',
+                        cond: '$$product.defaultImage'
                     }
                 }
             }
-        ]).then(products => ({
-            categoryId: type._id,
-            categoryName: type.name,
-            products: products.filter(p => p.defaultImage)
-        }));
-    });
-    
-    const categoriesWithProducts = (await Promise.all(productPromises)).filter(cat => cat.products.length > 0);
+        },
+        { $match: { 'products.0': { $exists: true } } },
+        { $sort: { categoryName: 1 } }
+    ]);
     res.json(categoriesWithProducts);
 });
+
 
 const getProductBySlug = asyncHandler(async (req, res) => {
     const product = await Product.findOne({ slug: req.params.slug, isActive: true }).lean();
