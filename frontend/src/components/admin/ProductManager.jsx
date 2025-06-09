@@ -8,7 +8,7 @@ import {
   Tag, SimpleGrid, Textarea, NumberInput, NumberInputField, NumberInputStepper,
   NumberIncrementStepper, NumberDecrementStepper, Divider, CloseButton,
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
-  Wrap, WrapItem, Radio, RadioGroup, Stack, Flex // <--- THE FIX: Added 'Flex' here
+  Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
 import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff, FaImage, FaExclamationTriangle, FaStar } from 'react-icons/fa';
 import { client } from '../../api/client';
@@ -68,8 +68,7 @@ const ProductManager = () => {
   useEffect(() => { if (token) { fetchProducts(); fetchProductTypes(); } }, [token, fetchProducts, fetchProductTypes]);
 
   const handleOpenModal = async (product = null) => {
-    onOpen();
-    setIsModalLoading(true);
+    onOpen(); setIsModalLoading(true);
     try {
       const activeTypes = productTypes.filter(pt => pt.isActive);
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
@@ -81,19 +80,14 @@ const ProductManager = () => {
           name: fullProductData.name, description: fullProductData.description || '', productType: fullProductData.productType?._id || fullProductData.productType || '',
           basePrice: fullProductData.basePrice || 0, tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
           isActive: fullProductData.isActive,
-          variants: (fullProductData.variants || []).map(v => ({ ...v, imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }] }))
+          variants: (fullProductData.variants || []).map(v => ({...v, imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }] }))
         });
       } else {
-        setIsEditing(false);
-        setSelectedProduct(null);
+        setIsEditing(false); setSelectedProduct(null);
         setFormData({ name: '', description: '', productType: activeTypes.length > 0 ? activeTypes[0]._id : '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
-    } catch (err) {
-      toast({ title: "Error", description: "Could not load data for the form.", status: "error" });
-      onClose();
-    } finally {
-      setIsModalLoading(false);
-    }
+    } catch (err) { toast({ title: "Error", description: "Could not load data for the form.", status: "error" }); onClose(); } 
+    finally { setIsModalLoading(false); }
   };
 
   const handleFormChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value })); };
@@ -114,16 +108,41 @@ const ProductManager = () => {
   const removeImageFromSet = (colorIndex, imageIndex) => { const newVariants = [...formData.variants]; if(newVariants[colorIndex].imageSet.length > 1) { newVariants[colorIndex].imageSet.splice(imageIndex, 1); if (!newVariants[colorIndex].imageSet.some(img => img.isPrimary)) { newVariants[colorIndex].imageSet[0].isPrimary = true; } setFormData(prev => ({ ...prev, variants: newVariants })); } };
   const setPrimaryImage = (colorIndex, imageIndex) => { const newVariants = [...formData.variants]; newVariants[colorIndex].imageSet.forEach((img, idx) => { img.isPrimary = idx === imageIndex; }); setFormData(prev => ({ ...prev, variants: newVariants })); };
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = formData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setFormData(prev => ({ ...prev, variants: newVariants })); };
-
+  
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.productType) { toast({ title: "Validation Error", description: "Product Name and Type are required.", status: "error" }); return; }
+    
+    // === THE FIX IS HERE: Add validation for image URLs before saving ===
+    for (const variant of formData.variants) {
+        for (const image of variant.imageSet) {
+            if (!image.url || image.url.trim() === '') {
+                toast({
+                    title: "Image URL Missing",
+                    description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`,
+                    status: "error",
+                    duration: 5000,
+                    isClosable: true,
+                });
+                return;
+            }
+        }
+    }
+    
     if (formData.variants.length > 0 && !formData.variants.some(v => v.isDefaultDisplay)) { formData.variants[0].isDefaultDisplay = true; }
     for (const variant of formData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `Size "${size.size}" for color "${variant.colorName}" is in stock but has no SKU.`, status: "error" }); return; } } }
+    
     const method = isEditing ? 'put' : 'post';
     const url = isEditing ? `/admin/products/${selectedProduct._id}` : '/admin/products';
     const payload = { ...formData, tags: (formData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
-    try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onClose(); } 
-    catch (err) { toast({ title: `Error ${isEditing ? 'Saving' : 'Creating'} Product`, description: err.response?.data?.message, status: "error" }); }
+    
+    try { 
+        await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); 
+        toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, status: "success" }); 
+        fetchProducts(); 
+        onClose(); 
+    } catch (err) { 
+        toast({ title: `Error ${isEditing ? 'Saving' : 'Creating'} Product`, description: err.response?.data?.message, status: "error" }); 
+    }
   };
   
   const handleOpenDeleteDialog = (product) => { setSelectedProduct(product); onDeleteOpen(); };
@@ -146,7 +165,10 @@ const ProductManager = () => {
                 <Td>${p.basePrice?.toFixed(2)}</Td>
                 <Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td>
                 <Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
-                <Td><Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" onClick={() => handleOpenModal(p)}/></Tooltip><Tooltip label="Delete"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip></Td>
+                <Td>
+                  <Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" onClick={() => handleOpenModal(p)}/></Tooltip>
+                  <Tooltip label="Delete"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip>
+                </Td>
               </Tr>
             ))}
           </Tbody>
@@ -159,26 +181,25 @@ const ProductManager = () => {
           <ModalBody pb={6}>
             {isModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
-                <Box p={4} borderWidth="1px" borderRadius="md"><Heading size="sm" mb={4}>Product Details</Heading><SimpleGrid columns={{base: 1, md: 2}} spacing={4}><FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange}/></FormControl><FormControl isRequired><FormLabel>Product Type</FormLabel><Select name="productType" value={formData.productType} onChange={handleFormChange} placeholder="Select type">{productTypes.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}</Select></FormControl><FormControl isRequired><FormLabel>Base Price ($)</FormLabel><NumberInput value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}><NumberInputField/><NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper></NumberInput></FormControl><FormControl><FormLabel>Tags</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange}/></FormControl></SimpleGrid><FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange}/></FormControl><FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={formData.isActive} onChange={handleFormChange}/></FormControl></Box>
+                <Box p={4} borderWidth="1px" borderRadius="md"><Heading size="sm" mb={4}>Product Details</Heading><SimpleGrid columns={{base: 1, md: 2}} spacing={4}><FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange}/></FormControl><FormControl isRequired><FormLabel>Product Type</FormLabel><Select name="productType" value={formData.productType} onChange={handleFormChange} placeholder="Select type">{productTypes.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}</Select></FormControl><FormControl isRequired><FormLabel>Base Price ($)</FormLabel><NumberInput value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}><NumberInputField/><NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper></NumberInput></FormControl><FormControl><FormLabel>Tags (comma-separated)</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange}/></FormControl></SimpleGrid><FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange}/></FormControl><FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={formData.isActive} onChange={handleFormChange}/></FormControl></Box>
                 <Box p={4} borderWidth="1px" borderRadius="md">
                     <Heading size="sm" mb={4}>Product Variants</Heading>
                     <RadioGroup onChange={(val) => setDefaultVariant(parseInt(val))} value={formData.variants.findIndex(v => v.isDefaultDisplay)?.toString() ?? "-1"}>
                       <VStack spacing={4} align="stretch">
                         {(formData.variants || []).map((variant, colorIndex) => (
-                          <Accordion key={colorIndex} defaultIndex={isEditing ? undefined : [0]} allowToggle borderWidth="1px" borderRadius="md" bg="gray.50">
+                          (variant && variant.sizes) ? // Defensive check to prevent crash on bad data
+                          <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="gray.50">
                             <AccordionItem border="none">
                               <Flex align="center" p={2}>
                                 <Radio value={colorIndex.toString()} mr={3} colorScheme="yellow"/>
-                                <Tooltip label="This is the default color shown on the main Shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "yellow.400" : "gray.300"} mr={2}/></Tooltip>
-                                <AccordionButton>
-                                  <HStack flex="1" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="gray.300"/><Text fontWeight="bold">{variant.colorName}</Text></HStack><AccordionIcon />
-                                </AccordionButton>
+                                <Tooltip label="Set as default display for shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "yellow.400" : "gray.300"} mr={2}/></Tooltip>
+                                <AccordionButton flex="1"><HStack w="full" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="gray.300"/><Text fontWeight="bold">{variant.colorName}</Text></HStack></AccordionButton>
                                 <CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
                               <AccordionPanel bg="white" pb={4}>
-                                <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={e => {/* update logic */}} /></FormControl>
+                                <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={e => {/* TODO: update logic */}} /></FormControl>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
-                                <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary).toString() ?? "-1"}>
+                                <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
                                     <VStack align="stretch" spacing={2}>{variant.imageSet?.map((img, imgIndex) => (<HStack key={imgIndex}><Radio value={imgIndex.toString()} colorScheme="green"/><Input size="sm" placeholder="https://image.url/shirt.png" value={img.url} onChange={(e) => handleImageSetUrlChange(colorIndex, imgIndex, e.target.value)} /><ChakraIconButton size="sm" icon={<Icon as={FaTrashAlt}/>} onClick={() => removeImageFromSet(colorIndex, imgIndex)} isDisabled={variant.imageSet.length <= 1} /></HStack>))}</VStack>
                                 </RadioGroup>
                                 <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
@@ -187,6 +208,7 @@ const ProductManager = () => {
                               </AccordionPanel>
                             </AccordionItem>
                           </Accordion>
+                          : <Alert status="warning"><AlertIcon/>Corrupted variant data. Please remove and re-add this color.</Alert>
                         ))}
                       </VStack>
                     </RadioGroup>
