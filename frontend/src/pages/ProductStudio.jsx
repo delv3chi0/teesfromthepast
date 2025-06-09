@@ -18,17 +18,14 @@ export default function ProductStudio() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [designsError, setDesignsError] = useState('');
   const [selectedDesign, setSelectedDesign] = useState(null);
-
   const [availableProductTypes, setAvailableProductTypes] = useState([]);
   const [loadingProductTypes, setLoadingProductTypes] = useState(true);
   const [productsOfType, setProductsOfType] = useState([]);
   const [loadingProductsOfType, setLoadingProductsOfType] = useState(false);
-
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [availableColors, setAvailableColors] = useState([]);
@@ -36,7 +33,6 @@ export default function ProductStudio() {
   const [availableSizes, setAvailableSizes] = useState([]);
   const [selectedProductSize, setSelectedProductSize] = useState('');
   const [selectedVariant, setSelectedVariant] = useState(null);
-
   const [showInfoAlert, setShowInfoAlert] = useState(false);
   const canvasEl = useRef(null);
   const fabricCanvas = useRef(null);
@@ -102,7 +98,7 @@ export default function ProductStudio() {
     if (!sizes.includes(selectedProductSize)) {
       setSelectedProductSize(sizes.length > 0 ? sizes[0] : '');
     }
-  }, [selectedProductColor, selectedProductId, productsOfType]);
+  }, [selectedProductColor, selectedProductId, productsOfType, selectedProductSize]);
 
   useEffect(() => {
     if (selectedProductId && selectedProductColor && selectedProductSize) {
@@ -111,7 +107,7 @@ export default function ProductStudio() {
       if (colorVariant) {
         const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
         if (sizeVariant) {
-          const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || (colorVariant.imageSet?.[0]) || { url: colorVariant.imageMockupFront };
+          const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || colorVariant.imageSet?.[0] || { url: colorVariant.imageMockupFront };
           setSelectedVariant({ ...sizeVariant, colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageMockupFront: primaryImage?.url });
         } else { setSelectedVariant(null); }
       } else { setSelectedVariant(null); }
@@ -146,12 +142,15 @@ export default function ProductStudio() {
           if (!designImg) return;
           designImg.scaleToWidth(CANVAS_WIDTH * 0.33);
           
-          // === THE FIX IS HERE: Replaced .center() with explicit positioning ===
-          // Center the image horizontally
-          designImg.centerH();
-          // Position it vertically, 20% from the top of the canvas
-          designImg.set({ top: CANVAS_HEIGHT * 0.20 });
+          // === THE FIX IS HERE: Manually calculating position for stability ===
+          const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) / 2;
+          const designTop = CANVAS_HEIGHT * 0.24; // Moved "down a smidge" from 20% to 24%
           
+          designImg.set({
+              top: designTop,
+              left: designLeft,
+          });
+
           FCanvas.add(designImg);
           FCanvas.renderAll();
         }, { crossOrigin: 'anonymous' });
