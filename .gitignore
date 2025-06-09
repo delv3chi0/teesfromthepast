@@ -1,0 +1,15 @@
+# Node
+node_modules/
+.env
+*.log
+
+# Ignore compressed files and backups
+*.tar.gz
+*.zip
+*.rar
+
+# Ignore environment files
+.env
+
+# Ignore node modules folder
+node_modules/
