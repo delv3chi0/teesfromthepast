@@ -10,7 +10,10 @@ import Product from '../models/Product.js';
 
 const getDashboardSummary = asyncHandler(async (req, res) => {
     const [totalSalesData, totalOrders, newUserCount, recentOrders] = await Promise.all([
-        Order.aggregate([ { $match: { paymentStatus: 'Succeeded' } }, { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } } ]),
+        Order.aggregate([
+            { $match: { paymentStatus: 'Succeeded' } },
+            { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
+        ]),
         Order.countDocuments({}),
         User.countDocuments({ createdAt: { $gte: new Date(new Date().setDate(new Date().getDate() - 7)) } }),
         Order.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'username email')
@@ -19,7 +22,6 @@ const getDashboardSummary = asyncHandler(async (req, res) => {
     res.json({ totalRevenue, totalOrders, newUserCount, recentOrders });
 });
 
-// --- USER MANAGEMENT CONTROLLERS ---
 const getAllUsersAdmin = asyncHandler(async (req, res) => {
     const users = await User.find({}).select('-password');
     res.json(users || []);
@@ -30,8 +32,24 @@ const getUserByIdAdmin = asyncHandler(async (req, res) => {
 });
 const updateUserAdmin = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id);
-    if (user) { user.username = req.body.username || user.username; user.email = req.body.email || user.email; user.firstName = req.body.firstName !== undefined ? req.body.firstName : user.firstName; user.lastName = req.body.lastName !== undefined ? req.body.lastName : user.lastName; if (req.body.isAdmin !== undefined) { if (req.user._id.toString() === user._id.toString() && user.isAdmin && req.body.isAdmin === false) { res.status(400); throw new Error('Admins cannot remove their own admin status.'); } user.isAdmin = req.body.isAdmin; } const updatedUser = await user.save(); const userToSend = { ...updatedUser.toObject() }; delete userToSend.password; res.json(userToSend);
-    } else { res.status(404); throw new Error('User not found'); }
+    if (user) {
+        user.username = req.body.username || user.username;
+        user.email = req.body.email || user.email;
+        user.firstName = req.body.firstName !== undefined ? req.body.firstName : user.firstName;
+        user.lastName = req.body.lastName !== undefined ? req.body.lastName : user.lastName;
+        if (req.body.isAdmin !== undefined) {
+            if (req.user._id.toString() === user._id.toString() && user.isAdmin && req.body.isAdmin === false) {
+                res.status(400); throw new Error('Admins cannot remove their own admin status.');
+            }
+            user.isAdmin = req.body.isAdmin;
+        }
+        const updatedUser = await user.save();
+        const userToSend = { ...updatedUser.toObject() };
+        delete userToSend.password;
+        res.json(userToSend);
+    } else {
+        res.status(404); throw new Error('User not found');
+    }
 });
 const deleteUserAdmin = asyncHandler(async (req, res) => {
     if (req.user._id.toString() === req.params.id) { res.status(400); throw new Error('Admins cannot delete their own account.'); }
@@ -39,7 +57,6 @@ const deleteUserAdmin = asyncHandler(async (req, res) => {
     if (user) { await User.deleteOne({ _id: user._id }); res.json({ message: 'User removed successfully' }); } else { res.status(404); throw new Error('User not found'); }
 });
 
-// --- ORDER MANAGEMENT CONTROLLERS ---
 const getAllOrdersAdmin = asyncHandler(async (req, res) => {
     const orders = await Order.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
     res.json(orders || []);
@@ -60,7 +77,6 @@ const updateOrderStatusAdmin = asyncHandler(async (req, res) => {
     if (order) { order.orderStatus = status; const updatedOrder = await order.save(); res.json(updatedOrder); } else { res.status(404); throw new Error('Order not found'); }
 });
 
-// --- DESIGN MANAGEMENT CONTROLLERS ---
 const getAllDesignsAdmin = asyncHandler(async (req, res) => {
     const designs = await Design.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
     res.json(designs || []);
@@ -71,7 +87,6 @@ const deleteDesignAdmin = asyncHandler(async (req, res) => {
     else { res.status(404); throw new Error('Design not found'); }
 });
 
-// --- PRODUCT CATEGORY MANAGEMENT ---
 const createProductCategoryAdmin = asyncHandler(async (req, res) => {
     const { name, description, isActive } = req.body;
     const categoryExists = await ProductCategory.findOne({ name });
@@ -119,7 +134,6 @@ const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     }
 });
 
-// --- PRODUCT TYPE MANAGEMENT ---
 const createProductTypeAdmin = asyncHandler(async (req, res) => {
     const { name, category: categoryId, description, isActive } = req.body;
     if (!mongoose.Types.ObjectId.isValid(categoryId)) { res.status(400); throw new Error('Invalid Product Category ID format.'); }
@@ -131,8 +145,6 @@ const createProductTypeAdmin = asyncHandler(async (req, res) => {
     const createdProductType = await productType.save();
     res.status(201).json(createdProductType);
 });
-
-// === THE FIX: Removed the .populate() to prevent server hanging ===
 const getProductTypesAdmin = asyncHandler(async (req, res) => {
     const productTypes = await ProductType.find({}).sort({ name: 1 }).lean();
     res.json(productTypes);
@@ -141,21 +153,105 @@ const getProductTypeByIdAdmin = asyncHandler(async (req, res) => {
     const productType = await ProductType.findById(req.params.id).populate('category', 'name description');
     if (productType) { res.json(productType); } else { res.status(404); throw new Error('Product type not found'); }
 });
-const updateProductTypeAdmin = asyncHandler(async (req, res) => { /* ... full function ... */ });
-const deleteProductTypeAdmin = asyncHandler(async (req, res) => { /* ... full function ... */ });
+const updateProductTypeAdmin = asyncHandler(async (req, res) => {
+    const { name, category: categoryId, description, isActive } = req.body;
+    const productType = await ProductType.findById(req.params.id);
+    if (productType) {
+        if (name && name !== productType.name) {
+            const typeExists = await ProductType.findOne({ name: name, _id: { $ne: req.params.id } });
+            if (typeExists) { res.status(400); throw new Error(`Product type name '${name}' already exists.`); }
+        }
+        productType.name = name || productType.name;
+        if (categoryId) {
+            if (!mongoose.Types.ObjectId.isValid(categoryId)) { res.status(400); throw new Error('Invalid Product Category ID format for update.'); }
+            const categoryExists = await ProductCategory.findById(categoryId);
+            if (!categoryExists) { res.status(400); throw new Error('Selected product category for update does not exist.'); }
+            productType.category = categoryId;
+        }
+        productType.description = description !== undefined ? description : productType.description;
+        productType.isActive = isActive !== undefined ? isActive : productType.isActive;
+        const updatedProductType = await productType.save();
+        await updatedProductType.populate('category', 'name');
+        res.json(updatedProductType);
+    } else {
+        res.status(404);
+        throw new Error('Product type not found');
+    }
+});
+const deleteProductTypeAdmin = asyncHandler(async (req, res) => {
+    const productType = await ProductType.findById(req.params.id);
+    if (productType) {
+        const productUsingType = await Product.findOne({ productType: req.params.id });
+        if (productUsingType) { res.status(400); throw new Error('Cannot delete type. It is currently in use by one or more products.'); }
+        await ProductType.deleteOne({ _id: req.params.id });
+        res.json({ message: 'Product type removed' });
+    } else {
+        res.status(404);
+        throw new Error('Product type not found');
+    }
+});
 
-// --- PRODUCT MANAGEMENT ---
-const createProductAdmin = asyncHandler(async (req, res) => { /* ... full function ... */ });
+const createProductAdmin = asyncHandler(async (req, res) => {
+    const { name, productType, description, basePrice, tags, isActive, variants } = req.body;
+    const productTypeExists = await ProductType.findById(productType);
+    if (!productTypeExists) { res.status(400); throw new Error('Selected product type does not exist.'); }
+    // Add validation for the new variant structure
+    if (variants) {
+        if (!Array.isArray(variants)) { res.status(400); throw new Error('Variants must be an array.'); }
+        if (variants.length > 0 && variants.filter(v => v.isDefaultDisplay).length !== 1) {
+            res.status(400); throw new Error('Exactly one variant must be marked as the default display.');
+        }
+    }
+    const product = new Product({ name, productType, description, basePrice, tags, isActive, variants });
+    const createdProduct = await product.save();
+    res.status(201).json(createdProduct);
+});
+
 const getProductsAdmin = asyncHandler(async (req, res) => {
     const products = await Product.find({}).select('-variants').sort({ name: 1 }).lean();
     res.json(products);
 });
+
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id).populate({ path: 'productType', select: 'name' });
     if (product) { res.json(product); } else { res.status(404); throw new Error('Product not found'); }
 });
-const updateProductAdmin = asyncHandler(async (req, res) => { /* ... full function ... */ });
-const deleteProductAdmin = asyncHandler(async (req, res) => { /* ... full function ... */ });
+
+const updateProductAdmin = asyncHandler(async (req, res) => {
+    const { name, productType, description, basePrice, tags, isActive, variants } = req.body;
+    const product = await Product.findById(req.params.id);
+    if (product) {
+        if (variants) {
+            if (!Array.isArray(variants)) { res.status(400); throw new Error('Variants must be an array.'); }
+            if (variants.length > 0 && variants.filter(v => v.isDefaultDisplay).length !== 1) {
+                res.status(400); throw new Error('Exactly one variant must be marked as the default display.');
+            }
+        }
+        product.name = name;
+        product.productType = productType;
+        product.description = description;
+        product.basePrice = basePrice;
+        product.tags = tags;
+        product.isActive = isActive;
+        product.variants = variants;
+        const updatedProduct = await product.save();
+        res.json(updatedProduct);
+    } else {
+        res.status(404);
+        throw new Error('Product not found');
+    }
+});
+
+const deleteProductAdmin = asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id);
+    if (product) {
+        await Product.deleteOne({ _id: req.params.id });
+        res.json({ message: 'Product removed' });
+    } else {
+        res.status(404);
+        throw new Error('Product not found');
+    }
+});
 
 export {
     getDashboardSummary, getAllUsersAdmin, getUserByIdAdmin, updateUserAdmin, deleteUserAdmin,
