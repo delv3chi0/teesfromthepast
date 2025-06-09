@@ -10,8 +10,8 @@ import RegistrationPage from './pages/RegistrationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import ContactPage from './pages/ContactPage';
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage'; // Added
-import TermsOfServicePage from './pages/TermsOfServicePage'; // Added
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 
 // Main Application Layout and Pages
 import MainLayout from './components/MainLayout';
@@ -25,6 +25,10 @@ import CheckoutPage from './pages/CheckoutPage';
 import PaymentSuccessPage from './pages/PaymentSuccessPage';
 import MyOrdersPage from './pages/MyOrdersPage';
 
+// === NEW: Import the new Shop and Product Detail pages ===
+import ShopPage from './pages/ShopPage';
+import ProductDetailPage from './pages/ProductDetailPage';
+
 // Route Protection and Admin Area
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
@@ -36,62 +40,38 @@ export default function App() {
       <AuthProvider>
         <Routes>
           {/* Public routes */}
-          <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} /> {/* Ensures this route is present */}
-          <Route path="/terms-of-service" element={<TermsOfServicePage />} /> {/* Ensures this route is present */}
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+          
+          {/* Default public route */}
+          <Route path="/" element={<Navigate to="/shop" replace />} />
 
 
           {/* Protected Routes */}
-          <Route
-            path="/dashboard"
-            element={<PrivateRoute><MainLayout><Dashboard/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/generate"
-            element={<PrivateRoute><MainLayout><Generate/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/my-designs"
-            element={<PrivateRoute><MainLayout><MyDesigns/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/product-studio"
-            element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/vote-now"
-            element={<PrivateRoute><MainLayout><VotingPage/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/profile"
-            element={<PrivateRoute><MainLayout><Profile/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/checkout"
-            element={<PrivateRoute><MainLayout><CheckoutPage/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/payment-success"
-            element={<PrivateRoute><MainLayout><PaymentSuccessPage/></MainLayout></PrivateRoute>}
-          />
-          <Route
-            path="/my-orders"
-            element={<PrivateRoute><MainLayout><MyOrdersPage/></MainLayout></PrivateRoute>}
-          />
+          {/* === NEW: Add the /shop and /product/:slug routes === */}
+          <Route path="/shop" element={<PrivateRoute><MainLayout><ShopPage/></MainLayout></PrivateRoute>} />
+          <Route path="/product/:slug" element={<PrivateRoute><MainLayout><ProductDetailPage/></MainLayout></PrivateRoute>} />
+
+          <Route path="/dashboard" element={<PrivateRoute><MainLayout><Dashboard/></MainLayout></PrivateRoute>} />
+          <Route path="/generate" element={<PrivateRoute><MainLayout><Generate/></MainLayout></PrivateRoute>} />
+          <Route path="/my-designs" element={<PrivateRoute><MainLayout><MyDesigns/></MainLayout></PrivateRoute>} />
+          <Route path="/product-studio" element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>} />
+          <Route path="/vote-now" element={<PrivateRoute><MainLayout><VotingPage/></MainLayout></PrivateRoute>} />
+          <Route path="/profile" element={<PrivateRoute><MainLayout><Profile/></MainLayout></PrivateRoute>} />
+          <Route path="/checkout" element={<PrivateRoute><MainLayout><CheckoutPage/></MainLayout></PrivateRoute>} />
+          <Route path="/payment-success" element={<PrivateRoute><MainLayout><PaymentSuccessPage/></MainLayout></PrivateRoute>} />
+          <Route path="/my-orders" element={<PrivateRoute><MainLayout><MyOrdersPage/></MainLayout></PrivateRoute>} />
 
           {/* ADMIN ROUTE */}
-          <Route
-            path="/admin"
-            element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>}
-          />
+          <Route path="/admin" element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>} />
           
           {/* Fallback route */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/shop" replace />} />
         </Routes>
       </AuthProvider>
     </ChakraProvider>

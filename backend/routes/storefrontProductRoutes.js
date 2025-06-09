@@ -15,10 +15,10 @@ router.route('/product-types').get(getActiveProductTypes);
 // GET active products for a given product type ID (used by Product Studio)
 router.route('/products/type/:productTypeId').get(getActiveProductsByType);
 
-// === NEW: GET all products grouped by category for the main Shop page ===
-router.route('/products/shop').get(getShopData);
+// GET all products grouped by category for the main Shop page
+router.route('/shop-data').get(getShopData);
 
-// === NEW: GET a single product by its SEO-friendly slug for the Detail page ===
+// GET a single product by its SEO-friendly slug for the Detail page
 router.route('/products/slug/:slug').get(getProductBySlug);
 
 export default router;
