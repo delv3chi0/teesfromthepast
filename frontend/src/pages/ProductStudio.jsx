@@ -78,7 +78,11 @@ export default function ProductStudio() {
     if (currentProduct?.variants) {
       const uniqueColors = currentProduct.variants.reduce((acc, v) => { if (!acc.find(c => c.value === v.colorName)) { acc.push({ value: v.colorName, label: v.colorName, hex: v.colorHex }); } return acc; }, []);
       setAvailableColors(uniqueColors);
-      if (uniqueColors.length === 0) setSelectedProductColor('');
+      if (uniqueColors.length > 0 && (!selectedProductColor || !uniqueColors.find(c => c.value === selectedProductColor))) {
+        setSelectedProductColor(uniqueColors[0].value);
+      } else if (uniqueColors.length === 0) {
+        setSelectedProductColor('');
+      }
     } else {
       setAvailableColors([]); setSelectedProductColor('');
     }
@@ -95,8 +99,10 @@ export default function ProductStudio() {
       }
     }
     setAvailableSizes(sizes.map(s => ({ value: s, label: s })));
-    if (!sizes.includes(selectedProductSize)) setSelectedProductSize('');
-  }, [selectedProductColor, selectedProductId, productsOfType, selectedProductSize]);
+    if (!sizes.includes(selectedProductSize)) {
+      setSelectedProductSize(sizes.length > 0 ? sizes[0] : '');
+    }
+  }, [selectedProductColor, selectedProductId, productsOfType]);
 
   useEffect(() => {
     if (selectedProductId && selectedProductColor && selectedProductSize) {
@@ -105,8 +111,7 @@ export default function ProductStudio() {
       if (colorVariant) {
         const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
         if (sizeVariant) {
-          // Find the primary image from the imageSet, or fall back to the first image.
-          const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || colorVariant.imageSet?.[0];
+          const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || (colorVariant.imageSet?.[0]) || { url: colorVariant.imageMockupFront };
           setSelectedVariant({ ...sizeVariant, colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageMockupFront: primaryImage?.url });
         } else { setSelectedVariant(null); }
       } else { setSelectedVariant(null); }
@@ -124,7 +129,6 @@ export default function ProductStudio() {
       if (!FCanvas) return;
       FCanvas.clear();
       
-      // === THE FIX IS HERE: It now uses the `imageMockupFront` property we created in the variant selection logic ===
       const mockupSrc = selectedVariant?.imageMockupFront;
 
       if (mockupSrc) {
@@ -141,8 +145,14 @@ export default function ProductStudio() {
         fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
           if (!designImg) return;
           designImg.scaleToWidth(CANVAS_WIDTH * 0.33);
+          
+          // === THE FIX IS HERE: Replaced .center() with explicit positioning ===
+          // Center the image horizontally
+          designImg.centerH();
+          // Position it vertically, 20% from the top of the canvas
+          designImg.set({ top: CANVAS_HEIGHT * 0.20 });
+          
           FCanvas.add(designImg);
-          designImg.center();
           FCanvas.renderAll();
         }, { crossOrigin: 'anonymous' });
       }
@@ -154,7 +164,8 @@ export default function ProductStudio() {
   const handleProceedToCheckout = () => {
     if (!selectedDesign) { toast({ title: "Please select a design.", status: "warning" }); return; }
     if (!selectedVariant) { toast({ title: "Please select all product options.", status: "warning" }); return; }
-    const checkoutItem = { designId: selectedDesign._id, productId: selectedProductId, variantSku: selectedVariant.sku, /* ...other details */ };
+    const product = productsOfType.find(p => p._id === selectedProductId);
+    const checkoutItem = { designId: selectedDesign._id, productId: selectedProductId, productName: product.name, variantSku: selectedVariant.sku, size: selectedVariant.size, color: selectedVariant.colorName, prompt: selectedDesign.prompt, imageDataUrl: selectedDesign.imageDataUrl, productImage: selectedVariant.imageMockupFront };
     localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
     navigate('/checkout');
   };
@@ -170,7 +181,7 @@ export default function ProductStudio() {
       <VStack spacing={6} align="stretch">
         <Heading>Customize Your Apparel!</Heading>
         {showInfoAlert && ( <Alert status="info" borderRadius="md"><AlertIcon /><Box>Want a new design? <ChakraLink as={RouterLink} to="/generate" fontWeight="bold">Create it in the AI Generator first!</ChakraLink></Box><ChakraCloseButton onClick={handleDismissInfoAlert} /></Alert> )}
-        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg"><Heading as="h2" size="lg" mb={6}>1. Choose Your Apparel</Heading><SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}><VStack align="stretch"><Text>Product Type:</Text><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder="Select Type" isDisabled={loadingProductTypes}>{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></VStack><VStack align="stretch"><Text>Specific Product:</Text><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType}>{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></VStack><VStack align="stretch"><Text>Color:</Text><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></VStack><VStack align="stretch"><Text>Size:</Text><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor}>{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></VStack></SimpleGrid></Box>
+        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg"><Heading as="h2" size="lg" mb={6}>1. Choose Your Apparel</Heading><SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}><VStack align="stretch"><Text>Product Type:</Text><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes}>{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></VStack><VStack align="stretch"><Text>Specific Product:</Text><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType}>{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></VStack><VStack align="stretch"><Text>Color:</Text><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></VStack><VStack align="stretch"><Text>Size:</Text><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor}>{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></VStack></SimpleGrid></Box>
         <Divider />
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg"><Heading as="h2" size="lg" mb={6}>2. Choose Your Saved Design</Heading>{loadingDesigns ? <Spinner /> : !designs.length ? <Text>You have no saved designs.</Text> : (<SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={4}>{designs.map(design => (<Box key={design._id} borderWidth="2px" borderRadius="md" onClick={() => setSelectedDesign(design)} cursor="pointer" borderColor={selectedDesign?._id === design._id ? "brand.accentYellow" : "transparent"}><Image src={design.imageDataUrl} fallbackSrc="https://via.placeholder.com/150" /></Box>))}</SimpleGrid>)}</Box>
         <Divider />
