@@ -4,115 +4,98 @@ import ProductType from '../models/ProductType.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 
-
-// @desc    Get all active product types that have active products
-// @route   GET /api/storefront/product-types
-// @access  Public
 const getActiveProductTypes = asyncHandler(async (req, res) => {
-  // This function is fine, no changes needed.
   const activeTypes = await ProductType.find({ isActive: true }).lean();
-  if (!activeTypes.length) {
-    return res.json([]);
-  }
+  if (!activeTypes.length) { return res.json([]); }
   const typesWithProducts = [];
   for (const type of activeTypes) {
-    const count = await Product.countDocuments({
-      productType: type._id,
-      isActive: true,
-      'variants.0': { $exists: true }
-    });
-    if (count > 0) {
-      typesWithProducts.push({ _id: type._id, name: type.name });
-    }
+    const count = await Product.countDocuments({ productType: type._id, isActive: true, 'variants.0': { $exists: true } });
+    if (count > 0) { typesWithProducts.push({ _id: type._id, name: type.name }); }
   }
   res.json(typesWithProducts);
 });
 
-
-// @desc    Get active products for a given product type ID, with their active variants
-// @route   GET /api/storefront/products/type/:productTypeId
-// @access  Public
 const getActiveProductsByType = asyncHandler(async (req, res) => {
   const { productTypeId } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
-    res.status(400);
-    throw new Error('Invalid Product Type ID.');
-  }
-
-  // The initial query is fine.
-  const products = await Product.find({
-    productType: productTypeId,
-    isActive: true,
-    'variants.0': { $exists: true }
-  })
-  .select('name description basePrice variants productType')
-  .lean();
-
-  if (!products.length) {
-    return res.json([]);
-  }
-  
-  // ==================== MODIFICATION START ====================
-  // This block is now updated to handle both NEW and OLD variant structures.
-
+  if (!mongoose.Types.ObjectId.isValid(productTypeId)) { res.status(400); throw new Error('Invalid Product Type ID.'); }
+  const products = await Product.find({ productType: productTypeId, isActive: true, 'variants.0': { $exists: true } }).select('name description basePrice variants productType').lean();
+  if (!products.length) { return res.json([]); }
   const productsWithCleanedVariants = products.map(product => {
-    if (!product.variants || product.variants.length === 0) {
-      return { ...product, variants: [] };
-    }
-
-    // Check the format of the FIRST variant to decide which logic to use.
+    if (!product.variants || product.variants.length === 0) { return { ...product, variants: [] }; }
     const isNewFormat = product.variants[0].sizes !== undefined;
-
     if (isNewFormat) {
-      // NEW FORMAT: Process nested variants
       const newFormatVariants = product.variants.map(colorVariant => {
-        // For each color, only include sizes that are marked as inStock.
-        const availableSizes = colorVariant.sizes
-          .filter(size => size.inStock)
-          .map(size => ({ // Select only the fields safe to send to the public
-            size: size.size,
-            sku: size.sku,
-            priceModifier: size.priceModifier,
-          }));
-        
-        // Only include this color if it has at least one size available
+        const availableSizes = colorVariant.sizes.filter(size => size.inStock).map(size => ({ size: size.size, sku: size.sku, priceModifier: size.priceModifier }));
         if (availableSizes.length > 0) {
           return {
             colorName: colorVariant.colorName,
             colorHex: colorVariant.colorHex,
-            imageMockupFront: colorVariant.imageMockupFront,
-            imageMockupBack: colorVariant.imageMockupBack,
-            sizes: availableSizes // Send the filtered, nested sizes array
+            imageSet: colorVariant.imageSet, // Send the full imageSet
+            sizes: availableSizes
           };
         }
-        return null; // Return null for colors with no available sizes
-      }).filter(Boolean); // Filter out any null entries
-
+        return null;
+      }).filter(Boolean);
       return { ...product, variants: newFormatVariants };
-
     } else {
-      // OLD FORMAT: Gracefully handle flat variants, only sending what's in stock.
-      const oldFormatVariants = product.variants
-        .filter(variant => variant.stock > 0) // Only send variants with stock > 0
-        .map(variant => ({ // Selectively map the fields to ensure consistency
-          sku: variant.sku,
-          colorName: variant.colorName,
-          colorHex: variant.colorHex,
-          size: variant.size,
-          priceModifier: variant.priceModifier,
-          imageMockupFront: variant.imageMockupFront,
-          imageMockupBack: variant.imageMockupBack,
-        }));
-      
+      const oldFormatVariants = product.variants.filter(variant => variant.stock > 0).map(variant => ({ sku: variant.sku, colorName: variant.colorName, colorHex: variant.colorHex, size: variant.size, priceModifier: variant.priceModifier, imageMockupFront: variant.imageMockupFront }));
       return { ...product, variants: oldFormatVariants };
     }
   });
-  // ==================== MODIFICATION END ====================
-
   res.json(productsWithCleanedVariants);
+});
+
+// === NEW FUNCTION for the main shop page ===
+const getShopData = asyncHandler(async (req, res) => {
+    const products = await Product.aggregate([
+        { $match: { isActive: true, 'variants.0': { $exists: true } } },
+        { $unwind: '$variants' },
+        { $match: { 'variants.isDefaultDisplay': true, 'variants.sizes': { $elemMatch: { inStock: true } } } },
+        {
+            $project: {
+                name: 1,
+                slug: 1,
+                basePrice: 1,
+                productType: 1,
+                defaultImage: {
+                    $let: {
+                        vars: { primaryImage: { $arrayElemAt: [ { $filter: { input: '$variants.imageSet', as: 'image', cond: { $eq: ['$$image.isPrimary', true] } } }, 0] } },
+                        in: '$$primaryImage.url'
+                    }
+                }
+            }
+        },
+        { $group: { _id: '$productType', products: { $push: '$$ROOT' } } },
+        { $lookup: { from: 'producttypes', localField: '_id', foreignField: '_id', as: 'categoryInfo' } },
+        { $unwind: '$categoryInfo' },
+        { $match: { 'categoryInfo.isActive': true } },
+        { $project: { _id: 0, categoryName: '$categoryInfo.name', categoryId: '$categoryInfo._id', products: 1 } },
+        { $sort: { categoryName: 1 } }
+    ]);
+    res.json(products);
+});
+
+// === NEW FUNCTION for the product detail page ===
+const getProductBySlug = asyncHandler(async (req, res) => {
+    const product = await Product.findOne({ slug: req.params.slug, isActive: true }).lean();
+    if (!product) {
+        res.status(404);
+        throw new Error('Product not found');
+    }
+    // Filter out-of-stock sizes before sending to frontend
+    product.variants.forEach(colorVariant => {
+        if (colorVariant.sizes && Array.isArray(colorVariant.sizes)) {
+            colorVariant.sizes = colorVariant.sizes.filter(size => size.inStock);
+        }
+    });
+    // Filter out colors that have no available sizes
+    product.variants = product.variants.filter(colorVariant => colorVariant.sizes && colorVariant.sizes.length > 0);
+    res.json(product);
 });
 
 export {
   getActiveProductTypes,
   getActiveProductsByType,
+  getShopData,
+  getProductBySlug,
 };

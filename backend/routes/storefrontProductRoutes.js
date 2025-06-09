@@ -2,21 +2,23 @@
 import express from 'express';
 import {
     getActiveProductTypes,
-    getActiveProductsByType
+    getActiveProductsByType,
+    getShopData,
+    getProductBySlug
 } from '../controllers/storefrontProductController.js';
 
 const router = express.Router();
 
-// @desc    Get all active product types that have active products
-// @route   GET /api/storefront/product-types
-// @access  Public
+// GET all active product types that have active products
 router.route('/product-types').get(getActiveProductTypes);
 
-// @desc    Get active products for a given product type ID
-// @route   GET /api/storefront/products/type/:productTypeId
-// @access  Public
+// GET active products for a given product type ID (used by Product Studio)
 router.route('/products/type/:productTypeId').get(getActiveProductsByType);
 
-// Future: you might add GET /api/storefront/products/:productIdOrSku for a direct product view page
+// === NEW: GET all products grouped by category for the main Shop page ===
+router.route('/products/shop').get(getShopData);
+
+// === NEW: GET a single product by its SEO-friendly slug for the Detail page ===
+router.route('/products/slug/:slug').get(getProductBySlug);
 
 export default router;
