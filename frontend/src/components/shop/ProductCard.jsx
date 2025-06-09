@@ -7,7 +7,7 @@ const ProductCard = ({ product }) => {
   if (!product) {
     return (
       <Box>
-        <Skeleton height="250px" />
+        <Skeleton height="220px" />
         <Skeleton height="20px" mt="4" />
         <Skeleton height="20px" mt="2" />
       </Box>
@@ -31,14 +31,20 @@ const ProductCard = ({ product }) => {
         alt={`Image of ${product.name}`}
         objectFit="cover"
         w="100%"
-        h="250px"
-        fallback={<Skeleton height="250px" />}
+        h="220px" // Made image smaller
+        fallback={<Skeleton height="220px" />}
+        htmlWidth="400" // Provide hints to browser for better quality
+        htmlHeight="400"
       />
-      <Box p="6">
-        <Heading as="h3" size="md" fontWeight="semibold" noOfLines={1}>
+      <Box p="4"> {/* Reduced padding */}
+        <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name}>
           {product.name}
         </Heading>
-        <Text mt={2} fontSize="lg" color="brand.textSlightlyDark">
+        {/* Added description */}
+        <Text fontSize="sm" color="gray.500" mt={1} noOfLines={2}>
+          {product.description}
+        </Text>
+        <Text mt={2} fontSize="lg" color="brand.textDark" fontWeight="bold">
           ${product.basePrice.toFixed(2)}
         </Text>
       </Box>
