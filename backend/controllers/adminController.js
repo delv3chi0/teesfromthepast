@@ -10,10 +10,7 @@ import Product from '../models/Product.js';
 
 const getDashboardSummary = asyncHandler(async (req, res) => {
     const [totalSalesData, totalOrders, newUserCount, recentOrders] = await Promise.all([
-        Order.aggregate([
-            { $match: { paymentStatus: 'Succeeded' } },
-            { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } }
-        ]),
+        Order.aggregate([ { $match: { paymentStatus: 'Succeeded' } }, { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } } ]),
         Order.countDocuments({}),
         User.countDocuments({ createdAt: { $gte: new Date(new Date().setDate(new Date().getDate() - 7)) } }),
         Order.find({}).sort({ createdAt: -1 }).limit(5).populate('user', 'username email')
@@ -32,24 +29,8 @@ const getUserByIdAdmin = asyncHandler(async (req, res) => {
 });
 const updateUserAdmin = asyncHandler(async (req, res) => {
     const user = await User.findById(req.params.id);
-    if (user) {
-        user.username = req.body.username || user.username;
-        user.email = req.body.email || user.email;
-        user.firstName = req.body.firstName !== undefined ? req.body.firstName : user.firstName;
-        user.lastName = req.body.lastName !== undefined ? req.body.lastName : user.lastName;
-        if (req.body.isAdmin !== undefined) {
-            if (req.user._id.toString() === user._id.toString() && user.isAdmin && req.body.isAdmin === false) {
-                res.status(400); throw new Error('Admins cannot remove their own admin status.');
-            }
-            user.isAdmin = req.body.isAdmin;
-        }
-        const updatedUser = await user.save();
-        const userToSend = { ...updatedUser.toObject() };
-        delete userToSend.password;
-        res.json(userToSend);
-    } else {
-        res.status(404); throw new Error('User not found');
-    }
+    if (user) { user.username = req.body.username || user.username; user.email = req.body.email || user.email; user.firstName = req.body.firstName !== undefined ? req.body.firstName : user.firstName; user.lastName = req.body.lastName !== undefined ? req.body.lastName : user.lastName; if (req.body.isAdmin !== undefined) { if (req.user._id.toString() === user._id.toString() && user.isAdmin && req.body.isAdmin === false) { res.status(400); throw new Error('Admins cannot remove their own admin status.'); } user.isAdmin = req.body.isAdmin; } const updatedUser = await user.save(); const userToSend = { ...updatedUser.toObject() }; delete userToSend.password; res.json(userToSend);
+    } else { res.status(404); throw new Error('User not found'); }
 });
 const deleteUserAdmin = asyncHandler(async (req, res) => {
     if (req.user._id.toString() === req.params.id) { res.status(400); throw new Error('Admins cannot delete their own account.'); }
@@ -193,9 +174,9 @@ const deleteProductTypeAdmin = asyncHandler(async (req, res) => {
 
 const createProductAdmin = asyncHandler(async (req, res) => {
     const { name, productType, description, basePrice, tags, isActive, variants } = req.body;
+    if (!productType) { res.status(400); throw new Error('Product type is required.'); }
     const productTypeExists = await ProductType.findById(productType);
     if (!productTypeExists) { res.status(400); throw new Error('Selected product type does not exist.'); }
-    // Add validation for the new variant structure
     if (variants) {
         if (!Array.isArray(variants)) { res.status(400); throw new Error('Variants must be an array.'); }
         if (variants.length > 0 && variants.filter(v => v.isDefaultDisplay).length !== 1) {
