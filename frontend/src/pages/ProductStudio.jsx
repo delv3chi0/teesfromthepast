@@ -75,21 +75,19 @@ export default function ProductStudio() {
     client.get(`/storefront/products/type/${selectedProductTypeId}`)
       .then(res => {
           setProductsOfType(res.data || []);
-          // If a product was pre-selected, it should now be in the list.
-          // The other useEffects will take over from here.
       })
       .finally(() => setLoadingProductsOfType(false));
   }, [selectedProductTypeId]);
 
   useEffect(() => {
-    if (!selectedProductId || productsOfType.length === 0) { setAvailableColors([]); return; }
+    if (!selectedProductId) { setAvailableColors([]); return; }
     const product = productsOfType.find(p => p._id === selectedProductId);
-    const colors = product?.variants.map(v => ({ value: v.colorName, label: v.colorName, hex: v.colorHex })) || [];
+    const colors = product?.variants.map(v => ({ value: v.colorName, label: v.colorName })) || [];
     setAvailableColors(colors);
   }, [selectedProductId, productsOfType]);
 
   useEffect(() => {
-    if (!selectedProductColor || !selectedProductId || productsOfType.length === 0) { setAvailableSizes([]); return; }
+    if (!selectedProductColor) { setAvailableSizes([]); return; }
     const product = productsOfType.find(p => p._id === selectedProductId);
     const colorVariant = product?.variants.find(v => v.colorName === selectedProductColor);
     const sizes = colorVariant?.sizes.map(s => s.size) || [];
@@ -104,8 +102,6 @@ export default function ProductStudio() {
       if (sizeVariant && colorVariant) {
         const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || colorVariant.imageSet?.[0] || { url: '' };
         setSelectedVariant({ ...sizeVariant, colorName: colorVariant.colorName, imageMockupFront: primaryImage?.url });
-      } else {
-        setSelectedVariant(null);
       }
     } else {
       setSelectedVariant(null);
@@ -119,16 +115,13 @@ export default function ProductStudio() {
         if (!FCanvas) return;
         FCanvas.clear();
         FCanvas.setBackgroundColor('#f0f0f0', FCanvas.renderAll.bind(FCanvas));
-
         const mockupSrc = selectedVariant?.imageMockupFront;
         if (mockupSrc) {
             fabricInstance.Image.fromURL(mockupSrc, (img) => { FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), { scaleX: FCanvas.width / img.width, scaleY: FCanvas.height / img.height }); }, { crossOrigin: 'anonymous' });
         }
         if (selectedDesign?.imageDataUrl) {
-            // Remove previous design if it exists
             const existingDesign = FCanvas.getObjects('image')[0];
             if(existingDesign) FCanvas.remove(existingDesign);
-
             fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                 if(!img) return;
                 img.scaleToWidth(CANVAS_WIDTH * 0.33);
@@ -156,20 +149,18 @@ export default function ProductStudio() {
   const handleSizeChange = (e) => { setSelectedProductSize(e.target.value); };
 
   return (
-    <Box maxW="container.xl" mx="auto" p={4}>
+    <Box maxW="container.xl" mx="auto" p={0}>
       <VStack spacing={6} align="stretch">
-        <Heading as="h1" size="pageTitle" textAlign="left" w="100%" color="brand.textDark">Customize Your Apparel</Heading>
+        <Heading as="h1" size="pageTitle" textAlign="left" w="100%" color="brand.textDark">Customize Apparel</Heading>
         {showInfoAlert && ( <Alert status="info" borderRadius="md"><AlertIcon /><Box>Want a new design? <ChakraLink as={RouterLink} to="/generate" fontWeight="bold">Create it in the AI Generator first!</ChakraLink></Box><ChakraCloseButton onClick={handleDismissInfoAlert} /></Alert> )}
         
-        {/* === THE UI REFACTOR STARTS HERE === */}
-
         <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg" bg="brand.paper">
             <Heading as="h2" size="lg" mb={6} color="brand.textDark">1. Choose Your Apparel</Heading>
             <SimpleGrid columns={{ base: 1, md: 2, lg:4 }} spacing={6}>
-                <VStack align="stretch"><Text fontWeight="medium">Product Type:</Text><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes}>{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></VStack>
-                <VStack align="stretch"><Text fontWeight="medium">Specific Product:</Text><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType}>{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></VStack>
-                <VStack align="stretch"><Text fontWeight="medium">Color:</Text><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></VStack>
-                <VStack align="stretch"><Text fontWeight="medium">Size:</Text><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor}>{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></VStack>
+                <VStack align="stretch"><Text fontWeight="medium">Product Type:</Text><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes} bg="white">{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></VStack>
+                <VStack align="stretch"><Text fontWeight="medium">Specific Product:</Text><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType} bg="white">{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></VStack>
+                <VStack align="stretch"><Text fontWeight="medium">Color:</Text><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId} bg="white">{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></VStack>
+                <VStack align="stretch"><Text fontWeight="medium">Size:</Text><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor} bg="white">{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></VStack>
             </SimpleGrid>
         </Box>
 
