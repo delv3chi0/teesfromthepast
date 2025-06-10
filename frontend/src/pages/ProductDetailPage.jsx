@@ -7,7 +7,8 @@ import {
   Skeleton, SkeletonText
 } from '@chakra-ui/react';
 import { client } from '../api/client';
-import { FaPalette, FaRulerVertical, FaPlus } from 'react-icons/fa';
+// === THE FIX IS HERE: Added FaImage to the import list ===
+import { FaPalette, FaRulerVertical, FaPlus, FaImage } from 'react-icons/fa';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -30,7 +31,6 @@ const ProductDetailPage = () => {
       try {
         const { data } = await client.get(`/storefront/products/slug/${slug}`);
         setProduct(data);
-        // Set initial state based on the fetched product data
         if (data && data.variants && data.variants.length > 0) {
           const defaultColor = data.variants.find(v => v.isDefaultDisplay) || data.variants[0];
           setSelectedColor(defaultColor);
@@ -54,7 +54,6 @@ const ProductDetailPage = () => {
     setSelectedColor(colorVariant);
     const primaryImage = colorVariant.imageSet.find(img => img.isPrimary) || colorVariant.imageSet[0];
     setCurrentDisplayImage(primaryImage?.url);
-    // Reset size selection or default to the first available size for the new color
     setSelectedSize(colorVariant.sizes[0]?.size || '');
   };
 
@@ -68,8 +67,6 @@ const ProductDetailPage = () => {
         toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error" });
         return;
     }
-
-    // Pass product info to the ProductStudio via URL query params
     const searchParams = new URLSearchParams({
         productId: product._id,
         sku: sizeDetails.sku,
@@ -105,7 +102,6 @@ const ProductDetailPage = () => {
   return (
     <Box maxW="container.lg" mx="auto" p={{ base: 4, md: 8 }}>
       <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={{ base: 4, md: 10 }}>
-        {/* Image Gallery Column */}
         <GridItem>
           <VStack spacing={4} align="stretch">
             <Box bg="gray.100" borderRadius="lg" p={4} display="flex" justifyContent="center" alignItems="center">
@@ -136,7 +132,6 @@ const ProductDetailPage = () => {
           </VStack>
         </GridItem>
 
-        {/* Details Column */}
         <GridItem>
           <VStack spacing={4} align="stretch">
             <Heading as="h1" size="xl">{product.name}</Heading>
@@ -144,7 +139,6 @@ const ProductDetailPage = () => {
             <Text fontSize="md" color="gray.600" whiteSpace="pre-wrap">{product.description}</Text>
             <Divider />
 
-            {/* Color Selector */}
             <FormControl>
               <FormLabel fontWeight="bold"><Icon as={FaPalette} mr={2} />Color: <Text as="span" fontWeight="normal">{selectedColor?.colorName}</Text></FormLabel>
               <HStack spacing={3} wrap="wrap">
@@ -166,7 +160,6 @@ const ProductDetailPage = () => {
               </HStack>
             </FormControl>
 
-            {/* Size Selector */}
             <FormControl>
               <FormLabel fontWeight="bold"><Icon as={FaRulerVertical} mr={2} />Size:</FormLabel>
               <Select 
