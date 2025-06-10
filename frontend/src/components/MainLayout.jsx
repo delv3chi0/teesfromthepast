@@ -1,26 +1,27 @@
 // frontend/src/components/MainLayout.jsx
 import React, { useMemo } from 'react';
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue, Container } from '@chakra-ui/react';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue, Container, Button } from '@chakra-ui/react';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
 
 const baseNavItems = [
-  { label: 'Shop', path: '/shop' },
-  { label: 'AI Image Generator', path: '/generate' },
-  { label: 'Customize Apparel', path: '/product-studio' },
-  { label: '🏆 Monthly Contest', path: '/vote-now' },
-  { label: 'My Saved Designs', path: '/my-designs' },
-  { label: 'My Orders', path: '/my-orders' },
-  { label: 'My Profile', path: '/profile' },
+    { label: 'Shop', path: '/shop' },
+    { label: 'AI Image Generator', path: '/generate' },
+    { label: 'Customize Apparel', path: '/product-studio' },
+    { label: '🏆 Monthly Contest', path: '/vote-now' },
+    { label: 'My Saved Designs', path: '/my-designs' },
+    { label: 'My Orders', path: '/my-orders' },
+    { label: 'My Profile', path: '/profile' },
 ];
 
 const adminNavItem = { label: '🛡️ Admin Console', path: '/admin' };
 
 export default function MainLayout({ children }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { user } = useAuth();
   const isDesktopView = useBreakpointValue({ base: false, md: true });
@@ -58,29 +59,45 @@ export default function MainLayout({ children }) {
     </Box>
   );
 
+  // The Header component is now smarter, showing different buttons for logged-in vs logged-out users
+  const Header = () => (
+    <Flex as="header" align="center" justify="space-between" w="full" px={{base: 4, md: 6}} py={2} h="16" bg="brand.secondary" borderBottomWidth="1px" borderColor="brand.primaryDark" flexShrink={0}>
+        <HStack spacing={4}>
+            {!isDesktopView && user && <IconButton aria-label="Open Menu" onClick={onOpen} icon={<HamburgerIcon />} variant="ghost" />}
+            <ChakraLink as={RouterLink} to="/">
+                <Image src="/logo-text.png" alt="Tees From The Past" h="40px" />
+            </ChakraLink>
+        </HStack>
+        <HStack spacing={4}>
+            {user ? (
+                <>
+                    {isDesktopView && <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} as={RouterLink} to="/profile" />}
+                    <LogoutButton />
+                </>
+            ) : (
+                <HStack spacing={2}>
+                    <Button variant="ghost" onClick={() => navigate('/login')} color="brand.textDark">Login</Button>
+                    <Button colorScheme="brandPrimary" onClick={() => navigate('/register')}>Sign Up</Button>
+                </HStack>
+            )}
+        </HStack>
+    </Flex>
+  );
+
   return (
     <Flex direction="column" minH="100vh" bg="brand.paper">
-        {isDesktopView && <SidebarContent />}
-        {!isDesktopView && (
-          <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
-            <DrawerOverlay /><DrawerContent bg="brand.primary" color="brand.textLight"><DrawerCloseButton /><DrawerHeader borderBottomWidth="1px" borderColor="brand.primaryDark" as={RouterLink} to="/shop" onClick={onClose} display="flex" justifyContent="center"><Image src="/logo.png" maxH="50px" /></DrawerHeader><DrawerBody p={0}><SidebarContent onClick={onClose} /></DrawerBody></DrawerContent>
-          </Drawer>
-        )}
+      {user && isDesktopView && <SidebarContent />}
+      
+      {user && !isDesktopView && (
+        <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
+          <DrawerOverlay /><DrawerContent bg="brand.primary" color="brand.textLight"><DrawerCloseButton /><DrawerHeader borderBottomWidth="1px" as={RouterLink} to="/shop" onClick={onClose} display="flex" justifyContent="center"><Image src="/logo.png" maxH="50px" /></DrawerHeader><DrawerBody p={0}><SidebarContent onClick={onClose} /></DrawerBody></DrawerContent>
+        </Drawer>
+      )}
 
-      <Flex as="main" direction="column" flex="1" ml={isDesktopView ? "60" : "0"}>
-        <Flex as="header" align="center" justify="space-between" w="full" px="4" py="2" h="16" bg="white" borderBottomWidth="1px" borderColor="gray.200" flexShrink={0}>
-          <HStack spacing={4}>
-            {!isDesktopView && <IconButton aria-label="Open Menu" onClick={onOpen} icon={<HamburgerIcon />} variant="ghost" />}
-            <Image src="/logo-text.png" alt="Tees From The Past" h="40px" />
-          </HStack>
-          <HStack spacing={4}>
-            {user && <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} bg="brand.primaryDark" color="white" />}
-            <LogoutButton />
-          </HStack>
-        </Flex>
-        
-        <Box flex="1" p={{ base: 4, md: 8 }}>
-            <Container maxW="container.xl" p={0}>
+      <Flex as="main" direction="column" flex="1" ml={user && isDesktopView ? "60" : "0"}>
+        <Header />
+        <Box flex="1" w="100%">
+            <Container maxW="container.xl" py={{ base: 6, md: 10 }} px={{ base: 4, md: 6 }}>
                 {children}
             </Container>
         </Box>

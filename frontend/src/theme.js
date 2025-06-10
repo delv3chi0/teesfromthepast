@@ -6,13 +6,13 @@ const colors = {
     primary: '#5D4037',
     primaryLight: '#795548',
     primaryDark: '#4E342E',
-    secondary: '#A1887F',
+    secondary: '#A1887F',         // Light Brown - Good for header background
     accentOrange: '#FF7043',
     accentOrangeHover: '#F4511E',
     accentYellow: '#FFEE58',
     accentYellowHover: '#FDD835',
-    paper: '#F5F5F0', // A subtle, off-white/cream for backgrounds
-    cardBg: '#FFFFFF', // Pure white for cards
+    paper: '#F9F6F1',             // A warmer, more subtle off-white/cream
+    cardBg: '#FFFFFF',             // Pure white for cards
     textDark: '#3E2723',
     textLight: '#FFFFFF',
   },
@@ -28,7 +28,7 @@ const components = {
     baseStyle: {
       fontFamily: fonts.heading,
       color: 'brand.textDark',
-      fontWeight: 'normal', // Bungee is already bold
+      fontWeight: 'normal',
     },
     sizes: {
       'pageTitle': {
@@ -36,7 +36,7 @@ const components = {
         fontSize: { base: '3xl', md: '4xl' },
         color: 'brand.textDark',
         lineHeight: 'shorter',
-        mb: 6,
+        mb: 8,
       },
     },
   },
@@ -44,8 +44,15 @@ const components = {
     baseStyle: {
       fontFamily: 'body',
       color: 'brand.textDark',
+      lineHeight: 'tall'
     },
   },
+  Button: {
+      baseStyle: {
+          borderRadius: "full",
+          fontWeight: "bold",
+      }
+  }
 };
 
 const config = {
