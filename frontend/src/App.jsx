@@ -1,4 +1,4 @@
-k// frontend/src/App.jsx
+// frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
 import theme from './theme';
