@@ -28,7 +28,7 @@ const components = {
     baseStyle: {
       fontFamily: fonts.heading,
       color: 'brand.textDark',
-      fontWeight: 'normal',
+      fontWeight: 'normal', // Bungee is already bold
     },
     sizes: {
       'pageTitle': {
