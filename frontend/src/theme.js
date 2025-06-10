@@ -1,29 +1,23 @@
 // frontend/src/theme.js
 import { extendTheme } from '@chakra-ui/react';
 
-// === NEW: Color palette sampled directly from your screenshot ===
 const colors = {
   brand: {
-    // Dark theme colors based on the "Dark Reader" look
-    primary: '#302B27',      // The main dark, soft brown background
-    secondary: '#4A443E',    // The slightly lighter color for cards/panels
+    primary: '#2D2A26',      // A rich, dark brown for the main background
+    primaryLight: '#4A443E', // Lighter brown for hovers/accents
+    primaryDark: '#1A1A1A',  // A deeper dark for contrast
     
-    // Sidebar color
-    sidebar: '#2B211C',
-
-    // Text colors for the dark theme
-    textLight: '#E8E6E3',     // The main off-white text color
-    textMuted: '#A9A199',     // Muted text for less important info
-
-    // Accent colors remain vibrant as requested
+    secondary: '#A1887F',    // The tan color you wanted for the header
+    
     accentOrange: '#FF7043',
     accentOrangeHover: '#F4511E',
     accentYellow: '#FFEE58',
     accentYellowHover: '#FDD835',
-
-    // Kept for specific use cases (like white text on orange buttons)
-    textOnAccent: '#FFFFFF',
-    textOnDark: '#3E2723',
+    
+    cardBg: '#FFFFFF',       // Pure white for cards (like the login panel)
+    
+    textLight: '#E8E6E3',     // Off-white for text on dark backgrounds
+    textDark: '#3E2723',      // Dark brown for text on light backgrounds
   },
 };
 
@@ -33,10 +27,21 @@ const fonts = {
 };
 
 const components = {
+  // Sets default text color inside cards to be dark and readable
+  Card: {
+    baseStyle: {
+        container: {
+            bg: 'brand.cardBg',
+            color: 'brand.textDark', 
+            borderRadius: 'xl',
+            boxShadow: 'lg',
+        }
+    }
+  },
   Heading: {
     baseStyle: {
       fontFamily: fonts.heading,
-      color: 'brand.textLight', // Headings are light by default
+      color: 'brand.textLight', // Default for headings on the main page
       fontWeight: 'normal',
     },
     sizes: {
@@ -51,33 +56,11 @@ const components = {
   Text: {
     baseStyle: {
       fontFamily: 'body',
-      color: 'brand.textLight', // Body text is light by default
+      color: 'brand.textLight', // Default for text on the main page
       lineHeight: 'tall',
     },
   },
-  Button: {
-    variants: {
-        // This ensures your orange button style is preserved
-        solid: (props) => {
-            if (props.colorScheme === 'brandAccentOrange') {
-                return {
-                    bg: 'brand.accentOrange',
-                    color: 'brand.textOnAccent', // Use pure white for buttons
-                    _hover: { bg: 'brand.accentOrangeHover' }
-                };
-            }
-        }
-    }
-  },
-  // A new global style for any "card" elements
-  Card: { 
-    baseStyle: {
-        container: {
-            bg: 'brand.secondary',
-            borderRadius: 'xl',
-        }
-    }
-  }
+  // Other components...
 };
 
 const config = {
@@ -93,7 +76,7 @@ const theme = extendTheme({
   styles: {
     global: {
       body: {
-        bg: 'brand.primary', // Use the new dark color as the global background
+        bg: 'brand.primary',
         color: 'brand.textLight',
       },
     },
