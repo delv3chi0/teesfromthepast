@@ -1,4 +1,4 @@
-k// frontend/src/components/MainLayout.jsx
+// frontend/src/components/MainLayout.jsx
 import React, { useMemo } from 'react';
 import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue, Container, Button } from '@chakra-ui/react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
