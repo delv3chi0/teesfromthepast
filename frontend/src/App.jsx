@@ -1,4 +1,4 @@
-// frontend/src/App.jsx
+k// frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
 import theme from './theme';
@@ -13,7 +13,7 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 
 import MainLayout from './components/MainLayout';
-import HomePage from './pages/HomePage'; // New
+import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import Generate from "./pages/Generate";
@@ -34,19 +34,23 @@ export default function App() {
     <ChakraProvider theme={theme}>
       <AuthProvider>
         <Routes>
-          {/* Public Routes */}
+          {/* === PUBLIC ROUTES === */}
           <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
           <Route path="/shop" element={<MainLayout><ShopPage /></MainLayout>} />
           <Route path="/product/:slug" element={<MainLayout><ProductDetailPage /></MainLayout>} />
+          
+          {/* Auth pages do not use MainLayout */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-          <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+          
+          {/* Other public pages */}
+          <Route path="/contact" element={<MainLayout><ContactPage /></MainLayout>} />
+          <Route path="/privacy-policy" element={<MainLayout><PrivacyPolicyPage /></MainLayout>} />
+          <Route path="/terms-of-service" element={<MainLayout><TermsOfServicePage /></MainLayout>} />
 
-          {/* Protected Routes */}
+          {/* === PROTECTED ROUTES (Require Login) === */}
           <Route path="/generate" element={<PrivateRoute><MainLayout><Generate/></MainLayout></PrivateRoute>} />
           <Route path="/my-designs" element={<PrivateRoute><MainLayout><MyDesigns/></MainLayout></PrivateRoute>} />
           <Route path="/product-studio" element={<PrivateRoute><MainLayout><ProductStudio/></MainLayout></PrivateRoute>} />
