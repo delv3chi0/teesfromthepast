@@ -1,15 +1,15 @@
 // frontend/src/pages/ProductDetailPage.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Box, Heading, Text, VStack, Spinner, Alert, AlertIcon,
   Grid, GridItem, Image, HStack, Button, Select, Divider, useToast, Icon,
   Skeleton, SkeletonText,
-  FormControl, FormLabel // <-- THE FIX: Added missing imports
+  FormControl, FormLabel,
+  Tooltip // <-- THE FIX: Added missing Tooltip import
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { FaPalette, FaRulerVertical, FaPlus, FaImage } from 'react-icons/fa';
-import { useLocation } from 'react-router-dom'; // Added useLocation for query params
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -35,7 +35,7 @@ const ProductDetailPage = () => {
         if (data?.variants?.length > 0) {
           const defaultColor = data.variants.find(v => v.isDefaultDisplay) || data.variants[0];
           setSelectedColor(defaultColor);
-          const primaryImage = defaultColor.imageSet.find(img => img.isPrimary) || defaultColor.imageSet[0];
+          const primaryImage = defaultColor.imageSet?.find(img => img.isPrimary) || defaultColor.imageSet?.[0];
           setCurrentDisplayImage(primaryImage?.url);
           if (defaultColor.sizes?.length > 0) {
             setSelectedSize(defaultColor.sizes[0].size);
@@ -98,13 +98,23 @@ const ProductDetailPage = () => {
       <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={{ base: 4, md: 10 }}>
         <GridItem>
           <VStack spacing={4} align="stretch">
-            <Box bg="gray.100" borderRadius="lg" p={4} display="flex" justifyContent="center" alignItems="center">
-              <Image src={currentDisplayImage} alt="Main product view" maxH="500px" objectFit="contain" fallback={<Icon as={FaImage} boxSize="100px" color="gray.300"/>} />
+            <Box bg="gray.100" borderRadius="lg" p={4} display="flex" justifyContent="center" alignItems="center" h={{ base: "300px", md: "500px" }}>
+              <Image src={currentDisplayImage} alt="Main product view" maxH="100%" objectFit="contain" fallback={<Icon as={FaImage} boxSize="100px" color="gray.300"/>} />
             </Box>
             <HStack spacing={3} overflowX="auto" py={2}>
               {selectedColor?.imageSet.map((image, index) => (
-                <Box key={index} boxSize="60px" border="2px solid" borderColor={image.url === currentDisplayImage ? "brand.primary" : "transparent"} borderRadius="md" cursor="pointer" onClick={() => setCurrentDisplayImage(image.url)} p="2px">
-                  <Image src={image.url} alt={`Thumbnail ${index + 1}`} boxSize="100%" objectFit="cover" borderRadius="sm" />
+                <Box 
+                  key={index}
+                  boxSize="60px"
+                  flexShrink={0}
+                  border="2px solid"
+                  borderColor={image.url === currentDisplayImage ? "brand.primary" : "transparent"}
+                  borderRadius="md"
+                  cursor="pointer"
+                  onClick={() => setCurrentDisplayImage(image.url)}
+                  p="2px"
+                >
+                  <Image src={image.url} alt={`Thumbnail ${index + 1}`} boxSize="100%" objectFit="cover" borderRadius="sm" fallback={<Icon as={FaImage} boxSize="100%" color="gray.200"/>} />
                 </Box>
               ))}
             </HStack>
@@ -122,7 +132,15 @@ const ProductDetailPage = () => {
               <HStack spacing={3} wrap="wrap">
                 {product.variants.map((variant) => (
                   <Tooltip key={variant.colorName} label={variant.colorName}>
-                    <Button onClick={() => handleColorSelect(variant)} height="40px" width="40px" borderRadius="full" p={0} border="3px solid" borderColor={selectedColor?.colorName === variant.colorName ? "brand.primary" : "gray.200"}>
+                    <Button 
+                      onClick={() => handleColorSelect(variant)}
+                      height="40px"
+                      width="40px"
+                      borderRadius="full"
+                      p={0}
+                      border="3px solid"
+                      borderColor={selectedColor?.colorName === variant.colorName ? "brand.primary" : "gray.200"}
+                    >
                       <Box bg={variant.colorHex} height="32px" width="32px" borderRadius="full" />
                     </Button>
                   </Tooltip>
