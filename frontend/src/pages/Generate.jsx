@@ -1,5 +1,5 @@
 // frontend/src/pages/Generate.jsx
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon } from "@chakra-ui/react";
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex } from "@chakra-ui/react";
 import { useState } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -8,57 +8,73 @@ import { FaMagic, FaSave } from 'react-icons/fa';
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
-  const [imageUrl, setImageUrl] = useState(""); 
+  const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  
+  // New state for the TV controls
+  const [decade, setDecade] = useState("1980s");
+  const [artStyle, setArtStyle] = useState("Classic Art");
+  const [isRetro, setIsRetro] = useState(true);
+
   const toast = useToast();
-  const { logout } = useAuth(); 
-  const navigate = useNavigate(); 
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
-    console.error(`[${actionType} Error]`, err.response?.data || err.message || err); 
-    let message = defaultMessage;
-    if (err.response) {
-      message = err.response.data?.message || err.response.data?.error?.message || err.response.data?.error || defaultMessage;
-      if (err.response.status === 401) {
-        toast({
-          title: 'Session Expired',
-          description: 'Please log in again.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-        logout();
-        navigate('/login');
-        return; 
-      }
-    } else if (err.message) {
-      message = err.message;
+    let message = err.response?.data?.message || defaultMessage;
+    if (err.response?.status === 401) {
+      toast({ title: 'Session Expired', status: 'error' });
+      logout();
+      navigate('/login');
+    } else {
+      toast({ title: `${actionType} Failed`, description: message, status: 'error' });
     }
     setError(message);
-    toast({
-      title: `${actionType} Failed`,
-      description: message,
-      status: 'error',
-      duration: 7000,
-      isClosable: true,
-    });
+  };
+
+  const constructFinalPrompt = () => {
+    let finalPrompt = prompt;
+    
+    // Add style modifiers
+    if (artStyle === 'Stencil Art') {
+      finalPrompt = `monochromatic stencil art, high contrast, clean lines, vector, ${prompt}`;
+    } else if (artStyle === 'Embroidery Style') {
+      finalPrompt = `detailed embroidery pattern, satin stitch, clean edges, vector art, limited color palette, ${prompt}`;
+    }
+
+    // Add retro/decade modifiers only if the switch is on
+    if (isRetro) {
+      const decadeMap = {
+        "1960s": "pop art style, vibrant colors, 1960s illustration",
+        "1970s": "70s retro aesthetic, earthy tones, groovy, psychedelic art",
+        "1980s": "80s synthwave sunset, neon colors, chrome, retro-futurism",
+        "1990s": "90s grunge aesthetic, grainy, bold graphics, early internet style",
+      };
+      finalPrompt = `${finalPrompt}, ${decadeMap[decade] || ''}`;
+    }
+
+    return finalPrompt.trim();
   };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
-      toast({ title: 'Prompt is empty', description: 'Please enter a prompt to generate an image.', status: 'warning', duration: 3000, isClosable: true });
+      toast({ title: 'Prompt is empty', status: 'warning' });
       return;
     }
     setLoading(true);
     setImageUrl("");
     setError("");
+    
+    const finalPrompt = constructFinalPrompt();
+    console.log("Final Generated Prompt:", finalPrompt); // For debugging
+
     try {
-      const response = await client.post('/designs/create', { prompt }); 
-      if (response.data && response.data.imageDataUrl) {
+      const response = await client.post('/designs/create', { prompt: finalPrompt });
+      if (response.data?.imageDataUrl) {
         setImageUrl(response.data.imageDataUrl);
-        toast({ title: 'Image Generated!', description: 'Your retro design is ready.', status: 'success', duration: 3000, isClosable: true });
+        toast({ title: 'Image Generated!', status: 'success' });
       } else {
         throw new Error("No image data received from server.");
       }
@@ -70,15 +86,13 @@ export default function Generate() {
   };
 
   const handleSaveDesign = async () => {
-    if (!imageUrl) { 
-        toast({ title: 'No Image', description: 'Generate an image first before saving.', status: 'warning', duration: 3000, isClosable: true });
-        return;
-    }
+    if (!imageUrl) { toast({ title: 'No Image', status: 'warning' }); return; }
     setIsSaving(true);
     setError("");
     try {
-      await client.post('/mydesigns', { prompt: prompt, imageDataUrl: imageUrl }); 
-      toast({ title: 'Design Saved!', description: 'Your masterpiece is saved to "My Designs".', status: 'success', duration: 3000, isClosable: true });
+      // We save the user's original prompt, not the modified one
+      await client.post('/mydesigns', { prompt: prompt, imageDataUrl: imageUrl });
+      toast({ title: 'Design Saved!', status: 'success' });
     } catch (err) {
       handleApiError(err, 'Failed to save design.', 'Save Design');
     } finally {
@@ -87,82 +101,95 @@ export default function Generate() {
   };
 
   return (
-    <VStack spacing={8} w="100%" maxW="4xl" mx="auto" mt={{base: 4, md: 6}} px={{base:2, md:4}} pb={10}>
-      {/* Page Title - UPDATED FOR UNIFORMITY */}
-      <Heading as="h1" 
-        size="pageTitle" // Using the new custom size from theme.js
-        color="brand.textLight" 
-        textAlign="left" 
-        w="100%" 
-        mb={{ base: 4, md: 6 }} // Consistent bottom margin
-      > 
-        AI Image Generator 
+    <VStack spacing={8} w="100%">
+      <Heading as="h1" size="pageTitle" textAlign="left" w="100%">
+        Retro AI Generator
       </Heading>
       
-      <VStack spacing={5} w="100%" bg="brand.paper" p={6} borderRadius="xl" shadow="lg">
-        <Textarea 
-          placeholder="Describe your retro shirt idea... e.g., 'a vibrant 80s synthwave sunset with a chrome robot'" 
-          value={prompt} 
-          onChange={(e) => setPrompt(e.target.value)} 
-          isDisabled={loading || isSaving}
-          size="lg"
-          minHeight="120px"
-          color="brand.textDark" 
-          borderColor="brand.secondary"
-          focusBorderColor="brand.primaryDark"
-          _placeholder={{ color: 'gray.500' }}
-        />
-        <Button 
-          onClick={handleGenerate} 
-          bg="brand.accentYellow"
-          color="brand.textDark"
-          _hover={{bg: "brand.accentYellowHover"}}
-          isLoading={loading}
-          loadingText="Generating..."
-          isDisabled={isSaving || loading}
-          size="lg" 
-          px={8} 
-          borderRadius="full"
-          leftIcon={<Icon as={FaMagic} />}
+      {/* The "TV" Component */}
+      <Box bg="brand.primaryDark" p={8} borderRadius="2xl" w="100%" maxW="800px" shadow="2xl">
+        {/* The Screen */}
+        <Box
+          w="100%"
+          h={{ base: "300px", md: "520px" }}
+          bg="black"
+          mb={6}
+          borderRadius="lg"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          position="relative"
+          border="4px solid"
+          borderColor="gray.700"
+          overflow="hidden"
         >
-          Generate Image
-        </Button>
-      </VStack>
+          {loading && <Spinner size="xl" color="brand.accentOrange" thickness="4px" />}
+          {!loading && imageUrl && (
+            <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="100%" maxH="100%" objectFit="contain" />
+          )}
+           {!loading && !imageUrl && (
+            <VStack color="gray.600">
+                <Icon as={FaMagic} boxSize="50px" />
+                <Text>Your Generated Image Will Appear Here</Text>
+            </VStack>
+           )}
+        </Box>
 
-      {error && (
-        <Alert status="error" mt={4} borderRadius="md" bg="red.100" borderColor="red.200" w="100%">
-            <AlertIcon color="red.600"/>
-            <Text color="red.800" wordBreak="break-word">{error}</Text>
-        </Alert>
-      )}
-      
-      {imageUrl && !error && (
-        <VStack 
-          mt={6} spacing={5} p={6} 
-          bg="brand.paper" 
-          borderRadius="xl" shadow="xl" w="100%" maxW="580px" 
-          transition="all 0.2s ease-in-out"
-          _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.01)"}}
-        >
-          <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="512px" maxH="512px" borderRadius="lg" shadow="md" />
-          <Button
-            mt={3} 
-            bg="brand.accentYellow"
-            color="brand.textDark"
-            _hover={{bg: "brand.accentYellowHover"}}
-            onClick={handleSaveDesign}
-            isLoading={isSaving} 
-            loadingText="Saving..." 
-            isDisabled={loading || !imageUrl}
-            size="lg" 
-            px={8} 
-            borderRadius="full"
-            leftIcon={<Icon as={FaSave} />}
-          >
-            Save This Design
-          </Button>
+        {/* The Control Panel */}
+        <VStack spacing={5} w="100%" bg="brand.secondary" p={6} borderRadius="xl">
+            <Textarea 
+                placeholder="Describe your retro shirt idea... e.g., 'a robot surfing on a synthesizer'"
+                value={prompt} 
+                onChange={(e) => setPrompt(e.target.value)} 
+                isDisabled={loading || isSaving}
+                size="lg" minHeight="120px" bg="brand.paper" color="brand.textDark"
+            />
+            <SimpleGrid columns={{base: 1, md: 3}} spacing={4} w="100%">
+                <FormControl>
+                    <FormLabel fontFamily="Bungee" color="brand.primaryDark">Decade</FormLabel>
+                    <Select value={decade} onChange={e => setDecade(e.target.value)} isDisabled={!isRetro || loading || isSaving} bg="white" color="brand.textDark">
+                        <option value="1960s">60s</option>
+                        <option value="1970s">70s</option>
+                        <option value="1980s">80s</option>
+                        <option value="1990s">90s</option>
+                    </Select>
+                </FormControl>
+                <FormControl>
+                    <FormLabel fontFamily="Bungee" color="brand.primaryDark">Style</FormLabel>
+                    <Select value={artStyle} onChange={e => setArtStyle(e.target.value)} isDisabled={loading || isSaving} bg="white" color="brand.textDark">
+                        <option value="Classic Art">Classic Art</option>
+                        <option value="Stencil Art">Stencil Art</option>
+                        <option value="Embroidery Style">Embroidery Style</option>
+                    </Select>
+                </FormControl>
+                <FormControl display="flex" flexDirection="column" alignItems="center">
+                    <FormLabel fontFamily="Bungee" color="brand.primaryDark">Retro Mode</FormLabel>
+                    <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="orange" size="lg" isDisabled={loading || isSaving}/>
+                </FormControl>
+            </SimpleGrid>
+            <Flex w="100%" justify="center" pt={4} gap={4}>
+                <Button 
+                    onClick={handleGenerate} 
+                    colorScheme="brandAccentOrange"
+                    isLoading={loading} loadingText="Generating..."
+                    isDisabled={isSaving || loading}
+                    size="lg" leftIcon={<Icon as={FaMagic} />}
+                >
+                    Generate Image
+                </Button>
+                <Button
+                    onClick={handleSaveDesign}
+                    colorScheme="brandPrimary"
+                    isLoading={isSaving} loadingText="Saving..."
+                    isDisabled={loading || !imageUrl || isSaving}
+                    size="lg" leftIcon={<Icon as={FaSave} />}
+                >
+                    Save This Design
+                </Button>
+            </Flex>
         </VStack>
-      )}
+      </Box>
+      {error && ( <Alert status="error" mt={4} borderRadius="md"><AlertIcon />{error}</Alert> )}
     </VStack>
   );
 }
