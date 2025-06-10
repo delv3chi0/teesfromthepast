@@ -23,27 +23,22 @@ export default function ProductStudio() {
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [selectedDesign, setSelectedDesign] = useState(null);
-
   const [availableProductTypes, setAvailableProductTypes] = useState([]);
   const [loadingProductTypes, setLoadingProductTypes] = useState(true);
-  
   const [productsOfType, setProductsOfType] = useState([]);
   const [loadingProductsOfType, setLoadingProductsOfType] = useState(false);
-  
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
-  const [selectedProductColor, setSelectedProductColor] = useState('');
-  const [selectedProductSize, setSelectedProductSize] = useState('');
-  
   const [availableColors, setAvailableColors] = useState([]);
+  const [selectedProductColor, setSelectedProductColor] = useState('');
   const [availableSizes, setAvailableSizes] = useState([]);
-  
+  const [selectedProductSize, setSelectedProductSize] = useState('');
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [showInfoAlert, setShowInfoAlert] = useState(false);
   const canvasEl = useRef(null);
   const fabricCanvas = useRef(null);
 
-  // === THE FIX: Replaced old pre-loading logic with a simpler version ===
+  // === THE FIX: Replaced old logic with a simpler, more robust version ===
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const productTypeId = params.get('productTypeId');
@@ -51,7 +46,6 @@ export default function ProductStudio() {
     const color = params.get('color');
     const size = params.get('size');
     
-    // If these params exist, set the state directly. The other useEffects will handle the rest.
     if (productTypeId && productId && color && size) {
         setSelectedProductTypeId(productTypeId);
         setSelectedProductId(productId);
@@ -60,19 +54,18 @@ export default function ProductStudio() {
     }
   }, [location.search]);
 
-
   useEffect(() => {
     const dismissed = localStorage.getItem(INFO_ALERT_DISMISSED_KEY);
     if (dismissed !== 'true') { setShowInfoAlert(true); }
   }, []);
 
-  useEffect(() => {
-    if(user) {
-        client.get('/mydesigns').then(res => setDesigns(res.data)).finally(() => setLoadingDesigns(false));
-    }
+  const fetchUserDesigns = useCallback(() => {
+    if (user) { client.get('/mydesigns').then(res => setDesigns(res.data)).finally(() => setLoadingDesigns(false)); }
   },[user]);
 
+  useEffect(() => { fetchUserDesigns(); }, [fetchUserDesigns]);
   useEffect(() => {
+    setLoadingProductTypes(true);
     client.get('/storefront/product-types').then(res => setAvailableProductTypes(res.data || [])).finally(() => setLoadingProductTypes(false));
   }, []);
 
@@ -105,7 +98,7 @@ export default function ProductStudio() {
       const colorVariant = product?.variants.find(v => v.colorName === selectedProductColor);
       const sizeVariant = colorVariant?.sizes.find(s => s.size === selectedProductSize);
       if (sizeVariant) {
-        const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || colorVariant.imageSet?.[0];
+        const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || colorVariant.imageSet?.[0] || { url: '' };
         setSelectedVariant({ ...sizeVariant, colorName: colorVariant.colorName, imageMockupFront: primaryImage?.url });
       }
     } else {
@@ -127,6 +120,7 @@ export default function ProductStudio() {
         }
         if (selectedDesign?.imageDataUrl) {
             fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
+                if(!img) return;
                 img.scaleToWidth(CANVAS_WIDTH * 0.33);
                 img.set({ top: CANVAS_HEIGHT * 0.24, left: (CANVAS_WIDTH - img.getScaledWidth()) / 2 });
                 FCanvas.add(img);
@@ -137,12 +131,31 @@ export default function ProductStudio() {
     pollForFabric();
   }, [selectedDesign, selectedVariant]);
   
-  const handleProceedToCheckout = () => { /* Unchanged */ };
-  const handleDismissInfoAlert = () => { /* Unchanged */ };
+  const handleProceedToCheckout = () => {
+    if (!selectedDesign) { toast({ title: "Please select a design.", status: "warning" }); return; }
+    if (!selectedVariant) { toast({ title: "Please select all product options.", status: "warning" }); return; }
+    const product = productsOfType.find(p => p._id === selectedProductId);
+    const checkoutItem = { designId: selectedDesign._id, productId: selectedProductId, productName: product.name, variantSku: selectedVariant.sku, size: selectedVariant.size, color: selectedVariant.colorName, prompt: selectedDesign.prompt, imageDataUrl: selectedDesign.imageDataUrl, productImage: selectedVariant.imageMockupFront };
+    localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
+    navigate('/checkout');
+  };
+  const handleDismissInfoAlert = () => { setShowInfoAlert(false); localStorage.setItem(INFO_ALERT_DISMISSED_KEY, 'true'); };
   const handleProductTypeChange = (e) => { setSelectedProductTypeId(e.target.value); setSelectedProductId(''); setSelectedProductColor(''); setSelectedProductSize(''); };
   const handleProductChange = (e) => { setSelectedProductId(e.target.value); setSelectedProductColor(''); setSelectedProductSize(''); };
   const handleColorChange = (e) => { setSelectedProductColor(e.target.value); setSelectedProductSize(''); };
   const handleSizeChange = (e) => { setSelectedProductSize(e.target.value); };
 
-  return ( <Box maxW="container.xl" mx="auto" p={4}>{/* ... JSX is unchanged ... */}</Box> );
+  return (
+    <Box maxW="container.xl" mx="auto" p={4}>
+      <VStack spacing={6} align="stretch">
+        <Heading>Customize Your Apparel!</Heading>
+        {showInfoAlert && ( <Alert status="info" borderRadius="md"><AlertIcon /><Box>Want a new design? <ChakraLink as={RouterLink} to="/generate" fontWeight="bold">Create it in the AI Generator first!</ChakraLink></Box><ChakraCloseButton onClick={handleDismissInfoAlert} /></Alert> )}
+        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg"><Heading as="h2" size="lg" mb={6}>1. Choose Your Apparel</Heading><SimpleGrid columns={{ base: 1, md: 4 }} spacing={6}><VStack align="stretch"><Text>Product Type:</Text><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes}>{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></VStack><VStack align="stretch"><Text>Specific Product:</Text><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType}>{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></VStack><VStack align="stretch"><Text>Color:</Text><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></VStack><VStack align="stretch"><Text>Size:</Text><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor}>{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></VStack></SimpleGrid></Box>
+        <Divider />
+        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg"><Heading as="h2" size="lg" mb={6}>2. Choose Your Saved Design</Heading>{loadingDesigns ? <Spinner /> : !designs.length ? <Text>You have no saved designs.</Text> : (<SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={4}>{designs.map(design => (<Box key={design._id} borderWidth="2px" borderRadius="md" onClick={() => setSelectedDesign(design)} cursor="pointer" borderColor={selectedDesign?._id === design._id ? "brand.accentYellow" : "transparent"}><Image src={design.imageDataUrl} fallbackSrc="https://via.placeholder.com/150" /></Box>))}</SimpleGrid>)}</Box>
+        <Divider />
+        <Box p={6} borderWidth="1px" borderRadius="xl" shadow="lg"><Heading as="h2" size="lg" mb={6}>3. Preview & Checkout</Heading><Box w={`${CANVAS_WIDTH}px`} h={`${CANVAS_HEIGHT}px`} bg="gray.200" mx="auto" borderRadius="md"><canvas ref={canvasEl} /></Box>{selectedDesign && selectedVariant && (<VStack spacing={6} mt={6}><Text>Your design on a {selectedVariant.size} {selectedVariant.colorName} shirt.</Text><Button colorScheme="brandAccent" size="lg" onClick={handleProceedToCheckout} leftIcon={<FaShoppingCart />}>Proceed to Checkout</Button></VStack>)}</Box>
+      </VStack>
+    </Box>
+  );
 }
