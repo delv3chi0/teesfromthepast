@@ -14,29 +14,34 @@ const ProductCard = ({ product }) => {
     );
   }
 
+  // === THE FIX: Only render the link if the slug exists ===
+  const productUrl = product.slug ? `/product/${product.slug}` : '#';
+  const isClickable = !!product.slug;
+
   return (
     <Box
-      as={RouterLink}
-      to={`/product/${product.slug}`}
+      as={isClickable ? RouterLink : 'div'}
+      to={productUrl}
       borderWidth="1px"
       borderRadius="lg"
       overflow="hidden"
       transition="all 0.2s ease-in-out"
-      _hover={{ shadow: 'lg', transform: 'translateY(-4px)' }}
+      _hover={isClickable ? { shadow: 'lg', transform: 'translateY(-4px)' } : {}}
+      cursor={isClickable ? 'pointer' : 'not-allowed'}
       display="block"
       bg="white"
     >
       <Image
-        src={product.defaultImage}
+        src={product.defaultImage || 'https://via.placeholder.com/400?text=No+Image'}
         alt={`Image of ${product.name}`}
         objectFit="cover"
         w="100%"
-        h="220px" // Made image smaller
+        h="220px"
         fallback={<Skeleton height="220px" />}
-        htmlWidth="400" // Hint for browser on image quality
+        htmlWidth="400"
         htmlHeight="400"
       />
-      <Box p="4"> {/* Reduced padding */}
+      <Box p="4">
         <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name}>
           {product.name}
         </Heading>
