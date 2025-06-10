@@ -1,6 +1,6 @@
 // frontend/src/pages/HomePage.jsx
 import React from 'react';
-import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Flex } from '@chakra-ui/react';
+import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image } from '@chakra-ui/react'; // <-- THE FIX: Added Image to the import list
 import { useNavigate } from 'react-router-dom';
 import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
 
@@ -27,17 +27,15 @@ const HomePage = () => {
           Unleash your creativity with our AI image generator, specializing in stunning retro and vintage styles. Bring your unique ideas to life on high-quality, custom apparel.
         </Text>
         <Button
-          colorScheme="brandPrimary"
-          bg="brand.accentOrange"
-          color="white"
+          colorScheme="brandAccentOrange"
           size="lg"
           px={12}
           py={8}
           fontSize="2xl"
           onClick={() => navigate('/shop')}
-          _hover={{ bg: 'brand.accentOrangeHover', transform: 'scale(1.05)' }}
+          _hover={{ transform: 'scale(1.05)' }}
         >
-          Explore The Shop
+          Explore The Collection
         </Button>
       </VStack>
 
