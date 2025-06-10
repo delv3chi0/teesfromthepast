@@ -24,6 +24,7 @@ const ProductDetailPage = () => {
     const fetchProduct = async () => {
       if (!slug) { setError("Product slug not found in URL."); setLoading(false); return; }
       setLoading(true);
+      setError('');
       try {
         const { data } = await client.get(`/storefront/products/slug/${slug}`);
         setProduct(data);
@@ -62,7 +63,14 @@ const ProductDetailPage = () => {
     navigate(`/product-studio?${searchParams.toString()}`);
   };
 
-  if (loading) { /* ... Skeleton unchanged ... */ }
+  if (loading) {
+    return (
+      <Box maxW="container.lg" mx="auto" p={8}>
+        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={8}><GridItem><Skeleton height={{ base: "300px", md: "500px" }} /><HStack mt={4} spacing={4}><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /></HStack></GridItem><GridItem><SkeletonText noOfLines={1} height="40px" /><SkeletonText noOfLines={1} height="30px" mt={4} width="150px" /><SkeletonText noOfLines={6} mt={6} /></GridItem></Grid>
+      </Box>
+    );
+  }
+
   if (error) return <Alert status="error" m={8}><AlertIcon />{error}</Alert>;
   if (!product) return <Text p={8}>Product not found.</Text>;
 
@@ -85,6 +93,7 @@ const ProductDetailPage = () => {
             </HStack>
           </VStack>
         </GridItem>
+
         <GridItem>
           <VStack spacing={4} align="stretch">
             <Heading as="h1" size="xl">{product.name}</Heading>

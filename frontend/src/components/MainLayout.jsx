@@ -7,7 +7,6 @@ import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
 
-// Corrected navigation order
 const baseNavItems = [
   { label: 'Shop', path: '/shop' },
   { label: 'AI Image Generator', path: '/generate' },
@@ -52,7 +51,8 @@ export default function MainLayout({ children }) {
                     color={location.pathname.startsWith(item.path) ? 'brand.accentYellow' : 'brand.textLight'}
                     bg={location.pathname.startsWith(item.path) ? 'brand.primaryLight' : 'transparent'}
                     _hover={{ textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow' }}
-                    onClick={onClick}>
+                    onClick={onClick}
+                >
                     {item.label}
                 </ChakraLink>
             ))}
