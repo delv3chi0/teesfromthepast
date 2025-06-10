@@ -42,8 +42,11 @@ const ProductDetailPage = () => {
         } else {
           setError("This product has no available options.");
         }
-      } catch (err) { setError('Could not find the requested product.'); } 
-      finally { setLoading(false); }
+      } catch (err) {
+        setError('Could not find the requested product.');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchProduct();
   }, [slug]);
@@ -57,7 +60,6 @@ const ProductDetailPage = () => {
 
   const handleCustomizeClick = () => {
     if (!selectedColor || !selectedSize) { toast({ title: "Please select a color and size.", status: "warning" }); return; }
-    
     if (user) {
       const sizeDetails = selectedColor.sizes.find(s => s.size === selectedSize);
       if (!sizeDetails || !sizeDetails.sku) { toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error" }); return; }
@@ -100,7 +102,7 @@ const ProductDetailPage = () => {
               <Image src={currentDisplayImage} alt="Main product view" maxH="100%" objectFit="contain" fallback={<Icon as={FaImage} boxSize="100px" color="gray.300"/>} />
             </Box>
             <HStack spacing={3} overflowX="auto" py={2}>
-              {selectedColor?.imageSet.map((image, index) => (
+              {selectedColor?.imageSet?.map((image, index) => (
                 <Box key={index} boxSize="60px" flexShrink={0} border="2px solid" borderColor={image.url === currentDisplayImage ? "brand.primary" : "transparent"} borderRadius="md" cursor="pointer" onClick={() => setCurrentDisplayImage(image.url)} p="2px">
                   <Image src={image.url} alt={`Thumbnail ${index + 1}`} boxSize="100%" objectFit="cover" borderRadius="sm" fallback={<Icon as={FaImage} boxSize="100%" color="gray.200"/>} />
                 </Box>
@@ -132,7 +134,18 @@ const ProductDetailPage = () => {
                 {selectedColor?.sizes.map(s => <option key={s.size} value={s.size}>{s.size}</option>)}
               </Select>
             </FormControl>
-            <Button colorScheme="brandPrimary" size="lg" w="100%" mt={4} leftIcon={<FaPlus />} onClick={handleCustomizeClick} isDisabled={!selectedSize}>
+            {/* === THE FIX IS HERE === */}
+            <Button
+                bg="brand.accentOrange"
+                color="white"
+                _hover={{ bg: 'brand.accentOrangeHover' }}
+                size="lg"
+                w="100%"
+                mt={4}
+                leftIcon={<FaPlus />}
+                onClick={handleCustomizeClick}
+                isDisabled={!selectedSize}
+              >
               Customize This Item
             </Button>
           </VStack>
