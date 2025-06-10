@@ -10,27 +10,22 @@ const sizeVariantSchema = new mongoose.Schema({
   podVariantId: { type: String, trim: true },
 }, { _id: false });
 
-// === MODIFIED: The schema for a color variant is now upgraded ===
 const colorVariantSchema = new mongoose.Schema({
   colorName: { type: String, required: true, trim: true },
   colorHex: { type: String, trim: true },
   podProductId: { type: String, trim: true },
-  isDefaultDisplay: { type: Boolean, default: false }, // To mark the product's default color
-  
-  // This new array replaces imageMockupFront and imageMockupBack
+  isDefaultDisplay: { type: Boolean, default: false },
   imageSet: [{
     url: { type: String, required: true },
     altText: { type: String, default: '' },
-    isPrimary: { type: Boolean, default: false } // To mark the color's primary image
+    isPrimary: { type: Boolean, default: false }
   }],
-  
   sizes: [sizeVariantSchema],
 });
 
 const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    // === NEW: slug field for user-friendly URLs ===
     slug: { type: String, unique: true, sparse: true },
     productType: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductType', required: true },
     description: { type: String, required: true, trim: true },
@@ -44,9 +39,10 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// === NEW: Mongoose middleware to auto-generate the slug before saving ===
+// === THE FIX IS HERE ===
+// This logic now runs if the document is new, if the name is modified, OR if the slug doesn't exist.
 productSchema.pre('save', function(next) {
-  if (this.isModified('name')) {
+  if (this.isNew || this.isModified('name') || !this.slug) {
     this.slug = slugify(this.name, { lower: true, strict: true });
   }
   next();
