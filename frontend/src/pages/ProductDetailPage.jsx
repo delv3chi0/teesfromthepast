@@ -24,7 +24,6 @@ const ProductDetailPage = () => {
     const fetchProduct = async () => {
       if (!slug) { setError("Product slug not found in URL."); setLoading(false); return; }
       setLoading(true);
-      setError('');
       try {
         const { data } = await client.get(`/storefront/products/slug/${slug}`);
         setProduct(data);
@@ -37,7 +36,7 @@ const ProductDetailPage = () => {
             setSelectedSize(defaultColor.sizes[0].size);
           }
         } else {
-            setError("This product has no available options.");
+          setError("This product has no available options.");
         }
       } catch (err) {
         setError('Could not find the requested product.');
@@ -59,14 +58,25 @@ const ProductDetailPage = () => {
     if (!selectedColor || !selectedSize) { toast({ title: "Please select a color and size.", status: "warning" }); return; }
     const sizeDetails = selectedColor.sizes.find(s => s.size === selectedSize);
     if (!sizeDetails || !sizeDetails.sku) { toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error" }); return; }
-    const searchParams = new URLSearchParams({ productId: product._id, sku: sizeDetails.sku });
+    
+    // === THE FIX: Pass all necessary info in the URL to avoid extra API calls ===
+    const searchParams = new URLSearchParams({
+        productId: product._id,
+        productTypeId: product.productType,
+        sku: sizeDetails.sku,
+        color: selectedColor.colorName,
+        size: selectedSize
+    });
     navigate(`/product-studio?${searchParams.toString()}`);
   };
 
   if (loading) {
     return (
       <Box maxW="container.lg" mx="auto" p={8}>
-        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={8}><GridItem><Skeleton height={{ base: "300px", md: "500px" }} /><HStack mt={4} spacing={4}><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /></HStack></GridItem><GridItem><SkeletonText noOfLines={1} height="40px" /><SkeletonText noOfLines={1} height="30px" mt={4} width="150px" /><SkeletonText noOfLines={6} mt={6} /></GridItem></Grid>
+        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={8}>
+          <GridItem><Skeleton height={{ base: "300px", md: "500px" }} /><HStack mt={4} spacing={4}><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /></HStack></GridItem>
+          <GridItem><SkeletonText noOfLines={1} height="40px" /><SkeletonText noOfLines={1} height="30px" mt={4} width="150px" /><SkeletonText noOfLines={6} mt={6} /></GridItem>
+        </Grid>
       </Box>
     );
   }
@@ -93,7 +103,6 @@ const ProductDetailPage = () => {
             </HStack>
           </VStack>
         </GridItem>
-
         <GridItem>
           <VStack spacing={4} align="stretch">
             <Heading as="h1" size="xl">{product.name}</Heading>

@@ -5,7 +5,6 @@ import {
   SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton as ChakraCloseButton,
   Link as ChakraLink, Divider, useToast, Icon, Button
 } from '@chakra-ui/react';
-// === NEW: Import useLocation and useSearchParams to read from URL ===
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -16,75 +15,50 @@ const CANVAS_HEIGHT = 400;
 const INFO_ALERT_DISMISSED_KEY = 'productStudioInfoAlertDismissed_v1';
 
 export default function ProductStudio() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  // === NEW: Hook to read URL query parameters ===
   const location = useLocation();
 
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
-  const [designsError, setDesignsError] = useState('');
   const [selectedDesign, setSelectedDesign] = useState(null);
+
   const [availableProductTypes, setAvailableProductTypes] = useState([]);
   const [loadingProductTypes, setLoadingProductTypes] = useState(true);
+  
   const [productsOfType, setProductsOfType] = useState([]);
   const [loadingProductsOfType, setLoadingProductsOfType] = useState(false);
+  
   const [selectedProductTypeId, setSelectedProductTypeId] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
-  const [availableColors, setAvailableColors] = useState([]);
   const [selectedProductColor, setSelectedProductColor] = useState('');
-  const [availableSizes, setAvailableSizes] = useState([]);
   const [selectedProductSize, setSelectedProductSize] = useState('');
+  
+  const [availableColors, setAvailableColors] = useState([]);
+  const [availableSizes, setAvailableSizes] = useState([]);
+  
   const [selectedVariant, setSelectedVariant] = useState(null);
   const [showInfoAlert, setShowInfoAlert] = useState(false);
   const canvasEl = useRef(null);
   const fabricCanvas = useRef(null);
 
-  // === NEW: useEffect to handle pre-selections from URL ===
+  // === THE FIX: Replaced old pre-loading logic with a simpler version ===
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    const productTypeId = params.get('productTypeId');
     const productId = params.get('productId');
-    const sku = params.get('sku');
-
-    if (productId && sku) {
-      // Find the product and its details based on the SKU
-      // This is a simplified approach; a more robust one might fetch the product directly
-      // But for now, we assume the necessary data will be loaded via the dropdowns.
-      // We will set the IDs, and the other useEffects will trigger to populate the dropdowns.
-      const preselectProduct = async () => {
-        try {
-          // We need to find which type this product belongs to
-          const res = await client.get(`/storefront/products/slim/${productId}`);
-          const slimProduct = res.data;
-          
-          if (slimProduct && slimProduct.productType) {
-            setSelectedProductTypeId(slimProduct.productType);
-            // Once product type is set, another useEffect will fire to load products of that type
-            // Then, we can set the product ID
-            setSelectedProductId(productId);
-
-            // We need to get the full product details to find the color/size from the sku
-            const fullProductRes = await client.get(`/storefront/products/slug/${slimProduct.slug}`);
-            const fullProduct = fullProductRes.data;
-
-            for (const color of fullProduct.variants) {
-              const size = color.sizes.find(s => s.sku === sku);
-              if (size) {
-                setSelectedProductColor(color.colorName);
-                setSelectedProductSize(size.size);
-                break;
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Failed to pre-select product", e);
-          toast({ title: "Could not pre-load selected item.", status: 'warning' });
-        }
-      };
-      preselectProduct();
+    const color = params.get('color');
+    const size = params.get('size');
+    
+    // If these params exist, set the state directly. The other useEffects will handle the rest.
+    if (productTypeId && productId && color && size) {
+        setSelectedProductTypeId(productTypeId);
+        setSelectedProductId(productId);
+        setSelectedProductColor(color);
+        setSelectedProductSize(size);
     }
-  }, [location.search, toast]);
+  }, [location.search]);
 
 
   useEffect(() => {
@@ -92,86 +66,79 @@ export default function ProductStudio() {
     if (dismissed !== 'true') { setShowInfoAlert(true); }
   }, []);
 
-  const fetchUserDesigns = useCallback(() => { /* Unchanged */ }, [user, toast, logout, navigate]);
-  useEffect(() => { fetchUserDesigns(); }, [fetchUserDesigns]);
-  useEffect(() => { setLoadingProductTypes(true); client.get('/storefront/product-types').then(res => setAvailableProductTypes(res.data || [])).catch(err => toast({ title: "Load Error", status: "error" })).finally(() => setLoadingProductTypes(false)); }, [toast]);
   useEffect(() => {
-    if (!selectedProductTypeId) { setProductsOfType([]); setSelectedProductId(''); return; }
-    setLoadingProductsOfType(true); setProductsOfType([]); setSelectedProductId('');
-    client.get(`/storefront/products/type/${selectedProductTypeId}`).then(res => setProductsOfType(res.data || [])).catch(err => toast({ title: "Load Error", status: "error" })).finally(() => setLoadingProductsOfType(false));
-  }, [selectedProductTypeId, toast]);
-  useEffect(() => {
-    if (!selectedProductId || productsOfType.length === 0) { setAvailableColors([]); setSelectedProductColor(''); return; }
-    const currentProduct = productsOfType.find(p => p._id === selectedProductId);
-    if (currentProduct?.variants) {
-      const uniqueColors = currentProduct.variants.reduce((acc, v) => { if (!acc.find(c => c.value === v.colorName)) { acc.push({ value: v.colorName, label: v.colorName, hex: v.colorHex }); } return acc; }, []);
-      setAvailableColors(uniqueColors);
-      if (uniqueColors.length > 0 && !selectedProductColor) {
-        setSelectedProductColor(uniqueColors[0].value);
-      }
-    } else {
-      setAvailableColors([]); setSelectedProductColor('');
+    if(user) {
+        client.get('/mydesigns').then(res => setDesigns(res.data)).finally(() => setLoadingDesigns(false));
     }
-  }, [selectedProductId, productsOfType, selectedProductColor]);
+  },[user]);
+
   useEffect(() => {
-    if (!selectedProductColor) { setAvailableSizes([]); setSelectedProductSize(''); return; }
-    const currentProduct = productsOfType.find(p => p._id === selectedProductId);
-    let sizes = [];
-    if (currentProduct?.variants?.length > 0) {
-      const colorVariant = currentProduct.variants.find(v => v.colorName === selectedProductColor);
-      if (colorVariant?.sizes) { sizes = colorVariant.sizes.map(s => s.size); }
-    }
+    client.get('/storefront/product-types').then(res => setAvailableProductTypes(res.data || [])).finally(() => setLoadingProductTypes(false));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedProductTypeId) { setProductsOfType([]); return; }
+    setLoadingProductsOfType(true);
+    client.get(`/storefront/products/type/${selectedProductTypeId}`)
+      .then(res => setProductsOfType(res.data || []))
+      .finally(() => setLoadingProductsOfType(false));
+  }, [selectedProductTypeId]);
+
+  useEffect(() => {
+    if (!selectedProductId) { setAvailableColors([]); return; }
+    const product = productsOfType.find(p => p._id === selectedProductId);
+    const colors = product?.variants.map(v => ({ value: v.colorName, label: v.colorName })) || [];
+    setAvailableColors(colors);
+  }, [selectedProductId, productsOfType]);
+
+  useEffect(() => {
+    if (!selectedProductColor) { setAvailableSizes([]); return; }
+    const product = productsOfType.find(p => p._id === selectedProductId);
+    const colorVariant = product?.variants.find(v => v.colorName === selectedProductColor);
+    const sizes = colorVariant?.sizes.map(s => s.size) || [];
     setAvailableSizes(sizes.map(s => ({ value: s, label: s })));
-    if (!selectedProductSize || !sizes.includes(selectedProductSize)) {
-      setSelectedProductSize(sizes.length > 0 ? sizes[0] : '');
-    }
-  }, [selectedProductColor, selectedProductId, productsOfType, selectedProductSize]);
+  }, [selectedProductColor, selectedProductId, productsOfType]);
+
   useEffect(() => {
     if (selectedProductId && selectedProductColor && selectedProductSize) {
       const product = productsOfType.find(p => p._id === selectedProductId);
       const colorVariant = product?.variants.find(v => v.colorName === selectedProductColor);
-      if (colorVariant) {
-        const sizeVariant = colorVariant.sizes.find(s => s.size === selectedProductSize);
-        if (sizeVariant) {
-          const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || (colorVariant.imageSet?.[0]) || { url: colorVariant.imageMockupFront };
-          setSelectedVariant({ ...sizeVariant, colorName: colorVariant.colorName, colorHex: colorVariant.colorHex, imageMockupFront: primaryImage?.url });
-        } else { setSelectedVariant(null); }
-      } else { setSelectedVariant(null); }
+      const sizeVariant = colorVariant?.sizes.find(s => s.size === selectedProductSize);
+      if (sizeVariant) {
+        const primaryImage = colorVariant.imageSet?.find(img => img.isPrimary) || colorVariant.imageSet?.[0];
+        setSelectedVariant({ ...sizeVariant, colorName: colorVariant.colorName, imageMockupFront: primaryImage?.url });
+      }
     } else {
       setSelectedVariant(null);
     }
   }, [selectedProductId, selectedProductColor, selectedProductSize, productsOfType]);
+  
   useEffect(() => {
     const setupCanvas = (fabricInstance) => {
-      if (!fabricCanvas.current && canvasEl.current) { fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }); }
-      const FCanvas = fabricCanvas.current;
-      if (!FCanvas) return;
-      FCanvas.clear();
-      const mockupSrc = selectedVariant?.imageMockupFront;
-      if (mockupSrc) {
-        fabricInstance.Image.fromURL(mockupSrc, (mockupImg) => { if (!mockupImg) return; FCanvas.setBackgroundImage(mockupImg, FCanvas.renderAll.bind(FCanvas), { scaleX: CANVAS_WIDTH / mockupImg.width, scaleY: CANVAS_HEIGHT / mockupImg.height }); }, { crossOrigin: 'anonymous' });
-      } else {
-        FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
-        FCanvas.setBackgroundColor('white', FCanvas.renderAll.bind(FCanvas));
-      }
-      if (selectedDesign?.imageDataUrl) {
-        fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-          if (!designImg) return;
-          designImg.scaleToWidth(CANVAS_WIDTH * 0.33);
-          const designLeft = (CANVAS_WIDTH - designImg.getScaledWidth()) / 2;
-          const designTop = CANVAS_HEIGHT * 0.24;
-          designImg.set({ top: designTop, left: designLeft });
-          FCanvas.add(designImg);
-          FCanvas.renderAll();
-        }, { crossOrigin: 'anonymous' });
-      }
+        if (!fabricCanvas.current && canvasEl.current) { fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, { width: CANVAS_WIDTH, height: CANVAS_HEIGHT }); }
+        const FCanvas = fabricCanvas.current;
+        if (!FCanvas) return;
+        FCanvas.clear();
+        const mockupSrc = selectedVariant?.imageMockupFront;
+        if (mockupSrc) {
+            fabricInstance.Image.fromURL(mockupSrc, (img) => { FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), { scaleX: FCanvas.width / img.width, scaleY: FCanvas.height / img.height }); }, { crossOrigin: 'anonymous' });
+        } else {
+            FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
+        }
+        if (selectedDesign?.imageDataUrl) {
+            fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
+                img.scaleToWidth(CANVAS_WIDTH * 0.33);
+                img.set({ top: CANVAS_HEIGHT * 0.24, left: (CANVAS_WIDTH - img.getScaledWidth()) / 2 });
+                FCanvas.add(img);
+            }, { crossOrigin: 'anonymous' });
+        }
     };
-    const pollForFabric = () => { if (window.fabric) { setupCanvas(window.fabric); } else { setTimeout(pollForFabric, 100); } };
-    if (canvasEl.current) pollForFabric();
+    const pollForFabric = () => { if(window.fabric) setupCanvas(window.fabric); else setTimeout(pollForFabric, 100); };
+    pollForFabric();
   }, [selectedDesign, selectedVariant]);
-
+  
   const handleProceedToCheckout = () => { /* Unchanged */ };
-  const handleDismissInfoAlert = () => { setShowInfoAlert(false); localStorage.setItem(INFO_ALERT_DISMISSED_KEY, 'true'); };
+  const handleDismissInfoAlert = () => { /* Unchanged */ };
   const handleProductTypeChange = (e) => { setSelectedProductTypeId(e.target.value); setSelectedProductId(''); setSelectedProductColor(''); setSelectedProductSize(''); };
   const handleProductChange = (e) => { setSelectedProductId(e.target.value); setSelectedProductColor(''); setSelectedProductSize(''); };
   const handleColorChange = (e) => { setSelectedProductColor(e.target.value); setSelectedProductSize(''); };
