@@ -25,7 +25,7 @@ export default function Login() {
     try {
       await login({ email, password });
       toast({ title: 'Login successful!', status: 'success', duration: 3000, isClosable: true });
-      navigate('/dashboard');
+      navigate('/shop');
     } catch (err) {
       const errorMessage = err.response?.data?.message || 'Login failed. Please check credentials or server status.';
       setError(errorMessage);

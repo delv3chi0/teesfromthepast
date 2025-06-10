@@ -1,21 +1,24 @@
 // frontend/src/components/MainLayout.jsx
 import React, { useMemo } from 'react';
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue } from '@chakra-ui/react';
+import {
+  Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue
+} from '@chakra-ui/react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
 
+// === RE-ORDERED per your request for a better user flow ===
 const baseNavItems = [
   { label: 'Shop', path: '/shop' },
+  { label: 'Dashboard', path: '/dashboard' },
   { label: 'AI Image Generator', path: '/generate' },
   { label: 'Customize Apparel', path: '/product-studio' },
-  { label: '🏆 Monthly Contest', path: '/vote-now' },
   { label: 'My Saved Designs', path: '/my-designs' },
   { label: 'My Orders', path: '/my-orders' },
+  { label: '🏆 Monthly Contest', path: '/vote-now' },
   { label: 'My Profile', path: '/profile' },
-  { label: 'Dashboard', path: '/dashboard' },
 ];
 
 const adminNavItem = { label: '🛡️ Admin Console', path: '/admin' };
@@ -30,10 +33,11 @@ export default function MainLayout({ children }) {
     if (user?.isAdmin) {
       const items = [...baseNavItems];
       const profileIndex = items.findIndex(item => item.path === '/profile');
+      // Insert Admin Console right after My Profile
       if (profileIndex !== -1) {
         items.splice(profileIndex + 1, 0, adminNavItem);
       } else {
-        items.push(adminNavItem);
+        items.push(adminNavItem); // Fallback
       }
       return items;
     }
