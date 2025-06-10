@@ -61,7 +61,7 @@ const theme = extendTheme({
   styles: {
     global: {
       body: {
-        bg: 'brand.paper', // Use the new off-white as the global background
+        bg: 'brand.paper',
         color: 'brand.textDark',
       },
     },

@@ -11,7 +11,8 @@ const ShopPage = () => {
 
   useEffect(() => {
     const fetchShopData = async () => {
-      setLoading(true); setError('');
+      setLoading(true);
+      setError('');
       try {
         const { data } = await client.get('/storefront/shop-data');
         setShopData(data);
