@@ -1,4 +1,4 @@
-k// frontend/src/pages/HomePage.jsx
+// frontend/src/pages/HomePage.jsx
 import React from 'react';
 import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
