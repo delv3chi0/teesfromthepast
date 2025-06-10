@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Heading, Text, VStack, Spinner, Alert, AlertIcon,
   Grid, GridItem, Image, HStack, Button, Select, Divider, useToast, Icon,
-  Skeleton, SkeletonText, FormControl, FormLabel, Tooltip
+  Skeleton, SkeletonText, FormControl, FormLabel, Tooltip // <-- THE FIX IS HERE
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { FaPalette, FaRulerVertical, FaPlus, FaImage } from 'react-icons/fa';
@@ -13,17 +13,24 @@ const ProductDetailPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState('');
   const [currentDisplayImage, setCurrentDisplayImage] = useState('');
 
   useEffect(() => {
     const fetchProduct = async () => {
-      if (!slug) { setError("Product slug not found in URL."); setLoading(false); return; }
+      if (!slug) {
+        setError("Product not found.");
+        setLoading(false);
+        return;
+      }
       setLoading(true);
+      setError('');
       try {
         const { data } = await client.get(`/storefront/products/slug/${slug}`);
         setProduct(data);
@@ -40,6 +47,7 @@ const ProductDetailPage = () => {
         }
       } catch (err) {
         setError('Could not find the requested product.');
+        console.error("Error fetching product by slug:", err);
       } finally {
         setLoading(false);
       }
@@ -55,17 +63,22 @@ const ProductDetailPage = () => {
   };
 
   const handleCustomizeClick = () => {
-    if (!selectedColor || !selectedSize) { toast({ title: "Please select a color and size.", status: "warning" }); return; }
+    if (!selectedColor || !selectedSize) {
+      toast({ title: "Please select a color and size.", status: "warning" });
+      return;
+    }
     const sizeDetails = selectedColor.sizes.find(s => s.size === selectedSize);
-    if (!sizeDetails || !sizeDetails.sku) { toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error" }); return; }
-    
-    // === THE FIX: Pass all necessary info in the URL to avoid extra API calls ===
+    if (!sizeDetails || !sizeDetails.sku) {
+      toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error" });
+      return;
+    }
+    // Pass all necessary info to avoid extra API calls in the next step
     const searchParams = new URLSearchParams({
-        productId: product._id,
-        productTypeId: product.productType,
-        sku: sizeDetails.sku,
-        color: selectedColor.colorName,
-        size: selectedSize
+      productId: product._id,
+      productTypeId: product.productType,
+      sku: sizeDetails.sku,
+      color: selectedColor.colorName,
+      size: selectedSize
     });
     navigate(`/product-studio?${searchParams.toString()}`);
   };
@@ -74,7 +87,7 @@ const ProductDetailPage = () => {
     return (
       <Box maxW="container.lg" mx="auto" p={8}>
         <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={8}>
-          <GridItem><Skeleton height={{ base: "300px", md: "500px" }} /><HStack mt={4} spacing={4}><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /><Skeleton height="60px" width="60px" /></HStack></GridItem>
+          <GridItem><Skeleton height={{ base: "300px", md: "500px" }} borderRadius="lg" /><HStack mt={4} spacing={4}><Skeleton height="60px" width="60px" borderRadius="md" /><Skeleton height="60px" width="60px" borderRadius="md" /><Skeleton height="60px" width="60px" borderRadius="md" /></HStack></GridItem>
           <GridItem><SkeletonText noOfLines={1} height="40px" /><SkeletonText noOfLines={1} height="30px" mt={4} width="150px" /><SkeletonText noOfLines={6} mt={6} /></GridItem>
         </Grid>
       </Box>
@@ -113,7 +126,7 @@ const ProductDetailPage = () => {
               <FormLabel fontWeight="bold"><Icon as={FaPalette} mr={2} />Color: <Text as="span" fontWeight="normal">{selectedColor?.colorName}</Text></FormLabel>
               <HStack spacing={3} wrap="wrap">
                 {product.variants.map((variant) => (
-                  <Tooltip key={variant.colorName} label={variant.colorName}>
+                  <Tooltip key={variant.colorName} label={variant.colorName} placement="top">
                     <Button onClick={() => handleColorSelect(variant)} height="40px" width="40px" borderRadius="full" p={0} border="3px solid" borderColor={selectedColor?.colorName === variant.colorName ? "brand.primary" : "gray.200"}>
                       <Box bg={variant.colorHex} height="32px" width="32px" borderRadius="full" />
                     </Button>
@@ -127,7 +140,9 @@ const ProductDetailPage = () => {
                 {selectedColor?.sizes.map(s => <option key={s.size} value={s.size}>{s.size}</option>)}
               </Select>
             </FormControl>
-            <Button colorScheme="brandPrimary" size="lg" w="100%" mt={4} leftIcon={<FaPlus />} onClick={handleCustomizeClick} isDisabled={!selectedSize}>Customize This Item</Button>
+            <Button colorScheme="brandPrimary" size="lg" w="100%" mt={4} leftIcon={<FaPlus />} onClick={handleCustomizeClick} isDisabled={!selectedSize}>
+              Customize This Item
+            </Button>
           </VStack>
         </GridItem>
       </Grid>
