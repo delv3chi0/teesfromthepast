@@ -1,17 +1,13 @@
 // frontend/src/components/shop/ProductCard.jsx
 import React from 'react';
-import { Box, Image, Text, VStack, Heading, Skeleton, Icon } from '@chakra-ui/react';
+import { Box, Image, Text, VStack, Heading, Skeleton, Icon, Flex } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { FaImage } from 'react-icons/fa';
 
 const ProductCard = ({ product }) => {
   if (!product) {
     return (
-      <Box>
-        <Skeleton height="220px" borderRadius="lg"/>
-        <Skeleton height="20px" mt="4" />
-        <Skeleton height="20px" mt="2" />
-      </Box>
+      <Box><Skeleton height="220px" borderRadius="lg"/><Skeleton height="20px" mt="4" /><Skeleton height="20px" mt="2" /></Box>
     );
   }
 
@@ -19,32 +15,8 @@ const ProductCard = ({ product }) => {
   const isClickable = !!product.slug;
 
   return (
-    <Box
-      as={isClickable ? RouterLink : 'div'}
-      to={productUrl}
-      borderWidth="1px"
-      borderRadius="lg"
-      overflow="hidden"
-      transition="all 0.2s ease-in-out"
-      _hover={isClickable ? { shadow: 'lg', transform: 'translateY(-4px)' } : {}}
-      cursor={isClickable ? 'pointer' : 'not-allowed'}
-      display="flex" // Use Flexbox to make footer sticky
-      flexDirection="column"
-      bg="white"
-    >
-      {/* === THE FIX IS HERE === */}
-      {/* 1.  The Image is now wrapped in a Box with padding and a background color.
-        2.  The Image's `objectFit` is changed to `contain` to ensure the whole shirt is visible.
-        3.  The Image's height is set to 100% to fill its new container.
-      */}
-      <Box 
-        h="220px" 
-        bg="gray.50" 
-        p={4} 
-        display="flex" 
-        alignItems="center" 
-        justifyContent="center"
-      >
+    <Box as={isClickable ? RouterLink : 'div'} to={productUrl} borderWidth="1px" borderRadius="lg" overflow="hidden" transition="all 0.2s ease-in-out" _hover={isClickable ? { shadow: 'lg', transform: 'translateY(-4px)' } : {}} cursor={isClickable ? 'pointer' : 'not-allowed'} display="flex" flexDirection="column" bg="white">
+      <Box h="220px" bg="gray.50" p={4} display="flex" alignItems="center" justifyContent="center">
         <Image
           src={product.defaultImage || ''}
           alt={`Image of ${product.name}`}
@@ -56,8 +28,7 @@ const ProductCard = ({ product }) => {
           htmlHeight="400"
         />
       </Box>
-
-      <Box p="4" mt="auto"> {/* Use flexbox properties to push this content down */}
+      <Box p="4" mt="auto">
         <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name}>
           {product.name}
         </Heading>

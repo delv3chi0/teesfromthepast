@@ -7,7 +7,7 @@ import LogoutButton from './LogoutButton';
 import { useAuth } from '../context/AuthProvider';
 import Footer from './Footer';
 
-// === RE-ORDERED for better user flow ===
+// Corrected navigation order
 const baseNavItems = [
   { label: 'Shop', path: '/shop' },
   { label: 'AI Image Generator', path: '/generate' },
@@ -30,8 +30,12 @@ export default function MainLayout({ children }) {
   const navItems = useMemo(() => {
     if (user?.isAdmin) {
       const items = [...baseNavItems];
-      // Insert Admin Console before the last item (Dashboard)
-      items.splice(items.length - 1, 0, adminNavItem);
+      const profileIndex = items.findIndex(item => item.path === '/profile');
+      if (profileIndex !== -1) {
+        items.splice(profileIndex + 1, 0, adminNavItem);
+      } else {
+        items.push(adminNavItem);
+      }
       return items;
     }
     return baseNavItems;
@@ -48,8 +52,7 @@ export default function MainLayout({ children }) {
                     color={location.pathname.startsWith(item.path) ? 'brand.accentYellow' : 'brand.textLight'}
                     bg={location.pathname.startsWith(item.path) ? 'brand.primaryLight' : 'transparent'}
                     _hover={{ textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow' }}
-                    onClick={onClick}
-                >
+                    onClick={onClick}>
                     {item.label}
                 </ChakraLink>
             ))}
