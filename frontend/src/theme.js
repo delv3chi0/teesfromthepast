@@ -1,28 +1,29 @@
 // frontend/src/theme.js
 import { extendTheme } from '@chakra-ui/react';
 
-// === NEW: Dark Theme Color Palette ===
+// === NEW: Color palette sampled directly from your screenshot ===
 const colors = {
   brand: {
-    // Primary colors are now your dark theme colors
-    primary: '#262626',      // The main dark background from your screenshot
-    primaryLight: '#383838', // A slightly lighter dark for hover states
-    primaryDark: '#1A1A1A',  // A deeper dark for contrast
+    // Dark theme colors based on the "Dark Reader" look
+    primary: '#302B27',      // The main dark, soft brown background
+    secondary: '#4A443E',    // The slightly lighter color for cards/panels
     
-    // Secondary colors for cards and panels
-    secondary: '#3C3C3C',    // The color of the card backgrounds
-    secondaryLight: '#4F4F4F',
-    
-    // Accent colors remain the same for buttons and highlights
+    // Sidebar color
+    sidebar: '#2B211C',
+
+    // Text colors for the dark theme
+    textLight: '#E8E6E3',     // The main off-white text color
+    textMuted: '#A9A199',     // Muted text for less important info
+
+    // Accent colors remain vibrant as requested
     accentOrange: '#FF7043',
     accentOrangeHover: '#F4511E',
     accentYellow: '#FFEE58',
     accentYellowHover: '#FDD835',
-    
-    // Text colors are now light by default
-    textDark: '#2D2D2D',      // Kept for use on light backgrounds if needed
-    textLight: '#E0E0E0',      // The main off-white text color
-    textMuted: '#A0A0A0',      // Muted gray for less important text
+
+    // Kept for specific use cases (like white text on orange buttons)
+    textOnAccent: '#FFFFFF',
+    textOnDark: '#3E2723',
   },
 };
 
@@ -56,32 +57,31 @@ const components = {
   },
   Button: {
     variants: {
-        // Ensure your orange button style is preserved
+        // This ensures your orange button style is preserved
         solid: (props) => {
             if (props.colorScheme === 'brandAccentOrange') {
                 return {
                     bg: 'brand.accentOrange',
-                    color: 'white',
+                    color: 'brand.textOnAccent', // Use pure white for buttons
                     _hover: { bg: 'brand.accentOrangeHover' }
                 };
             }
-            // Add other button variants if needed
         }
     }
   },
-  Card: { // A new global style for any "card" elements
+  // A new global style for any "card" elements
+  Card: { 
     baseStyle: {
         container: {
             bg: 'brand.secondary',
             borderRadius: 'xl',
-            boxShadow: 'lg',
         }
     }
   }
 };
 
 const config = {
-  initialColorMode: 'dark', // Set the initial mode to dark
+  initialColorMode: 'dark',
   useSystemColorMode: false,
 };
 
