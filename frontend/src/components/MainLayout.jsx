@@ -1,6 +1,10 @@
 // frontend/src/components/MainLayout.jsx
 import React, { useMemo } from 'react';
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image, Avatar, HStack, Icon, Spacer, useBreakpointValue, Container, Button, Text } from '@chakra-ui/react';
+import {
+  Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody,
+  Image as ChakraImage, // Renamed import to avoid naming conflict
+  Avatar, HStack, Icon, Spacer, useBreakpointValue, Container, Button
+} from '@chakra-ui/react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { HamburgerIcon } from '@chakra-ui/icons';
 import LogoutButton from './LogoutButton';
@@ -41,30 +45,28 @@ export default function MainLayout({ children }) {
   }, [user]);
 
   const SidebarContent = ({ onClick }) => (
-    <Box as="nav" pos="fixed" top="0" left="0" zIndex={1200} h="full" pb="10" overflowX="hidden" overflowY="auto" bg={user ? 'brand.sidebar' : 'brand.primary'} borderRightWidth="1px" borderColor="brand.primaryDark" w="60">
+    <Box as="nav" pos="fixed" top="0" left="0" zIndex={1200} h="full" pb="10" overflowX="hidden" overflowY="auto" bg="brand.sidebar" borderRightWidth="1px" borderColor="brand.primaryDark" w="60">
         <Flex as={RouterLink} to="/" px="4" py="4" align="center" justifyContent="center">
             <ChakraImage src="/logo.png" alt="Tees From The Past Logo" maxW="190px"/>
         </Flex>
-        {user && (
-          <VStack spacing={3} align="stretch" px="4" mt={8}>
-              {navItems.map((item) => (
-                  <ChakraLink key={item.label} as={RouterLink} to={item.path} p={3} borderRadius="md" fontWeight="medium" display="flex" alignItems="center"
-                      color={location.pathname.startsWith(item.path) ? 'brand.accentYellow' : 'brand.textLight'}
-                      bg={location.pathname.startsWith(item.path) ? 'brand.primaryLight' : 'transparent'}
-                      _hover={{ textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow' }}
-                      onClick={onClick}>
-                      {item.label}
-                  </ChakraLink>
-              ))}
-          </VStack>
-        )}
+        <VStack spacing={3} align="stretch" px="4" mt={8}>
+            {navItems.map((item) => (
+                <ChakraLink key={item.label} as={RouterLink} to={item.path} p={3} borderRadius="md" fontWeight="medium" display="flex" alignItems="center"
+                    color={location.pathname.startsWith(item.path) ? 'brand.accentYellow' : 'brand.textLight'}
+                    bg={location.pathname.startsWith(item.path) ? 'brand.primaryLight' : 'transparent'}
+                    _hover={{ textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow' }}
+                    onClick={onClick}>
+                    {item.label}
+                </ChakraLink>
+            ))}
+        </VStack>
     </Box>
   );
 
   const Header = () => (
     <Flex as="header" align="center" justify="space-between" w="full" px={{base: 4, md: 6}} py={2} h="16" bg="brand.secondary" borderBottomWidth="1px" borderColor="brand.primaryDark" flexShrink={0}>
         <HStack spacing={4}>
-            {user && !isDesktopView && <IconButton aria-label="Open Menu" onClick={onOpen} icon={<HamburgerIcon />} variant="ghost" />}
+            {user && !isDesktopView && <IconButton aria-label="Open Menu" onClick={onOpen} icon={<HamburgerIcon />} variant="ghost" color="brand.textDark" _hover={{bg: 'blackAlpha.200'}} />}
             <ChakraLink as={RouterLink} to="/">
                 <ChakraImage src="/logo-text.png" alt="Tees From The Past" h="40px" />
             </ChakraLink>
@@ -90,7 +92,14 @@ export default function MainLayout({ children }) {
         {user && isDesktopView && <SidebarContent />}
         {user && !isDesktopView && (
           <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
-            <DrawerOverlay /><DrawerContent bg="brand.primary" color="brand.textLight"><DrawerCloseButton /><DrawerHeader borderBottomWidth="1px" as={RouterLink} to="/shop" onClick={onClose} display="flex" justifyContent="center"><ChakraImage src="/logo.png" maxH="50px" /></DrawerHeader><DrawerBody p={0}><SidebarContent onClick={onClose} /></DrawerBody></DrawerContent>
+            <DrawerOverlay />
+            <DrawerContent bg="brand.sidebar" color="brand.textLight">
+                <DrawerCloseButton />
+                <DrawerHeader borderBottomWidth="1px" borderColor="brand.primaryDark" as={RouterLink} to="/" onClick={onClose} display="flex" justifyContent="center">
+                    <ChakraImage src="/logo.png" maxH="50px" />
+                </DrawerHeader>
+                <DrawerBody p={0}><SidebarContent onClick={onClose} /></DrawerBody>
+            </DrawerContent>
           </Drawer>
         )}
 
