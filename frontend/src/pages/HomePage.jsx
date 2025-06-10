@@ -1,40 +1,40 @@
 // frontend/src/pages/HomePage.jsx
 import React from 'react';
-import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image } from '@chakra-ui/react';
+import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Card, CardBody } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
 
 const FeatureCard = ({ icon, title, children }) => (
-  <Box bg="brand.cardBg" p={6} borderRadius="lg" shadow="md" textAlign="center">
-    <Icon as={icon} w={12} h={12} color="brand.primary" mb={4} />
-    <Heading as="h3" size="lg" mb={3}>{title}</Heading>
-    <Text color="gray.600">{children}</Text>
-  </Box>
+  <Card>
+    <CardBody p={8} display="flex" flexDirection="column" alignItems="center" textAlign="center">
+      <Icon as={icon} w={12} h={12} color="brand.accentOrange" mb={4} />
+      <Heading as="h3" size="lg" mb={3} color="brand.textLight">{title}</Heading>
+      <Text color="brand.textMuted">{children}</Text>
+    </CardBody>
+  </Card>
 );
 
 const HomePage = () => {
   const navigate = useNavigate();
 
   return (
-    <VStack spacing={20} py={10}>
-      {/* Hero Section */}
-      <VStack spacing={6} textAlign="center" py={10}>
-        <Image src="/logo.png" alt="Tees From The Past Logo" maxW="300px" mb={4} />
-        <Heading as="h1" size="2xl" fontFamily="Bungee" textTransform="uppercase">
+    <VStack spacing={{ base: 16, md: 24 }} py={10}>
+      {/* Hero Section - Reduced spacing */}
+      <VStack spacing={8} textAlign="center" py={10}>
+        <Image src="/logo.png" alt="Tees From The Past Logo" maxW={{base: "250px", md: "350px"}} mb={4} />
+        <Heading as="h1" size="2xl" fontFamily="Bungee" textTransform="uppercase" color="brand.textLight">
           Wear Your Imagination
         </Heading>
-        <Text fontSize="xl" maxW="3xl" color="brand.textDark">
+        <Text fontSize="xl" maxW="3xl" color="brand.textMuted">
           Unleash your creativity with our AI image generator, specializing in stunning retro and vintage styles. Bring your unique ideas to life on high-quality, custom apparel.
         </Text>
         <Button
-          bg="brand.accentOrange"
-          color="white"
+          colorScheme="brandAccentOrange"
           size="lg"
           px={12}
           py={8}
           fontSize="2xl"
           onClick={() => navigate('/shop')}
-          _hover={{ bg: 'brand.accentOrangeHover', transform: 'scale(1.05)' }}
         >
           Explore The Collection
         </Button>

@@ -1,29 +1,20 @@
 // frontend/src/theme.js
 import { extendTheme } from '@chakra-ui/react';
 
-// === NEW: Warmer, more accurate retro color palette ===
+// A new, refined color palette based on your screenshot
 const colors = {
   brand: {
-    // Main dark brown background
-    primary: '#3D352E',
+    primary: '#1A1D22',      // The main dark background
+    secondary: '#2C3539',    // A slightly lighter dark for cards and panels
+    headerBg: '#212428',     // A specific dark color for the top header
+    sidebar: '#1A1D22',      // Sidebar background
     
-    // A warmer, richer tan for the header and other elements
-    secondary: '#D2B48C', // Tan
+    accentOrange: '#D95A2B', // The vibrant orange from your buttons
+    accentOrangeHover: '#E86A3C',
     
-    // Vibrant accents that work with the new theme
-    accentOrange: '#FF7043',
-    accentOrangeHover: '#F4511E',
-    accentYellow: '#FFC107',
-    accentYellowHover: '#FFA000',
-    
-    // Card and Paper backgrounds
-    cardBg: '#FFFFFF',       // Pure white for cards to pop
-    paper: '#F5F5F0',        // A subtle off-white for main content areas
-    
-    // Text colors for high contrast
-    textLight: '#F5F5F0',     // Off-white for text on dark backgrounds
-    textDark: '#3D352E',      // Dark brown for text on light backgrounds
-    textMuted: '#A1887F',    // Muted tan for less important text on dark backgrounds
+    textLight: '#EAEAEA',     // The main off-white text color
+    textMuted: '#949494',      // Muted gray for less important text
+    textDark: '#1A1D22',      // Dark text for use on light backgrounds (like buttons)
   },
 };
 
@@ -33,29 +24,60 @@ const fonts = {
 };
 
 const components = {
-  // === UPDATED: Default styles for cards and modals ===
-  Card: {
+  Button: {
+    baseStyle: {
+      borderRadius: "full",
+      fontWeight: "bold",
+      transition: "transform 0.1s ease-out",
+      _hover: {
+        transform: "scale(1.03)",
+      }
+    },
+    variants: {
+      solid: (props) => {
+        if (props.colorScheme === 'brandAccentOrange') {
+          return {
+            bg: 'brand.accentOrange',
+            color: 'white',
+            _hover: { bg: 'brand.accentOrangeHover' }
+          };
+        }
+        if (props.colorScheme === 'brandPrimary') {
+            return {
+              bg: 'brand.primaryDark',
+              color: 'brand.textLight',
+              _hover: {bg: 'blackAlpha.800'}
+            };
+        }
+      },
+      ghost: (props) => ({
+        color: 'brand.textLight',
+        _hover: { bg: 'whiteAlpha.200' }
+      })
+    },
+  },
+  Card: { // A new global style for any "card" elements
     baseStyle: {
         container: {
-            bg: 'brand.cardBg',
-            color: 'brand.textDark', // Text inside cards is now dark for readability
+            bg: 'brand.secondary',
+            color: 'brand.textLight', 
             borderRadius: 'xl',
-            boxShadow: 'lg',
+            boxShadow: 'md',
         }
     }
   },
   Modal: {
-      baseStyle: {
-          dialog: {
-              bg: 'brand.cardBg', // Modals will also have the white card background
-              color: 'brand.textDark'
-          }
-      }
+    baseStyle: {
+        dialog: {
+            bg: 'brand.secondary',
+            color: 'brand.textLight'
+        }
+    }
   },
   Heading: {
     baseStyle: {
       fontFamily: fonts.heading,
-      color: 'brand.textDark', // Default heading color is now dark
+      color: 'brand.textLight',
       fontWeight: 'normal',
     },
     sizes: {
@@ -67,30 +89,10 @@ const components = {
       },
     },
   },
-  Text: {
-    baseStyle: {
-      fontFamily: 'body',
-      color: 'brand.textDark', // Default text color is dark
-      lineHeight: 'tall',
-    },
-  },
-  Button: {
-    variants: {
-        solid: (props) => {
-            if (props.colorScheme === 'brandAccentOrange') {
-                return {
-                    bg: 'brand.accentOrange',
-                    color: 'white',
-                    _hover: { bg: 'brand.accentOrangeHover' }
-                };
-            }
-        }
-    }
-  },
 };
 
 const config = {
-  initialColorMode: 'light',
+  initialColorMode: 'dark',
   useSystemColorMode: false,
 };
 
@@ -102,8 +104,8 @@ const theme = extendTheme({
   styles: {
     global: {
       body: {
-        bg: 'brand.primary', // Use the new rich brown as the global background
-        color: 'brand.textLight', // Default text on the body is light
+        bg: 'brand.primary',
+        color: 'brand.textLight',
       },
     },
   },
