@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Select,
   SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton as ChakraCloseButton,
-  Link as ChakraLink, Divider, useToast, Icon, Button, Card, CardBody, CardHeader
+  Link as ChakraLink, Divider, useToast, Icon, Button, Card, CardBody,
+  FormControl, FormLabel // <-- THE FIX: Added missing imports
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { client } from '../api/client';
@@ -110,9 +111,8 @@ export default function ProductStudio() {
         if (mockupSrc) {
             fabricInstance.Image.fromURL(mockupSrc, (img) => { FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), { scaleX: FCanvas.width / img.width, scaleY: FCanvas.height / img.height }); }, { crossOrigin: 'anonymous' });
         }
+        FCanvas.getObjects('image').forEach(obj => FCanvas.remove(obj));
         if (selectedDesign?.imageDataUrl) {
-            const existingDesign = FCanvas.getObjects('image')[0];
-            if(existingDesign) FCanvas.remove(existingDesign);
             fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                 if(!img) return;
                 img.scaleToWidth(CANVAS_WIDTH * 0.33);
@@ -125,7 +125,14 @@ export default function ProductStudio() {
     pollForFabric();
   }, [selectedDesign, selectedVariant]);
   
-  const handleProceedToCheckout = () => { /* ... unchanged ... */ };
+  const handleProceedToCheckout = () => {
+    if (!selectedDesign) { toast({ title: "Please select a design.", status: "warning" }); return; }
+    if (!selectedVariant) { toast({ title: "Please select all product options.", status: "warning" }); return; }
+    const product = productsOfType.find(p => p._id === selectedProductId);
+    const checkoutItem = { designId: selectedDesign._id, productId: selectedProductId, productName: product.name, variantSku: selectedVariant.sku, size: selectedVariant.size, color: selectedVariant.colorName, prompt: selectedDesign.prompt, imageDataUrl: selectedDesign.imageDataUrl, productImage: selectedVariant.imageMockupFront };
+    localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
+    navigate('/checkout');
+  };
   const handleProductTypeChange = (e) => { setSelectedProductTypeId(e.target.value); setSelectedProductId(''); setSelectedProductColor(''); setSelectedProductSize(''); };
   const handleProductChange = (e) => { setSelectedProductId(e.target.value); setSelectedProductColor(''); setSelectedProductSize(''); };
   const handleColorChange = (e) => { setSelectedProductColor(e.target.value); setSelectedProductSize(''); };
@@ -133,7 +140,7 @@ export default function ProductStudio() {
 
   return (
     <VStack spacing={8} align="stretch">
-      <Heading as="h1" size="pageTitle">Customize Your Apparel</Heading>
+      <Heading as="h1" size="pageTitle">Customize Apparel</Heading>
       
       <Card><CardBody><VStack spacing={5} align="stretch">
         <Heading as="h2" size="lg">1. Choose Your Apparel</Heading>
