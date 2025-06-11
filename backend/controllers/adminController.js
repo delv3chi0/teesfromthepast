@@ -1,4 +1,3 @@
-// backend/controllers/adminController.js
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
@@ -115,33 +114,44 @@ const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     }
 });
 
-// CORRECTED: This function no longer contains the incorrect validation logic for product categories.
+// CORRECTED AND FINAL VERSION
 const createProductTypeAdmin = asyncHandler(async (req, res) => {
-    const { name } = req.body;
+    const { name, category, description } = req.body;
 
-    if (!name) {
-        return res.status(400).json({ message: 'Product type name is required.' });
+    if (!name || !category || !description) {
+        return res.status(400).json({ message: 'Name, category, and description are all required fields.' });
     }
 
-    try {
-        const existingType = await ProductType.findOne({ name });
-        if (existingType) {
-            return res.status(400).json({ message: 'Product type already exists.' });
-        }
-
-        const newType = new ProductType({ name });
-        const createdType = await newType.save();
-        
-        res.status(201).json(createdType);
-    } catch (error) {
-        res.status(500).json({ message: 'Server error while creating product type.', error: error.message });
+    if (!mongoose.Types.ObjectId.isValid(category)) { 
+        return res.status(400).json({ message: 'The provided Category ID is not a valid format.' }); 
     }
+
+    const categoryExists = await ProductCategory.findById(category);
+    if (!categoryExists) {
+        return res.status(404).json({ message: 'The selected category does not exist.' });
+    }
+
+    const typeExists = await ProductType.findOne({ name, category });
+    if (typeExists) {
+        return res.status(400).json({ message: `A product type named '${name}' already exists in this category.` });
+    }
+
+    const productType = new ProductType({
+        name,
+        category,
+        description,
+    });
+
+    const createdProduct = await productType.save();
+    res.status(201).json(createdProduct);
 });
 
+// CORRECTED: Ensures the category is populated for display on the frontend
 const getProductTypesAdmin = asyncHandler(async (req, res) => {
-    const productTypes = await ProductType.find({}).sort({ name: 1 }).lean();
+    const productTypes = await ProductType.find({}).populate('category', 'name').sort({ name: 1 });
     res.json(productTypes);
 });
+
 const getProductTypeByIdAdmin = asyncHandler(async (req, res) => {
     const productType = await ProductType.findById(req.params.id).populate('category', 'name description');
     if (productType) { res.json(productType); } else { res.status(404); throw new Error('Product type not found'); }
