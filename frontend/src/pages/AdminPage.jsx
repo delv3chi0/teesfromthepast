@@ -1,4 +1,4 @@
-k// frontend/src/pages/AdminPage.jsx
+// frontend/src/pages/AdminPage.jsx
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
