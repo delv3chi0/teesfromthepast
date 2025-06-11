@@ -16,8 +16,8 @@ import {
   Alert,
   AlertIcon,
 } from '@chakra-ui/react';
-// CORRECTED IMPORT STATEMENT
-import { apiClient } from '../../api/client';
+// CORRECTED: Importing 'client' instead of 'apiClient'
+import { client } from '../../api/client';
 
 const ProductCategoryManager = () => {
   const [categories, setCategories] = useState([]);
@@ -29,7 +29,8 @@ const ProductCategoryManager = () => {
   const fetchCategories = async () => {
     try {
       setIsLoading(true);
-      const { data } = await apiClient.get('/admin/product-categories');
+      // CORRECTED: Using 'client'
+      const { data } = await client.get('/admin/product-categories');
       setCategories(data);
       setError('');
     } catch (err) {
@@ -62,7 +63,8 @@ const ProductCategoryManager = () => {
       return;
     }
     try {
-      await apiClient.post('/admin/product-categories', { name: newCategoryName });
+      // CORRECTED: Using 'client'
+      await client.post('/admin/product-categories', { name: newCategoryName });
       toast({
         title: 'Category created.',
         description: `Successfully created "${newCategoryName}".`,
@@ -86,7 +88,8 @@ const ProductCategoryManager = () => {
   const handleDeleteCategory = async (id) => {
     if (window.confirm('Are you sure you want to delete this category?')) {
       try {
-        await apiClient.delete(`/admin/product-categories/${id}`);
+        // CORRECTED: Using 'client'
+        await client.delete(`/admin/product-categories/${id}`);
         toast({
           title: 'Category deleted.',
           status: 'success',
