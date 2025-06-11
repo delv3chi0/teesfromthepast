@@ -1,4 +1,3 @@
-// frontend/src/components/admin/ProductCategoryManager.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -17,7 +16,8 @@ import {
   Alert,
   AlertIcon,
 } from '@chakra-ui/react';
-import apiClient from '../../api/client';
+// CORRECTED IMPORT STATEMENT
+import { apiClient } from '../../api/client';
 
 const ProductCategoryManager = () => {
   const [categories, setCategories] = useState([]);

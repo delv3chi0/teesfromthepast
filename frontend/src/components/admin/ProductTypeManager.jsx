@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+kimport React, { useState, useEffect } from 'react';
 import {
   Box,
   Heading,
@@ -16,7 +16,8 @@ import {
   Alert,
   AlertIcon,
 } from '@chakra-ui/react';
-import apiClient from '../../api/client';
+// CORRECTED IMPORT STATEMENT
+import { apiClient } from '../../api/client';
 
 const ProductTypeManager = () => {
   const [types, setTypes] = useState([]);
