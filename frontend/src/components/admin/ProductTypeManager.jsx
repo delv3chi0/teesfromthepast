@@ -15,42 +15,60 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  Select, // Import Select
+  VStack, // Import VStack
+  FormControl, // Import FormControl
+  FormLabel, // Import FormLabel
 } from '@chakra-ui/react';
 import { client } from '../../api/client';
 
 const ProductTypeManager = () => {
   const [types, setTypes] = useState([]);
+  const [categories, setCategories] = useState([]); // State for categories
   const [newTypeName, setNewTypeName] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(''); // State for selected category
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const toast = useToast();
 
-  const fetchTypes = async () => {
+  const fetchData = async () => {
     try {
       setIsLoading(true);
-      const { data } = await client.get('/admin/product-types');
-      setTypes(data);
+      const [typesRes, categoriesRes] = await Promise.all([
+        client.get('/admin/product-types'),
+        client.get('/admin/product-categories')
+      ]);
+      setTypes(typesRes.data);
+      setCategories(categoriesRes.data);
+      if (categoriesRes.data.length > 0) {
+        setSelectedCategoryId(categoriesRes.data[0]._id); // Default to first category
+      }
       setError('');
     } catch (err) {
-      setError('Could not fetch product types.');
+      setError('Could not fetch data.');
+      toast({ title: 'Error', description: err.message, status: 'error' });
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchTypes();
+    fetchData();
   }, []);
 
   const handleCreateType = async () => {
-    if (!newTypeName.trim()) return;
+    if (!newTypeName.trim() || !selectedCategoryId) {
+      toast({ title: 'Validation Error', description: 'Name and category are required.', status: 'warning' });
+      return;
+    }
     try {
-      await client.post('/admin/product-types', { name: newTypeName });
-      toast({ title: 'Product type created.', status: 'success', duration: 3000, isClosable: true });
+      // Send both name and the selected category ID
+      await client.post('/admin/product-types', { name: newTypeName, category: selectedCategoryId });
+      toast({ title: 'Product type created.', status: 'success' });
       setNewTypeName('');
-      fetchTypes();
+      fetchData(); // Refresh list
     } catch (err) {
-      toast({ title: 'Creation failed.', description: err.message, status: 'error', duration: 5000, isClosable: true });
+      toast({ title: 'Creation failed', description: err.response?.data?.message || 'Could not create type.', status: 'error' });
     }
   };
 
@@ -58,37 +76,46 @@ const ProductTypeManager = () => {
     if (window.confirm('Are you sure you want to delete this product type?')) {
       try {
         await client.delete(`/admin/product-types/${id}`);
-        toast({ title: 'Product type deleted.', status: 'success', duration: 3000, isClosable: true });
-        fetchTypes();
+        toast({ title: 'Product type deleted.', status: 'success' });
+        fetchData(); // Refresh list
       } catch (err) {
-        toast({ title: 'Deletion failed.', description: err.message, status: 'error', duration: 5000, isClosable: true });
+        toast({ title: 'Deletion failed', description: err.response?.data?.message || 'Could not delete type.', status: 'error' });
       }
     }
   };
-
+  
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
   return (
     <Box bg="ui.background" p={6} borderRadius="lg" shadow="sm">
       <Heading size="md" mb={4}>Manage Product Types</Heading>
-      <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateType(); }}>
-        <Input
-          placeholder="New product type name"
-          value={newTypeName}
-          onChange={(e) => setNewTypeName(e.target.value)}
-        />
-        <Button type="submit">Add Type</Button>
-      </HStack>
-      {/* Added size="sm" to make rows more compact */}
+      <VStack as="form" mb={6} spacing={4} align="stretch" onSubmit={(e) => { e.preventDefault(); handleCreateType(); }}>
+        <FormControl>
+          <FormLabel>Type Name</FormLabel>
+          <Input placeholder="New product type name" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
+        </FormControl>
+        <FormControl>
+          <FormLabel>Category</FormLabel>
+          <Select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
+            {categories.map(cat => (
+              <option key={cat._id} value={cat._id}>{cat.name}</option>
+            ))}
+          </Select>
+        </FormControl>
+        <Button type="submit" alignSelf="flex-end">Add Type</Button>
+      </VStack>
+
       <Table variant="simple" size="sm">
         <Thead>
-          <Tr><Th>Name</Th><Th>Actions</Th></Tr>
+          <Tr><Th>Name</Th><Th>Category</Th><Th>Actions</Th></Tr>
         </Thead>
         <Tbody>
           {types.map((type) => (
             <Tr key={type._id}>
               <Td>{type.name}</Td>
+              {/* Assuming your API for getProductTypesAdmin populates the category name */}
+              <Td>{type.category?.name || 'N/A'}</Td>
               <Td>
                 <Button size="sm" colorScheme="red" onClick={() => handleDeleteType(type._id)}>Delete</Button>
               </Td>
