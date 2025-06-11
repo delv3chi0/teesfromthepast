@@ -15,7 +15,7 @@ import {
   Spinner,
   Alert,
   AlertIcon,
-  Card, // Added Card to imports
+  // Card has been removed from imports
 } from '@chakra-ui/react';
 import { client } from '../../api/client';
 
@@ -47,22 +47,22 @@ const ProductTypeManager = () => {
     if (!newTypeName.trim()) return;
     try {
       await client.post('/admin/product-types', { name: newTypeName });
-      toast({ title: 'Product type created.', status: 'success' });
+      toast({ title: 'Product type created.', status: 'success', duration: 3000, isClosable: true });
       setNewTypeName('');
       fetchTypes();
     } catch (err) {
-      toast({ title: 'Creation failed.', description: err.message, status: 'error' });
+      toast({ title: 'Creation failed.', description: err.message, status: 'error', duration: 5000, isClosable: true });
     }
   };
 
   const handleDeleteType = async (id) => {
-    if (window.confirm('Are you sure?')) {
+    if (window.confirm('Are you sure you want to delete this product type?')) {
       try {
         await client.delete(`/admin/product-types/${id}`);
-        toast({ title: 'Product type deleted.', status: 'success' });
+        toast({ title: 'Product type deleted.', status: 'success', duration: 3000, isClosable: true });
         fetchTypes();
       } catch (err) {
-        toast({ title: 'Deletion failed.', description: err.message, status: 'error' });
+        toast({ title: 'Deletion failed.', description: err.message, status: 'error', duration: 5000, isClosable: true });
       }
     }
   };
@@ -70,9 +70,9 @@ const ProductTypeManager = () => {
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
-  // Replaced root <Box> with <Card> for consistent styling
+  // Using a styled Box to precisely match the Products tab layout
   return (
-    <Card>
+    <Box bg="ui.background" p={6} borderRadius="lg" shadow="sm">
       <Heading size="md" mb={4}>Manage Product Types</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateType(); }}>
         <Input
@@ -85,7 +85,7 @@ const ProductTypeManager = () => {
       <Table variant="simple">
         <Thead>
           <Tr><Th>Name</Th><Th>Actions</Th></Tr>
-        </Thead>
+        </Tbody>
         <Tbody>
           {types.map((type) => (
             <Tr key={type._id}>
@@ -97,7 +97,7 @@ const ProductTypeManager = () => {
           ))}
         </Tbody>
       </Table>
-    </Card>
+    </Box>
   );
 };
 

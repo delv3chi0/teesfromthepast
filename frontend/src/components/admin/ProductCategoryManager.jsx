@@ -15,7 +15,7 @@ import {
   Spinner,
   Alert,
   AlertIcon,
-  Card, // Added Card to imports
+  // Card has been removed from imports
 } from '@chakra-ui/react';
 import { client } from '../../api/client';
 
@@ -47,22 +47,22 @@ const ProductCategoryManager = () => {
     if (!newCategoryName.trim()) return;
     try {
       await client.post('/admin/product-categories', { name: newCategoryName });
-      toast({ title: 'Category created.', status: 'success' });
+      toast({ title: 'Category created.', status: 'success', duration: 3000, isClosable: true });
       setNewCategoryName('');
       fetchCategories();
     } catch (err) {
-      toast({ title: 'Creation failed.', description: err.message, status: 'error' });
+      toast({ title: 'Creation failed.', description: err.message, status: 'error', duration: 5000, isClosable: true });
     }
   };
 
   const handleDeleteCategory = async (id) => {
-    if (window.confirm('Are you sure?')) {
+    if (window.confirm('Are you sure you want to delete this category?')) {
       try {
         await client.delete(`/admin/product-categories/${id}`);
-        toast({ title: 'Category deleted.', status: 'success' });
+        toast({ title: 'Category deleted.', status: 'success', duration: 3000, isClosable: true });
         fetchCategories();
       } catch (err) {
-        toast({ title: 'Deletion failed.', description: err.message, status: 'error' });
+        toast({ title: 'Deletion failed.', description: err.message, status: 'error', duration: 5000, isClosable: true });
       }
     }
   };
@@ -70,9 +70,9 @@ const ProductCategoryManager = () => {
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
-  // Replaced root <Box> with <Card> for consistent styling
+  // Using a styled Box to precisely match the Products tab layout
   return (
-    <Card>
+    <Box bg="ui.background" p={6} borderRadius="lg" shadow="sm">
       <Heading size="md" mb={4}>Manage Product Categories</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateCategory(); }}>
         <Input
@@ -97,7 +97,7 @@ const ProductCategoryManager = () => {
           ))}
         </Tbody>
       </Table>
-    </Card>
+    </Box>
   );
 };
 
