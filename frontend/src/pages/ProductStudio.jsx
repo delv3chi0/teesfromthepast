@@ -2,9 +2,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Select,
-  SimpleGrid, Image, Spinner, Alert, AlertIcon, CloseButton as ChakraCloseButton,
-  Link as ChakraLink, Divider, useToast, Icon, Button, Card, CardBody,
-  FormControl, FormLabel // <-- THE FIX: Added missing imports
+  SimpleGrid, Image, Spinner, Alert, AlertIcon, Link as ChakraLink, 
+  Divider, useToast, Icon, Button, Card, CardBody, CardHeader,
+  FormControl, FormLabel
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import { client } from '../api/client';
@@ -145,10 +145,10 @@ export default function ProductStudio() {
       <Card><CardBody><VStack spacing={5} align="stretch">
         <Heading as="h2" size="lg">1. Choose Your Apparel</Heading>
         <SimpleGrid columns={{ base: 1, md: 2, lg:4 }} spacing={6}>
-            <FormControl><FormLabel>Product Type</FormLabel><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes}>{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></FormControl>
-            <FormControl><FormLabel>Specific Product</FormLabel><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType}>{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></FormControl>
-            <FormControl><FormLabel>Color</FormLabel><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></FormControl>
-            <FormControl><FormLabel>Size</FormLabel><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor}>{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></FormControl>
+            <FormControl><FormLabel>Product Type</FormLabel><Select value={selectedProductTypeId} onChange={handleProductTypeChange} placeholder={loadingProductTypes ? "Loading..." : "Select Type"} isDisabled={loadingProductTypes} sx={{ color: 'brand.textDark' }}>{availableProductTypes.map(pt => <option key={pt._id} value={pt._id}>{pt.name}</option>)}</Select></FormControl>
+            <FormControl><FormLabel>Specific Product</FormLabel><Select value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedProductTypeId || loadingProductsOfType} sx={{ color: 'brand.textDark' }}>{productsOfType.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</Select></FormControl>
+            <FormControl><FormLabel>Color</FormLabel><Select value={selectedProductColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId} sx={{ color: 'brand.textDark' }}>{availableColors.map(pc => <option key={pc.value} value={pc.value}>{pc.label}</option>)}</Select></FormControl>
+            <FormControl><FormLabel>Size</FormLabel><Select value={selectedProductSize} onChange={handleSizeChange} placeholder="Select Size" isDisabled={!selectedProductColor} sx={{ color: 'brand.textDark' }}>{availableSizes.map(ps => <option key={ps.value} value={ps.value}>{ps.label}</option>)}</Select></FormControl>
         </SimpleGrid>
       </VStack></CardBody></Card>
 
