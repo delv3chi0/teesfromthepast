@@ -1,318 +1,162 @@
 // frontend/src/components/admin/ProductCategoryManager.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Heading,
   Button,
+  Input,
+  HStack,
   Table,
   Thead,
   Tbody,
   Tr,
   Th,
   Td,
-  TableContainer,
+  useToast,
   Spinner,
   Alert,
   AlertIcon,
-  VStack,
-  Text,
-  useToast,
-  IconButton as ChakraIconButton,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  useDisclosure,
-  FormControl,
-  FormLabel,
-  Input,
-  Switch,
-  HStack,
-  Tooltip,
-  Icon,
-  Tag, // <--- ADDED Tag HERE
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff } from 'react-icons/fa';
-import { client } from '../../api/client'; // Adjust path if your client.js is elsewhere
-import { useAuth } from '../../context/AuthProvider'; // Adjust path if your AuthProvider.js is elsewhere
+import apiClient from '../../api/client';
 
 const ProductCategoryManager = () => {
-  const { token } = useAuth();
+  const [categories, setCategories] = useState([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const toast = useToast();
 
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', isActive: true });
-
-  const { isOpen, onOpen, onClose } = useDisclosure(); // For Add/Edit Modal
-  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure(); // For Delete Confirmation
-
-  const fetchCategories = useCallback(async () => {
-    setLoading(true);
-    setError('');
+  const fetchCategories = async () => {
     try {
-      const response = await client.get('/admin/product-categories', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCategories(response.data);
+      setIsLoading(true);
+      const { data } = await apiClient.get('/admin/product-categories');
+      setCategories(data);
+      setError('');
     } catch (err) {
-      console.error("Error fetching categories:", err);
-      setError(err.response?.data?.message || 'Failed to fetch product categories.');
-      toast({ title: "Error", description: err.response?.data?.message || 'Failed to fetch categories.', status: "error", duration: 5000, isClosable: true });
+      setError('Could not fetch product categories.');
+      toast({
+        title: 'Error fetching categories',
+        description: err.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, [token, toast]);
+  };
 
   useEffect(() => {
-    if (token) {
-      fetchCategories();
-    }
-  }, [fetchCategories, token]);
+    fetchCategories();
+  }, []);
 
-  const handleOpenModal = (category = null) => {
-    if (category) {
-      setIsEditing(true);
-      setSelectedCategory(category);
-      setFormData({ name: category.name, description: category.description || '', isActive: category.isActive });
-    } else {
-      setIsEditing(false);
-      setSelectedCategory(null);
-      setFormData({ name: '', description: '', isActive: true });
-    }
-    onOpen();
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value }));
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.name.trim()) {
-      toast({ title: "Validation Error", description: "Category name is required.", status: "error", duration: 3000, isClosable: true });
-      return;
-    }
-
-    const method = isEditing ? 'put' : 'post';
-    const url = isEditing ? `/admin/product-categories/${selectedCategory._id}` : '/admin/product-categories';
-
-    try {
-      const response = await client[method](url, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
       toast({
-        title: `Category ${isEditing ? 'Updated' : 'Created'}`,
-        description: `Category "${response.data.name}" has been successfully ${isEditing ? 'updated' : 'created'}.`,
-        status: "success",
+        title: 'Validation Error',
+        description: 'Category name cannot be empty.',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
-      fetchCategories(); // Refresh the list
-      onClose();
-    } catch (err) {
-      console.error(`Error ${isEditing ? 'updating' : 'creating'} category:`, err);
+      return;
+    }
+    try {
+      await apiClient.post('/admin/product-categories', { name: newCategoryName });
       toast({
-        title: `Error ${isEditing ? 'Updating' : 'Creating'} Category`,
-        description: err.response?.data?.message || `Could not ${isEditing ? 'update' : 'create'} category.`,
-        status: "error",
+        title: 'Category created.',
+        description: `Successfully created "${newCategoryName}".`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      setNewCategoryName('');
+      fetchCategories(); // Refresh the list
+    } catch (err) {
+      toast({
+        title: 'Creation failed',
+        description: err.response?.data?.message || 'Could not create category.',
+        status: 'error',
         duration: 5000,
         isClosable: true,
       });
     }
   };
 
-  const handleOpenDeleteDialog = (category) => {
-    setSelectedCategory(category);
-    onDeleteOpen();
-  };
-
-  const handleDelete = async () => {
-    if (!selectedCategory) return;
-    try {
-      await client.delete(`/admin/product-categories/${selectedCategory._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast({ title: "Category Deleted", description: `Category "${selectedCategory.name}" has been removed.`, status: "success", duration: 3000, isClosable: true });
-      fetchCategories(); // Refresh the list
-      onDeleteClose();
-    } catch (err) {
-      console.error("Error deleting category:", err);
-      toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete category.", status: "error", duration: 5000, isClosable: true });
-      onDeleteClose(); // Close dialog even on error
+  const handleDeleteCategory = async (id) => {
+    if (window.confirm('Are you sure you want to delete this category?')) {
+      try {
+        await apiClient.delete(`/admin/product-categories/${id}`);
+        toast({
+          title: 'Category deleted.',
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+        fetchCategories(); // Refresh the list
+      } catch (err) {
+        toast({
+          title: 'Deletion failed',
+          description: err.response?.data?.message || 'Could not delete category.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     }
   };
 
-  if (loading) {
-    return (
-      <VStack justifyContent="center" alignItems="center" minH="200px">
-        <Spinner size="xl" color="brand.primary" />
-        <Text mt={2} color="brand.textDark">Loading Product Categories...</Text>
-      </VStack>
-    );
+  if (isLoading) {
+    return <Spinner />;
   }
 
   if (error) {
-    return <Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert>;
+    return (
+      <Alert status="error">
+        <AlertIcon />
+        {error}
+      </Alert>
+    );
   }
 
   return (
-    <Box p={{ base: 2, md: 4 }} borderWidth="1px" borderRadius="md" shadow="sm" bg="white">
-      <HStack justifyContent="space-between" mb={6}>
-        <Heading size="md" color="brand.textDark">Manage Product Categories</Heading>
-        <Button
-          leftIcon={<Icon as={FaPlus} />}
-          bg="brand.primary"
-          color="white"
-          _hover={{ bg: "brand.primaryDark" }}
-          onClick={() => handleOpenModal()}
-          size="sm"
-        >
-          Add New Category
-        </Button>
+    <Box>
+      <Heading size="md" mb={4}>
+        Manage Product Categories
+      </Heading>
+      <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateCategory(); }}>
+        <Input
+          placeholder="New category name"
+          value={newCategoryName}
+          onChange={(e) => setNewCategoryName(e.target.value)}
+        />
+        <Button type="submit">Add Category</Button>
       </HStack>
 
-      {categories.length === 0 ? (
-        <Text color="brand.textDark">No product categories found. Click "Add New Category" to start.</Text>
-      ) : (
-        <TableContainer>
-          <Table variant="simple" size="sm">
-            <Thead>
-              <Tr>
-                <Th>Name</Th>
-                <Th>Description</Th>
-                <Th>Status</Th>
-                <Th>Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {categories.map((category) => (
-                <Tr key={category._id}>
-                  <Td fontWeight="medium">{category.name}</Td>
-                  <Td fontSize="xs" maxW="300px" whiteSpace="normal">{category.description || 'N/A'}</Td>
-                  <Td>
-                    <Tag size="sm" colorScheme={category.isActive ? 'green' : 'red'} borderRadius="full">
-                      <Icon as={category.isActive ? FaToggleOn : FaToggleOff} mr={1} />
-                      {category.isActive ? 'Active' : 'Inactive'}
-                    </Tag>
-                  </Td>
-                  <Td>
-                    <Tooltip label="Edit Category" placement="top">
-                      <ChakraIconButton
-                        icon={<Icon as={FaEdit} />}
-                        size="xs"
-                        variant="ghost"
-                        colorScheme="yellow"
-                        mr={2}
-                        onClick={() => handleOpenModal(category)}
-                        aria-label="Edit Category"
-                      />
-                    </Tooltip>
-                    <Tooltip label="Delete Category" placement="top">
-                      <ChakraIconButton
-                        icon={<Icon as={FaTrashAlt} />}
-                        size="xs"
-                        variant="ghost"
-                        colorScheme="red"
-                        onClick={() => handleOpenDeleteDialog(category)}
-                        aria-label="Delete Category"
-                      />
-                    </Tooltip>
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      )}
-
-      {/* Add/Edit Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} isCentered>
-        <ModalOverlay />
-        <ModalContent bg="brand.paper">
-          <ModalHeader color="brand.textDark">{isEditing ? 'Edit' : 'Add New'} Product Category</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <VStack spacing={4}>
-              <FormControl isRequired isInvalid={!formData.name && formData.name.length === 0}>
-                <FormLabel color="brand.textDark">Category Name</FormLabel>
-                <Input
-                  name="name"
-                  value={formData.name}
-                  onChange={handleFormChange}
-                  placeholder="e.g., Men's Apparel, Accessories"
-                  bg="white"
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel color="brand.textDark">Description (Optional)</FormLabel>
-                <Input
-                  name="description"
-                  value={formData.description}
-                  onChange={handleFormChange}
-                  placeholder="Brief description of the category"
-                  bg="white"
-                />
-              </FormControl>
-              <FormControl display="flex" alignItems="center">
-                <FormLabel htmlFor="isActive-category" mb="0" color="brand.textDark">
-                  Active:
-                </FormLabel>
-                <Switch
-                  id="isActive-category"
-                  name="isActive"
-                  isChecked={formData.isActive}
-                  onChange={handleFormChange}
-                  colorScheme="green"
-                  ml={3}
-                />
-                 <Text ml={2} fontSize="sm" color={formData.isActive ? "green.500" : "red.500"}>
-                    ({formData.isActive ? "Visible to admins/public" : "Hidden"})
-                </Text>
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={onClose} mr={3} variant="ghost">Cancel</Button>
-            <Button
-              bg="brand.primary"
-              color="white"
-              _hover={{ bg: "brand.primaryDark" }}
-              onClick={handleSubmit}
-            >
-              {isEditing ? 'Save Changes' : 'Create Category'}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      {selectedCategory && (
-        <Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered>
-          <ModalOverlay />
-          <ModalContent bg="brand.paper">
-            <ModalHeader color="brand.textDark">Confirm Deletion</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody color="brand.textDark">
-              <Text>Are you sure you want to delete the category "<strong>{selectedCategory.name}</strong>"?</Text>
-              <Text mt={2} color="red.500" fontWeight="bold">This action cannot be undone.</Text>
-              <Text mt={1} fontSize="sm">(If this category is in use by Product Types, deletion might be prevented by the server.)</Text>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="ghost" onClick={onDeleteClose} mr={3}>Cancel</Button>
-              <Button colorScheme="red" onClick={handleDelete}>Delete Category</Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
-      )}
+      <Table variant="simple">
+        <Thead>
+          <Tr>
+            <Th>Name</Th>
+            <Th>Actions</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
+          {categories.map((category) => (
+            <Tr key={category._id}>
+              <Td>{category.name}</Td>
+              <Td>
+                <Button
+                  size="sm"
+                  colorScheme="red"
+                  onClick={() => handleDeleteCategory(category._id)}
+                >
+                  Delete
+                </Button>
+              </Td>
+            </Tr>
+          ))}
+        </Tbody>
+      </Table>
     </Box>
   );
 };
