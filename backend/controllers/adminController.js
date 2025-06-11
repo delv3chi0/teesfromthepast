@@ -115,17 +115,29 @@ const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     }
 });
 
+// CORRECTED: This function no longer contains the incorrect validation logic for product categories.
 const createProductTypeAdmin = asyncHandler(async (req, res) => {
-    const { name, category: categoryId, description, isActive } = req.body;
-    if (!mongoose.Types.ObjectId.isValid(categoryId)) { res.status(400); throw new Error('Invalid Product Category ID format.'); }
-    const categoryExists = await ProductCategory.findById(categoryId);
-    if (!categoryExists) { res.status(400); throw new Error('Selected product category does not exist.'); }
-    const typeExists = await ProductType.findOne({ name });
-    if (typeExists) { res.status(400); throw new Error(`Product type '${name}' already exists`); }
-    const productType = new ProductType({ name, category: categoryId, description, isActive: isActive !== undefined ? isActive : true });
-    const createdProductType = await productType.save();
-    res.status(201).json(createdProductType);
+    const { name } = req.body;
+
+    if (!name) {
+        return res.status(400).json({ message: 'Product type name is required.' });
+    }
+
+    try {
+        const existingType = await ProductType.findOne({ name });
+        if (existingType) {
+            return res.status(400).json({ message: 'Product type already exists.' });
+        }
+
+        const newType = new ProductType({ name });
+        const createdType = await newType.save();
+        
+        res.status(201).json(createdType);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error while creating product type.', error: error.message });
+    }
 });
+
 const getProductTypesAdmin = asyncHandler(async (req, res) => {
     const productTypes = await ProductType.find({}).sort({ name: 1 }).lean();
     res.json(productTypes);
