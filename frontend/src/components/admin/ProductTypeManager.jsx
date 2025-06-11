@@ -15,8 +15,8 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  Card, // Added Card to imports
 } from '@chakra-ui/react';
-// FINAL FIX: Importing the correctly named 'client'
 import { client } from '../../api/client';
 
 const ProductTypeManager = () => {
@@ -29,7 +29,6 @@ const ProductTypeManager = () => {
   const fetchTypes = async () => {
     try {
       setIsLoading(true);
-      // FINAL FIX: Using 'client' to make the API call
       const { data } = await client.get('/admin/product-types');
       setTypes(data);
       setError('');
@@ -47,7 +46,6 @@ const ProductTypeManager = () => {
   const handleCreateType = async () => {
     if (!newTypeName.trim()) return;
     try {
-      // FINAL FIX: Using 'client'
       await client.post('/admin/product-types', { name: newTypeName });
       toast({ title: 'Product type created.', status: 'success' });
       setNewTypeName('');
@@ -60,7 +58,6 @@ const ProductTypeManager = () => {
   const handleDeleteType = async (id) => {
     if (window.confirm('Are you sure?')) {
       try {
-        // FINAL FIX: Using 'client'
         await client.delete(`/admin/product-types/${id}`);
         toast({ title: 'Product type deleted.', status: 'success' });
         fetchTypes();
@@ -73,8 +70,9 @@ const ProductTypeManager = () => {
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
+  // Replaced root <Box> with <Card> for consistent styling
   return (
-    <Box>
+    <Card>
       <Heading size="md" mb={4}>Manage Product Types</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateType(); }}>
         <Input
@@ -99,7 +97,7 @@ const ProductTypeManager = () => {
           ))}
         </Tbody>
       </Table>
-    </Box>
+    </Card>
   );
 };
 

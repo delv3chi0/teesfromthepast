@@ -15,8 +15,8 @@ import {
   Spinner,
   Alert,
   AlertIcon,
+  Card, // Added Card to imports
 } from '@chakra-ui/react';
-// FINAL FIX: Importing the correctly named 'client'
 import { client } from '../../api/client';
 
 const ProductCategoryManager = () => {
@@ -29,7 +29,6 @@ const ProductCategoryManager = () => {
   const fetchCategories = async () => {
     try {
       setIsLoading(true);
-      // FINAL FIX: Using 'client' to make the API call
       const { data } = await client.get('/admin/product-categories');
       setCategories(data);
       setError('');
@@ -47,7 +46,6 @@ const ProductCategoryManager = () => {
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     try {
-      // FINAL FIX: Using 'client'
       await client.post('/admin/product-categories', { name: newCategoryName });
       toast({ title: 'Category created.', status: 'success' });
       setNewCategoryName('');
@@ -60,7 +58,6 @@ const ProductCategoryManager = () => {
   const handleDeleteCategory = async (id) => {
     if (window.confirm('Are you sure?')) {
       try {
-        // FINAL FIX: Using 'client'
         await client.delete(`/admin/product-categories/${id}`);
         toast({ title: 'Category deleted.', status: 'success' });
         fetchCategories();
@@ -73,8 +70,9 @@ const ProductCategoryManager = () => {
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
+  // Replaced root <Box> with <Card> for consistent styling
   return (
-    <Box>
+    <Card>
       <Heading size="md" mb={4}>Manage Product Categories</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateCategory(); }}>
         <Input
@@ -99,7 +97,7 @@ const ProductCategoryManager = () => {
           ))}
         </Tbody>
       </Table>
-    </Box>
+    </Card>
   );
 };
 
