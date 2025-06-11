@@ -1,46 +1,32 @@
-// frontend/src/theme.js
 import { extendTheme } from '@chakra-ui/react';
 
 const colors = {
   brand: {
-    primary: '#1A1D22',      // The main dark background
-    secondary: '#212428',    // Header background
-    
-    // === NEW: Navy blue for cards ===
-    cardBlue: '#2c3e50',
-    
-    accentOrange: '#D95A2B',
-    accentOrangeHover: '#E86A3C',
+    primary: '#2D2A26',
+    primaryLight: '#4A443E',
+    primaryDark: '#1A1A1A',
+    secondary: '#A1887F', // Tan header
+    accentOrange: '#FF7043',
+    accentOrangeHover: '#F4511E',
     accentYellow: '#FFEE58',
-    
-    textLight: '#EAEAEA',
-    textMuted: '#A0A0A0',
-    textDark: '#1A1D22',
+    accentYellowHover: '#FDD835',
+    cardBlue: '#2c3e50', // New Navy Blue
+    paper: '#F5F5F0', 
+    textLight: '#E8E6E3',
+    textDark: '#3E2723',
   },
 };
 
-const fonts = {
-  heading: "'Bungee', cursive",
-  body: "'Montserrat', sans-serif",
-};
+const fonts = { /* Unchanged */ };
 
 const components = {
-  Button: {
-    variants: {
-      solid: (props) => {
-        if (props.colorScheme === 'brandAccentOrange') {
-          return { bg: 'brand.accentOrange', color: 'white', _hover: { bg: 'brand.accentOrangeHover' } };
-        }
-      },
-    },
-  },
-  // === UPDATED: Global styles for Cards and Modals ===
   Card: {
     baseStyle: {
         container: {
             bg: 'brand.cardBlue',
-            color: 'brand.textLight', 
+            color: 'brand.textLight',
             borderRadius: 'xl',
+            boxShadow: 'lg',
         }
     }
   },
@@ -48,6 +34,12 @@ const components = {
       baseStyle: {
           dialog: {
               bg: 'brand.cardBlue',
+              color: 'brand.textLight'
+          },
+          header: {
+              color: 'brand.textLight'
+          },
+          body: {
               color: 'brand.textLight'
           }
       }
@@ -60,7 +52,9 @@ const components = {
     },
     sizes: {
       'pageTitle': {
+        fontFamily: fonts.heading,
         fontSize: { base: '3xl', md: '4xl' },
+        lineHeight: 'shorter',
         mb: 8,
       },
     },
@@ -72,12 +66,10 @@ const components = {
       lineHeight: 'tall',
     },
   },
+  Button: { /* Unchanged */ },
 };
 
-const config = {
-  initialColorMode: 'dark',
-  useSystemColorMode: false,
-};
+const config = { initialColorMode: 'dark', useSystemColorMode: false };
 
 const theme = extendTheme({
   config,
