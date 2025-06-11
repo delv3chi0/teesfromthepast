@@ -80,10 +80,11 @@ const ProductTypeManager = () => {
         />
         <Button type="submit">Add Type</Button>
       </HStack>
-      <Table variant="simple">
+      {/* Added size="sm" to make rows more compact */}
+      <Table variant="simple" size="sm">
         <Thead>
           <Tr><Th>Name</Th><Th>Actions</Th></Tr>
-        </Thead> {/* <-- This was the line with the typo, now corrected */}
+        </Thead>
         <Tbody>
           {types.map((type) => (
             <Tr key={type._id}>

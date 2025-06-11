@@ -80,7 +80,8 @@ const ProductCategoryManager = () => {
         />
         <Button type="submit">Add Category</Button>
       </HStack>
-      <Table variant="simple">
+      {/* Added size="sm" to make rows more compact */}
+      <Table variant="simple" size="sm">
         <Thead>
           <Tr><Th>Name</Th><Th>Actions</Th></Tr>
         </Thead>
