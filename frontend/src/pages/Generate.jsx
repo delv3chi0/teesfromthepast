@@ -13,7 +13,6 @@ export default function Generate() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   
-  // New state for the TV controls
   const [decade, setDecade] = useState("1980s");
   const [artStyle, setArtStyle] = useState("Classic Art");
   const [isRetro, setIsRetro] = useState(true);
@@ -37,14 +36,12 @@ export default function Generate() {
   const constructFinalPrompt = () => {
     let finalPrompt = prompt;
     
-    // Add style modifiers
     if (artStyle === 'Stencil Art') {
       finalPrompt = `monochromatic stencil art, high contrast, clean lines, vector, ${prompt}`;
     } else if (artStyle === 'Embroidery Style') {
       finalPrompt = `detailed embroidery pattern, satin stitch, clean edges, vector art, limited color palette, ${prompt}`;
     }
 
-    // Add retro/decade modifiers only if the switch is on
     if (isRetro) {
       const decadeMap = {
         "1960s": "pop art style, vibrant colors, 1960s illustration",
@@ -68,8 +65,6 @@ export default function Generate() {
     setError("");
     
     const finalPrompt = constructFinalPrompt();
-    console.log("Final Generated Prompt:", finalPrompt); // For debugging
-
     try {
       const response = await client.post('/designs/create', { prompt: finalPrompt });
       if (response.data?.imageDataUrl) {
@@ -90,7 +85,6 @@ export default function Generate() {
     setIsSaving(true);
     setError("");
     try {
-      // We save the user's original prompt, not the modified one
       await client.post('/mydesigns', { prompt: prompt, imageDataUrl: imageUrl });
       toast({ title: 'Design Saved!', status: 'success' });
     } catch (err) {
@@ -100,95 +94,62 @@ export default function Generate() {
     }
   };
 
+  // This is the themed "Retro TV" interface
+  const RetroGenerator = () => (
+    <Box bg="#3b2f2f" p={{base: 4, md: 8}} borderRadius="2xl" w="100%" maxW="800px" shadow="2xl" border="4px solid" borderColor="#2d2a26">
+      {/* The Screen */}
+      <Box w="100%" h={{ base: "300px", md: "520px" }} bg="black" mb={6} borderRadius="lg" display="flex" alignItems="center" justifyContent="center" position="relative" border="8px solid" borderColor="#221c1c" overflow="hidden">
+        {loading && <Spinner size="xl" color="brand.accentOrange" thickness="4px" />}
+        {!loading && imageUrl && <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="100%" maxH="100%" objectFit="contain" />}
+        {!loading && !imageUrl && (<VStack color="gray.600"><Icon as={FaMagic} boxSize="50px" /><Text>Your Generated Image Will Appear Here</Text></VStack>)}
+      </Box>
+
+      {/* The Control Panel */}
+      <VStack spacing={5} w="100%" bg="#94847b" p={6} borderRadius="xl">
+        <Textarea placeholder="Describe your retro shirt idea... e.g., 'a robot surfing on a synthesizer'" value={prompt} onChange={(e) => setPrompt(e.target.value)} isDisabled={loading || isSaving} size="lg" minHeight="100px" bg="brand.paper" color="brand.textDark" />
+        <SimpleGrid columns={{base: 1, md: 3}} spacing={4} w="100%">
+            <FormControl>
+                <FormLabel fontFamily="Bungee" color="brand.primaryDark" textAlign="center">Decade</FormLabel>
+                <Select value={decade} onChange={e => setDecade(e.target.value)} isDisabled={!isRetro || loading || isSaving} bg="white" color="brand.textDark" variant="filled" _hover={{bg: 'whiteAlpha.800'}}>
+                    <option value="1960s">60s</option>
+                    <option value="1970s">70s</option>
+                    <option value="1980s">80s</option>
+                    <option value="1990s">90s</option>
+                </Select>
+            </FormControl>
+            <FormControl>
+                <FormLabel fontFamily="Bungee" color="brand.primaryDark" textAlign="center">Style</FormLabel>
+                <Select value={artStyle} onChange={e => setArtStyle(e.target.value)} isDisabled={loading || isSaving} bg="white" color="brand.textDark" variant="filled" _hover={{bg: 'whiteAlpha.800'}}>
+                    <option value="Classic Art">Classic Art</option>
+                    <option value="Stencil Art">Stencil Art</option>
+                    <option value="Embroidery Style">Embroidery</option>
+                </Select>
+            </FormControl>
+            <FormControl display="flex" flexDirection="column" alignItems="center">
+                <FormLabel fontFamily="Bungee" color="brand.primaryDark">Retro Mode</FormLabel>
+                <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="orange" size="lg" isDisabled={loading || isSaving}/>
+            </FormControl>
+        </SimpleGrid>
+        <Flex w="100%" justify="center" pt={4} gap={4}>
+            <Button onClick={handleGenerate} colorScheme="brandAccentOrange" isLoading={loading} loadingText="Generating..." isDisabled={isSaving || loading || !prompt} size="lg" leftIcon={<Icon as={FaMagic} />}>Generate Image</Button>
+            <Button onClick={handleSaveDesign} bg="gray.600" color="white" _hover={{bg: "gray.700"}} isLoading={isSaving} loadingText="Saving..." isDisabled={loading || !imageUrl || isSaving} size="lg" leftIcon={<Icon as={FaSave} />}>Save This Design</Button>
+        </Flex>
+      </VStack>
+    </Box>
+  );
+
+  // This is the current modern interface
+  const ModernGenerator = () => (
+    <VStack spacing={5} w="100%" bg="brand.cardBg" p={6} borderRadius="xl" shadow="lg">
+        <Textarea placeholder="Describe your image idea..." value={prompt} onChange={(e) => setPrompt(e.target.value)} isDisabled={loading || isSaving} size="lg" minHeight="120px"/>
+        <Button onClick={handleGenerate} colorScheme="brandPrimary" isLoading={loading} loadingText="Generating..." isDisabled={isSaving || loading} size="lg" px={8} leftIcon={<Icon as={FaMagic} />}>Generate Image</Button>
+    </VStack>
+  );
+
   return (
     <VStack spacing={8} w="100%">
-      <Heading as="h1" size="pageTitle" textAlign="left" w="100%">
-        Retro AI Generator
-      </Heading>
-      
-      {/* The "TV" Component */}
-      <Box bg="brand.primaryDark" p={8} borderRadius="2xl" w="100%" maxW="800px" shadow="2xl">
-        {/* The Screen */}
-        <Box
-          w="100%"
-          h={{ base: "300px", md: "520px" }}
-          bg="black"
-          mb={6}
-          borderRadius="lg"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          position="relative"
-          border="4px solid"
-          borderColor="gray.700"
-          overflow="hidden"
-        >
-          {loading && <Spinner size="xl" color="brand.accentOrange" thickness="4px" />}
-          {!loading && imageUrl && (
-            <Image src={imageUrl} alt={prompt || "Generated Tee Art"} maxW="100%" maxH="100%" objectFit="contain" />
-          )}
-           {!loading && !imageUrl && (
-            <VStack color="gray.600">
-                <Icon as={FaMagic} boxSize="50px" />
-                <Text>Your Generated Image Will Appear Here</Text>
-            </VStack>
-           )}
-        </Box>
-
-        {/* The Control Panel */}
-        <VStack spacing={5} w="100%" bg="brand.secondary" p={6} borderRadius="xl">
-            <Textarea 
-                placeholder="Describe your retro shirt idea... e.g., 'a robot surfing on a synthesizer'"
-                value={prompt} 
-                onChange={(e) => setPrompt(e.target.value)} 
-                isDisabled={loading || isSaving}
-                size="lg" minHeight="120px" bg="brand.paper" color="brand.textDark"
-            />
-            <SimpleGrid columns={{base: 1, md: 3}} spacing={4} w="100%">
-                <FormControl>
-                    <FormLabel fontFamily="Bungee" color="brand.primaryDark">Decade</FormLabel>
-                    <Select value={decade} onChange={e => setDecade(e.target.value)} isDisabled={!isRetro || loading || isSaving} bg="white" color="brand.textDark">
-                        <option value="1960s">60s</option>
-                        <option value="1970s">70s</option>
-                        <option value="1980s">80s</option>
-                        <option value="1990s">90s</option>
-                    </Select>
-                </FormControl>
-                <FormControl>
-                    <FormLabel fontFamily="Bungee" color="brand.primaryDark">Style</FormLabel>
-                    <Select value={artStyle} onChange={e => setArtStyle(e.target.value)} isDisabled={loading || isSaving} bg="white" color="brand.textDark">
-                        <option value="Classic Art">Classic Art</option>
-                        <option value="Stencil Art">Stencil Art</option>
-                        <option value="Embroidery Style">Embroidery Style</option>
-                    </Select>
-                </FormControl>
-                <FormControl display="flex" flexDirection="column" alignItems="center">
-                    <FormLabel fontFamily="Bungee" color="brand.primaryDark">Retro Mode</FormLabel>
-                    <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="orange" size="lg" isDisabled={loading || isSaving}/>
-                </FormControl>
-            </SimpleGrid>
-            <Flex w="100%" justify="center" pt={4} gap={4}>
-                <Button 
-                    onClick={handleGenerate} 
-                    colorScheme="brandAccentOrange"
-                    isLoading={loading} loadingText="Generating..."
-                    isDisabled={isSaving || loading}
-                    size="lg" leftIcon={<Icon as={FaMagic} />}
-                >
-                    Generate Image
-                </Button>
-                <Button
-                    onClick={handleSaveDesign}
-                    colorScheme="brandPrimary"
-                    isLoading={isSaving} loadingText="Saving..."
-                    isDisabled={loading || !imageUrl || isSaving}
-                    size="lg" leftIcon={<Icon as={FaSave} />}
-                >
-                    Save This Design
-                </Button>
-            </Flex>
-        </VStack>
-      </Box>
+      <Heading as="h1" size="pageTitle" textAlign="left" w="100%">AI Image Generator</Heading>
+      {isRetro ? <RetroGenerator/> : <ModernGenerator/>}
       {error && ( <Alert status="error" mt={4} borderRadius="md"><AlertIcon />{error}</Alert> )}
     </VStack>
   );
