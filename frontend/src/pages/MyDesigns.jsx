@@ -6,7 +6,7 @@ import {
     useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay,
     useToast, Icon, HStack, Card, CardBody
 } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaPlusSquare, FaMagic, FaTrophy, FaCheckCircle, FaTrashAlt } from 'react-icons/fa';
@@ -43,7 +43,7 @@ export default function MyDesigns() {
         .catch(err => {
           setError('Failed to load your designs. Please try again.');
           if (err.response?.status === 401) {
-            toast({ title: "Session Expired", status: "warning" });
+            toast({ title: "Session Expired", description: "Please log in again.", status: "warning" });
             logout();
             navigate('/login');
           }
@@ -51,8 +51,6 @@ export default function MyDesigns() {
         .finally(() => {
           setLoading(false);
         });
-    } else {
-        setLoading(false);
     }
   };
 
@@ -61,48 +59,59 @@ export default function MyDesigns() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const handleImageClick = (design) => {
-    setSelectedDesign(design);
-    onImageModalOpen();
+  const handleImageClick = (design) => { setSelectedDesign(design); onImageModalOpen(); };
+  const handleOpenSubmitConfirmation = (design) => { setDesignToSubmit(design); onContestAlertOpen(); };
+  const handleConfirmSubmitToContest = async () => {
+    if (!designToSubmit) return;
+    setIsSubmitting(true);
+    try {
+      const response = await client.post(`/contest/submit/${designToSubmit._id}`);
+      toast({ title: "Submission Successful!", description: response.data.message, status: "success" });
+      onImageModalClose();
+      onContestAlertClose();
+      fetchDesigns();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || "Could not submit your design.";
+      toast({ title: "Submission Failed", description: errorMessage, status: "error" });
+      onContestAlertClose();
+    } finally {
+      setIsSubmitting(false);
+      setDesignToSubmit(null);
+    }
+  };
+  const handleOpenDeleteConfirmation = (design) => { setDesignToDelete(design); onDeleteAlertOpen(); };
+  const handleConfirmDelete = async () => {
+    if (!designToDelete) return;
+    setIsDeleting(true);
+    try {
+      await client.delete(`/mydesigns/${designToDelete._id}`);
+      toast({ title: "Design Deleted", status: "success" });
+      onImageModalClose();
+      onDeleteAlertClose();
+      fetchDesigns();
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || "Could not delete the design.";
+      toast({ title: "Deletion Failed", description: errorMessage, status: "error" });
+      onDeleteAlertClose();
+    } finally {
+      setIsDeleting(false);
+      setDesignToDelete(null);
+    }
   };
 
-  const handleOpenSubmitConfirmation = (design) => {
-    setDesignToSubmit(design);
-    onContestAlertOpen();
-  };
-
-  const handleConfirmSubmitToContest = async () => { /* Unchanged */ };
-  const handleOpenDeleteConfirmation = (design) => {
-    setDesignToDelete(design);
-    onDeleteAlertOpen();
-  };
-  const handleConfirmDelete = async () => { /* Unchanged */ };
-
-  if (loading) {
-    return (
-      <VStack justifyContent="center" alignItems="center" minH="60vh">
-        <Spinner size="xl" thickness="4px"/>
-        <Text mt={3}>Loading Your Designs...</Text>
-      </VStack>
-    );
-  }
-  if (error) {
-    return ( <Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert> );
-  }
+  if (loading) return <VStack justifyContent="center" minH="60vh"><Spinner size="xl" /></VStack>;
+  if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
   return (
     <Box w="100%">
       <VStack spacing={6} align="stretch" mb={8}>
         <Heading as="h1" size="pageTitle">My Saved Designs</Heading>
-        <Button 
-            bg="brand.accentOrange" color="white" _hover={{bg: "brand.accentOrangeHover"}} 
-            onClick={() => navigate('/generate')} alignSelf="flex-start" size="lg" 
-            leftIcon={<Icon as={FaMagic} />}
-        >
+        {designs.length > 0 && (
+          <Button colorScheme="brandAccentOrange" onClick={() => navigate('/generate')} alignSelf="flex-start" size="lg" leftIcon={<Icon as={FaMagic} />}>
             ✨ Create Another Design
-        </Button>
+          </Button>
+        )}
       </VStack>
-
       {designs.length === 0 ? (
         <Card><CardBody><VStack spacing={5} py={8} textAlign="center">
             <Icon as={FaPlusSquare} boxSize="50px" color="brand.textMuted" />
@@ -112,40 +121,43 @@ export default function MyDesigns() {
       ) : (
         <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
           {designs.map(design => (
-            <Card as="div" key={design._id} overflow="hidden" cursor="pointer" onClick={() => handleImageClick(design)} _hover={{ transform: "translateY(-4px)" }} transition="transform 0.2s ease-in-out">
-              <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="gray.700"/>
-              <CardBody>
-                <Text noOfLines={2} title={design.prompt} fontWeight="medium">
-                    {design.prompt || "Untitled Design"}
-                </Text>
-              </CardBody>
+            <Card as="div" key={design._id} p={0} overflow="hidden" cursor="pointer" onClick={() => handleImageClick(design)} _hover={{ transform: "translateY(-4px)" }} transition="transform 0.2s ease-in-out">
+                <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="gray.900"/>
+                <CardBody>
+                    <Text noOfLines={2} title={design.prompt} fontWeight="medium">
+                        {design.prompt || "Untitled Design"}
+                    </Text>
+                </CardBody>
             </Card>
           ))}
         </SimpleGrid>
       )}
-
       {selectedDesign && (
         <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
-          <ModalOverlay bg="blackAlpha.700"/>
-          <ModalContent>
-            <ModalHeader>Design Preview</ModalHeader>
-            <ModalCloseButton />
+          <ModalOverlay bg="blackAlpha.700"/><ModalContent><ModalHeader>Design Preview</ModalHeader><ModalCloseButton />
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="75vh" maxW="100%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
             <ModalFooter flexWrap="wrap" justifyContent="space-between" py={4}>
-              <Button bg="red.500" _hover={{bg: "red.600"}} onClick={() => handleOpenDeleteConfirmation(selectedDesign)} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>Delete</Button>
+              <Button bg="red.600" color="white" _hover={{bg: "red.700"}} onClick={() => handleOpenDeleteConfirmation(selectedDesign)} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>Delete</Button>
               <HStack>
-                <Button bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}} onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>Submit to Contest</Button>
+                <Button colorScheme="brandAccentYellow" color="brand.textDark" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>Submit to Contest</Button>
                 <Button variant="ghost" onClick={onImageModalClose}>Close</Button>
               </HStack>
             </ModalFooter>
           </ModalContent>
         </Modal>
       )}
-
-      {designToSubmit && (<AlertDialog isOpen={isContestAlertOpen} leastDestructiveRef={cancelRef} onClose={onContestAlertClose} isCentered>{/* ... */}</AlertDialog>)}
-      {designToDelete && (<AlertDialog isOpen={isDeleteAlertOpen} leastDestructiveRef={cancelDeleteRef} onClose={onDeleteAlertClose} isCentered>{/* ... */}</AlertDialog>)}
+      {designToSubmit && (
+        <AlertDialog isOpen={isContestAlertOpen} leastDestructiveRef={cancelRef} onClose={onContestAlertClose} isCentered>
+          <AlertDialogOverlay><AlertDialogContent><AlertDialogHeader>Confirm Submission</AlertDialogHeader><AlertDialogBody>Are you sure you want to submit this design?</AlertDialogBody><AlertDialogFooter><Button ref={cancelRef} onClick={onContestAlertClose}>Cancel</Button><Button colorScheme="green" onClick={handleConfirmSubmitToContest} ml={3} isLoading={isSubmitting}>Yes, Submit</Button></AlertDialogFooter></AlertDialogContent></AlertDialogOverlay>
+        </AlertDialog>
+      )}
+      {designToDelete && (
+        <AlertDialog isOpen={isDeleteAlertOpen} leastDestructiveRef={cancelDeleteRef} onClose={onDeleteAlertClose} isCentered>
+          <AlertDialogOverlay><AlertDialogContent><AlertDialogHeader>Confirm Deletion</AlertDialogHeader><AlertDialogBody>Are you sure you want to delete this design?</AlertDialogBody><AlertDialogFooter><Button ref={cancelDeleteRef} onClick={onDeleteAlertClose}>Cancel</Button><Button colorScheme="red" onClick={handleConfirmDelete} ml={3} isLoading={isDeleting}>Delete</Button></AlertDialogFooter></AlertDialogContent></AlertDialogOverlay>
+        </AlertDialog>
+      )}
     </Box>
   );
 }

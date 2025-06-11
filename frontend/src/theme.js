@@ -1,30 +1,33 @@
+// frontend/src/theme.js
 import { extendTheme } from '@chakra-ui/react';
 
 const colors = {
   brand: {
-    primary: '#2D2A26',
-    primaryLight: '#4A443E',
-    primaryDark: '#1A1A1A',
-    secondary: '#A1887F', // Tan header
-    accentOrange: '#FF7043',
-    accentOrangeHover: '#F4511E',
+    primary: '#1A1D22',      // The main dark background from your screenshot
+    secondary: '#212428',    // Header background
+    cardBlue: '#2c3e50',   // The navy blue for cards
+    
+    accentOrange: '#D95A2B', // The vibrant orange from your buttons
+    accentOrangeHover: '#E86A3C',
     accentYellow: '#FFEE58',
-    accentYellowHover: '#FDD835',
-    cardBlue: '#2c3e50', // New Navy Blue
-    paper: '#F5F5F0', 
-    textLight: '#E8E6E3',
-    textDark: '#3E2723',
+    
+    textLight: '#EAEAEA',     // The main off-white text color
+    textMuted: '#949494',      // Muted gray for less important text
+    textDark: '#1A1D22',      // Dark text for use on light backgrounds
   },
 };
 
-const fonts = { /* Unchanged */ };
+const fonts = {
+  heading: "'Bungee', cursive",
+  body: "'Montserrat', sans-serif",
+};
 
 const components = {
   Card: {
     baseStyle: {
         container: {
             bg: 'brand.cardBlue',
-            color: 'brand.textLight',
+            color: 'brand.textLight', 
             borderRadius: 'xl',
             boxShadow: 'lg',
         }
@@ -37,10 +40,16 @@ const components = {
               color: 'brand.textLight'
           },
           header: {
-              color: 'brand.textLight'
+              color: 'brand.textLight',
+              borderBottomWidth: '1px',
+              borderColor: 'brand.primaryLight'
           },
           body: {
               color: 'brand.textLight'
+          },
+          footer: {
+              borderTopWidth: '1px',
+              borderColor: 'brand.primaryLight'
           }
       }
   },
@@ -66,10 +75,32 @@ const components = {
       lineHeight: 'tall',
     },
   },
-  Button: { /* Unchanged */ },
+  Button: {
+    variants: {
+        solid: (props) => {
+            if (props.colorScheme === 'brandAccentOrange') {
+                return {
+                    bg: 'brand.accentOrange',
+                    color: 'white',
+                    _hover: { bg: 'brand.accentOrangeHover' }
+                };
+            }
+             if (props.colorScheme === 'brandAccentYellow') {
+                return {
+                    bg: 'brand.accentYellow',
+                    color: 'brand.textDark',
+                    _hover: { bg: '#FDD835' } // a slightly darker yellow
+                };
+            }
+        }
+    }
+  },
 };
 
-const config = { initialColorMode: 'dark', useSystemColorMode: false };
+const config = {
+  initialColorMode: 'dark',
+  useSystemColorMode: false,
+};
 
 const theme = extendTheme({
   config,
