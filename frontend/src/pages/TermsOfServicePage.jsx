@@ -1,105 +1,116 @@
 // frontend/src/pages/TermsOfServicePage.jsx
+
 import React from 'react';
-import { Box, Heading, Text, VStack, Link as ChakraLink, UnorderedList, ListItem, Divider, Icon } from '@chakra-ui/react';
+import { Container, Heading, Text, VStack, Link as ChakraLink, UnorderedList, ListItem, Divider, Icon } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { FaHome } from 'react-icons/fa';
 
+/**
+ * Terms of Service Page
+ * REFRACTORED:
+ * - Removed redundant outer Box to allow MainLayout to control the page background and padding.
+ * - Wrapped content in a <Container> to apply a constrained width for readability.
+ * - Updated all text and link colors to use theme variables appropriate for a dark background.
+ */
 const TermsOfServicePage = () => {
   return (
-    <Box bg="brand.accentOrange" minH="100vh" py={{ base: 8, md: 16 }} px={{ base: 4, md: 8 }}>
-      <Box maxW="3xl" mx="auto" bg="brand.paper" p={{ base: 6, md: 10 }} borderRadius="xl" boxShadow="xl">
-        <VStack spacing={6} align="stretch">
-          <Heading as="h1" size="xl" textAlign="center" color="brand.textDark" mb={6}>
-            Terms of Service
-          </Heading>
-          <Text color="brand.textDark" fontSize="sm" textAlign="center" mb={4}>
-            Last Updated: [Insert Date of Last Update Here - e.g., June 3, 2025]
-          </Text>
+    <Container maxW="container.lg" py={{ base: 6, md: 12 }}>
+      <VStack spacing={6} align="stretch">
+        <Heading as="h1" size="2xl" textAlign="center" color="brand.textLight" mb={4}>
+          Terms of Service
+        </Heading>
+        <Text color="brand.textLight" fontSize="sm" textAlign="center" opacity={0.7}>
+          Last Updated: June 10, 2025
+        </Text>
 
-          <Text color="brand.textDark" fontWeight="bold" fontStyle="italic">
-            IMPORTANT: This is a general template and NOT a complete or legally binding Terms of Service agreement. You MUST consult with a legal professional to create terms tailored to your specific business model (AI image generation, e-commerce, custom apparel), user interactions, intellectual property policies, and all applicable legal requirements.
-          </Text>
-          
-          <Divider my={4} />
+        <Text bg="yellow.400" color="black" p={4} borderRadius="md" fontWeight="bold">
+          IMPORTANT: This is a general template and NOT a complete or legally binding Terms of Service agreement. You MUST consult with a legal professional to create terms tailored to your specific business model (AI image generation, e-commerce, custom apparel), user interactions, intellectual property policies, and all applicable legal requirements.
+        </Text>
+        
+        <Divider my={4} borderColor="whiteAlpha.300" />
 
-          <Text color="brand.textDark">
-            Welcome to TeesFromThePast.com (the "Site"), operated by [Your Company Name, if applicable] ("TeesFromThePast," "we," "us," or "our"). These Terms of Service ("Terms") govern your access to and use of our website, including any content, functionality, and services offered on or through TeesFromThePast.com, such as our AI image generator and e-commerce platform for custom apparel.
-            <br/><br/>
-            Please read these Terms carefully before you start to use the Site. By using the Site, or by clicking to accept or agree to the Terms when this option is made available to you, you accept and agree to be bound and abide by these Terms and our Privacy Policy, found at <ChakraLink as={RouterLink} to="/privacy-policy" color="brand.primaryDark" isExternal>your Privacy Policy Page</ChakraLink>, incorporated herein by reference. If you do not want to agree to these Terms or the Privacy Policy, you must not access or use the Site.
-          </Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={4} mb={2}>1. Eligibility & Account Registration</Heading>
-          <Text color="brand.textDark">
-            This Site is offered and available to users who are [e.g., 13 years of age or older, or 18 years of age or older]. By using this Site, you represent and warrant that you are of legal age to form a binding contract with us. If you do not meet all of these requirements, you must not access or use the Site. You are responsible for maintaining the confidentiality of your account password and for all activities that occur under your account.
-            <br /><em>(You should detail account responsibilities, age restrictions, and account termination conditions here.)</em>
-          </Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>2. AI Image Generation Service</Heading>
-          <Text color="brand.textDark" mb={2}>
-            Our Service allows you to generate images using artificial intelligence. You are responsible for the prompts you provide and the images generated.
-          </Text>
-          <UnorderedList spacing={3} pl={6} color="brand.textDark" styleType="disc">
-            <ListItem>
-              <strong>User Conduct for AI Prompts:</strong> You agree not to submit prompts or attempt to generate images that are unlawful, harmful, threatening, abusive, harassing, defamatory, vulgar, obscene, libelous, invasive of another's privacy, hateful, or racially, ethnically, or otherwise objectionable, or that infringe upon any third party's intellectual property rights.
-            </ListItem>
-            <ListItem>
-              <strong>Intellectual Property of AI-Generated Designs:</strong>
-              <br /><em>(CRUCIAL: Clearly define who owns the copyright to the designs generated by users through your AI tool. Does the user own it? Does TeesFromThePast own it? Do you grant the user a license? Can TeesFromThePast use user-generated designs for other purposes? What rights does the user have? Are there any restrictions if the AI model itself has specific output licensing terms? This section requires careful consideration and likely legal advice tailored to AI-generated content laws, which are evolving.)</em>
-            </ListItem>
-            <ListItem>
-              <strong>Service Limitations:</strong> The AI image generation service is provided "as is." We do not guarantee specific results or the quality or uniqueness of generated images. We reserve the right to modify, suspend, or discontinue the AI generation service with or without notice.
-            </ListItem>
-          </UnorderedList>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>3. Purchases, Payments, and Fulfillment</Heading>
-          <UnorderedList spacing={2} pl={6} color="brand.textDark" styleType="disc">
-            <ListItem><strong>Orders:</strong> All orders placed through the Site are subject to our acceptance. We may refuse or cancel an order for any reason. </ListItem>
-            <ListItem><strong>Pricing:</strong> Prices for products are subject to change without notice. All prices are listed in [Your Currency, e.g., USD].</ListItem>
-            <ListItem><strong>Payment:</strong> We use Stripe for payment processing. By making a purchase, you agree to Stripe's terms and conditions. We do not store your full credit card details.</ListItem>
-            <ListItem><strong>Shipping:</strong> <em>(Outline your shipping policies, estimated delivery times, costs, and regions you ship to.)</em></ListItem>
-            <ListItem><strong>Returns & Refunds:</strong> <em>(CRUCIAL for custom apparel. Clearly state your policy. Are sales final for custom items? What if there's a defect? What's the process?)</em></ListItem>
-          </UnorderedList>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>4. User Content (Beyond AI Designs)</Heading>
-          <Text color="brand.textDark"><em>(If users can submit other content like reviews, contest entries, profile information, define ownership, licenses, and acceptable use for that content here.)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>5. Prohibited Uses</Heading>
-          <Text color="brand.textDark"><em>(List activities that are not allowed on your site, e.g., violating laws, infringing IP, distributing malware, spamming, attempting to disrupt the service, etc.)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>6. Intellectual Property Rights (Our Site Content)</Heading>
-          <Text color="brand.textDark">The Site and its original content (excluding User-Generated AI Designs, subject to Section 2, and any other User Content as defined in Section 4), features, and functionality are and will remain the exclusive property of TeesFromThePast and its licensors. Our trademarks, logo, and site design may not be used in connection with any product or service without our prior written consent.<br/><em>(Protect your own branding, logo, site design.)</em></Text>
-          
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>7. Termination</Heading>
-          <Text color="brand.textDark"><em>(Under what conditions can you or the user terminate an account or access to the service? Detail the process and consequences.)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>8. Disclaimer of Warranties; Limitation of Liability</Heading>
-          <Text color="brand.textDark"><em>(These are standard but critical legal sections. Your lawyer will provide appropriate language here to limit your liability and state that the service is provided "as is".)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>9. Indemnification</Heading>
-          <Text color="brand.textDark"><em>(User agrees to indemnify (compensate for harm) you against certain claims arising from their use of the site or violation of these Terms.)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>10. Governing Law & Dispute Resolution</Heading>
-          <Text color="brand.textDark"><em>(Specify the jurisdiction (e.g., state, country) whose laws will govern these Terms, and how any disputes will be resolved (e.g., arbitration in a specific city, or courts of a specific jurisdiction).)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>11. Changes to Terms</Heading>
-          <Text color="brand.textDark"><em>(Explain that you reserve the right to modify these terms at any time, how users will be notified of changes (e.g., by posting on the site or via email), and that continued use after changes means acceptance.)</em></Text>
-
-          <Heading as="h2" size="lg" color="brand.textDark" mt={6} mb={2}>12. Contact Information</Heading>
-          <Text color="brand.textDark">
-            For any questions about these Terms of Service, please contact us at:
-            <br />TeesFromThePast.com
-            <br />[Your Business Name, if different and applicable]
-            <br />Email: <ChakraLink href="mailto:legal@teesfromthepast.com" color="brand.primaryDark" isExternal>legal@teesfromthepast.com</ChakraLink> <em>(Ensure this email is set up and monitored)</em>
-          </Text>
-
-          <Divider my={6} />
-          <ChakraLink as={RouterLink} to="/" color="brand.primaryDark" fontWeight="semibold" _hover={{ color: 'brand.primary' }} display="flex" alignItems="center" justifyContent="center">
-            <Icon as={FaHome} mr={2} />
-            Back to Home
+        <Text color="brand.textLight">
+          Welcome to TeesFromThePast.com (the "Site"), operated by [Your Company Name, if applicable] ("TeesFromThePast," "we," "us," or "our"). These Terms of Service ("Terms") govern your access to and use of our website, including any content, functionality, and services offered on or through TeesFromThePast.com, such as our AI image generator and e-commerce platform for custom apparel.
+          <br/><br/>
+          Please read these Terms carefully before you start to use the Site. By using the Site, or by clicking to accept or agree to the Terms when this option is made available to you, you accept and agree to be bound and abide by these Terms and our Privacy Policy, found at our{' '}
+          <ChakraLink as={RouterLink} to="/privacy-policy" color="brand.accentYellow" fontWeight="bold">
+            Privacy Policy Page
           </ChakraLink>
-        </VStack>
-      </Box>
-    </Box>
+          , incorporated herein by reference. If you do not want to agree to these Terms or the Privacy Policy, you must not access or use the Site.
+        </Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={4} mb={2}>1. Eligibility & Account Registration</Heading>
+        <Text color="brand.textLight">
+          This Site is offered and available to users who are [e.g., 13 years of age or older, or 18 years of age or older]. By using this Site, you represent and warrant that you are of legal age to form a binding contract with us. If you do not meet all of these requirements, you must not access or use the Site. You are responsible for maintaining the confidentiality of your account password and for all activities that occur under your account.
+          <Text as="em" display="block" mt={2} opacity={0.8} fontSize="sm">(You should detail account responsibilities, age restrictions, and account termination conditions here.)</Text>
+        </Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>2. AI Image Generation Service</Heading>
+        <Text color="brand.textLight" mb={2}>
+          Our Service allows you to generate images using artificial intelligence. You are responsible for the prompts you provide and the images generated.
+        </Text>
+        <UnorderedList spacing={3} pl={6} color="brand.textLight">
+          <ListItem>
+            <Text as="strong">User Conduct for AI Prompts:</Text> You agree not to submit prompts or attempt to generate images that are unlawful, harmful, threatening, abusive, harassing, defamatory, vulgar, obscene, libelous, invasive of another's privacy, hateful, or racially, ethnically, or otherwise objectionable, or that infringe upon any third party's intellectual property rights.
+          </ListItem>
+          <ListItem>
+            <Text as="strong">Intellectual Property of AI-Generated Designs:</Text>
+            <Text as="em" display="block" mt={1} opacity={0.8} fontSize="sm">(CRUCIAL: Clearly define who owns the copyright to the designs generated by users through your AI tool. Does the user own it? Does TeesFromThePast own it? Do you grant the user a license? Can TeesFromThePast use user-generated designs for other purposes? What rights does the user have? Are there any restrictions if the AI model itself has specific output licensing terms? This section requires careful consideration and likely legal advice tailored to AI-generated content laws, which are evolving.)</Text>
+          </ListItem>
+          <ListItem>
+            <Text as="strong">Service Limitations:</Text> The AI image generation service is provided "as is." We do not guarantee specific results or the quality or uniqueness of generated images. We reserve the right to modify, suspend, or discontinue the AI generation service with or without notice.
+          </ListItem>
+        </UnorderedList>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>3. Purchases, Payments, and Fulfillment</Heading>
+        <UnorderedList spacing={2} pl={6} color="brand.textLight">
+          <ListItem><Text as="strong">Orders:</Text> All orders placed through the Site are subject to our acceptance. We may refuse or cancel an order for any reason.</ListItem>
+          <ListItem><Text as="strong">Pricing:</Text> Prices for products are subject to change without notice. All prices are listed in [Your Currency, e.g., USD].</ListItem>
+          <ListItem><Text as="strong">Payment:</Text> We use Stripe for payment processing. By making a purchase, you agree to Stripe's terms and conditions. We do not store your full credit card details.</ListItem>
+          <ListItem><Text as="strong">Shipping:</Text> <Text as="em">(Outline your shipping policies, estimated delivery times, costs, and regions you ship to.)</Text></ListItem>
+          <ListItem><Text as="strong">Returns & Refunds:</Text> <Text as="em">(CRUCIAL for custom apparel. Clearly state your policy. Are sales final for custom items? What if there's a defect? What's the process?)</Text></ListItem>
+        </UnorderedList>
+
+        {/* Other sections for legal counsel review */}
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>4. User Content (Beyond AI Designs)</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(If users can submit other content like reviews, contest entries, profile information, define ownership, licenses, and acceptable use for that content here.)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>5. Prohibited Uses</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(List activities that are not allowed on your site, e.g., violating laws, infringing IP, distributing malware, spamming, attempting to disrupt the service, etc.)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>6. Intellectual Property Rights (Our Site Content)</Heading>
+        <Text color="brand.textLight">The Site and its original content (excluding User-Generated AI Designs, subject to Section 2, and any other User Content as defined in Section 4), features, and functionality are and will remain the exclusive property of TeesFromThePast and its licensors. Our trademarks, logo, and site design may not be used in connection with any product or service without our prior written consent.<br/><Text as="em" display="block" mt={1} opacity={0.8} fontSize="sm">(Protect your own branding, logo, site design.)</Text></Text>
+        
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>7. Termination</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(Under what conditions can you or the user terminate an account or access to the service? Detail the process and consequences.)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>8. Disclaimer of Warranties; Limitation of Liability</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(These are standard but critical legal sections. Your lawyer will provide appropriate language here to limit your liability and state that the service is provided "as is".)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>9. Indemnification</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(User agrees to indemnify (compensate for harm) you against certain claims arising from their use of the site or violation of these Terms.)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>10. Governing Law & Dispute Resolution</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(Specify the jurisdiction (e.g., state, country) whose laws will govern these Terms, and how any disputes will be resolved (e.g., arbitration in a specific city, or courts of a specific jurisdiction).)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>11. Changes to Terms</Heading>
+        <Text as="em" color="brand.textLight" opacity={0.8}>(Explain that you reserve the right to modify these terms at any time, how users will be notified of changes (e.g., by posting on the site or via email), and that continued use after changes means acceptance.)</Text>
+
+        <Heading as="h2" size="lg" color="brand.textLight" mt={6} mb={2}>12. Contact Information</Heading>
+        <Text color="brand.textLight">
+          For any questions about these Terms of Service, please contact us at:
+          <br />TeesFromThePast.com
+          <br />[Your Business Name, if different and applicable]
+          <br />Email: <ChakraLink href="mailto:legal@teesfromthepast.com" color="brand.accentYellow" fontWeight="bold" isExternal>legal@teesfromthepast.com</ChakraLink> <em>(Ensure this email is set up and monitored)</em>
+        </Text>
+
+        <Divider my={6} borderColor="whiteAlpha.300" />
+        <ChakraLink as={RouterLink} to="/" color="brand.accentYellow" fontWeight="semibold" _hover={{ textDecoration: 'underline' }} display="flex" alignItems="center" justifyContent="center">
+          <Icon as={FaHome} mr={2} />
+          Back to Home
+        </ChakraLink>
+      </VStack>
+    </Container>
   );
 };
 

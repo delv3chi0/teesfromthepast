@@ -1,12 +1,22 @@
 // frontend/src/pages/MyOrdersPage.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import {
     Box, Heading, Text, Spinner, Alert, AlertIcon,
-    VStack, Divider, SimpleGrid, useColorModeValue, Image as ChakraImage,
-    Tag, HStack, Card, CardHeader, CardBody
+    VStack, Divider, SimpleGrid, Image as ChakraImage,
+    Tag, HStack
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
+
+/**
+ * My Orders Page & Order Item Card
+ * REFRACTORED:
+ * - Replaced default Card component with a custom-styled dark card for each order.
+ * - Updated all text, heading, and divider colors to align with the dark theme.
+ * - Restyled loader, alerts, and "no orders" states for consistency.
+ * - Improved visual hierarchy within each order card for better readability.
+ */
 
 const OrderItemCard = ({ order }) => {
     const getOrderStatusColor = (status) => {
@@ -14,41 +24,57 @@ const OrderItemCard = ({ order }) => {
             case 'Delivered': return 'green';
             case 'Shipped': return 'blue';
             case 'Cancelled': return 'red';
-            default: return 'purple';
+            case 'Processing': return 'purple';
+            default: return 'gray';
         }
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <Heading size='md'>Order ID: {order._id}</Heading>
-            </CardHeader>
-            <CardBody>
-                <VStack align="start" spacing={3}>
-                    <Text fontSize="sm"><strong>Date:</strong> {new Date(order.createdAt).toLocaleDateString()}</Text>
-                    <Text fontSize="sm"><strong>Total:</strong> ${(order.totalAmount / 100).toFixed(2)}</Text>
-                    <HStack><Text fontSize="sm" fontWeight="bold">Payment:</Text><Tag size="sm" colorScheme={order.paymentStatus === 'Succeeded' ? 'green' : 'orange'}>{order.paymentStatus}</Tag></HStack>
-                    <HStack><Text fontSize="sm" fontWeight="bold">Status:</Text><Tag size="sm" colorScheme={getOrderStatusColor(order.orderStatus)}>{order.orderStatus}</Tag></HStack>
-                </VStack>
-                <Divider my={4} />
-                <Heading size="sm" mb={3}>Items ({order.orderItems?.length || 0})</Heading>
+        <Box bg="brand.primaryLight" p={{ base: 5, md: 6 }} borderRadius="xl" borderWidth="1px" borderColor="whiteAlpha.200">
+            <VStack align="stretch" spacing={5}>
+                {/* Order Header */}
+                <Box>
+                    <Heading size='md' color="brand.textLight">Order ID: {order._id}</Heading>
+                    <Text fontSize="sm" color="whiteAlpha.700">Placed on: {new Date(order.createdAt).toLocaleDateString()}</Text>
+                </Box>
+
+                {/* Order Summary */}
+                <HStack spacing={6} justify="space-between" wrap="wrap">
+                    <VStack align="start" spacing={1}>
+                        <Text fontSize="sm" color="whiteAlpha.700">Total</Text>
+                        <Text fontWeight="bold" fontSize="lg" color="brand.textLight">${(order.totalAmount / 100).toFixed(2)}</Text>
+                    </VStack>
+                    <VStack align="start" spacing={1}>
+                        <Text fontSize="sm" color="whiteAlpha.700">Payment</Text>
+                        <Tag size="md" variant="subtle" colorScheme={order.paymentStatus === 'Succeeded' ? 'green' : 'orange'}>{order.paymentStatus}</Tag>
+                    </VStack>
+                    <VStack align="start" spacing={1}>
+                        <Text fontSize="sm" color="whiteAlpha.700">Status</Text>
+                        <Tag size="md" variant="subtle" colorScheme={getOrderStatusColor(order.orderStatus)}>{order.orderStatus}</Tag>
+                    </VStack>
+                </HStack>
+
+                <Divider my={3} borderColor="whiteAlpha.300" />
+
+                {/* Order Items */}
+                <Heading size="sm" color="whiteAlpha.800">Items ({order.orderItems?.length || 0})</Heading>
                 <VStack align="stretch" spacing={4}>
                     {order.orderItems?.map((item, index) => (
-                        <Box key={item._id || index} p={3} borderWidth="1px" borderRadius="md" borderColor="brand.primaryLight">
-                            <HStack spacing={4} align="start">
-                                {item.customImageURL && <ChakraImage src={item.customImageURL} alt={item.name || 'Product Image'} boxSize="70px" objectFit="cover" borderRadius="md" />}
+                        <Box key={item._id || index} p={4} bg="brand.primaryDark" borderRadius="lg">
+                            <HStack spacing={4} align="center">
+                                {item.customImageURL && <ChakraImage src={item.customImageURL} alt={item.name || 'Product Image'} boxSize="80px" objectFit="cover" borderRadius="md" />}
                                 <VStack align="start" spacing={1} flex="1">
-                                    <Text fontWeight="semibold">{item.name || 'Custom Item'}</Text>
-                                    <Text fontSize="sm">Size: {item.size} | Color: {item.color}</Text>
-                                    <Text fontSize="sm">Quantity: {item.quantity || 1}</Text>
-                                    {item.price && <Text fontSize="sm">Price: ${(item.price / 100).toFixed(2)} each</Text>}
+                                    <Text fontWeight="semibold" color="brand.textLight">{item.name || 'Custom Item'}</Text>
+                                    <Text fontSize="sm" color="whiteAlpha.700">Size: {item.size} | Color: {item.color}</Text>
+                                    <Text fontSize="sm" color="whiteAlpha.700">Quantity: {item.quantity || 1}</Text>
+                                    {item.price && <Text fontSize="sm" color="whiteAlpha.700">Price: ${(item.price / 100).toFixed(2)} each</Text>}
                                 </VStack>
                             </HStack>
                         </Box>
                     ))}
                 </VStack>
-            </CardBody>
-        </Card>
+            </VStack>
+        </Box>
     );
 };
 
@@ -63,8 +89,10 @@ export default function MyOrdersPage() {
             if (!user) return;
             setLoading(true);
             try {
+                // Sort orders by most recent first
                 const response = await client.get('/orders/myorders');
-                setOrders(response.data);
+                const sortedOrders = response.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                setOrders(sortedOrders);
             } catch (err) {
                 setError('An error occurred while fetching your orders.');
             } finally {
@@ -74,17 +102,36 @@ export default function MyOrdersPage() {
         fetchOrders();
     }, [user]);
 
-    if (loading) return <VStack justifyContent="center" minH="60vh"><Spinner size="xl" /></VStack>;
-    if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
+    if (loading) {
+        return (
+            <VStack justifyContent="center" minH="60vh">
+                <Spinner size="xl" color="brand.accentYellow" thickness="4px" />
+                <Text mt={4} fontSize="lg" color="brand.textLight">Loading Your Orders...</Text>
+            </VStack>
+        );
+    }
+    
+    if (error) {
+        return (
+            <Alert status="error" bg="red.900" borderRadius="md" p={6} borderWidth="1px" borderColor="red.500">
+                <AlertIcon color="red.300" />
+                <Text color="white">{error}</Text>
+            </Alert>
+        );
+    }
 
     return (
-        <Box w="100%">
-            <Heading as="h1" size="pageTitle">My Orders</Heading>
-            {orders.length === 0 ? (<Text fontSize="lg">You haven't placed any orders yet.</Text>) : (
-                <SimpleGrid columns={{ base: 1, lg: 1 }} spacing={6}>
+        <VStack w="100%" align="stretch" spacing={8}>
+            <Heading as="h1" size="2xl" color="brand.textLight">My Orders</Heading>
+            {orders.length === 0 ? (
+                <Box textAlign="center" py={10}>
+                    <Text fontSize="xl" color="whiteAlpha.800">You haven't placed any orders yet.</Text>
+                </Box>
+            ) : (
+                <SimpleGrid columns={{ base: 1 }} spacing={6}>
                     {orders.map(order => (<OrderItemCard key={order._id} order={order} />))}
                 </SimpleGrid>
             )}
-        </Box>
+        </VStack>
     );
 }

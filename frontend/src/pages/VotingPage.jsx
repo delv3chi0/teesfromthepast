@@ -1,16 +1,23 @@
 // frontend/src/pages/VotingPage.jsx
-import { useState, useEffect, useRef } from 'react';
+
+import { useState, useEffect } from 'react';
 import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
-    HStack,
-    useToast,
-    Stat, StatLabel, StatNumber, Tooltip, Icon
+    HStack, useToast, Stat, StatLabel, StatNumber, Tooltip, Icon
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaRegSadCry, FaVoteYea } from 'react-icons/fa';
 
+/**
+ * Voting Page
+ * REFRACTORED:
+ * - Layout changed to be full-width to better suit an interactive gallery page.
+ * - Removed 'brand.paper' backgrounds from cards and alerts to integrate with the dark theme.
+ * - Updated all text colors to 'brand.textLight' or other light variants for readability.
+ * - Enhanced hover effects and styling for a more polished, cohesive UI.
+ */
 export default function VotingPage() {
     const [contestDesigns, setContestDesigns] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -22,12 +29,15 @@ export default function VotingPage() {
     const navigate = useNavigate();
     const toast = useToast();
 
+    // Fetching functions remain the same, their logic is sound.
     const fetchContestDesigns = () => {
         setLoading(true);
         setError('');
         client.get('/contest/designs')
             .then(response => {
-                setContestDesigns(response.data);
+                // Sort designs by votes initially
+                const sortedDesigns = response.data.sort((a, b) => (b.votes || 0) - (a.votes || 0));
+                setContestDesigns(sortedDesigns);
                 setLoading(false);
             })
             .catch(err => {
@@ -103,68 +113,62 @@ export default function VotingPage() {
     const renderContent = () => {
         if (loading) {
             return (
-                <Box textAlign="center" py={10}>
-                    <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
-                    <Text mt={4} color="brand.textLight">Loading Contest Gallery...</Text>
+                <Box textAlign="center" py={20}>
+                    <Spinner size="xl" color="brand.accentYellow" thickness="4px" speed="0.65s" emptyColor="whiteAlpha.300" />
+                    <Text mt={4} color="brand.textLight" fontSize="lg">Loading Contest Gallery...</Text>
                 </Box>
             );
         }
         if (error) {
             return (
                 <Box textAlign="center" mt={8} px={4}>
-                    <Alert status="error" bg="brand.paper" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={10}>
-                        <AlertIcon boxSize="40px" mr={0} color="red.500" />
-                        <Text mt={3} fontWeight="bold" color="brand.textDark">{error}</Text>
-                        <Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} borderRadius="full" size="lg" onClick={fetchContestDesigns}>Try Again</Button>
+                    <Alert status="error" bg="red.900" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={10} borderWidth="1px" borderColor="red.500">
+                        <AlertIcon boxSize="40px" mr={0} color="red.300" />
+                        <Text mt={4} mb={6} fontWeight="bold" color="white">{error}</Text>
+                        <Button bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} onClick={fetchContestDesigns}>Try Again</Button>
                     </Alert>
                 </Box>
             );
         }
         if (contestDesigns.length === 0) {
             return (
-                <VStack 
-                    spacing={5} p={8} bg="rgba(255,255,255,0.1)" borderRadius="xl" 
-                    shadow="md" borderWidth="1px" borderColor="rgba(255,255,255,0.2)"
-                    mt={8} textAlign="center"
-                >
-                    <Icon as={FaRegSadCry} boxSize="60px" color="brand.textLight" />
-                    <Text fontSize="xl" fontWeight="medium" color="brand.textLight">
-                        No designs submitted for this month's contest yet. <br/>
-                        Why not submit yours or check back soon?
+                <VStack spacing={5} p={10} bg="brand.primaryLight" borderRadius="xl" mt={8} textAlign="center" borderWidth="1px" borderColor="whiteAlpha.200">
+                    <Icon as={FaRegSadCry} boxSize="60px" color="brand.accentYellow" />
+                    <Text fontSize="2xl" fontWeight="medium" color="brand.textLight">
+                        No Contest Submissions Yet!
+                    </Text>
+                    <Text color="whiteAlpha.800">
+                        The gallery is empty for now. Why not be the first to submit a design?
                     </Text>
                 </VStack>
             );
         }
         return (
-            <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={6}>
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 6, md: 8 }}>
                 {contestDesigns.map(design => (
                     <Box 
-                        key={design._id} bg="brand.paper" borderRadius="xl" 
+                        key={design._id} bg="brand.primaryLight" borderRadius="xl" 
                         overflow="hidden" shadow="lg" display="flex"
                         flexDirection="column" transition="all 0.2s ease-in-out"
-                        _hover={{ boxShadow: "2xl", transform: "translateY(-4px) scale(1.02)" }}
+                        borderWidth="1px" borderColor="transparent"
+                        _hover={{ boxShadow: "xl", transform: "translateY(-5px)", borderColor: "brand.accentYellow" }}
                     >
-                        <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h="280px" bg="gray.200" />
+                        <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h={{base: 300, md: 320}} bg="whiteAlpha.100" />
                         <Box p={5} flexGrow={1} display="flex" flexDirection="column" justifyContent="space-between">
-                            {/* MODIFIED: Display username instead of prompt */}
-                            <Tooltip label={design.prompt || "No prompt provided"} placement="top" bg="gray.600" color="white" hasArrow>
-                                <Text fontSize="md" color="brand.textDark" fontWeight="medium" noOfLines={1}>
+                            <Tooltip label={design.prompt || "No prompt provided"} placement="top" bg="gray.700" color="white" hasArrow>
+                                <Text fontSize="md" color="whiteAlpha.900" fontWeight="medium" noOfLines={1}>
                                     Submitted by: {design.user ? design.user.username : 'Unknown User'}
                                 </Text>
                             </Tooltip>
-                            {/* You can choose to still display the prompt if desired, perhaps smaller or truncated */}
-                            {/* <Text fontSize="sm" color="gray.600" noOfLines={1} title={design.prompt} mt={1}>
-                                {design.prompt || "Untitled Design"}
-                            </Text> */}
                             <HStack justifyContent="space-between" mt={4}>
                                 <Stat size="sm">
-                                    <StatLabel color="brand.textMutedOnOrange">Votes</StatLabel> 
-                                    <StatNumber color="brand.primaryDark" fontWeight="bold" fontSize="xl">{design.votes || 0}</StatNumber>
+                                    <StatLabel color="whiteAlpha.700">Votes</StatLabel> 
+                                    <StatNumber color="brand.accentYellow" fontWeight="bold" fontSize="3xl">{design.votes || 0}</StatNumber>
                                 </Stat>
                                 <Tooltip 
                                     label={
                                         !user ? "Please log in to vote" :
-                                        design.user?._id === user?._id ? "You cannot vote for your own design" : // check design.user._id
+                                        design.user?._id === user?._id ? "You cannot vote for your own design" :
                                         votedDesignIds.includes(design._id) ? "You have already voted for this design" : 
                                         userVotesLeft <= 0 ? "No votes left this month" : 
                                         "Cast your vote!"
@@ -174,13 +178,13 @@ export default function VotingPage() {
                                     <Button
                                         bg="brand.accentYellow" color="brand.textDark"
                                         _hover={{bg: "brand.accentYellowHover"}}
-                                        size="md" px={6} borderRadius="full" 
+                                        size="md" px={6} 
                                         leftIcon={<Icon as={FaVoteYea} />}
                                         onClick={() => user ? handleVote(design._id) : navigate('/login')}
-                                        isDisabled={!user || votedDesignIds.includes(design._id) || userVotesLeft <= 0 || design.user?._id === user?._id} // check design.user._id
+                                        isDisabled={!user || votedDesignIds.includes(design._id) || userVotesLeft <= 0 || design.user?._id === user?._id}
                                         boxShadow="md" _active={{ boxShadow: "lg" }}
                                     >
-                                        Vote!
+                                        Vote
                                     </Button>
                                 </Tooltip>
                             </HStack>
@@ -191,39 +195,32 @@ export default function VotingPage() {
         );
     };
 
-    if (!user && loading) { 
+    if (!user) {
         return (
-            <Box textAlign="center" mt={20}>
-                <Spinner size="xl" color="brand.primary" thickness="4px" speed="0.65s" emptyColor="gray.200" />
-                <Text mt={4} color="brand.textLight">Loading...</Text>
+            <Box textAlign="center" py={20}>
+                <Heading color="brand.textLight" mb={4}>Contest Access Required</Heading>
+                <Text color="whiteAlpha.800" mb={6}>Please log in or create an account to view the gallery and vote.</Text>
+                <Button bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}} size="lg" onClick={() => navigate('/login')}>
+                    Login or Sign Up
+                </Button>
             </Box>
         );
     }
-    if (!user && !loading && !error) { 
-        return <Box textAlign="center" mt={20} px={4}><Text color="brand.textLight">Please log in to view the contest.</Text><Button mt={4} bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}} borderRadius="full" size="lg" onClick={() => navigate('/login')}>Go to Login</Button></Box>;
-    }
-
+    
     return (
-        <Box maxW="container.lg" mx="auto" mt={{base:6, md:8}} /*px removed, MainLayout handles it*/ pb={10}>
-            <VStack spacing={4} align="stretch" mb={8}>
-                {/* Page Title - UPDATED FOR UNIFORMITY */}
-                <Heading as="h1" 
-                  size="pageTitle" // Uniform page title style
-                  color="brand.textLight" 
-                  textAlign="left" 
-                  w="100%" 
-                  mb={{ base: 4, md: 6 }} // Consistent bottom margin
-                > 
-                    🏆 Monthly Design Contest 🏆
+        <Box py={{base: 6, md: 8}} px={{base: 0, md: 2}}> {/* Full-width layout */}
+            <VStack spacing={4} align="stretch" mb={10}>
+                <Heading as="h1" size="2xl" color="brand.textLight" textAlign="left" w="100%"> 
+                    Monthly Design Contest
                 </Heading>
                 {user && (
                     <>
-                        <Text fontSize="lg" color="brand.textLight" textAlign="left" w="100%">
-                            Vote for your favorite designs! You have <Text as="span" fontWeight="bold" color="brand.accentYellow">{userVotesLeft}</Text> vote(s) left this month.
+                        <Text fontSize="lg" color="whiteAlpha.900" textAlign="left" w="100%">
+                            Vote for your favorite designs! You have <Text as="span" fontWeight="bold" color="brand.accentYellow">{userVotesLeft}</Text> vote(s) left for this month's contest.
                         </Text>
                         {userVotesLeft <= 0 && 
                             <Text color="brand.accentYellow" fontWeight="bold" fontSize="lg" textAlign="left" w="100%">
-                                You've used all your votes for this month. Check back next month!
+                                You've used all your votes. Thanks for participating! Check back next month for a new contest.
                             </Text>
                         }
                     </>
