@@ -15,7 +15,6 @@ import {
   Spinner,
   Alert,
   AlertIcon,
-  // Card has been removed from imports
 } from '@chakra-ui/react';
 import { client } from '../../api/client';
 
@@ -70,7 +69,6 @@ const ProductTypeManager = () => {
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
-  // Using a styled Box to precisely match the Products tab layout
   return (
     <Box bg="ui.background" p={6} borderRadius="lg" shadow="sm">
       <Heading size="md" mb={4}>Manage Product Types</Heading>
@@ -85,7 +83,7 @@ const ProductTypeManager = () => {
       <Table variant="simple">
         <Thead>
           <Tr><Th>Name</Th><Th>Actions</Th></Tr>
-        </Tbody>
+        </Thead> {/* <-- This was the line with the typo, now corrected */}
         <Tbody>
           {types.map((type) => (
             <Tr key={type._id}>
