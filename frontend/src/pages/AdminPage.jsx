@@ -1,8 +1,6 @@
 // frontend/src/pages/AdminPage.jsx
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-    // CORRECTED: Added all missing Chakra UI components to this single import statement
     Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
     Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner, Alert, AlertIcon,
     Button, useToast, Tag, Image, Select,
@@ -12,21 +10,21 @@ import {
     Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
     Wrap, WrapItem, Radio, RadioGroup, NumberInput, NumberInputField, NumberInputStepper,
     NumberIncrementStepper, NumberDecrementStepper, Textarea, AlertDialog, AlertDialogBody,
-    AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, CloseButton
+    AlertDialogFooter, AlertDialogHeader, AlertDialogContent, CloseButton
 } from '@chakra-ui/react';
 import { FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash, FaWarehouse, FaTachometerAlt, FaDollarSign, FaUserPlus, FaBoxes, FaPlus, FaStar, FaToggleOn, FaToggleOff, FaExclamationTriangle } from 'react-icons/fa';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 
 /**
- * Admin Console - DEFINITIVE, COMPLETE, & FINAL v3
- * - Restored all inventory manager functionality into a nested tab structure.
- * - This single file contains all logic and components for the Admin page.
- * - All components are fully refactored for the dark theme.
- * - All previous bugs (StatCard crash, missing definitions, missing imports) are resolved.
+ * Admin Console - DEFINITIVE, COMPLETE, & FINAL
+ * - This single file contains all logic for all admin panels.
+ * - The Inventory Panel is a nested tab structure for Products, Types, and Categories.
+ * - All components have been fully refactored for the dark theme.
+ * - All previous bugs are resolved.
  */
 
-// Reusable Themed Inputs
+// --- Reusable Themed Inputs ---
 const ThemedInput = (props) => <Input bg="brand.primaryDark" borderColor="whiteAlpha.300" _hover={{ borderColor: "whiteAlpha.400" }} focusBorderColor="brand.accentYellow" {...props} />;
 const ThemedTextarea = (props) => <Textarea bg="brand.primaryDark" borderColor="whiteAlpha.300" _hover={{ borderColor: "whiteAlpha.400" }} focusBorderColor="brand.accentYellow" {...props} />;
 const ThemedSelect = (props) => <Select bg="brand.primaryDark" borderColor="whiteAlpha.300" _hover={{ borderColor: "whiteAlpha.400" }} focusBorderColor="brand.accentYellow" {...props} />;
@@ -64,7 +62,7 @@ const ProductTypeManager = ({ token }) => {
     const handleFormChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value })); };
     const handleSubmit = async () => { if (!formData.name.trim() || !formData.category) { toast({ title: "Validation Error", description: "Name and Category are required.", status: "error" }); return; } const method = isEditing ? 'put' : 'post'; const url = isEditing ? `/admin/product-types/${selectedProductType._id}` : '/admin/product-types'; try { await client[method](url, formData, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product Type ${isEditing ? 'Updated' : 'Created'}`, status: "success" }); fetchProductTypesAndCategories(); onClose(); } catch (err) { toast({ title: `Error ${isEditing ? 'Updating' : 'Creating'} Product Type`, description: err.response?.data?.message, status: "error" }); } };
     const handleOpenDeleteDialog = (productType) => { setSelectedProductType(productType); onDeleteOpen(); };
-    const handleDelete = async () => { if (!selectedProductType) return; try { await client.delete(`/admin/product-types/${selectedProductType._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Product Type Deleted", status: "success" }); fetchProductTypesAndCategories(); onClose(); } catch (err) { toast({ title: "Delete Failed", description: err.response?.data?.message, status: "error" }); onDeleteClose(); } };
+    const handleDelete = async () => { if (!selectedProductType) return; try { await client.delete(`/admin/product-types/${selectedProductType._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Product Type Deleted", status: "success" }); fetchProductTypesAndCategories(); onDeleteClose(); } catch (err) { toast({ title: "Delete Failed", description: err.response?.data?.message, status: "error" }); onDeleteClose(); } };
     if (loading) return <VStack minH="200px" justify="center"><Spinner size="xl" color="brand.accentYellow" /></VStack>;
     if (error && productTypes.length === 0) return <Alert status="error" bg="red.900" borderRadius="lg"><AlertIcon color="red.300" />{error}</Alert>;
     return (<Box><HStack justifyContent="space-between" mb={6}><Heading size="lg" color="brand.textLight">Manage Product Types</Heading><Button leftIcon={<Icon as={FaPlus} />} bg="brand.accentOrange" color="white" _hover={{bg:"brand.accentOrangeHover"}} onClick={() => handleOpenModal()} isDisabled={categories.length === 0}>Add New Type</Button></HStack>{categories.length === 0 && !loading && <Alert status="warning" mb={4} bg="yellow.900" borderColor="yellow.500" borderWidth="1px" borderRadius="lg"><AlertIcon color="yellow.400" />Please add Product Categories first before adding Product Types.</Alert>}<TableContainer><Table variant="simple" size="sm" color="brand.textLight"><Thead><Tr><Th color="whiteAlpha.600">Name</Th><Th color="whiteAlpha.600">Category</Th><Th color="whiteAlpha.600">Description</Th><Th color="whiteAlpha.600">Status</Th><Th color="whiteAlpha.600">Actions</Th></Tr></Thead><Tbody>{productTypes.map((pt) => (<Tr key={pt._id} _hover={{bg:"brand.headerBg"}}><Td fontWeight="medium">{pt.name}</Td><Td>{pt.category?.name || 'N/A'}</Td><Td fontSize="xs" maxW="300px" whiteSpace="normal">{pt.description || 'N/A'}</Td><Td><Tag size="sm" colorScheme={pt.isActive ? 'green' : 'red'} variant="subtle">{pt.isActive ? 'Active' : 'Inactive'}</Tag></Td><Td><Tooltip label="Edit Type" bg="brand.headerBg" color="white"><IconButton icon={<Icon as={FaEdit} />} size="sm" variant="ghost" onClick={() => handleOpenModal(pt)}/></Tooltip><Tooltip label="Delete Type" bg="brand.headerBg" color="white"><IconButton icon={<Icon as={FaTrashAlt} />} size="sm" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(pt)}/></Tooltip></Td></Tr>))}</Tbody></Table></TableContainer><Modal isOpen={isOpen} onClose={onClose} isCentered><ModalOverlay bg="blackAlpha.800"/><ModalContent bg="brand.primaryLight" color="brand.textLight"><ModalHeader borderBottomWidth="1px" borderColor="whiteAlpha.300">{isEditing ? 'Edit' : 'Add New'} Product Type</ModalHeader><ModalCloseButton _hover={{bg:"whiteAlpha.200"}}/><ModalBody py={6} as="form" id="type-form" onSubmit={(e)=>{e.preventDefault();handleSubmit();}}><VStack spacing={4}><FormControl isRequired><FormLabel>Type Name</FormLabel><ThemedInput name="name" value={formData.name} onChange={handleFormChange} placeholder="e.g., T-Shirt, Hoodie"/></FormControl><FormControl isRequired><FormLabel>Category</FormLabel><ThemedSelect name="category" value={formData.category} onChange={handleFormChange} placeholder="Select category" isDisabled={categories.length === 0}>{categories.map(cat => (<option key={cat._id} value={cat._id}>{cat.name}</option>))}</ThemedSelect></FormControl><FormControl><FormLabel>Description</FormLabel><ThemedInput name="description" value={formData.description} onChange={handleFormChange} placeholder="Brief description"/></FormControl><FormControl display="flex" alignItems="center"><FormLabel htmlFor="isActive-type" mb="0">Active</FormLabel><Switch id="isActive-type" name="isActive" isChecked={formData.isActive} onChange={handleFormChange} colorScheme="yellow" ml={3}/></FormControl></VStack></ModalBody><ModalFooter borderTopWidth="1px" borderColor="whiteAlpha.300"><Button variant="ghost" _hover={{bg:"whiteAlpha.200"}} mr={3} onClick={onClose}>Cancel</Button><Button type="submit" form="type-form" bg="brand.accentOrange" color="white" _hover={{bg:"brand.accentOrangeHover"}} isDisabled={categories.length === 0 && !isEditing}>{isEditing ? 'Save Changes' : 'Create Type'}</Button></ModalFooter></ModalContent></Modal><AlertDialog isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered leastDestructiveRef={cancelRef}><AlertDialogOverlay bg="blackAlpha.800" /><AlertDialogContent bg="brand.primaryLight" color="brand.textLight"><AlertDialogHeader>Confirm Deletion</AlertDialogHeader><AlertDialogBody>Delete <strong>{selectedProductType?.name}</strong>? This cannot be undone.</AlertDialogBody><AlertDialogFooter><Button ref={cancelRef} variant="ghost" _hover={{bg:"whiteAlpha.200"}} onClick={onDeleteClose}>Cancel</Button><Button colorScheme="red" onClick={handleDelete} ml={3}>Delete</Button></AlertDialogFooter></AlertDialogContent></AlertDialog></Box>);
