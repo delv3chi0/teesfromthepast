@@ -18,6 +18,7 @@ const DashboardPanel = ({ token, onViewOrder }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const toast = useToast();
+
     useEffect(() => {
         const fetchSummary = async () => {
             if (!token) return; setLoading(true); setError('');
@@ -29,12 +30,29 @@ const DashboardPanel = ({ token, onViewOrder }) => {
         };
         fetchSummary();
     }, [token, toast]);
-    const StatCard = ({ title, stat, icon, helpText }) => ( <Stat p={5} shadow="md" borderWidth="1px" borderRadius="lg" bg="white"><Flex justifyContent="space-between"><Box><StatLabel color="gray.500">{title}</StatLabel><StatNumber>{stat}</StatNumber>{helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}</Box><Box my="auto" color="gray.400"><Icon as={icon} w={8} h={8} /></Box></Flex></Stat> );
+
+    // MODIFIED: StatCard now uses themed background and text colors for readability.
+    const StatCard = ({ title, stat, icon, helpText }) => (
+        <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="ui.background">
+            <Flex justifyContent="space-between">
+                <Box>
+                    <StatLabel color="gray.400">{title}</StatLabel>
+                    <StatNumber>{stat}</StatNumber>
+                    {helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}
+                </Box>
+                <Box my="auto" color="brand.primary">
+                    <Icon as={icon} w={8} h={8} />
+                </Box>
+            </Flex>
+        </Stat>
+    );
+
     if (loading) return <VStack justifyContent="center" alignItems="center" minH="300px"><Spinner size="xl" /></VStack>;
     if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
     if (!summary) return <Text p={4}>No summary data available.</Text>;
+    
     return (
-        <VStack spacing={6} align="stretch" p={{ base: 2, md: 4 }}>
+        <VStack spacing={6} align="stretch">
             <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
                 <StatCard title="Total Revenue" stat={`$${(summary.totalRevenue / 100).toFixed(2)}`} icon={FaDollarSign} helpText="All successful orders"/>
                 <StatCard title="Total Orders" stat={summary.totalOrders} icon={FaBoxes} helpText="All orders placed"/>
@@ -42,8 +60,19 @@ const DashboardPanel = ({ token, onViewOrder }) => {
             </SimpleGrid>
             <Box mt={8}>
                 <Heading size="md" mb={4}>Recent Orders</Heading>
-                <TableContainer borderWidth="1px" borderRadius="lg" bg="white">
-                    <Table variant="simple" size="sm"><Thead><Tr><Th>Order ID</Th><Th>User</Th><Th>Date</Th><Th isNumeric>Total</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
+                {/* MODIFIED: Table background now matches the themed cards for consistency */}
+                <TableContainer borderWidth="1px" borderRadius="lg" bg="ui.background" p={4}>
+                    <Table variant="simple" size="sm">
+                        <Thead>
+                            <Tr>
+                                <Th>Order ID</Th>
+                                <Th>User</Th>
+                                <Th>Date</Th>
+                                <Th isNumeric>Total</Th>
+                                <Th>Status</Th>
+                                <Th>Actions</Th>
+                            </Tr>
+                        </Thead>
                         <Tbody>
                             {summary.recentOrders.map(order => (
                                 <Tr key={order._id}>
@@ -52,7 +81,11 @@ const DashboardPanel = ({ token, onViewOrder }) => {
                                     <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
                                     <Td isNumeric>${(order.totalAmount / 100).toFixed(2)}</Td>
                                     <Td><Tag size="sm" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'gray'}>{order.orderStatus}</Tag></Td>
-                                    <Td><Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => onViewOrder(order._id)}/></Tooltip></Td>
+                                    <Td>
+                                        <Tooltip label="View Order Details">
+                                            <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => onViewOrder(order._id)}/>
+                                        </Tooltip>
+                                    </Td>
                                 </Tr>
                             ))}
                         </Tbody>
