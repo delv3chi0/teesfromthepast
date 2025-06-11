@@ -16,7 +16,7 @@ import {
   Alert,
   AlertIcon,
 } from '@chakra-ui/react';
-// CORRECTED: Importing 'client' instead of 'apiClient'
+// FINAL FIX: Importing the correctly named 'client'
 import { client } from '../../api/client';
 
 const ProductCategoryManager = () => {
@@ -29,19 +29,12 @@ const ProductCategoryManager = () => {
   const fetchCategories = async () => {
     try {
       setIsLoading(true);
-      // CORRECTED: Using 'client'
+      // FINAL FIX: Using 'client' to make the API call
       const { data } = await client.get('/admin/product-categories');
       setCategories(data);
       setError('');
     } catch (err) {
       setError('Could not fetch product categories.');
-      toast({
-        title: 'Error fetching categories',
-        description: err.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
     } finally {
       setIsLoading(false);
     }
@@ -52,81 +45,37 @@ const ProductCategoryManager = () => {
   }, []);
 
   const handleCreateCategory = async () => {
-    if (!newCategoryName.trim()) {
-      toast({
-        title: 'Validation Error',
-        description: 'Category name cannot be empty.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
+    if (!newCategoryName.trim()) return;
     try {
-      // CORRECTED: Using 'client'
+      // FINAL FIX: Using 'client'
       await client.post('/admin/product-categories', { name: newCategoryName });
-      toast({
-        title: 'Category created.',
-        description: `Successfully created "${newCategoryName}".`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
+      toast({ title: 'Category created.', status: 'success' });
       setNewCategoryName('');
-      fetchCategories(); // Refresh the list
+      fetchCategories();
     } catch (err) {
-      toast({
-        title: 'Creation failed',
-        description: err.response?.data?.message || 'Could not create category.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      toast({ title: 'Creation failed.', description: err.message, status: 'error' });
     }
   };
 
   const handleDeleteCategory = async (id) => {
-    if (window.confirm('Are you sure you want to delete this category?')) {
+    if (window.confirm('Are you sure?')) {
       try {
-        // CORRECTED: Using 'client'
+        // FINAL FIX: Using 'client'
         await client.delete(`/admin/product-categories/${id}`);
-        toast({
-          title: 'Category deleted.',
-          status: 'success',
-          duration: 5000,
-          isClosable: true,
-        });
-        fetchCategories(); // Refresh the list
+        toast({ title: 'Category deleted.', status: 'success' });
+        fetchCategories();
       } catch (err) {
-        toast({
-          title: 'Deletion failed',
-          description: err.response?.data?.message || 'Could not delete category.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
+        toast({ title: 'Deletion failed.', description: err.message, status: 'error' });
       }
     }
   };
 
-  if (isLoading) {
-    return <Spinner />;
-  }
-
-  if (error) {
-    return (
-      <Alert status="error">
-        <AlertIcon />
-        {error}
-      </Alert>
-    );
-  }
+  if (isLoading) return <Spinner />;
+  if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
   return (
     <Box>
-      <Heading size="md" mb={4}>
-        Manage Product Categories
-      </Heading>
+      <Heading size="md" mb={4}>Manage Product Categories</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateCategory(); }}>
         <Input
           placeholder="New category name"
@@ -135,26 +84,16 @@ const ProductCategoryManager = () => {
         />
         <Button type="submit">Add Category</Button>
       </HStack>
-
       <Table variant="simple">
         <Thead>
-          <Tr>
-            <Th>Name</Th>
-            <Th>Actions</Th>
-          </Tr>
+          <Tr><Th>Name</Th><Th>Actions</Th></Tr>
         </Thead>
         <Tbody>
           {categories.map((category) => (
             <Tr key={category._id}>
               <Td>{category.name}</Td>
               <Td>
-                <Button
-                  size="sm"
-                  colorScheme="red"
-                  onClick={() => handleDeleteCategory(category._id)}
-                >
-                  Delete
-                </Button>
+                <Button size="sm" colorScheme="red" onClick={() => handleDeleteCategory(category._id)}>Delete</Button>
               </Td>
             </Tr>
           ))}

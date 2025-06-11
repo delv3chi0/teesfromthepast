@@ -16,8 +16,8 @@ import {
   Alert,
   AlertIcon,
 } from '@chakra-ui/react';
-// CORRECTED IMPORT STATEMENT
-import { apiClient } from '../../api/client';
+// FINAL FIX: Importing the correctly named 'client'
+import { client } from '../../api/client';
 
 const ProductTypeManager = () => {
   const [types, setTypes] = useState([]);
@@ -29,18 +29,12 @@ const ProductTypeManager = () => {
   const fetchTypes = async () => {
     try {
       setIsLoading(true);
-      const { data } = await apiClient.get('/admin/product-types');
+      // FINAL FIX: Using 'client' to make the API call
+      const { data } = await client.get('/admin/product-types');
       setTypes(data);
       setError('');
     } catch (err) {
       setError('Could not fetch product types.');
-      toast({
-        title: 'Error fetching types',
-        description: err.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
     } finally {
       setIsLoading(false);
     }
@@ -51,79 +45,37 @@ const ProductTypeManager = () => {
   }, []);
 
   const handleCreateType = async () => {
-    if (!newTypeName.trim()) {
-      toast({
-        title: 'Validation Error',
-        description: 'Type name cannot be empty.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
+    if (!newTypeName.trim()) return;
     try {
-      await apiClient.post('/admin/product-types', { name: newTypeName });
-      toast({
-        title: 'Product type created.',
-        description: `Successfully created "${newTypeName}".`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
+      // FINAL FIX: Using 'client'
+      await client.post('/admin/product-types', { name: newTypeName });
+      toast({ title: 'Product type created.', status: 'success' });
       setNewTypeName('');
-      fetchTypes(); // Refresh the list
+      fetchTypes();
     } catch (err) {
-      toast({
-        title: 'Creation failed',
-        description: err.response?.data?.message || 'Could not create product type.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      toast({ title: 'Creation failed.', description: err.message, status: 'error' });
     }
   };
 
   const handleDeleteType = async (id) => {
-    if (window.confirm('Are you sure you want to delete this product type?')) {
+    if (window.confirm('Are you sure?')) {
       try {
-        await apiClient.delete(`/admin/product-types/${id}`);
-        toast({
-          title: 'Product type deleted.',
-          status: 'success',
-          duration: 5000,
-          isClosable: true,
-        });
-        fetchTypes(); // Refresh the list
+        // FINAL FIX: Using 'client'
+        await client.delete(`/admin/product-types/${id}`);
+        toast({ title: 'Product type deleted.', status: 'success' });
+        fetchTypes();
       } catch (err) {
-        toast({
-          title: 'Deletion failed',
-          description: err.response?.data?.message || 'Could not delete product type.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
+        toast({ title: 'Deletion failed.', description: err.message, status: 'error' });
       }
     }
   };
-  
-  if (isLoading) {
-    return <Spinner />;
-  }
 
-  if (error) {
-    return (
-      <Alert status="error">
-        <AlertIcon />
-        {error}
-      </Alert>
-    );
-  }
+  if (isLoading) return <Spinner />;
+  if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
   return (
     <Box>
-      <Heading size="md" mb={4}>
-        Manage Product Types
-      </Heading>
+      <Heading size="md" mb={4}>Manage Product Types</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateType(); }}>
         <Input
           placeholder="New product type name"
@@ -132,26 +84,16 @@ const ProductTypeManager = () => {
         />
         <Button type="submit">Add Type</Button>
       </HStack>
-
       <Table variant="simple">
         <Thead>
-          <Tr>
-            <Th>Name</Th>
-            <Th>Actions</Th>
-          </Tr>
+          <Tr><Th>Name</Th><Th>Actions</Th></Tr>
         </Thead>
         <Tbody>
           {types.map((type) => (
             <Tr key={type._id}>
               <Td>{type.name}</Td>
               <Td>
-                <Button
-                  size="sm"
-                  colorScheme="red"
-                  onClick={() => handleDeleteType(type._id)}
-                >
-                  Delete
-                </Button>
+                <Button size="sm" colorScheme="red" onClick={() => handleDeleteType(type._id)}>Delete</Button>
               </Td>
             </Tr>
           ))}
