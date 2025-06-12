@@ -15,18 +15,18 @@ import {
   Spinner,
   Alert,
   AlertIcon,
-  Select, // Import Select
-  VStack, // Import VStack
-  FormControl, // Import FormControl
-  FormLabel, // Import FormLabel
+  Select,
+  VStack,
+  FormControl,
+  FormLabel,
 } from '@chakra-ui/react';
 import { client } from '../../api/client';
 
 const ProductTypeManager = () => {
   const [types, setTypes] = useState([]);
-  const [categories, setCategories] = useState([]); // State for categories
+  const [categories, setCategories] = useState([]);
   const [newTypeName, setNewTypeName] = useState('');
-  const [selectedCategoryId, setSelectedCategoryId] = useState(''); // State for selected category
+  const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const toast = useToast();
@@ -40,8 +40,8 @@ const ProductTypeManager = () => {
       ]);
       setTypes(typesRes.data);
       setCategories(categoriesRes.data);
-      if (categoriesRes.data.length > 0) {
-        setSelectedCategoryId(categoriesRes.data[0]._id); // Default to first category
+      if (categoriesRes.data.length > 0 && !selectedCategoryId) {
+        setSelectedCategoryId(categoriesRes.data[0]._id);
       }
       setError('');
     } catch (err) {
@@ -62,8 +62,11 @@ const ProductTypeManager = () => {
       return;
     }
     try {
-      // Send both name and the selected category ID
-      await client.post('/admin/product-types', { name: newTypeName, category: selectedCategoryId });
+      // Sending only name and category, as description is not needed.
+      await client.post('/admin/product-types', { 
+        name: newTypeName, 
+        category: selectedCategoryId 
+      });
       toast({ title: 'Product type created.', status: 'success' });
       setNewTypeName('');
       fetchData(); // Refresh list
@@ -83,7 +86,7 @@ const ProductTypeManager = () => {
       }
     }
   };
-  
+ 
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
@@ -91,13 +94,13 @@ const ProductTypeManager = () => {
     <Box bg="ui.background" p={6} borderRadius="lg" shadow="sm">
       <Heading size="md" mb={4}>Manage Product Types</Heading>
       <VStack as="form" mb={6} spacing={4} align="stretch" onSubmit={(e) => { e.preventDefault(); handleCreateType(); }}>
-        <FormControl>
+        <FormControl isRequired>
           <FormLabel>Type Name</FormLabel>
           <Input placeholder="New product type name" value={newTypeName} onChange={(e) => setNewTypeName(e.target.value)} />
         </FormControl>
-        <FormControl>
+        <FormControl isRequired>
           <FormLabel>Category</FormLabel>
-          <Select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
+          <Select placeholder="Select category" value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
             {categories.map(cat => (
               <option key={cat._id} value={cat._id}>{cat.name}</option>
             ))}
@@ -114,7 +117,6 @@ const ProductTypeManager = () => {
           {types.map((type) => (
             <Tr key={type._id}>
               <Td>{type.name}</Td>
-              {/* Assuming your API for getProductTypesAdmin populates the category name */}
               <Td>{type.category?.name || 'N/A'}</Td>
               <Td>
                 <Button size="sm" colorScheme="red" onClick={() => handleDeleteType(type._id)}>Delete</Button>

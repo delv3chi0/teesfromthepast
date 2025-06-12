@@ -1,3 +1,4 @@
+// backend/controllers/adminController.js
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
@@ -114,12 +115,12 @@ const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     }
 });
 
-// CORRECTED AND FINAL VERSION
+// FINAL CORRECTED VERSION: Description is not required.
 const createProductTypeAdmin = asyncHandler(async (req, res) => {
     const { name, category, description } = req.body;
 
-    if (!name || !category || !description) {
-        return res.status(400).json({ message: 'Name, category, and description are all required fields.' });
+    if (!name || !category) {
+        return res.status(400).json({ message: 'Name and category are required fields.' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(category)) { 
@@ -139,7 +140,7 @@ const createProductTypeAdmin = asyncHandler(async (req, res) => {
     const productType = new ProductType({
         name,
         category,
-        description,
+        description: description || '', // Handle optional description
     });
 
     const createdProduct = await productType.save();
