@@ -12,7 +12,9 @@ import {
   Tag,
   Button,
   Flex,
-  Icon
+  Icon,
+  Image,
+  HStack,
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -90,7 +92,6 @@ const MyOrdersPage = () => {
                 
                 <Box>
                   <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Total</Heading>
-                  {/* MODIFIED: Safely handle cases where totalPrice might be missing */}
                   <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text>
                 </Box>
                 
@@ -104,11 +105,24 @@ const MyOrdersPage = () => {
               <Divider my={4} borderColor="whiteAlpha.300" />
 
               <Box>
-                <Heading size="sm" mb={3}>Items</Heading>
-                <VStack align="stretch" spacing={3}>
+                <Heading size="sm" mb={4}>Items</Heading>
+                <VStack align="stretch" spacing={4}>
+                  {/* CORRECTED: This now maps over the items and displays all their details */}
                   {order.orderItems.map(item => (
-                    <Flex key={item._id} justify="space-between" align="center">
-                      <Text fontSize="sm">{item.name} (x{item.qty})</Text>
+                    <Flex key={item._id} justify="space-between" align="center" bg="brand.primary" p={3} borderRadius="md">
+                      <HStack spacing={4}>
+                        <Image 
+                          src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'} 
+                          alt={item.name}
+                          boxSize="60px"
+                          objectFit="cover"
+                          borderRadius="md"
+                        />
+                        <VStack align="start" spacing={0}>
+                          <Text fontWeight="bold">{item.name}</Text>
+                          <Text fontSize="xs" color="brand.textMuted">Qty: {item.qty}</Text>
+                        </VStack>
+                      </HStack>
                       <Text fontSize="sm" fontWeight="bold">${(item.price * item.qty).toFixed(2)}</Text>
                     </Flex>
                   ))}
