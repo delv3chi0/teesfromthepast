@@ -84,8 +84,8 @@ const RegistrationPage = () => {
         boxShadow="xl"
         w="100%"
       >
-        {/* CORRECTED: Using the correct path for the logo from the public folder */}
-        <Image src="/logo.png" alt="Tees From The Past Logo" boxSize="150px" mb={4} />
+        {/* CORRECTED: Setting a fixed height and using objectFit to maintain aspect ratio */}
+        <Image src="/logo.png" alt="Tees From The Past Logo" height="100px" objectFit="contain" mb={4} />
         <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">
           Create Your Account
         </Heading>
