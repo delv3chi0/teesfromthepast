@@ -6,6 +6,7 @@ import {
   useDisclosure, FormControl, FormLabel, Input, Select, Switch, HStack, Tooltip, Icon,
   Tag, SimpleGrid, Textarea, NumberInput, NumberInputField, NumberInputStepper,
   NumberIncrementStepper, NumberDecrementStepper, Divider, CloseButton,
+
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
@@ -130,11 +131,7 @@ const ProductManager = () => {
 
   return (
     <Box p={{ base: 2, md: 4 }}>
-      {/* MODIFIED: Added the "Add New Product" button back in this HStack */}
-      <HStack justifyContent="space-between" mb={6}>
-        <Heading size="md">Manage Products</Heading>
-        <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button>
-      </HStack>
+      <HStack justifyContent="space-between" mb={6}><Heading size="md">Manage Products</Heading><Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button></HStack>
       <TableContainer>
         <Table variant="simple" size="sm">
           <Thead><Tr><Th>Name</Th><Th>Category</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
@@ -154,13 +151,15 @@ const ProductManager = () => {
                       <VStack spacing={4} align="stretch">
                         {(formData.variants || []).map((variant, colorIndex) => (
                           (variant && variant.sizes) ? 
-                          <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="gray.50">
+                          // MODIFIED: bg="gray.50" changed to a theme-aware dark color
+                          <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="gray.800">
                             <AccordionItem border="none">
                               <Flex align="center" p={2}>
                                 <Radio value={colorIndex.toString()} mr={3} colorScheme="yellow"/><Tooltip label="Set as default display for shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "yellow.400" : "gray.300"} mr={2}/></Tooltip>
                                 <AccordionButton flex="1"><HStack w="full" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="gray.300"/><Text fontWeight="bold">{variant.colorName}</Text></HStack></AccordionButton><AccordionIcon /><CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
-                              <AccordionPanel bg="white" pb={4}>
+                              {/* MODIFIED: bg="white" changed to a theme-aware dark color */}
+                              <AccordionPanel bg="gray.700" pb={4}>
                                 <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => { const newV = [...formData.variants]; newV[colorIndex].podProductId = e.target.value; setFormData(p => ({...p, variants: newV})); }} /></FormControl>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
                                 <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
@@ -172,11 +171,11 @@ const ProductManager = () => {
                               </AccordionPanel>
                             </AccordionItem>
                           </Accordion>
-                          : null // Changed to null to avoid the alert for now
+                          : null
                         ))}
                       </VStack>
                     </RadioGroup>
-                    <Box p={4} borderWidth="1px" borderRadius="md" mt={6} bg="gray.50"><Heading size="xs" mb={3}>Add New Color Variant</Heading><SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}><FormControl><FormLabel fontSize="sm">Color Name</FormLabel><Select size="sm" name="colorName" value={newColorData.colorName} onChange={handleNewColorFormChange} placeholder="Select...">{CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</Select></FormControl><FormControl><FormLabel fontSize="sm">Color Hex</FormLabel><HStack><Input size="sm" name="colorHex" value={newColorData.colorHex} onChange={handleNewColorFormChange}/><Box w="24px" h="24px" bg={newColorData.colorHex} borderRadius="sm" border="1px solid" borderColor="gray.300"/></HStack></FormControl><FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" name="podProductId" value={newColorData.podProductId} onChange={handleNewColorFormChange}/></FormControl></SimpleGrid><Button mt={4} size="sm" colorScheme="teal" onClick={handleAddColorVariant} isDisabled={!newColorData.colorName}>Add This Color</Button></Box>
+                    <Box p={4} borderWidth="1px" borderRadius="md" mt={6} bg="gray.700"><Heading size="xs" mb={3}>Add New Color Variant</Heading><SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}><FormControl><FormLabel fontSize="sm">Color Name</FormLabel><Select size="sm" name="colorName" value={newColorData.colorName} onChange={handleNewColorFormChange} placeholder="Select...">{CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</Select></FormControl><FormControl><FormLabel fontSize="sm">Color Hex</FormLabel><HStack><Input size="sm" name="colorHex" value={newColorData.colorHex} onChange={handleNewColorFormChange}/><Box w="24px" h="24px" bg={newColorData.colorHex} borderRadius="sm" border="1px solid" borderColor="gray.300"/></HStack></FormControl><FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" name="podProductId" value={newColorData.podProductId} onChange={handleNewColorFormChange}/></FormControl></SimpleGrid><Button mt={4} size="sm" colorScheme="teal" onClick={handleAddColorVariant} isDisabled={!newColorData.colorName}>Add This Color</Button></Box>
                 </Box>
             </VStack>
             )}

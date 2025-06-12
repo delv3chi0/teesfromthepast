@@ -69,9 +69,10 @@ const ProductCategoryManager = () => {
   if (isLoading) return <Spinner />;
   if (error) return <Alert status="error"><AlertIcon />{error}</Alert>;
 
+  // MODIFIED: This container now matches the styling of the Products tab
   return (
-    <Box bg="ui.background" p={6} borderRadius="lg" shadow="sm">
-      <Heading size="md" mb={4}>Manage Product Categories</Heading>
+    <Box p={{ base: 2, md: 4 }}>
+      <Heading size="md" mb={4}>Manage Categories</Heading>
       <HStack as="form" mb={6} onSubmit={(e) => { e.preventDefault(); handleCreateCategory(); }}>
         <Input
           placeholder="New category name"
@@ -80,7 +81,6 @@ const ProductCategoryManager = () => {
         />
         <Button type="submit">Add Category</Button>
       </HStack>
-      {/* Added size="sm" to make rows more compact */}
       <Table variant="simple" size="sm">
         <Thead>
           <Tr><Th>Name</Th><Th>Actions</Th></Tr>
