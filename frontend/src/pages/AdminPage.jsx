@@ -18,7 +18,6 @@ const DashboardPanel = ({ token, onViewOrder }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const toast = useToast();
-
     useEffect(() => {
         const fetchSummary = async () => {
             if (!token) return; setLoading(true); setError('');
@@ -30,21 +29,20 @@ const DashboardPanel = ({ token, onViewOrder }) => {
         };
         fetchSummary();
     }, [token, toast]);
-
-    // MODIFIED: StatCard now uses themed background and text colors for readability.
+    
     const StatCard = ({ title, stat, icon, helpText }) => (
-        <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="ui.background">
-            <Flex justifyContent="space-between">
-                <Box>
-                    <StatLabel color="gray.400">{title}</StatLabel>
-                    <StatNumber>{stat}</StatNumber>
-                    {helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}
-                </Box>
-                <Box my="auto" color="brand.primary">
-                    <Icon as={icon} w={8} h={8} />
-                </Box>
-            </Flex>
-        </Stat>
+      <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="ui.background">
+          <Flex justifyContent="space-between">
+              <Box>
+                  <StatLabel color="gray.400">{title}</StatLabel>
+                  <StatNumber>{stat}</StatNumber>
+                  {helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}
+              </Box>
+              <Box my="auto" color="brand.primary">
+                  <Icon as={icon} w={8} h={8} />
+              </Box>
+          </Flex>
+      </Stat>
     );
 
     if (loading) return <VStack justifyContent="center" alignItems="center" minH="300px"><Spinner size="xl" /></VStack>;
@@ -60,19 +58,9 @@ const DashboardPanel = ({ token, onViewOrder }) => {
             </SimpleGrid>
             <Box mt={8}>
                 <Heading size="md" mb={4}>Recent Orders</Heading>
-                {/* MODIFIED: Table background now matches the themed cards for consistency */}
                 <TableContainer borderWidth="1px" borderRadius="lg" bg="ui.background" p={4}>
                     <Table variant="simple" size="sm">
-                        <Thead>
-                            <Tr>
-                                <Th>Order ID</Th>
-                                <Th>User</Th>
-                                <Th>Date</Th>
-                                <Th isNumeric>Total</Th>
-                                <Th>Status</Th>
-                                <Th>Actions</Th>
-                            </Tr>
-                        </Thead>
+                        <Thead><Tr><Th>Order ID</Th><Th>User</Th><Th>Date</Th><Th isNumeric>Total</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
                         <Tbody>
                             {summary.recentOrders.map(order => (
                                 <Tr key={order._id}>
@@ -81,11 +69,7 @@ const DashboardPanel = ({ token, onViewOrder }) => {
                                     <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
                                     <Td isNumeric>${(order.totalAmount / 100).toFixed(2)}</Td>
                                     <Td><Tag size="sm" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'gray'}>{order.orderStatus}</Tag></Td>
-                                    <Td>
-                                        <Tooltip label="View Order Details">
-                                            <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => onViewOrder(order._id)}/>
-                                        </Tooltip>
-                                    </Td>
+                                    <Td><Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => onViewOrder(order._id)}/></Tooltip></Td>
                                 </Tr>
                             ))}
                         </Tbody>
@@ -123,7 +107,7 @@ const AdminPage = () => {
   const { isOpen: isViewOrderModalOpen, onOpen: onOpenViewOrderModal, onClose: onCloseViewOrderModal } = useDisclosure();
   const { isOpen: isViewDesignModalOpen, onOpen: onOpenViewDesignModal, onClose: onCloseViewDesignModal } = useDisclosure();
   const { isOpen: isDeleteDesignModalOpen, onOpen: onOpenDeleteDesignModal, onClose: onCloseDeleteDesignModal } = useDisclosure();
- 
+  
   const [editFormData, setEditFormData] = useState({ username: '', email: '', firstName: '', lastName: '', isAdmin: false, newPassword: '', confirmNewPassword: '' });
   const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
   const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
@@ -237,43 +221,92 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
+      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" for a solid appearance */}
       <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
-        <ModalOverlay /><ModalContent bg="brand.paper"><ModalHeader>User: {selectedUser?.username}</ModalHeader><ModalCloseButton /><ModalBody><VStack spacing={3} align="start"><Text><strong>ID:</strong> {selectedUser?._id}</Text><Text><strong>Username:</strong> {selectedUser?.username}</Text><Text><strong>Email:</strong> {selectedUser?.email}</Text></VStack></ModalBody><ModalFooter><Button onClick={onViewUserModalClose}>Close</Button></ModalFooter></ModalContent>
+        <ModalOverlay />
+        <ModalContent bg="ui.background">
+            <ModalHeader>User: {selectedUser?.username}</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody><VStack spacing={3} align="start"><Text><strong>ID:</strong> {selectedUser?._id}</Text><Text><strong>Username:</strong> {selectedUser?.username}</Text><Text><strong>Email:</strong> {selectedUser?.email}</Text></VStack></ModalBody>
+            <ModalFooter><Button onClick={onViewUserModalClose}>Close</Button></ModalFooter>
+        </ModalContent>
       </Modal>
+      
+      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="xl">
-        <ModalOverlay /><ModalContent bg="brand.paper"><ModalHeader>Edit User: {selectedUser?.username}</ModalHeader><ModalCloseButton /><ModalBody overflowY="auto" maxHeight="70vh"><VStack spacing={4} align="stretch"><FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} /></FormControl><FormControl display="flex" alignItems="center"><FormLabel htmlFor="isAdmin" mb="0">Admin Status</FormLabel><Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} /></FormControl><Divider my={4} /><Heading size="sm">Change Password</Heading><FormControl><FormLabel>New Password</FormLabel><InputGroup><Input name="newPassword" type={showNewPasswordInModal?'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl><FormControl><FormLabel>Confirm New Password</FormLabel><InputGroup><Input name="confirmNewPassword" type={showConfirmNewPasswordInModal?'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl></VStack></ModalBody><ModalFooter><Button onClick={onEditModalClose} mr={3}>Cancel</Button><Button onClick={handleSaveChanges} colorScheme="brandPrimary">Save</Button></ModalFooter></ModalContent>
+        <ModalOverlay />
+        <ModalContent bg="ui.background">
+            <ModalHeader>Edit User: {selectedUser?.username}</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody overflowY="auto" maxHeight="70vh"><VStack spacing={4} align="stretch"><FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} /></FormControl><FormControl display="flex" alignItems="center"><FormLabel htmlFor="isAdmin" mb="0">Admin Status</FormLabel><Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} /></FormControl><Divider my={4} /><Heading size="sm">Change Password</Heading><FormControl><FormLabel>New Password</FormLabel><InputGroup><Input name="newPassword" type={showNewPasswordInModal?'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl><FormControl><FormLabel>Confirm New Password</FormLabel><InputGroup><Input name="confirmNewPassword" type={showConfirmNewPasswordInModal?'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl></VStack></ModalBody>
+            <ModalFooter><Button onClick={onEditModalClose} mr={3}>Cancel</Button><Button onClick={handleSaveChanges} colorScheme="brandPrimary">Save</Button></ModalFooter>
+        </ModalContent>
       </Modal>
+
+      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isDeleteUserModalOpen} onClose={onDeleteUserModalClose} isCentered>
-        <ModalOverlay /><ModalContent bg="brand.paper"><ModalHeader>Confirm Deletion</ModalHeader><ModalCloseButton /><ModalBody><Text>Delete <strong>{selectedUser?.username}</strong>?</Text><Text mt={2} color="red.500">This action cannot be undone.</Text></ModalBody><ModalFooter><Button onClick={onDeleteUserModalClose} mr={3}>Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete</Button></ModalFooter></ModalContent>
+        <ModalOverlay />
+        <ModalContent bg="ui.background">
+            <ModalHeader>Confirm Deletion</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody><Text>Delete <strong>{selectedUser?.username}</strong>?</Text><Text mt={2} color="red.500">This action cannot be undone.</Text></ModalBody>
+            <ModalFooter><Button onClick={onDeleteUserModalClose} mr={3}>Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete</Button></ModalFooter>
+        </ModalContent>
       </Modal>
+
+      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isDeleteOrderModalOpen} onClose={onDeleteOrderModalClose} isCentered>
-        <ModalOverlay /><ModalContent bg="brand.paper"><ModalHeader>Confirm Deletion</ModalHeader><ModalCloseButton /><ModalBody><Text>Delete order <strong>{orderToDelete?._id}</strong>?</Text><Alert mt={4} status="warning"><AlertIcon/>This does not issue a refund in Stripe.</Alert></ModalBody><ModalFooter><Button onClick={onDeleteOrderModalClose} mr={3}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteOrder}>Delete</Button></ModalFooter></ModalContent>
+        <ModalOverlay />
+        <ModalContent bg="ui.background">
+            <ModalHeader>Confirm Deletion</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody><Text>Delete order <strong>{orderToDelete?._id}</strong>?</Text><Alert mt={4} status="warning"><AlertIcon/>This does not issue a refund in Stripe.</Alert></ModalBody>
+            <ModalFooter><Button onClick={onDeleteOrderModalClose} mr={3}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteOrder}>Delete</Button></ModalFooter>
+        </ModalContent>
       </Modal>
+
+      {/* MODIFIED: Changed bg="brand.paper" to a solid color */}
       <Modal isOpen={isViewOrderModalOpen} onClose={() => { onCloseViewOrderModal(); setSelectedOrder(null); }} size="4xl" scrollBehavior="inside">
-        <ModalOverlay /><ModalContent bg="brand.paper" color="brand.textDark"><ModalHeader>Order Details</ModalHeader><ModalCloseButton />
-          <ModalBody>
-            {loadingSelectedOrder ? (<VStack justifyContent="center" minH="300px"><Spinner size="xl" /></VStack>) : selectedOrder && (
-              <VStack spacing={6} align="stretch">
-                <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)"}} gap={6}><GridItem><Heading size="sm" mb={2}>Customer</Heading><Text><strong>Name:</strong> {selectedOrder.user?.firstName || ''} {selectedOrder.user?.lastName || ''}</Text><Text><strong>Email:</strong> {selectedOrder.user?.email}</Text></GridItem><GridItem><Heading size="sm" mb={2}>Summary</Heading><Text><strong>ID:</strong> {selectedOrder._id}</Text><Text><strong>Date:</strong> {new Date(selectedOrder.createdAt).toLocaleString()}</Text><Text><strong>Total:</strong> <Tag colorScheme='green'>${(selectedOrder.totalAmount/100).toFixed(2)}</Tag></Text></GridItem></Grid>
-                <Box><Heading size="sm" mb={2}>Shipping Address</Heading><Text>{selectedOrder.shippingAddress.recipientName}</Text><Text>{selectedOrder.shippingAddress.street1}</Text>{selectedOrder.shippingAddress.street2 && <Text>{selectedOrder.shippingAddress.street2}</Text>}<Text>{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.zipCode}</Text><Text>{selectedOrder.shippingAddress.country}</Text></Box>
-                <Divider />
-                <Box><Heading size="sm" mb={4}>Items ({selectedOrder.orderItems.length})</Heading>
-                    <VStack spacing={4} align="stretch">{selectedOrder.orderItems.map((item, index) => (<Flex key={index} p={3} borderWidth="1px" borderRadius="md" alignItems="center" flexWrap="wrap"><Image src={item.designId?.imageDataUrl || 'https://via.placeholder.com/100'} boxSize="100px" objectFit="cover" borderRadius="md" mr={4} mb={{base: 2, md: 0}} /><VStack align="start" spacing={1} fontSize="sm"><Text fontWeight="bold">{item.productName}</Text><Text><strong>SKU:</strong> {item.variantSku}</Text><Text><strong>Color:</strong> {item.color} | <strong>Size:</strong> {item.size}</Text><Text><strong>Quantity:</strong> {item.quantity}</Text><Text><strong>Price/Item:</strong> ${(item.priceAtPurchase/100).toFixed(2)}</Text><Tooltip label={item.designId?.prompt}><Text isTruncated maxW="400px"><strong>Prompt:</strong> {item.designId?.prompt || 'N/A'}</Text></Tooltip></VStack></Flex>))}</VStack>
-                </Box>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter><Button onClick={() => { onCloseViewOrderModal(); setSelectedOrder(null); }}>Close</Button></ModalFooter>
+        <ModalOverlay />
+        <ModalContent bg="ui.background" color="brand.textLight">
+            <ModalHeader>Order Details</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+                {loadingSelectedOrder ? (<VStack justifyContent="center" minH="300px"><Spinner size="xl" /></VStack>) : selectedOrder && (
+                    <VStack spacing={6} align="stretch">
+                        <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)"}} gap={6}><GridItem><Heading size="sm" mb={2}>Customer</Heading><Text><strong>Name:</strong> {selectedOrder.user?.firstName || ''} {selectedOrder.user?.lastName || ''}</Text><Text><strong>Email:</strong> {selectedOrder.user?.email}</Text></GridItem><GridItem><Heading size="sm" mb={2}>Summary</Heading><Text><strong>ID:</strong> {selectedOrder._id}</Text><Text><strong>Date:</strong> {new Date(selectedOrder.createdAt).toLocaleString()}</Text><Text><strong>Total:</strong> <Tag colorScheme='green'>${(selectedOrder.totalAmount/100).toFixed(2)}</Tag></Text></GridItem></Grid>
+                        <Box><Heading size="sm" mb={2}>Shipping Address</Heading><Text>{selectedOrder.shippingAddress.recipientName}</Text><Text>{selectedOrder.shippingAddress.street1}</Text>{selectedOrder.shippingAddress.street2 && <Text>{selectedOrder.shippingAddress.street2}</Text>}<Text>{selectedOrder.shippingAddress.city}, {selectedOrder.shippingAddress.state} {selectedOrder.shippingAddress.zipCode}</Text><Text>{selectedOrder.shippingAddress.country}</Text></Box>
+                        <Divider />
+                        <Box><Heading size="sm" mb={4}>Items ({selectedOrder.orderItems.length})</Heading>
+                            <VStack spacing={4} align="stretch">{selectedOrder.orderItems.map((item, index) => (<Flex key={index} p={3} borderWidth="1px" borderRadius="md" alignItems="center" flexWrap="wrap"><Image src={item.designId?.imageDataUrl || 'https://via.placeholder.com/100'} boxSize="100px" objectFit="cover" borderRadius="md" mr={4} mb={{base: 2, md: 0}} /><VStack align="start" spacing={1} fontSize="sm"><Text fontWeight="bold">{item.productName}</Text><Text><strong>SKU:</strong> {item.variantSku}</Text><Text><strong>Color:</strong> {item.color} | <strong>Size:</strong> {item.size}</Text><Text><strong>Quantity:</strong> {item.quantity}</Text><Text><strong>Price/Item:</strong> ${(item.priceAtPurchase/100).toFixed(2)}</Text><Tooltip label={item.designId?.prompt}><Text isTruncated maxW="400px"><strong>Prompt:</strong> {item.designId?.prompt || 'N/A'}</Text></Tooltip></VStack></Flex>))}</VStack>
+                        </Box>
+                    </VStack>
+                )}
+            </ModalBody>
+            <ModalFooter><Button onClick={() => { onCloseViewOrderModal(); setSelectedOrder(null); }}>Close</Button></ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* MODIFIED: Changed to a solid background */}
       <Modal isOpen={isViewDesignModalOpen} onClose={onCloseViewDesignModal} size="xl" isCentered>
-        <ModalOverlay /><ModalContent><ModalHeader>Design Preview</ModalHeader><ModalCloseButton />
-          <ModalBody>{selectedDesign && (<VStack><Image src={selectedDesign.imageDataUrl} maxW="100%" maxH="60vh" objectFit="contain" /><Text fontSize="sm" color="gray.500" mt={2} p={2} bg="gray.100" borderRadius="md">{selectedDesign.prompt}</Text></VStack>)}</ModalBody>
-          <ModalFooter><Button onClick={onCloseViewDesignModal}>Close</Button></ModalFooter>
+        <ModalOverlay />
+        <ModalContent bg="ui.background">
+            <ModalHeader>Design Preview</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>{selectedDesign && (<VStack><Image src={selectedDesign.imageDataUrl} maxW="100%" maxH="60vh" objectFit="contain" /><Text fontSize="sm" color="gray.400" mt={2} p={2} bg="gray.800" borderRadius="md">{selectedDesign.prompt}</Text></VStack>)}</ModalBody>
+            <ModalFooter><Button onClick={onCloseViewDesignModal}>Close</Button></ModalFooter>
         </ModalContent>
       </Modal>
+      
+      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isDeleteDesignModalOpen} onClose={onCloseDeleteDesignModal} isCentered>
-        <ModalOverlay /><ModalContent><ModalHeader>Confirm Deletion</ModalHeader><ModalCloseButton /><ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody><ModalFooter><Button variant="ghost" mr={3} onClick={onCloseDeleteDesignModal}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button></ModalFooter></ModalContent>
+        <ModalOverlay />
+        <ModalContent bg="ui.background">
+            <ModalHeader>Confirm Deletion</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody>
+            <ModalFooter><Button variant="ghost" mr={3} onClick={onCloseDeleteDesignModal}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button></ModalFooter>
+        </ModalContent>
       </Modal>
     </Box>
   );
