@@ -1,39 +1,28 @@
 import asyncHandler from 'express-async-handler';
-import ProductType from '../models/ProductType.js';
+import ProductCategory from '../models/ProductCategory.js'; // MODIFIED: Import ProductCategory
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 
-const getActiveProductTypes = asyncHandler(async (req, res) => {
-  const activeTypes = await ProductType.find({ isActive: true }).lean();
-  if (!activeTypes.length) {
-    return res.json([]);
-  }
-  const typesWithProducts = [];
-  for (const type of activeTypes) {
-    const product = await Product.findOne({ productType: type._id, isActive: true, 'variants.0': { $exists: true } });
-    if (product) {
-      typesWithProducts.push({ _id: type._id, name: type.name });
-    }
-  }
-  res.json(typesWithProducts);
-});
+// REMOVED: getActiveProductTypes is no longer needed
 
-const getActiveProductsByType = asyncHandler(async (req, res) => {
-  const { productTypeId } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(productTypeId)) {
+// MODIFIED: This function now gets products by a CATEGORY ID
+const getActiveProductsByCategory = asyncHandler(async (req, res) => {
+  const { categoryId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(categoryId)) {
     res.status(400);
-    throw new Error('Invalid Product Type ID.');
+    throw new Error('Invalid Category ID.');
   }
   const products = await Product.find({
-    productType: productTypeId,
+    category: categoryId, // Search by category instead of productType
     isActive: true,
     'variants.0': { $exists: true }
-  }).select('name description basePrice variants productType slug').lean();
+  }).select('name description basePrice variants category slug').lean();
 
   if (!products.length) {
     return res.json([]);
   }
-  
+ 
+  // This cleaning logic for variants remains the same
   const productsWithCleanedVariants = products.map(product => {
     if (!product.variants || product.variants.length === 0) {
       return { ...product, variants: [] };
@@ -59,7 +48,6 @@ const getActiveProductsByType = asyncHandler(async (req, res) => {
       }).filter(Boolean);
       return { ...product, variants: newFormatVariants };
     } else {
-      // This logic now correctly handles old data formats again.
       const oldFormatVariants = product.variants
         .filter(variant => variant.stock > 0)
         .map(variant => ({
@@ -71,20 +59,21 @@ const getActiveProductsByType = asyncHandler(async (req, res) => {
           imageMockupFront: variant.imageMockupFront,
           imageSet: [{ url: variant.imageMockupFront, isPrimary: true }]
         }));
-      
+     
       return { ...product, variants: oldFormatVariants };
     }
   });
   res.json(productsWithCleanedVariants);
 });
 
+// MODIFIED: This now builds the shop page data based on Categories
 const getShopData = asyncHandler(async (req, res) => {
-    const activeProductTypes = await ProductType.find({ isActive: true }).sort('name').lean();
+    const activeCategories = await ProductCategory.find({ isActive: true }).sort('name').lean();
     const shopData = [];
 
-    for (const type of activeProductTypes) {
+    for (const category of activeCategories) {
         const products = await Product.find({
-            productType: type._id,
+            category: category._id,
             isActive: true,
             'variants.sizes.inStock': true
         }).select('name slug description basePrice variants').lean();
@@ -109,8 +98,8 @@ const getShopData = asyncHandler(async (req, res) => {
 
             if (productsForShop.length > 0) {
                 shopData.push({
-                    categoryId: type._id,
-                    categoryName: type.name,
+                    categoryId: category._id,
+                    categoryName: category.name,
                     products: productsForShop
                 });
             }
@@ -125,20 +114,20 @@ const getProductBySlug = asyncHandler(async (req, res) => {
         res.status(404);
         throw new Error('Product not found');
     }
-    
+   
     product.variants.forEach(colorVariant => {
         if (colorVariant.sizes && Array.isArray(colorVariant.sizes)) {
             colorVariant.sizes = colorVariant.sizes.filter(size => size.inStock);
         }
     });
     product.variants = product.variants.filter(colorVariant => colorVariant.sizes && colorVariant.sizes.length > 0);
-    
+   
     res.json(product);
 });
 
 export {
-  getActiveProductTypes,
-  getActiveProductsByType,
+  // getActiveProductTypes, // Removed
+  getActiveProductsByCategory, // Renamed from getActiveProductsByType
   getShopData,
   getProductBySlug,
 };

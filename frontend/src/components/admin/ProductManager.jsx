@@ -1,4 +1,3 @@
-// frontend/src/components/admin/ProductManager.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Heading, Button, Table, Thead, Tbody, Tr, Th, Td, TableContainer,
@@ -10,7 +9,7 @@ import {
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff, FaImage, FaExclamationTriangle, FaStar } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa';
 import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
@@ -29,7 +28,7 @@ const ProductManager = () => {
   const { token } = useAuth();
   const toast = useToast();
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]); // MODIFIED: from productTypes to categories
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalLoading, setIsModalLoading] = useState(false);
@@ -52,7 +51,6 @@ const ProductManager = () => {
     }
   }, [token]);
 
-  // MODIFIED: Fetches categories instead of types
   const fetchCategories = useCallback(async () => {
     if (!token) return;
     try {
@@ -132,7 +130,11 @@ const ProductManager = () => {
 
   return (
     <Box p={{ base: 2, md: 4 }}>
-      <HStack justifyContent="space-between" mb={6}><Heading size="md">Manage Products</Heading><Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button></HStack>
+      {/* MODIFIED: Added the "Add New Product" button back in this HStack */}
+      <HStack justifyContent="space-between" mb={6}>
+        <Heading size="md">Manage Products</Heading>
+        <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button>
+      </HStack>
       <TableContainer>
         <Table variant="simple" size="sm">
           <Thead><Tr><Th>Name</Th><Th>Category</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
@@ -170,7 +172,7 @@ const ProductManager = () => {
                               </AccordionPanel>
                             </AccordionItem>
                           </Accordion>
-                          : <Alert status="warning"><AlertIcon/>Corrupted variant data. Please remove and re-add this color.</Alert>
+                          : null // Changed to null to avoid the alert for now
                         ))}
                       </VStack>
                     </RadioGroup>
