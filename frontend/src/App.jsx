@@ -1,10 +1,9 @@
-// frontend/src/App.jsx
 import { ChakraProvider } from '@chakra-ui/react';
 import { Routes, Route, Navigate } from "react-router-dom";
 import theme from './theme';
 
 import { AuthProvider } from './context/AuthProvider';
-import Login from './Login';
+import LoginPage from './pages/LoginPage'; // MODIFIED: Import the new LoginPage
 import RegistrationPage from './pages/RegistrationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -40,7 +39,7 @@ export default function App() {
           <Route path="/product/:slug" element={<MainLayout><ProductDetailPage /></MainLayout>} />
           
           {/* Auth pages do not use MainLayout */}
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<LoginPage />} /> {/* MODIFIED: Use the new LoginPage */}
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
