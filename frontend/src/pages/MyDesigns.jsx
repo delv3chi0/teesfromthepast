@@ -1,5 +1,3 @@
-// frontend/src/pages/MyDesigns.jsx
-
 import { useState, useEffect, useRef } from 'react';
 import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
@@ -12,14 +10,6 @@ import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt } from 'react-icons/fa';
 
-/**
- * My Designs Page
- * REFRACTORED:
- * - Replaced default Cards with custom-styled dark cards for the design grid and empty state.
- * - Restyled all Modals and AlertDialogs for a cohesive dark theme experience (dark backgrounds, light text).
- * - Standardized all buttons for primary, secondary, and destructive actions.
- * - Enhanced hover effects and styling on design cards for better UX.
- */
 export default function MyDesigns() {
     const [designs, setDesigns] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -41,7 +31,6 @@ export default function MyDesigns() {
     const [isDeleting, setIsDeleting] = useState(false);
     const cancelDeleteRef = useRef();
 
-    // Data fetching logic remains the same
     const fetchDesigns = () => {
         if (user) {
             setLoading(true);
@@ -125,24 +114,26 @@ export default function MyDesigns() {
             <VStack spacing={6} align="stretch" mb={8}>
                 <Heading as="h1" size="2xl" color="brand.textLight">My Saved Designs</Heading>
                 {designs.length > 0 && (
-                    <Button bg="brand.accentOrange" color="white" _hover={{ bg: 'brand.accentOrangeHover' }} onClick={() => navigate('/generate')} alignSelf="flex-start" size="lg" leftIcon={<Icon as={FaMagic} />}>
+                    <Button colorScheme="brandAccentOrange" onClick={() => navigate('/generate')} alignSelf="flex-start" size="lg" leftIcon={<Icon as={FaMagic} />}>
                         Create Another Design
                     </Button>
                 )}
             </VStack>
             {designs.length === 0 ? (
-                <Box bg="brand.primaryLight" p={10} borderRadius="xl" textAlign="center">
+                // MODIFIED: Changed background to match the themed cards
+                <Box bg="brand.cardBlue" p={10} borderRadius="xl" textAlign="center">
                     <VStack spacing={5}>
                         <Icon as={FaPlusSquare} boxSize="50px" color="brand.accentYellow" />
                         <Text fontSize="xl" fontWeight="medium" color="brand.textLight">You haven't saved any designs yet!</Text>
-                        <Button bg="brand.accentOrange" color="white" _hover={{ bg: 'brand.accentOrangeHover' }} onClick={() => navigate('/generate')}>Let’s Create Your First Design!</Button>
+                        <Button colorScheme="brandAccentOrange" onClick={() => navigate('/generate')}>Let’s Create Your First Design!</Button>
                     </VStack>
                 </Box>
             ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
                     {designs.map(design => (
-                        <Box as="div" key={design._id} bg="brand.primaryLight" borderRadius="xl" overflow="hidden" cursor="pointer" onClick={() => handleImageClick(design)} _hover={{ transform: "translateY(-5px)", boxShadow: "lg", bg:"brand.headerBg", borderColor: "brand.accentYellow" }} transition="all 0.2s ease-in-out" borderWidth="2px" borderColor="transparent">
-                            <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="brand.primaryDark"/>
+                        // MODIFIED: Changed background to match the themed cards
+                        <Box as="div" key={design._id} bg="brand.cardBlue" borderRadius="xl" overflow="hidden" cursor="pointer" onClick={() => handleImageClick(design)} _hover={{ transform: "translateY(-5px)", boxShadow: "lg", borderColor: "brand.accentYellow" }} transition="all 0.2s ease-in-out" borderWidth="2px" borderColor="transparent">
+                            <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="brand.secondary"/>
                             <Box p={4}>
                                 <Text noOfLines={2} title={design.prompt} fontWeight="medium" color="brand.textLight">
                                     {design.prompt || "Untitled Design"}
@@ -157,16 +148,16 @@ export default function MyDesigns() {
             {selectedDesign && (
                 <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
                     <ModalOverlay bg="blackAlpha.800"/>
-                    <ModalContent bg="brand.primaryLight" color="brand.textLight" borderWidth="1px" borderColor="whiteAlpha.200">
+                    <ModalContent>
                         <ModalHeader>Design Preview</ModalHeader>
                         <ModalCloseButton _hover={{bg:"whiteAlpha.200"}}/>
                         <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
                             <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH="70vh" maxW="100%" objectFit="contain" borderRadius="md"/>
                         </ModalBody>
-                        <ModalFooter bg="brand.primaryDark" borderBottomRadius="md" justifyContent="space-between">
-                            <Button bg="red.600" color="white" _hover={{bg: "red.700"}} onClick={() => handleOpenDeleteConfirmation(selectedDesign)} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>Delete</Button>
+                        <ModalFooter bg="brand.secondary" borderBottomRadius="md" justifyContent="space-between">
+                            <Button colorScheme="red" onClick={() => handleOpenDeleteConfirmation(selectedDesign)} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>Delete</Button>
                             <HStack>
-                                <Button bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}} onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>Submit to Contest</Button>
+                                <Button colorScheme="brandAccentYellow" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>Submit to Contest</Button>
                                 <Button variant="ghost" onClick={onImageModalClose} _hover={{bg:"whiteAlpha.200"}}>Close</Button>
                             </HStack>
                         </ModalFooter>
@@ -178,12 +169,12 @@ export default function MyDesigns() {
             {designToSubmit && (
                 <AlertDialog isOpen={isContestAlertOpen} leastDestructiveRef={cancelRef} onClose={onContestAlertClose} isCentered>
                     <AlertDialogOverlay bg="blackAlpha.800" />
-                    <AlertDialogContent bg="brand.primaryLight" color="brand.textLight">
+                    <AlertDialogContent>
                         <AlertDialogHeader>Confirm Submission</AlertDialogHeader>
                         <AlertDialogBody>Are you sure you want to submit this design to the monthly contest?</AlertDialogBody>
                         <AlertDialogFooter>
                             <Button ref={cancelRef} onClick={onContestAlertClose} variant="ghost" _hover={{bg:"whiteAlpha.200"}}>Cancel</Button>
-                            <Button bg="green.500" color="white" _hover={{bg:"green.600"}} onClick={handleConfirmSubmitToContest} ml={3} isLoading={isSubmitting}>Yes, Submit</Button>
+                            <Button colorScheme="green" onClick={handleConfirmSubmitToContest} ml={3} isLoading={isSubmitting}>Yes, Submit</Button>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -193,12 +184,12 @@ export default function MyDesigns() {
             {designToDelete && (
                 <AlertDialog isOpen={isDeleteAlertOpen} leastDestructiveRef={cancelDeleteRef} onClose={onDeleteAlertClose} isCentered>
                     <AlertDialogOverlay bg="blackAlpha.800" />
-                    <AlertDialogContent bg="brand.primaryLight" color="brand.textLight">
+                    <AlertDialogContent>
                         <AlertDialogHeader>Confirm Deletion</AlertDialogHeader>
                         <AlertDialogBody>This action cannot be undone. Are you sure you want to permanently delete this design?</AlertDialogBody>
                         <AlertDialogFooter>
                             <Button ref={cancelDeleteRef} onClick={onDeleteAlertClose} variant="ghost" _hover={{bg:"whiteAlpha.200"}}>Cancel</Button>
-                            <Button bg="red.600" color="white" _hover={{bg:"red.700"}} onClick={handleConfirmDelete} ml={3} isLoading={isDeleting}>Delete</Button>
+                            <Button colorScheme="red" onClick={handleConfirmDelete} ml={3} isLoading={isDeleting}>Delete</Button>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
