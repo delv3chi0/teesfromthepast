@@ -1,3 +1,4 @@
+// frontend/src/pages/AdminPage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -29,18 +30,19 @@ const DashboardPanel = ({ token, onViewOrder }) => {
         fetchSummary();
     }, [token, toast]);
     
+    // MODIFIED: StatCard now uses a darker background and lighter text for better contrast.
     const StatCard = ({ title, stat, icon, helpText }) => (
-      <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="ui.background">
-        <Flex justifyContent="space-between">
-            <Box>
-                <StatLabel color="gray.400">{title}</StatLabel>
-                <StatNumber>{stat}</StatNumber>
-                {helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}
-            </Box>
-            <Box my="auto" color="brand.primary">
-                <Icon as={icon} w={8} h={8} />
-            </Box>
-        </Flex>
+      <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="brand.cardBlue">
+          <Flex justifyContent="space-between">
+              <Box>
+                  <StatLabel color="brand.textLight" opacity={0.7}>{title}</StatLabel>
+                  <StatNumber color="white">{stat}</StatNumber>
+                  {helpText && <Text fontSize="sm" color="brand.textMuted">{helpText}</Text>}
+              </Box>
+              <Box my="auto" color="brand.accentOrange">
+                  <Icon as={icon} w={8} h={8} />
+              </Box>
+          </Flex>
       </Stat>
     );
 
@@ -57,7 +59,8 @@ const DashboardPanel = ({ token, onViewOrder }) => {
             </SimpleGrid>
             <Box mt={8}>
                 <Heading size="md" mb={4}>Recent Orders</Heading>
-                <TableContainer borderWidth="1px" borderRadius="lg" bg="ui.background" p={4}>
+                {/* MODIFIED: Table background now matches the themed cards for consistency */}
+                <TableContainer borderWidth="1px" borderRadius="lg" bg="brand.cardBlue" p={4}>
                     <Table variant="simple" size="sm">
                         <Thead><Tr><Th>Order ID</Th><Th>User</Th><Th>Date</Th><Th isNumeric>Total</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
                         <Tbody>
@@ -220,7 +223,7 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
-      {/* MODALS START HERE: bg prop has been removed to use the theme's default solid background */}
+      {/* MODALS START HERE */}
       <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
