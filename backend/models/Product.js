@@ -1,4 +1,3 @@
-// backend/models/Product.js
 import mongoose from 'mongoose';
 import slugify from 'slugify';
 
@@ -27,7 +26,8 @@ const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     slug: { type: String, unique: true, sparse: true },
-    productType: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductType', required: true },
+    // CORRECTED: Replaced 'productType' with 'category' to match our new system
+    category: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductCategory', required: true },
     description: { type: String, required: true, trim: true },
     basePrice: { type: Number, required: true, min: 0 },
     tags: [{ type: String, trim: true }],
@@ -39,8 +39,6 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-// === THE FIX IS HERE ===
-// This logic now runs if the document is new, if the name is modified, OR if the slug doesn't exist.
 productSchema.pre('save', function(next) {
   if (this.isNew || this.isModified('name') || !this.slug) {
     this.slug = slugify(this.name, { lower: true, strict: true });

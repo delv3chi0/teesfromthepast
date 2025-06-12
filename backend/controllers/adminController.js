@@ -75,7 +75,7 @@ const createProductCategoryAdmin = asyncHandler(async (req, res) => {
     const { name, description, isActive } = req.body;
     const categoryExists = await ProductCategory.findOne({ name });
     if (categoryExists) { res.status(400); throw new Error(`Category '${name}' already exists`); }
-    const category = new ProductCategory({ name, description, isActive: isActive !== undefined ? isActive : true });
+    const category = new ProductCategory({ name, description: description || '', isActive: isActive !== undefined ? isActive : true });
     const createdCategory = await category.save();
     res.status(201).json(createdCategory);
 });
@@ -138,7 +138,6 @@ const getProductsAdmin = asyncHandler(async (req, res) => {
     res.json(products);
 });
 
-// FINAL CORRECTION: This now populates 'category' instead of 'productType'
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id).populate({ path: 'category', select: 'name' });
     if (product) { res.json(product); } else { res.status(404); throw new Error('Product not found'); }
