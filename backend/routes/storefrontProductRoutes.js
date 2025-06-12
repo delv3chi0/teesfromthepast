@@ -9,7 +9,7 @@ import {
 const router = express.Router();
 
 // This route gets all the data needed for the main shop page
-router.get('/shop', getShopData);
+router.get('/shop-data', getShopData);
 
 // MODIFIED: This route now correctly gets products by a category ID
 router.get('/products/category/:categoryId', getActiveProductsByCategory);
