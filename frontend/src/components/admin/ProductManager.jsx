@@ -131,7 +131,10 @@ const ProductManager = () => {
 
   return (
     <Box p={{ base: 2, md: 4 }}>
-      <HStack justifyContent="space-between" mb={6}><Heading size="md">Manage Products</Heading><Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button></HStack>
+      <HStack justifyContent="space-between" mb={6}>
+        <Heading size="md">Manage Products</Heading>
+        <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button>
+      </HStack>
       <TableContainer>
         <Table variant="simple" size="sm">
           <Thead><Tr><Th>Name</Th><Th>Category</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
@@ -140,7 +143,10 @@ const ProductManager = () => {
       </TableContainer>
      
       <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">
-        <ModalOverlay /><ModalContent><ModalHeader>{isEditing ? 'Edit' : 'Add New'} Product</ModalHeader><ModalCloseButton />
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{isEditing ? 'Edit' : 'Add New'} Product</ModalHeader>
+          <ModalCloseButton />
           <ModalBody pb={6}>
             {isModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
@@ -151,14 +157,12 @@ const ProductManager = () => {
                       <VStack spacing={4} align="stretch">
                         {(formData.variants || []).map((variant, colorIndex) => (
                           (variant && variant.sizes) ? 
-                          // MODIFIED: bg="gray.50" changed to a theme-aware dark color
                           <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="gray.800">
                             <AccordionItem border="none">
                               <Flex align="center" p={2}>
                                 <Radio value={colorIndex.toString()} mr={3} colorScheme="yellow"/><Tooltip label="Set as default display for shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "yellow.400" : "gray.300"} mr={2}/></Tooltip>
                                 <AccordionButton flex="1"><HStack w="full" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="gray.300"/><Text fontWeight="bold">{variant.colorName}</Text></HStack></AccordionButton><AccordionIcon /><CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
-                              {/* MODIFIED: bg="white" changed to a theme-aware dark color */}
                               <AccordionPanel bg="gray.700" pb={4}>
                                 <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => { const newV = [...formData.variants]; newV[colorIndex].podProductId = e.target.value; setFormData(p => ({...p, variants: newV})); }} /></FormControl>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
@@ -167,7 +171,7 @@ const ProductManager = () => {
                                 </RadioGroup>
                                 <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
-                                <Wrap spacing={4}>{variant.sizes?.map((size, sizeIndex) => (<WrapItem key={size.size}><VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.50' : 'red.50'}><HStack justifyContent="space-between" w="100%"><Text fontWeight="bold">{size.size}</Text><Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/></HStack><FormControl isDisabled={!size.inStock}><FormLabel fontSize="xs">SKU</FormLabel><Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)}/></FormControl></VStack></WrapItem>))}</Wrap>
+                                <Wrap spacing={4}>{variant.sizes?.map((size, sizeIndex) => (<WrapItem key={size.size}><VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.50' : 'red.50'} color="brand.textDark"><HStack justifyContent="space-between" w="100%"><Text fontWeight="bold">{size.size}</Text><Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/></HStack><FormControl isDisabled={!size.inStock}><FormLabel fontSize="xs">SKU</FormLabel><Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)}/></FormControl></VStack></WrapItem>))}</Wrap>
                               </AccordionPanel>
                             </AccordionItem>
                           </Accordion>
