@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import {
     Box, Button, FormControl, FormLabel, Input, Heading, Text,
     VStack, useToast, Link as ChakraLink, Center, Image,
-    Alert, AlertIcon, AlertTitle, AlertDescription
+    Alert, AlertIcon, AlertTitle, AlertDescription, Flex, Container
 } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
-import Footer from '../components/Footer.jsx'; // MODIFIED: Using your existing Footer component
+import Footer from '../components/Footer.jsx';
 
 const ForgotPasswordPage = () => {
     const [email, setEmail] = useState('');
@@ -46,11 +46,11 @@ const ForgotPasswordPage = () => {
     };
 
     return (
-        <Box>
-            <Center minH="100vh" bg="brand.primary" p={{ base: 4, md: 8 }}>
-                <VStack spacing={6} w="100%" maxW="md">
+        <Flex direction="column" minH="100vh" bg="brand.primary">
+            <Container maxW="container.sm" centerContent flex="1" display="flex" flexDirection="column" justifyContent="center" py={{ base: 8, md: 12 }}>
+                <VStack spacing={6} w="100%">
                     <RouterLink to="/">
-                        <Image src="/logo.png" alt="Tees From The Past Logo" maxH="120px" />
+                        <Image src="/logo.png" alt="Tees From The Past Logo" maxH="100px" mb={4} objectFit="contain" />
                     </RouterLink>
                     <Box
                         p={{base: 6, md: 10}}
@@ -58,33 +58,29 @@ const ForgotPasswordPage = () => {
                         borderColor="whiteAlpha.200"
                         borderRadius="xl"
                         boxShadow="lg"
-                        bg="brand.primaryLight"
+                        bg="brand.cardBlue"
                         w="100%"
                     >
                         <VStack spacing={6}>
-                            <Heading as="h1" size="xl" textAlign="center" color="brand.textLight">
+                            <Heading as="h1" size="lg" textAlign="center" color="brand.textLight">
                                 Forgot Your Password?
                             </Heading>
                             
                             {!message ? (
                                 <>
-                                    <Text textAlign="center" color="whiteAlpha.800">
-                                        No worries! Enter your email address below, and we'll send you a link to reset your password.
+                                    <Text textAlign="center" color="brand.textMuted">
+                                        No worries! Enter your email address below and we'll send you a link to reset it.
                                     </Text>
                                     <form onSubmit={handleSubmit} style={{ width: '100%' }}>
                                         <VStack spacing={5}>
                                             <FormControl id="email-forgot" isRequired>
-                                                <FormLabel color="whiteAlpha.800">Email address</FormLabel>
+                                                <FormLabel>Email address</FormLabel>
                                                 <Input
                                                     type="email"
                                                     value={email}
                                                     onChange={(e) => setEmail(e.target.value)}
                                                     placeholder="you@example.com"
                                                     size="lg"
-                                                    bg="brand.primaryDark"
-                                                    borderColor="whiteAlpha.300"
-                                                    _hover={{ borderColor: "whiteAlpha.400" }}
-                                                    focusBorderColor="brand.accentYellow"
                                                 />
                                             </FormControl>
                                             <Button
@@ -125,7 +121,7 @@ const ForgotPasswordPage = () => {
                                 </Alert>
                             )}
 
-                            <Text pt={4} textAlign="center" color="whiteAlpha.800">
+                            <Text pt={4} textAlign="center" color="brand.textMuted">
                                 Remember your password?{' '}
                                 <ChakraLink as={RouterLink} to="/login" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
                                     Login here
@@ -134,7 +130,7 @@ const ForgotPasswordPage = () => {
                         </VStack>
                     </Box>
                 </VStack>
-            </Center>
+            </Container>
             <Footer />
         </Box>
     );
