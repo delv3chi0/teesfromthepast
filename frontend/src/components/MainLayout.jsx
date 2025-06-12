@@ -1,8 +1,7 @@
-import { Box, Flex, HStack, Link as ChakraLink, Button, Icon, Menu, MenuButton, MenuList, MenuItem, MenuDivider } from '@chakra-ui/react';
+import { Box, Flex, HStack, Link as ChakraLink, Button, Icon, Menu, MenuButton, MenuList, MenuItem, MenuDivider, Image } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
-import siteLogo from '../assets/teesfromthepast-logo.png'; 
 
 const MainLayout = ({ children }) => {
     const { user, logout } = useAuth();
@@ -27,7 +26,8 @@ const MainLayout = ({ children }) => {
             >
                 <Flex h={16} alignItems="center" justifyContent="space-between" maxW="8xl" mx="auto">
                     <RouterLink to="/">
-                        <img src={siteLogo} alt="Tees From The Past Logo" style={{ height: '50px' }} />
+                        {/* MODIFIED: Using the correct logo 'logo-text.png' from the public folder */}
+                        <Image src="/logo-text.png" alt="Tees From The Past Logo" height="45px" objectFit="contain" />
                     </RouterLink>
 
                     <HStack spacing={8} alignItems="center">
@@ -47,7 +47,6 @@ const MainLayout = ({ children }) => {
                                         minW={0}
                                         _hover={{ textDecoration: 'none' }}
                                     >
-                                        {/* MODIFIED: Themed profile icon */}
                                         <Icon as={FaUserCircle} boxSize={8} color="brand.textMuted" _hover={{ color: 'brand.textLight' }} />
                                     </MenuButton>
                                     <MenuList bg="brand.cardBlue" borderColor="whiteAlpha.300">
@@ -74,7 +73,6 @@ const MainLayout = ({ children }) => {
                             ) : (
                                 <HStack>
                                     <Button variant="ghost" onClick={() => navigate('/login')}>Log In</Button>
-                                    {/* MODIFIED: Themed sign up button */}
                                     <Button colorScheme="brandAccentOrange" onClick={() => navigate('/register')}>
                                         Sign Up
                                     </Button>
@@ -88,6 +86,8 @@ const MainLayout = ({ children }) => {
             <Box as="main" flex="1" py={8} px={{ base: 4, md: 8 }} maxW="8xl" mx="auto" w="100%">
                 {children}
             </Box>
+
+            <Footer />
         </Flex>
     );
 };
