@@ -18,7 +18,6 @@ import {
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import siteLogo from '../assets/teesfromthepast-logo.png'; // Assuming your logo is here
 
 const RegistrationPage = () => {
   const [formData, setFormData] = useState({
@@ -85,7 +84,8 @@ const RegistrationPage = () => {
         boxShadow="xl"
         w="100%"
       >
-        <Image src={siteLogo} alt="Tees From The Past Logo" boxSize="150px" mb={4} />
+        {/* CORRECTED: Using the correct path for the logo from the public folder */}
+        <Image src="/logo.png" alt="Tees From The Past Logo" boxSize="150px" mb={4} />
         <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">
           Create Your Account
         </Heading>
@@ -107,7 +107,7 @@ const RegistrationPage = () => {
               type={showPassword ? 'text' : 'password'}
               name="password"
               onChange={handleChange}
-              placeholder="Create a password"
+              placeholder="Create a password (min. 6 characters)"
             />
             <InputRightElement>
               <IconButton

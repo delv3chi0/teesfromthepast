@@ -13,12 +13,11 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
-  Image, // Import Image
+  Image,
 } from '@chakra-ui/react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
-import siteLogo from '../assets/teesfromthepast-logo.png'; // Assuming your logo is here
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -48,7 +47,7 @@ const LoginPage = () => {
     } catch (error) {
       toast({
         title: 'Login Failed',
-        description: error.response?.data?.message || 'An unexpected error occurred.',
+        description: error.response?.data?.message || 'Invalid email or password.',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -70,7 +69,8 @@ const LoginPage = () => {
         boxShadow="xl"
         w="100%"
       >
-        <Image src={siteLogo} alt="Tees From The Past Logo" boxSize="150px" mb={4} />
+        {/* CORRECTED: Using the correct path for the logo from the public folder */}
+        <Image src="/logo.png" alt="Tees From The Past Logo" boxSize="150px" mb={4} />
         <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">
           Welcome Back
         </Heading>
