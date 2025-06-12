@@ -1,4 +1,3 @@
-// frontend/src/context/AuthProvider.jsx
 import { client } from '../api/client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { jwtDecode } from 'jwt-decode';
@@ -8,8 +7,6 @@ export const AuthContext = createContext(null);
 console.log("✅ AuthProvider rendered (Top Level)");
 
 export function AuthProvider({ children }) {
-  // Initialize token directly from localStorage.
-  // This means the token state is immediately up-to-date on first render.
   const [token, setToken] = useState(() => {
     console.log("🔑 AuthProvider [useState init]: Reading initial token from localStorage.");
     const initialToken = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -18,14 +15,12 @@ export function AuthProvider({ children }) {
   });
 
   const [user, setUser] = useState(null);
-  const [loadingAuth, setLoadingAuth] = useState(true); // Still start as true
+  const [loadingAuth, setLoadingAuth] = useState(true);
 
   useEffect(() => {
     console.log("🔄 AuthProvider [Token Effect]: Triggered. Current token state:", token ? "Exists" : "Null");
 
     if (token) {
-      // If a token exists (either from initial load or after login/register),
-      // we need to validate it and fetch the profile. Ensure loading is true.
       setLoadingAuth(true); 
       try {
         console.log("🔍 AuthProvider [Token Effect]: Attempting to decode token (first 20 chars):", token.substring(0,20) + "...");
@@ -38,8 +33,7 @@ export function AuthProvider({ children }) {
           localStorage.removeItem('token');
           setUser(null);
           delete client.defaults.headers.common['Authorization'];
-          setToken(null); // This will re-trigger this effect with token = null
-                          // The next run will hit the 'else' block and set loadingAuth = false.
+          setToken(null); 
         } else {
           console.log("👍 AuthProvider [Token Effect]: Token valid. Setting Axios header and fetching profile.");
           client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -53,14 +47,14 @@ export function AuthProvider({ children }) {
               } else if (response.data) {
                 console.log("👤 AuthProvider [Token Effect]: User is not an Administrator.");
               }
-              setLoadingAuth(false); // Profile fetched (or attempted), auth process for this token is complete.
+              setLoadingAuth(false);
             })
             .catch((err) => {
               console.error("❌ AuthProvider [Token Effect]: Failed to fetch profile. Clearing token/user.", err.response?.data || err.message);
               localStorage.removeItem('token');
               setUser(null);
               delete client.defaults.headers.common['Authorization'];
-              setToken(null); // Re-trigger, will hit 'else' block and set loadingAuth = false.
+              setToken(null);
             });
         }
       } catch (error) {
@@ -68,26 +62,25 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('token');
         setUser(null);
         delete client.defaults.headers.common['Authorization'];
-        setToken(null); // Re-trigger, will hit 'else' block and set loadingAuth = false.
+        setToken(null);
       }
     } else {
-      // No token in state. This means auth process is complete (no user).
       console.log("🚫 AuthProvider [Token Effect]: No token. Clearing user, auth header, and setting loadingAuth=false.");
       setUser(null);
       delete client.defaults.headers.common['Authorization'];
       setLoadingAuth(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]); // This effect runs when 'token' state changes.
+  }, [token]);
 
-  const login = async (credentials) => {
+  // CORRECTED: This now accepts email and password as separate arguments
+  const login = async (email, password) => {
     console.log("🚀 AuthProvider: login function called");
-    // setLoadingAuth(true) will be handled by the useEffect when token changes
-    const { data } = await client.post('/auth/login', credentials);
+    const { data } = await client.post('/auth/login', { email, password }); // Pass as an object
     if (data.token) {
       console.log("🔑 AuthProvider: Token received from login.");
       localStorage.setItem('token', data.token);
-      setToken(data.token); // This triggers the useEffect
+      setToken(data.token);
     } else {
       console.error("❌ AuthProvider: No token received from login API.");
       throw new Error(data.message || "Login failed: No token received");
@@ -95,14 +88,14 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const register = async (userData) => {
+  // CORRECTED: This now accepts username, email, and password as separate arguments
+  const register = async (username, email, password) => {
     console.log("🚀 AuthProvider: register function called");
-    // setLoadingAuth(true) will be handled by the useEffect when token changes
-    const { data } = await client.post('/auth/register', userData);
+    const { data } = await client.post('/auth/register', { username, email, password }); // Pass as an object
     if (data.token) {
       console.log("🔑 AuthProvider: Token received from register.");
       localStorage.setItem('token', data.token);
-      setToken(data.token); // This triggers the useEffect
+      setToken(data.token);
     } else {
       console.error("❌ AuthProvider: No token received from register API.");
       throw new Error(data.message || "Registration failed: No token received");
@@ -113,7 +106,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     console.log("🚪 AuthProvider: logout function called");
     localStorage.removeItem('token');
-    setToken(null); // This triggers the useEffect, which will handle cleanup and setLoadingAuth(false)
+    setToken(null);
   };
 
   const contextValue = { user, token, login, register, logout, loadingAuth, setUser };
