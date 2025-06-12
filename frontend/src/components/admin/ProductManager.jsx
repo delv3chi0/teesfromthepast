@@ -174,15 +174,15 @@ const ProductManager = () => {
                                 <Wrap spacing={4}>
                                   {variant.sizes?.map((size, sizeIndex) => (
                                     <WrapItem key={size.size}>
-                                      {/* MODIFIED: Added color prop directly to Text and FormLabel */}
-                                      <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.50' : 'red.50'}>
+                                      {/* FINAL FIX: Changed background colors to be dark and removed the direct color prop on text */}
+                                      <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.800' : 'red.800'}>
                                         <HStack justifyContent="space-between" w="100%">
-                                          <Text fontWeight="bold" color="brand.textDark">{size.size}</Text>
+                                          <Text fontWeight="bold">{size.size}</Text>
                                           <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
                                         </HStack>
                                         <FormControl isDisabled={!size.inStock}>
-                                          <FormLabel fontSize="xs" color="brand.textDark">SKU</FormLabel>
-                                          <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} color="brand.textDark" _placeholder={{ color: 'gray.500' }} />
+                                          <FormLabel fontSize="xs">SKU</FormLabel>
+                                          <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} />
                                         </FormControl>
                                       </VStack>
                                     </WrapItem>
