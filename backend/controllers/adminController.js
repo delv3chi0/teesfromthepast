@@ -1,4 +1,3 @@
-// backend/controllers/adminController.js
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
@@ -71,7 +70,7 @@ const deleteDesignAdmin = asyncHandler(async (req, res) => {
     else { res.status(404); throw new Error('Design not found'); }
 });
 
-// --- Category Management (Formerly Product Category) ---
+// --- Category Management ---
 const createProductCategoryAdmin = asyncHandler(async (req, res) => {
     const { name, description, isActive } = req.body;
     const categoryExists = await ProductCategory.findOne({ name });
@@ -108,7 +107,6 @@ const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
 const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     const category = await ProductCategory.findById(req.params.id);
     if (category) {
-        // Now check if category is used by any Product
         const productUsingCategory = await Product.findOne({ category: req.params.id });
         if (productUsingCategory) { res.status(400); throw new Error('Cannot delete category. It is currently in use by one or more products.'); }
         await ProductCategory.deleteOne({ _id: req.params.id });
@@ -118,7 +116,7 @@ const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     }
 });
 
-// --- Product Management (MODIFIED) ---
+// --- Product Management ---
 const createProductAdmin = asyncHandler(async (req, res) => {
     const { name, category, description, basePrice, tags, isActive, variants } = req.body;
     if (!category) { res.status(400); throw new Error('Category is required.'); }
@@ -140,6 +138,7 @@ const getProductsAdmin = asyncHandler(async (req, res) => {
     res.json(products);
 });
 
+// FINAL CORRECTION: This now populates 'category' instead of 'productType'
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id).populate({ path: 'category', select: 'name' });
     if (product) { res.json(product); } else { res.status(404); throw new Error('Product not found'); }
@@ -184,6 +183,5 @@ export {
     getAllOrdersAdmin, deleteOrderAdmin, getOrderByIdAdmin, updateOrderStatusAdmin,
     getAllDesignsAdmin, deleteDesignAdmin,
     createProductCategoryAdmin, getProductCategoriesAdmin, getProductCategoryByIdAdmin, updateProductCategoryAdmin, deleteProductCategoryAdmin,
-    // Product Type functions are removed
     createProductAdmin, getProductsAdmin, getProductByIdAdmin, updateProductAdmin, deleteProductAdmin
 };
