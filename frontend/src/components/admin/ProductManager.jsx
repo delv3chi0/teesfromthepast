@@ -29,7 +29,7 @@ const ProductManager = () => {
   const { token } = useAuth();
   const toast = useToast();
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]); 
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalLoading, setIsModalLoading] = useState(false);
@@ -171,8 +171,23 @@ const ProductManager = () => {
                                 </RadioGroup>
                                 <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
-                                {/* MODIFIED: Added color prop to fix text readability */}
-                                <Wrap spacing={4}>{variant.sizes?.map((size, sizeIndex) => (<WrapItem key={size.size}><VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.50' : 'red.50'} color="brand.textDark"><HStack justifyContent="space-between" w="100%"><Text fontWeight="bold">{size.size}</Text><Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/></HStack><FormControl isDisabled={!size.inStock}><FormLabel fontSize="xs">SKU</FormLabel><Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)}/></FormControl></VStack></WrapItem>))}</Wrap>
+                                <Wrap spacing={4}>
+                                  {variant.sizes?.map((size, sizeIndex) => (
+                                    <WrapItem key={size.size}>
+                                      {/* MODIFIED: Added color prop directly to Text and FormLabel */}
+                                      <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.50' : 'red.50'}>
+                                        <HStack justifyContent="space-between" w="100%">
+                                          <Text fontWeight="bold" color="brand.textDark">{size.size}</Text>
+                                          <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
+                                        </HStack>
+                                        <FormControl isDisabled={!size.inStock}>
+                                          <FormLabel fontSize="xs" color="brand.textDark">SKU</FormLabel>
+                                          <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} color="brand.textDark" _placeholder={{ color: 'gray.500' }} />
+                                        </FormControl>
+                                      </VStack>
+                                    </WrapItem>
+                                  ))}
+                                </Wrap>
                               </AccordionPanel>
                             </AccordionItem>
                           </Accordion>
