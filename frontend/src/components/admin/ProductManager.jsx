@@ -29,7 +29,7 @@ const ProductManager = () => {
   const { token } = useAuth();
   const toast = useToast();
   const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalLoading, setIsModalLoading] = useState(false);
@@ -133,7 +133,8 @@ const ProductManager = () => {
     <Box p={{ base: 2, md: 4 }}>
       <HStack justifyContent="space-between" mb={6}>
         <Heading size="md">Manage Products</Heading>
-        <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button>
+        {/* MODIFIED: Changed colorScheme for better visibility */}
+        <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandAccentOrange" onClick={() => handleOpenModal()}>Add New Product</Button>
       </HStack>
       <TableContainer>
         <Table variant="simple" size="sm">
@@ -184,7 +185,11 @@ const ProductManager = () => {
             </VStack>
             )}
           </ModalBody>
-          <ModalFooter><Button onClick={onClose} mr={3}>Cancel</Button><Button colorScheme="brandPrimary" onClick={handleSubmit} isLoading={isModalLoading}>Save Changes</Button></ModalFooter>
+          <ModalFooter>
+            <Button onClick={onClose} mr={3}>Cancel</Button>
+            {/* MODIFIED: Changed colorScheme for better visibility */}
+            <Button colorScheme="brandAccentOrange" onClick={handleSubmit} isLoading={isModalLoading}>Save Changes</Button>
+          </ModalFooter>
         </ModalContent>
       </Modal>
       {selectedProduct && (<Modal isOpen={isDeleteOpen} onClose={onDeleteClose} isCentered><ModalOverlay/><ModalContent><ModalHeader>Confirm Deletion</ModalHeader><ModalCloseButton/><ModalBody>Delete <strong>{selectedProduct.name}</strong>?</ModalBody><ModalFooter><Button onClick={onDeleteClose}>No</Button><Button colorScheme="red" onClick={handleDelete}>Yes</Button></ModalFooter></ModalContent></Modal>)}
