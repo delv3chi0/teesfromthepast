@@ -27,6 +27,7 @@ import MyOrdersPage from './pages/MyOrdersPage';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import AdminPage from './pages/AdminPage';
+// The old Login.jsx is no longer imported
 
 export default function App() {
   return (

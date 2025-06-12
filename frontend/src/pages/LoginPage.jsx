@@ -13,10 +13,12 @@ import {
   InputGroup,
   InputRightElement,
   IconButton,
+  Image, // Import Image
 } from '@chakra-ui/react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
+import siteLogo from '../assets/teesfromthepast-logo.png'; // Assuming your logo is here
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -28,7 +30,7 @@ const LoginPage = () => {
   const location = useLocation();
   const toast = useToast();
 
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = location.state?.from?.pathname || '/';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -68,13 +70,11 @@ const LoginPage = () => {
         boxShadow="xl"
         w="100%"
       >
+        <Image src={siteLogo} alt="Tees From The Past Logo" boxSize="150px" mb={4} />
         <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">
           Welcome Back
         </Heading>
-        <Text color="brand.textMuted" textAlign="center">
-          Log in to continue your retro journey.
-        </Text>
-
+        
         <FormControl isRequired>
           <FormLabel>Email Address</FormLabel>
           <Input
