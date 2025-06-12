@@ -133,7 +133,6 @@ const ProductManager = () => {
     <Box p={{ base: 2, md: 4 }}>
       <HStack justifyContent="space-between" mb={6}>
         <Heading size="md">Manage Products</Heading>
-        {/* MODIFIED: Changed colorScheme for better visibility */}
         <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandAccentOrange" onClick={() => handleOpenModal()}>Add New Product</Button>
       </HStack>
       <TableContainer>
@@ -172,6 +171,7 @@ const ProductManager = () => {
                                 </RadioGroup>
                                 <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
+                                {/* MODIFIED: Added color prop to fix text readability */}
                                 <Wrap spacing={4}>{variant.sizes?.map((size, sizeIndex) => (<WrapItem key={size.size}><VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.50' : 'red.50'} color="brand.textDark"><HStack justifyContent="space-between" w="100%"><Text fontWeight="bold">{size.size}</Text><Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/></HStack><FormControl isDisabled={!size.inStock}><FormLabel fontSize="xs">SKU</FormLabel><Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)}/></FormControl></VStack></WrapItem>))}</Wrap>
                               </AccordionPanel>
                             </AccordionItem>
@@ -187,7 +187,6 @@ const ProductManager = () => {
           </ModalBody>
           <ModalFooter>
             <Button onClick={onClose} mr={3}>Cancel</Button>
-            {/* MODIFIED: Changed colorScheme for better visibility */}
             <Button colorScheme="brandAccentOrange" onClick={handleSubmit} isLoading={isModalLoading}>Save Changes</Button>
           </ModalFooter>
         </ModalContent>
