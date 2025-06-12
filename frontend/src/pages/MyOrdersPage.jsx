@@ -75,13 +75,12 @@ const MyOrdersPage = () => {
       ) : (
         <VStack spacing={6} align="stretch">
           {orders.map(order => (
-            // MODIFIED: This Box now uses the consistent card styling
             <Box key={order._id} p={6} bg="brand.cardBlue" borderRadius="xl" shadow="lg">
               <SimpleGrid columns={{ base: 1, md: 4 }} spacing={{ base: 4, md: 6 }} alignItems="center">
                 
                 <Box>
                   <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Order #</Heading>
-                  <Text fontSize="sm" title={order._id}>{order._id.substring(18)}</Text>
+                  <Text fontSize="sm" title={order._id}>{(order._id || '').substring(18)}</Text>
                 </Box>
                 
                 <Box>
@@ -91,7 +90,8 @@ const MyOrdersPage = () => {
                 
                 <Box>
                   <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Total</Heading>
-                  <Text fontSize="sm">${order.totalPrice.toFixed(2)}</Text>
+                  {/* MODIFIED: Safely handle cases where totalPrice might be missing */}
+                  <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text>
                 </Box>
                 
                 <Box>
