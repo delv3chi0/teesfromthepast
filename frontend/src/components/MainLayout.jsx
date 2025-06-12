@@ -1,100 +1,95 @@
-// frontend/src/components/MainLayout.jsx
-import React, { useMemo } from 'react';
-import { Box, Flex, VStack, Link as ChakraLink, IconButton, useDisclosure, Drawer, DrawerOverlay, DrawerContent, DrawerCloseButton, DrawerHeader, DrawerBody, Image as ChakraImage, Avatar, HStack, Icon, Spacer, useBreakpointValue, Container, Button } from '@chakra-ui/react';
-import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { HamburgerIcon } from '@chakra-ui/icons';
-import LogoutButton from './LogoutButton';
+import { Box, Flex, HStack, Link as ChakraLink, Button, Icon, Menu, MenuButton, MenuList, MenuItem, MenuDivider } from '@chakra-ui/react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { FaUserCircle } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
-import Footer from './Footer';
+import siteLogo from '../assets/teesfromthepast-logo.png'; 
 
-const baseNavItems = [
-    { label: 'Shop', path: '/shop' },
-    { label: 'AI Image Generator', path: '/generate' },
-    { label: 'Customize Apparel', path: '/product-studio' },
-    { label: '🏆 Monthly Contest', path: '/vote-now' },
-    { label: 'My Saved Designs', path: '/my-designs' },
-    { label: 'My Orders', path: '/my-orders' },
-    { label: 'My Profile', path: '/profile' },
-];
-const adminNavItem = { label: '🛡️ Admin Console', path: '/admin' };
+const MainLayout = ({ children }) => {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
 
-export default function MainLayout({ children }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const { user } = useAuth();
-  const isDesktopView = useBreakpointValue({ base: false, lg: true });
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
 
-  const navItems = useMemo(() => {
-    if (user?.isAdmin) {
-      const items = [...baseNavItems];
-      items.push(adminNavItem);
-      return items;
-    }
-    return baseNavItems;
-  }, [user]);
+    return (
+        <Flex direction="column" minH="100vh" bg="brand.primary">
+            <Box
+                as="header"
+                bg="brand.secondary"
+                px={{ base: 4, md: 8 }}
+                py={3}
+                shadow="md"
+                position="sticky"
+                top={0}
+                zIndex="sticky"
+            >
+                <Flex h={16} alignItems="center" justifyContent="space-between" maxW="8xl" mx="auto">
+                    <RouterLink to="/">
+                        <img src={siteLogo} alt="Tees From The Past Logo" style={{ height: '50px' }} />
+                    </RouterLink>
 
-  const SidebarContent = ({ onClick }) => (
-    <Box as="nav" pos="fixed" top="0" left="0" zIndex={1200} h="full" pb="10" overflowX="hidden" overflowY="auto" bg="brand.sidebar" w="60">
-        <Flex as={RouterLink} to="/" px="4" py="4" align="center" justifyContent="center">
-            <ChakraImage src="/logo.png" alt="Tees From The Past Logo" maxW="190px"/>
-        </Flex>
-        <VStack spacing={3} align="stretch" px="4" mt={8}>
-            {navItems.map((item) => (
-                <ChakraLink key={item.label} as={RouterLink} to={item.path} p={3} borderRadius="md" fontWeight="medium" display="flex" alignItems="center"
-                    color={location.pathname.startsWith(item.path) ? 'brand.accentYellow' : 'brand.textLight'}
-                    bg={location.pathname.startsWith(item.path) ? 'brand.primaryLight' : 'transparent'}
-                    _hover={{ textDecoration: 'none', bg: 'brand.primaryLight', color: 'brand.accentYellow' }}
-                    onClick={onClick}>
-                    {item.label}
-                </ChakraLink>
-            ))}
-        </VStack>
-    </Box>
-  );
+                    <HStack spacing={8} alignItems="center">
+                        <HStack as="nav" spacing={6} display={{ base: 'none', md: 'flex' }}>
+                            <ChakraLink as={RouterLink} to="/shop" _hover={{ color: 'brand.accentYellow' }}>Shop</ChakraLink>
+                            <ChakraLink as={RouterLink} to="/generate" _hover={{ color: 'brand.accentYellow' }}>Create</ChakraLink>
+                            <ChakraLink as={RouterLink} to="/vote-now" _hover={{ color: 'brand.accentYellow' }}>Vote</ChakraLink>
+                        </HStack>
+                        <HStack spacing={4}>
+                            {user ? (
+                                <Menu>
+                                    <MenuButton
+                                        as={Button}
+                                        rounded="full"
+                                        variant="link"
+                                        cursor="pointer"
+                                        minW={0}
+                                        _hover={{ textDecoration: 'none' }}
+                                    >
+                                        {/* MODIFIED: Themed profile icon */}
+                                        <Icon as={FaUserCircle} boxSize={8} color="brand.textMuted" _hover={{ color: 'brand.textLight' }} />
+                                    </MenuButton>
+                                    <MenuList bg="brand.cardBlue" borderColor="whiteAlpha.300">
+                                        <MenuItem bg="brand.cardBlue" _hover={{ bg: 'whiteAlpha.200' }} onClick={() => navigate('/profile')}>
+                                            My Profile
+                                        </MenuItem>
+                                        <MenuItem bg="brand.cardBlue" _hover={{ bg: 'whiteAlpha.200' }} onClick={() => navigate('/my-orders')}>
+                                            My Orders
+                                        </MenuItem>
+                                        <MenuItem bg="brand.cardBlue" _hover={{ bg: 'whiteAlpha.200' }} onClick={() => navigate('/my-designs')}>
+                                            My Designs
+                                        </MenuItem>
+                                        {user.isAdmin && (
+                                            <MenuItem bg="brand.cardBlue" _hover={{ bg: 'whiteAlpha.200' }} onClick={() => navigate('/admin')}>
+                                                Admin Console
+                                            </MenuItem>
+                                        )}
+                                        <MenuDivider borderColor="whiteAlpha.300" />
+                                        <MenuItem bg="brand.cardBlue" color="red.300" _hover={{ bg: 'red.800', color: 'white' }} onClick={handleLogout}>
+                                            Logout
+                                        </MenuItem>
+                                    </MenuList>
+                                </Menu>
+                            ) : (
+                                <HStack>
+                                    <Button variant="ghost" onClick={() => navigate('/login')}>Log In</Button>
+                                    {/* MODIFIED: Themed sign up button */}
+                                    <Button colorScheme="brandAccentOrange" onClick={() => navigate('/register')}>
+                                        Sign Up
+                                    </Button>
+                                </HStack>
+                            )}
+                        </HStack>
+                    </HStack>
+                </Flex>
+            </Box>
 
-  const Header = () => (
-    <Flex as="header" align="center" justify="space-between" w="full" px={{base: 4, md: 6}} py={2} h="16" bg="brand.headerBg" borderBottomWidth="1px" borderColor="brand.primaryDark" flexShrink={0}>
-        <HStack spacing={4}>
-            {(user && !isDesktopView) && <IconButton aria-label="Open Menu" onClick={onOpen} icon={<HamburgerIcon />} variant="ghost" color="brand.textLight" _hover={{bg: 'whiteAlpha.200'}} />}
-            <ChakraLink as={RouterLink} to="/">
-                <ChakraImage src="/logo-text.png" alt="Tees From The Past" h="40px" />
-            </ChakraLink>
-        </HStack>
-        <HStack spacing={2}>
-            {user ? (
-                <HStack spacing={4}>
-                    <Avatar size="sm" name={user.username || user.email} src={user.avatarUrl || ''} as={RouterLink} to="/profile" cursor="pointer" bg="brand.primaryDark" color="white" />
-                    <LogoutButton />
-                </HStack>
-            ) : (
-                <HStack spacing={{base: 1, md: 2}}>
-                    <Button variant="ghost" onClick={() => navigate('/login')}>Login</Button>
-                    <Button bg="brand.accentOrange" color="white" _hover={{bg: 'brand.accentOrangeHover'}} onClick={() => navigate('/register')}>Sign Up</Button>
-                </HStack>
-            )}
-        </HStack>
-    </Flex>
-  );
-
-  return (
-    <Flex direction="column" minH="100vh" bg="brand.primary">
-        {user && isDesktopView && <SidebarContent />}
-        {user && !isDesktopView && (
-          <Drawer isOpen={isOpen} placement="left" onClose={onClose}>
-            <DrawerOverlay /><DrawerContent bg="brand.sidebar" color="brand.textLight"><DrawerCloseButton /><DrawerHeader borderBottomWidth="1px" as={RouterLink} to="/" onClick={onClose} display="flex" justifyContent="center"><ChakraImage src="/logo.png" maxH="50px" /></DrawerHeader><DrawerBody p={0}><SidebarContent onClick={onClose} /></DrawerBody></DrawerContent>
-          </Drawer>
-        )}
-
-      <Flex as="main" direction="column" flex="1" ml={user && isDesktopView ? "60" : "0"}>
-        <Header />
-        <Box flex="1" w="100%" p={{ base: 4, md: 8 }}>
-            <Container maxW="container.xl" p={0}>
+            <Box as="main" flex="1" py={8} px={{ base: 4, md: 8 }} maxW="8xl" mx="auto" w="100%">
                 {children}
-            </Container>
-        </Box>
-        <Footer />
-      </Flex>
-    </Flex>
-  );
-}
+            </Box>
+        </Flex>
+    );
+};
+
+export default MainLayout;
