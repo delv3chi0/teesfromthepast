@@ -16,8 +16,7 @@ import {
   Image,
   Link as ChakraLink,
   Center,
-  Flex,
-  Spacer
+  Flex
 } from '@chakra-ui/react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';

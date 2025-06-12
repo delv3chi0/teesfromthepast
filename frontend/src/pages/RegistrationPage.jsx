@@ -16,11 +16,12 @@ import {
   Image,
   Link as ChakraLink,
   Center,
+  Flex
 } from '@chakra-ui/react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import Footer from '../components/Footer.jsx'; // MODIFIED: Using your existing Footer component
+import Footer from '../components/Footer.jsx';
 
 const RegistrationPage = () => {
   const [formData, setFormData] = useState({
@@ -76,108 +77,99 @@ const RegistrationPage = () => {
   };
 
   return (
-    <Box>
-        <Center minH="100vh" bg="brand.primary" p={{ base: 4, md: 8 }}>
-            <VStack spacing={6} w="100%" maxW="md">
-                <RouterLink to="/">
-                    <Image src="/logo.png" alt="Tees From The Past Logo" maxH="120px" />
-                </RouterLink>
-                <Box
-                    p={{base: 6, md: 10}}
-                    borderWidth="1px"
-                    borderColor="whiteAlpha.200"
-                    borderRadius="xl"
-                    boxShadow="lg"
-                    bg="brand.primaryLight"
-                    w="100%"
-                >
-                    <VStack as="form" onSubmit={handleSubmit} spacing={6}>
-                        <Heading as="h1" size="xl" textAlign="center" color="brand.textLight">
-                            Create an Account
-                        </Heading>
+    <Flex direction="column" minH="100vh" bg="brand.primary">
+      <Container maxW="container.sm" centerContent flex="1" display="flex" flexDirection="column" justifyContent="center" py={{ base: 8, md: 12 }}>
+        <VStack spacing={6} w="100%">
+          <RouterLink to="/">
+            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="100px" mb={4} objectFit="contain" />
+          </RouterLink>
+          <VStack
+            as="form"
+            onSubmit={handleSubmit}
+            spacing={6}
+            p={{ base: 6, md: 10 }}
+            bg="brand.cardBlue"
+            borderRadius="xl"
+            boxShadow="xl"
+            w="100%"
+          >
+            <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">
+              Create Your Account
+            </Heading>
 
-                        <FormControl isRequired>
-                            <FormLabel color="whiteAlpha.800">Username</FormLabel>
-                            <Input name="username" onChange={handleChange} placeholder="Choose a unique username" size="lg" bg="brand.primaryDark" borderColor="whiteAlpha.300" _hover={{ borderColor: "whiteAlpha.400" }} focusBorderColor="brand.accentYellow" />
-                        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Username</FormLabel>
+              <Input name="username" onChange={handleChange} placeholder="Choose a unique username" size="lg"/>
+            </FormControl>
 
-                        <FormControl isRequired>
-                            <FormLabel color="whiteAlpha.800">Email Address</FormLabel>
-                            <Input type="email" name="email" onChange={handleChange} placeholder="you@example.com" size="lg" bg="brand.primaryDark" borderColor="whiteAlpha.300" _hover={{ borderColor: "whiteAlpha.400" }} focusBorderColor="brand.accentYellow" />
-                        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Email Address</FormLabel>
+              <Input type="email" name="email" onChange={handleChange} placeholder="you@example.com" size="lg"/>
+            </FormControl>
 
-                        <FormControl isRequired>
-                            <FormLabel color="whiteAlpha.800">Password</FormLabel>
-                            <InputGroup size="lg">
-                                <Input
-                                    type={showPassword ? 'text' : 'password'}
-                                    name="password"
-                                    onChange={handleChange}
-                                    placeholder="Create a password (min. 6 characters)"
-                                    bg="brand.primaryDark"
-                                    borderColor="whiteAlpha.300"
-                                    _hover={{ borderColor: "whiteAlpha.400" }}
-                                    focusBorderColor="brand.accentYellow"
-                                />
-                                <InputRightElement>
-                                <IconButton
-                                    variant="ghost"
-                                    icon={showPassword ? <FaEyeSlash /> : <FaEye />}
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                                />
-                                </InputRightElement>
-                            </InputGroup>
-                        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Password</FormLabel>
+              <InputGroup size="lg">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  onChange={handleChange}
+                  placeholder="Create a password (min. 6 characters)"
+                />
+                <InputRightElement>
+                  <IconButton
+                    variant="ghost"
+                    icon={showPassword ? <FaEyeSlash /> : <FaEye />}
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  />
+                </InputRightElement>
+              </InputGroup>
+            </FormControl>
 
-                        <FormControl isRequired>
-                            <FormLabel color="whiteAlpha.800">Confirm Password</FormLabel>
-                            <InputGroup size="lg">
-                                <Input
-                                    type={showConfirmPassword ? 'text' : 'password'}
-                                    name="confirmPassword"
-                                    onChange={handleChange}
-                                    placeholder="Confirm your password"
-                                    bg="brand.primaryDark"
-                                    borderColor="whiteAlpha.300"
-                                    _hover={{ borderColor: "whiteAlpha.400" }}
-                                    focusBorderColor="brand.accentYellow"
-                                />
-                                <InputRightElement>
-                                <IconButton
-                                    variant="ghost"
-                                    icon={showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                                />
-                                </InputRightElement>
-                            </InputGroup>
-                        </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Confirm Password</FormLabel>
+              <InputGroup size="lg">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  name="confirmPassword"
+                  onChange={handleChange}
+                  placeholder="Confirm your password"
+                />
+                <InputRightElement>
+                  <IconButton
+                    variant="ghost"
+                    icon={showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  />
+                </InputRightElement>
+              </InputGroup>
+            </FormControl>
 
-                        <Button
-                            type="submit"
-                            isLoading={loading}
-                            loadingText="Creating Account..."
-                            colorScheme="brandAccentOrange"
-                            width="full"
-                            size="lg"
-                            fontSize="md"
-                        >
-                            Sign Up
-                        </Button>
+            <Button
+              type="submit"
+              isLoading={loading}
+              loadingText="Creating Account..."
+              colorScheme="brandAccentOrange"
+              width="full"
+              size="lg"
+              fontSize="md"
+            >
+              Sign Up
+            </Button>
 
-                        <Text pt={4} textAlign="center" color="whiteAlpha.800">
-                            Already have an account?{' '}
-                            <ChakraLink as={RouterLink} to="/login" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
-                                Log in
-                            </ChakraLink>
-                        </Text>
-                    </VStack>
-                </Box>
-            </VStack>
-        </Center>
-        <Footer />
-    </Box>
+            <Text pt={2} textAlign="center" color="brand.textMuted">
+              Already have an account?{' '}
+              <ChakraLink as={RouterLink} to="/login" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
+                Log in
+              </ChakraLink>
+            </Text>
+          </VStack>
+        </VStack>
+      </Container>
+      <Footer />
+    </Flex>
   );
 };
 

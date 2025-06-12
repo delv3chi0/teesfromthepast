@@ -132,7 +132,7 @@ const ForgotPasswordPage = () => {
                 </VStack>
             </Container>
             <Footer />
-        </Box>
+        </Flex>
     );
 };
 
