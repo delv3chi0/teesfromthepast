@@ -1,6 +1,6 @@
 import express from 'express';
 import {
-    // MODIFIED: Replaced old function names with the new correct ones
+    // MODIFIED: Importing the new, correct functions from the controller
     getActiveProductsByCategory,
     getShopData,
     getProductBySlug,
@@ -11,7 +11,7 @@ const router = express.Router();
 // This route gets all the data needed for the main shop page
 router.get('/shop', getShopData);
 
-// MODIFIED: This route now gets products by a category ID, not a type ID
+// MODIFIED: This route now correctly gets products by a category ID
 router.get('/products/category/:categoryId', getActiveProductsByCategory);
 
 // This route gets a single product by its unique slug for the detail page
