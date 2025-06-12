@@ -1,20 +1,23 @@
-// frontend/src/theme.js
 import { extendTheme } from '@chakra-ui/react';
 
 const colors = {
   brand: {
-    primary: '#1A1D22',      // The main dark background from your screenshot
-    secondary: '#212428',    // Header background
-    cardBlue: '#2c3e50',   // The navy blue for cards
+    primary: '#1A1D22',       // The main dark background from your screenshot
+    secondary: '#212428',     // Header background
+    cardBlue: '#2c3e50',      // The navy blue for cards
     
     accentOrange: '#D95A2B', // The vibrant orange from your buttons
     accentOrangeHover: '#E86A3C',
     accentYellow: '#FFEE58',
     
-    textLight: '#EAEAEA',     // The main off-white text color
-    textMuted: '#949494',      // Muted gray for less important text
-    textDark: '#1A1D22',      // Dark text for use on light backgrounds
+    textLight: '#EAEAEA',      // The main off-white text color
+    textMuted: '#949494',       // Muted gray for less important text
+    textDark: '#1A1D22',       // Dark text for use on light backgrounds
   },
+  // Added this ui color for solid panel backgrounds
+  ui: {
+      background: '#2D3748', // A solid, dark gray
+  }
 };
 
 const fonts = {
@@ -33,25 +36,26 @@ const components = {
         }
     }
   },
+  // MODIFIED: Corrected the Modal component style
   Modal: {
-      baseStyle: {
+      baseStyle: (props) => ({
           dialog: {
-              bg: 'brand.cardBlue',
+              bg: colors.brand.cardBlue, // Use the solid blue color
               color: 'brand.textLight'
           },
           header: {
               color: 'brand.textLight',
               borderBottomWidth: '1px',
-              borderColor: 'brand.primaryLight'
+              borderColor: 'rgba(255, 255, 255, 0.1)' // A subtle border color
           },
           body: {
               color: 'brand.textLight'
           },
           footer: {
               borderTopWidth: '1px',
-              borderColor: 'brand.primaryLight'
+              borderColor: 'rgba(255, 255, 255, 0.1)'
           }
-      }
+      })
   },
   Heading: {
     baseStyle: {

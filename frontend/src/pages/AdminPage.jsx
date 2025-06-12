@@ -1,4 +1,3 @@
-// frontend/src/pages/AdminPage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -32,16 +31,16 @@ const DashboardPanel = ({ token, onViewOrder }) => {
     
     const StatCard = ({ title, stat, icon, helpText }) => (
       <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="ui.background">
-          <Flex justifyContent="space-between">
-              <Box>
-                  <StatLabel color="gray.400">{title}</StatLabel>
-                  <StatNumber>{stat}</StatNumber>
-                  {helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}
-              </Box>
-              <Box my="auto" color="brand.primary">
-                  <Icon as={icon} w={8} h={8} />
-              </Box>
-          </Flex>
+        <Flex justifyContent="space-between">
+            <Box>
+                <StatLabel color="gray.400">{title}</StatLabel>
+                <StatNumber>{stat}</StatNumber>
+                {helpText && <Text fontSize="sm" color="gray.500">{helpText}</Text>}
+            </Box>
+            <Box my="auto" color="brand.primary">
+                <Icon as={icon} w={8} h={8} />
+            </Box>
+        </Flex>
       </Stat>
     );
 
@@ -221,10 +220,10 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
-      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" for a solid appearance */}
+      {/* MODALS START HERE: bg prop has been removed to use the theme's default solid background */}
       <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
         <ModalOverlay />
-        <ModalContent bg="ui.background">
+        <ModalContent>
             <ModalHeader>User: {selectedUser?.username}</ModalHeader>
             <ModalCloseButton />
             <ModalBody><VStack spacing={3} align="start"><Text><strong>ID:</strong> {selectedUser?._id}</Text><Text><strong>Username:</strong> {selectedUser?.username}</Text><Text><strong>Email:</strong> {selectedUser?.email}</Text></VStack></ModalBody>
@@ -232,10 +231,9 @@ const AdminPage = () => {
         </ModalContent>
       </Modal>
       
-      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="xl">
         <ModalOverlay />
-        <ModalContent bg="ui.background">
+        <ModalContent>
             <ModalHeader>Edit User: {selectedUser?.username}</ModalHeader>
             <ModalCloseButton />
             <ModalBody overflowY="auto" maxHeight="70vh"><VStack spacing={4} align="stretch"><FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} /></FormControl><FormControl display="flex" alignItems="center"><FormLabel htmlFor="isAdmin" mb="0">Admin Status</FormLabel><Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} /></FormControl><Divider my={4} /><Heading size="sm">Change Password</Heading><FormControl><FormLabel>New Password</FormLabel><InputGroup><Input name="newPassword" type={showNewPasswordInModal?'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl><FormControl><FormLabel>Confirm New Password</FormLabel><InputGroup><Input name="confirmNewPassword" type={showConfirmNewPasswordInModal?'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl></VStack></ModalBody>
@@ -243,10 +241,9 @@ const AdminPage = () => {
         </ModalContent>
       </Modal>
 
-      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isDeleteUserModalOpen} onClose={onDeleteUserModalClose} isCentered>
         <ModalOverlay />
-        <ModalContent bg="ui.background">
+        <ModalContent>
             <ModalHeader>Confirm Deletion</ModalHeader>
             <ModalCloseButton />
             <ModalBody><Text>Delete <strong>{selectedUser?.username}</strong>?</Text><Text mt={2} color="red.500">This action cannot be undone.</Text></ModalBody>
@@ -254,10 +251,9 @@ const AdminPage = () => {
         </ModalContent>
       </Modal>
 
-      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isDeleteOrderModalOpen} onClose={onDeleteOrderModalClose} isCentered>
         <ModalOverlay />
-        <ModalContent bg="ui.background">
+        <ModalContent>
             <ModalHeader>Confirm Deletion</ModalHeader>
             <ModalCloseButton />
             <ModalBody><Text>Delete order <strong>{orderToDelete?._id}</strong>?</Text><Alert mt={4} status="warning"><AlertIcon/>This does not issue a refund in Stripe.</Alert></ModalBody>
@@ -265,10 +261,9 @@ const AdminPage = () => {
         </ModalContent>
       </Modal>
 
-      {/* MODIFIED: Changed bg="brand.paper" to a solid color */}
       <Modal isOpen={isViewOrderModalOpen} onClose={() => { onCloseViewOrderModal(); setSelectedOrder(null); }} size="4xl" scrollBehavior="inside">
         <ModalOverlay />
-        <ModalContent bg="ui.background" color="brand.textLight">
+        <ModalContent>
             <ModalHeader>Order Details</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
@@ -287,10 +282,9 @@ const AdminPage = () => {
         </ModalContent>
       </Modal>
 
-      {/* MODIFIED: Changed to a solid background */}
       <Modal isOpen={isViewDesignModalOpen} onClose={onCloseViewDesignModal} size="xl" isCentered>
         <ModalOverlay />
-        <ModalContent bg="ui.background">
+        <ModalContent>
             <ModalHeader>Design Preview</ModalHeader>
             <ModalCloseButton />
             <ModalBody>{selectedDesign && (<VStack><Image src={selectedDesign.imageDataUrl} maxW="100%" maxH="60vh" objectFit="contain" /><Text fontSize="sm" color="gray.400" mt={2} p={2} bg="gray.800" borderRadius="md">{selectedDesign.prompt}</Text></VStack>)}</ModalBody>
@@ -298,10 +292,9 @@ const AdminPage = () => {
         </ModalContent>
       </Modal>
       
-      {/* MODIFIED: Changed bg="brand.paper" to bg="ui.background" */}
       <Modal isOpen={isDeleteDesignModalOpen} onClose={onCloseDeleteDesignModal} isCentered>
         <ModalOverlay />
-        <ModalContent bg="ui.background">
+        <ModalContent>
             <ModalHeader>Confirm Deletion</ModalHeader>
             <ModalCloseButton />
             <ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody>
