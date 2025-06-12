@@ -1,4 +1,4 @@
-kk// backend/controllers/adminController.js
+// backend/controllers/adminController.js
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
