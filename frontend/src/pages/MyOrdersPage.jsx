@@ -35,7 +35,6 @@ const MyOrdersPage = () => {
       client.get('/orders/myorders')
         .then(response => {
           setOrders(response.data);
-          setLoading(false);
         })
         .catch(err => {
           console.error("Error fetching orders:", err);
@@ -44,7 +43,9 @@ const MyOrdersPage = () => {
             logout();
             navigate('/login');
           }
-          setLoading(false);
+        })
+        .finally(() => {
+            setLoading(false);
         });
     }
   }, [user, logout, navigate]);
@@ -92,13 +93,12 @@ const MyOrdersPage = () => {
                 
                 <Box>
                   <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Total</Heading>
-                  {/* MODIFIED: Safely handle cases where totalPrice might be missing */}
                   <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text>
                 </Box>
                 
                 <Box>
                   <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Status</Heading>
-                  <Tag size="md" colorScheme={order.status === 'Delivered' ? 'green' : 'yellow'} mt={1}>{order.status}</Tag>
+                  <Tag size="md" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'yellow'} mt={1}>{order.orderStatus}</Tag>
                 </Box>
 
               </SimpleGrid>
@@ -108,7 +108,7 @@ const MyOrdersPage = () => {
               <Box>
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
-                  {order.orderItems.map(item => (
+                  {order.orderItems && order.orderItems.map(item => (
                     <Flex key={item._id} justify="space-between" align="center" bg="brand.primary" p={3} borderRadius="md">
                       <HStack spacing={4}>
                         <Image 
