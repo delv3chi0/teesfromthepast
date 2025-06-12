@@ -92,6 +92,7 @@ const MyOrdersPage = () => {
                 
                 <Box>
                   <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Total</Heading>
+                  {/* MODIFIED: Safely handle cases where totalPrice might be missing */}
                   <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text>
                 </Box>
                 
@@ -107,7 +108,6 @@ const MyOrdersPage = () => {
               <Box>
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
-                  {/* CORRECTED: This now maps over the items and displays all their details */}
                   {order.orderItems.map(item => (
                     <Flex key={item._id} justify="space-between" align="center" bg="brand.primary" p={3} borderRadius="md">
                       <HStack spacing={4}>
