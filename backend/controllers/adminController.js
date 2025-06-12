@@ -1,13 +1,13 @@
-// backend/controllers/adminController.js
+kk// backend/controllers/adminController.js
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Design from '../models/Design.js';
 import ProductCategory from '../models/ProductCategory.js';
-import ProductType from '../models/ProductType.js';
 import Product from '../models/Product.js';
 
+// --- Dashboard ---
 const getDashboardSummary = asyncHandler(async (req, res) => {
     const [totalSalesData, totalOrders, newUserCount, recentOrders] = await Promise.all([
         Order.aggregate([ { $match: { paymentStatus: 'Succeeded' } }, { $group: { _id: null, totalRevenue: { $sum: '$totalAmount' } } } ]),
@@ -19,6 +19,7 @@ const getDashboardSummary = asyncHandler(async (req, res) => {
     res.json({ totalRevenue, totalOrders, newUserCount, recentOrders });
 });
 
+// --- User Management ---
 const getAllUsersAdmin = asyncHandler(async (req, res) => {
     const users = await User.find({}).select('-password');
     res.json(users || []);
@@ -38,6 +39,7 @@ const deleteUserAdmin = asyncHandler(async (req, res) => {
     if (user) { await User.deleteOne({ _id: user._id }); res.json({ message: 'User removed successfully' }); } else { res.status(404); throw new Error('User not found'); }
 });
 
+// --- Order Management ---
 const getAllOrdersAdmin = asyncHandler(async (req, res) => {
     const orders = await Order.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
     res.json(orders || []);
@@ -58,6 +60,7 @@ const updateOrderStatusAdmin = asyncHandler(async (req, res) => {
     if (order) { order.orderStatus = status; const updatedOrder = await order.save(); res.json(updatedOrder); } else { res.status(404); throw new Error('Order not found'); }
 });
 
+// --- Design Management ---
 const getAllDesignsAdmin = asyncHandler(async (req, res) => {
     const designs = await Design.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
     res.json(designs || []);
@@ -68,10 +71,11 @@ const deleteDesignAdmin = asyncHandler(async (req, res) => {
     else { res.status(404); throw new Error('Design not found'); }
 });
 
+// --- Category Management (Formerly Product Category) ---
 const createProductCategoryAdmin = asyncHandler(async (req, res) => {
     const { name, description, isActive } = req.body;
     const categoryExists = await ProductCategory.findOne({ name });
-    if (categoryExists) { res.status(400); throw new Error(`Product category '${name}' already exists`); }
+    if (categoryExists) { res.status(400); throw new Error(`Category '${name}' already exists`); }
     const category = new ProductCategory({ name, description, isActive: isActive !== undefined ? isActive : true });
     const createdCategory = await category.save();
     res.status(201).json(createdCategory);
@@ -82,7 +86,7 @@ const getProductCategoriesAdmin = asyncHandler(async (req, res) => {
 });
 const getProductCategoryByIdAdmin = asyncHandler(async (req, res) => {
     const category = await ProductCategory.findById(req.params.id);
-    if (category) { res.json(category); } else { res.status(404); throw new Error('Product category not found'); }
+    if (category) { res.json(category); } else { res.status(404); throw new Error('Category not found'); }
 });
 const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
     const { name, description, isActive } = req.body;
@@ -90,7 +94,7 @@ const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
     if (category) {
         if (name && name !== category.name) {
             const categoryExists = await ProductCategory.findOne({ name: name, _id: { $ne: req.params.id } });
-            if (categoryExists) { res.status(400); throw new Error(`Product category name '${name}' already exists.`); }
+            if (categoryExists) { res.status(400); throw new Error(`Category name '${name}' already exists.`); }
         }
         category.name = name || category.name;
         category.description = description !== undefined ? description : category.description;
@@ -98,115 +102,35 @@ const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
         const updatedCategory = await category.save();
         res.json(updatedCategory);
     } else {
-        res.status(404);
-        throw new Error('Product category not found');
+        res.status(404); throw new Error('Category not found');
     }
 });
 const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
     const category = await ProductCategory.findById(req.params.id);
     if (category) {
-        const productTypeUsingCategory = await ProductType.findOne({ category: req.params.id });
-        if (productTypeUsingCategory) { res.status(400); throw new Error('Cannot delete category. It is currently in use by one or more product types.'); }
+        // Now check if category is used by any Product
+        const productUsingCategory = await Product.findOne({ category: req.params.id });
+        if (productUsingCategory) { res.status(400); throw new Error('Cannot delete category. It is currently in use by one or more products.'); }
         await ProductCategory.deleteOne({ _id: req.params.id });
-        res.json({ message: 'Product category removed' });
+        res.json({ message: 'Category removed' });
     } else {
-        res.status(404);
-        throw new Error('Product category not found');
+        res.status(404); throw new Error('Category not found');
     }
 });
 
-// FINAL CORRECTED VERSION: Description is not required.
-const createProductTypeAdmin = asyncHandler(async (req, res) => {
-    const { name, category, description } = req.body;
-
-    if (!name || !category) {
-        return res.status(400).json({ message: 'Name and category are required fields.' });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(category)) { 
-        return res.status(400).json({ message: 'The provided Category ID is not a valid format.' }); 
-    }
-
-    const categoryExists = await ProductCategory.findById(category);
-    if (!categoryExists) {
-        return res.status(404).json({ message: 'The selected category does not exist.' });
-    }
-
-    const typeExists = await ProductType.findOne({ name, category });
-    if (typeExists) {
-        return res.status(400).json({ message: `A product type named '${name}' already exists in this category.` });
-    }
-
-    const productType = new ProductType({
-        name,
-        category,
-        description: description || '', // Handle optional description
-    });
-
-    const createdProduct = await productType.save();
-    res.status(201).json(createdProduct);
-});
-
-// CORRECTED: Ensures the category is populated for display on the frontend
-const getProductTypesAdmin = asyncHandler(async (req, res) => {
-    const productTypes = await ProductType.find({}).populate('category', 'name').sort({ name: 1 });
-    res.json(productTypes);
-});
-
-const getProductTypeByIdAdmin = asyncHandler(async (req, res) => {
-    const productType = await ProductType.findById(req.params.id).populate('category', 'name description');
-    if (productType) { res.json(productType); } else { res.status(404); throw new Error('Product type not found'); }
-});
-const updateProductTypeAdmin = asyncHandler(async (req, res) => {
-    const { name, category: categoryId, description, isActive } = req.body;
-    const productType = await ProductType.findById(req.params.id);
-    if (productType) {
-        if (name && name !== productType.name) {
-            const typeExists = await ProductType.findOne({ name: name, _id: { $ne: req.params.id } });
-            if (typeExists) { res.status(400); throw new Error(`Product type name '${name}' already exists.`); }
-        }
-        productType.name = name || productType.name;
-        if (categoryId) {
-            if (!mongoose.Types.ObjectId.isValid(categoryId)) { res.status(400); throw new Error('Invalid Product Category ID format for update.'); }
-            const categoryExists = await ProductCategory.findById(categoryId);
-            if (!categoryExists) { res.status(400); throw new Error('Selected product category for update does not exist.'); }
-            productType.category = categoryId;
-        }
-        productType.description = description !== undefined ? description : productType.description;
-        productType.isActive = isActive !== undefined ? isActive : productType.isActive;
-        const updatedProductType = await productType.save();
-        await updatedProductType.populate('category', 'name');
-        res.json(updatedProductType);
-    } else {
-        res.status(404);
-        throw new Error('Product type not found');
-    }
-});
-const deleteProductTypeAdmin = asyncHandler(async (req, res) => {
-    const productType = await ProductType.findById(req.params.id);
-    if (productType) {
-        const productUsingType = await Product.findOne({ productType: req.params.id });
-        if (productUsingType) { res.status(400); throw new Error('Cannot delete type. It is currently in use by one or more products.'); }
-        await ProductType.deleteOne({ _id: req.params.id });
-        res.json({ message: 'Product type removed' });
-    } else {
-        res.status(404);
-        throw new Error('Product type not found');
-    }
-});
-
+// --- Product Management (MODIFIED) ---
 const createProductAdmin = asyncHandler(async (req, res) => {
-    const { name, productType, description, basePrice, tags, isActive, variants } = req.body;
-    if (!productType) { res.status(400); throw new Error('Product type is required.'); }
-    const productTypeExists = await ProductType.findById(productType);
-    if (!productTypeExists) { res.status(400); throw new Error('Selected product type does not exist.'); }
+    const { name, category, description, basePrice, tags, isActive, variants } = req.body;
+    if (!category) { res.status(400); throw new Error('Category is required.'); }
+    const categoryExists = await ProductCategory.findById(category);
+    if (!categoryExists) { res.status(400); throw new Error('Selected category does not exist.'); }
     if (variants) {
         if (!Array.isArray(variants)) { res.status(400); throw new Error('Variants must be an array.'); }
         if (variants.length > 0 && variants.filter(v => v.isDefaultDisplay).length !== 1) {
             res.status(400); throw new Error('Exactly one variant must be marked as the default display.');
         }
     }
-    const product = new Product({ name, productType, description, basePrice, tags, isActive, variants });
+    const product = new Product({ name, category, description, basePrice, tags, isActive, variants });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
 });
@@ -217,12 +141,12 @@ const getProductsAdmin = asyncHandler(async (req, res) => {
 });
 
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
-    const product = await Product.findById(req.params.id).populate({ path: 'productType', select: 'name' });
+    const product = await Product.findById(req.params.id).populate({ path: 'category', select: 'name' });
     if (product) { res.json(product); } else { res.status(404); throw new Error('Product not found'); }
 });
 
 const updateProductAdmin = asyncHandler(async (req, res) => {
-    const { name, productType, description, basePrice, tags, isActive, variants } = req.body;
+    const { name, category, description, basePrice, tags, isActive, variants } = req.body;
     const product = await Product.findById(req.params.id);
     if (product) {
         if (variants) {
@@ -232,7 +156,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             }
         }
         product.name = name;
-        product.productType = productType;
+        product.category = category;
         product.description = description;
         product.basePrice = basePrice;
         product.tags = tags;
@@ -241,8 +165,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
         const updatedProduct = await product.save();
         res.json(updatedProduct);
     } else {
-        res.status(404);
-        throw new Error('Product not found');
+        res.status(404); throw new Error('Product not found');
     }
 });
 
@@ -252,8 +175,7 @@ const deleteProductAdmin = asyncHandler(async (req, res) => {
         await Product.deleteOne({ _id: req.params.id });
         res.json({ message: 'Product removed' });
     } else {
-        res.status(404);
-        throw new Error('Product not found');
+        res.status(404); throw new Error('Product not found');
     }
 });
 
@@ -262,6 +184,6 @@ export {
     getAllOrdersAdmin, deleteOrderAdmin, getOrderByIdAdmin, updateOrderStatusAdmin,
     getAllDesignsAdmin, deleteDesignAdmin,
     createProductCategoryAdmin, getProductCategoriesAdmin, getProductCategoryByIdAdmin, updateProductCategoryAdmin, deleteProductCategoryAdmin,
-    createProductTypeAdmin, getProductTypesAdmin, getProductTypeByIdAdmin, updateProductTypeAdmin, deleteProductTypeAdmin,
+    // Product Type functions are removed
     createProductAdmin, getProductsAdmin, getProductByIdAdmin, updateProductAdmin, deleteProductAdmin
 };

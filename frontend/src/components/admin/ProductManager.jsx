@@ -7,7 +7,6 @@ import {
   useDisclosure, FormControl, FormLabel, Input, Select, Switch, HStack, Tooltip, Icon,
   Tag, SimpleGrid, Textarea, NumberInput, NumberInputField, NumberInputStepper,
   NumberIncrementStepper, NumberDecrementStepper, Divider, CloseButton,
-
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
@@ -30,13 +29,13 @@ const ProductManager = () => {
   const { token } = useAuth();
   const toast = useToast();
   const [products, setProducts] = useState([]);
-  const [productTypes, setProductTypes] = useState([]);
+  const [categories, setCategories] = useState([]); // MODIFIED: from productTypes to categories
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '', productType: '', basePrice: 0, tags: '', isActive: true, variants: [] });
+  const [formData, setFormData] = useState({ name: '', description: '', category: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
@@ -53,36 +52,37 @@ const ProductManager = () => {
     }
   }, [token]);
 
-  const fetchProductTypes = useCallback(async () => {
-    if (!token) return [];
+  // MODIFIED: Fetches categories instead of types
+  const fetchCategories = useCallback(async () => {
+    if (!token) return;
     try {
-      const { data } = await client.get('/admin/product-types', { headers: { Authorization: `Bearer ${token}` } });
-      setProductTypes(data);
+      const { data } = await client.get('/admin/product-categories', { headers: { Authorization: `Bearer ${token}` } });
+      setCategories(data);
     } catch (e) {
-      toast({ title: "Error", description: "Could not load product types.", status: "error" });
+      toast({ title: "Error", description: "Could not load categories.", status: "error" });
     }
   }, [token, toast]);
 
-  useEffect(() => { if (token) { fetchProducts(); fetchProductTypes(); } }, [token, fetchProducts, fetchProductTypes]);
+  useEffect(() => { if (token) { fetchProducts(); fetchCategories(); } }, [token, fetchProducts, fetchCategories]);
 
   const handleOpenModal = async (product = null) => {
     onOpen(); setIsModalLoading(true);
     try {
-      const activeTypes = productTypes.filter(pt => pt.isActive);
+      const activeCategories = categories.filter(pt => pt.isActive);
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
       if (product) {
         const { data: fullProductData } = await client.get(`/admin/products/${product._id}`, { headers: { Authorization: `Bearer ${token}` }});
         setIsEditing(true);
         setSelectedProduct(fullProductData);
         setFormData({
-          name: fullProductData.name, description: fullProductData.description || '', productType: fullProductData.productType?._id || fullProductData.productType || '',
+          name: fullProductData.name, description: fullProductData.description || '', category: fullProductData.category?._id || fullProductData.category || '',
           basePrice: fullProductData.basePrice || 0, tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
           isActive: fullProductData.isActive,
           variants: (fullProductData.variants || []).map(v => ({...v, imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }], sizes: v.sizes || [] }))
         });
       } else {
         setIsEditing(false); setSelectedProduct(null);
-        setFormData({ name: '', description: '', productType: activeTypes.length > 0 ? activeTypes[0]._id : '', basePrice: 0, tags: '', isActive: true, variants: [] });
+        setFormData({ name: '', description: '', category: activeCategories.length > 0 ? activeCategories[0]._id : '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
     } catch (err) { toast({ title: "Error", description: "Could not load data for the form.", status: "error" }); onClose(); } 
     finally { setIsModalLoading(false); }
@@ -91,7 +91,7 @@ const ProductManager = () => {
   const handleFormChange = (e) => { const { name, value, type, checked } = e.target; setFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value })); };
   const handleBasePriceChange = (valStr, valNum) => { setFormData(prev => ({ ...prev, basePrice: valNum || 0 })); };
   const handleNewColorFormChange = (e) => { const { name, value } = e.target; if (name === "colorName") { const sel = CORE_COLORS.find(c => c.name === value); setNewColorData(prev => ({ ...prev, colorName: value, colorHex: sel ? sel.hex : '' })); } else { setNewColorData(prev => ({ ...prev, [name]: value })); } };
-  
+ 
   const handleAddColorVariant = () => {
     if (!newColorData.colorName) { toast({ title: "Color Name Required", status: "warning" }); return; }
     if (formData.variants.some(v => v.colorName === newColorData.colorName)) { toast({ title: "Duplicate Color", status: "warning" }); return; }
@@ -103,7 +103,7 @@ const ProductManager = () => {
     setFormData(prev => ({ ...prev, variants: [...prev.variants, newVariant] }));
     setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
   };
-  
+ 
   const handleRemoveColorVariant = (colorIndex) => { const newVariants = [...formData.variants]; newVariants.splice(colorIndex, 1); if (newVariants.length > 0 && !newVariants.some(v => v.isDefaultDisplay)) { newVariants[0].isDefaultDisplay = true; } setFormData(prev => ({ ...prev, variants: newVariants })); };
   const handleSizeDetailChange = (colorIdx, sizeIdx, field, value) => { const newV = [...formData.variants]; newV[colorIdx].sizes[sizeIdx][field] = value; setFormData(prev => ({ ...prev, variants: newV })); };
   const handleImageSetUrlChange = (colorIndex, imageIndex, url) => { const newVariants = [...formData.variants]; newVariants[colorIndex].imageSet[imageIndex].url = url; setFormData(prev => ({ ...prev, variants: newVariants })); };
@@ -111,9 +111,9 @@ const ProductManager = () => {
   const removeImageFromSet = (colorIndex, imageIndex) => { const newVariants = [...formData.variants]; if(newVariants[colorIndex].imageSet.length > 1) { newVariants[colorIndex].imageSet.splice(imageIndex, 1); if (!newVariants[colorIndex].imageSet.some(img => img.isPrimary)) { newVariants[colorIndex].imageSet[0].isPrimary = true; } setFormData(prev => ({ ...prev, variants: newVariants })); } };
   const setPrimaryImage = (colorIndex, imageIndex) => { const newVariants = [...formData.variants]; newVariants[colorIndex].imageSet.forEach((img, idx) => { img.isPrimary = idx === imageIndex; }); setFormData(prev => ({ ...prev, variants: newVariants })); };
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = formData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setFormData(prev => ({ ...prev, variants: newVariants })); };
-  
+ 
   const handleSubmit = async () => {
-    if (!formData.name.trim() || !formData.productType) { toast({ title: "Validation Error", description: "Product Name and Type are required.", status: "error" }); return; }
+    if (!formData.name.trim() || !formData.category) { toast({ title: "Validation Error", description: "Product Name and Category are required.", status: "error" }); return; }
     for (const variant of formData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
     if (formData.variants.length > 0 && !formData.variants.some(v => v.isDefaultDisplay)) { formData.variants[0].isDefaultDisplay = true; }
     for (const variant of formData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; } } }
@@ -123,7 +123,7 @@ const ProductManager = () => {
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onClose(); } 
     catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message, status: "error" }); }
   };
-  
+ 
   const handleOpenDeleteDialog = (product) => { setSelectedProduct(product); onDeleteOpen(); };
   const handleDelete = async () => { if (!selectedProduct) return; try { await client.delete(`/admin/products/${selectedProduct._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Product Deleted", status: "success" }); fetchProducts(); onDeleteClose(); } catch (err) { toast({ title: "Delete Failed", description: err.response?.data?.message, status: "error" }); onDeleteClose(); } };
 
@@ -135,17 +135,17 @@ const ProductManager = () => {
       <HStack justifyContent="space-between" mb={6}><Heading size="md">Manage Products</Heading><Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandPrimary" onClick={() => handleOpenModal()}>Add New Product</Button></HStack>
       <TableContainer>
         <Table variant="simple" size="sm">
-          <Thead><Tr><Th>Name</Th><Th>Type</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
-          <Tbody>{products.map((p) => (<Tr key={p._id}><Td fontWeight="medium">{p.name}</Td><Td>{productTypes.find(pt => pt._id === p.productType)?.name || 'N/A'}</Td><Td>${p.basePrice?.toFixed(2)}</Td><Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td><Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td><Td><Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" onClick={() => handleOpenModal(p)}/></Tooltip><Tooltip label="Delete"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip></Td></Tr>))}</Tbody>
+          <Thead><Tr><Th>Name</Th><Th>Category</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
+          <Tbody>{products.map((p) => (<Tr key={p._id}><Td fontWeight="medium">{p.name}</Td><Td>{categories.find(pt => pt._id === p.category)?.name || 'N/A'}</Td><Td>${p.basePrice?.toFixed(2)}</Td><Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td><Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td><Td><Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" onClick={() => handleOpenModal(p)}/></Tooltip><Tooltip label="Delete"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip></Td></Tr>))}</Tbody>
         </Table>
       </TableContainer>
-      
+     
       <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">
         <ModalOverlay /><ModalContent><ModalHeader>{isEditing ? 'Edit' : 'Add New'} Product</ModalHeader><ModalCloseButton />
           <ModalBody pb={6}>
             {isModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
-                <Box p={4} borderWidth="1px" borderRadius="md"><Heading size="sm" mb={4}>Product Details</Heading><SimpleGrid columns={{base: 1, md: 2}} spacing={4}><FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange}/></FormControl><FormControl isRequired><FormLabel>Product Type</FormLabel><Select name="productType" value={formData.productType} onChange={handleFormChange} placeholder="Select type">{productTypes.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}</Select></FormControl><FormControl isRequired><FormLabel>Base Price ($)</FormLabel><NumberInput value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}><NumberInputField/><NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper></NumberInput></FormControl><FormControl><FormLabel>Tags (comma-separated)</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange}/></FormControl></SimpleGrid><FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange}/></FormControl><FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={formData.isActive} onChange={handleFormChange}/></FormControl></Box>
+                <Box p={4} borderWidth="1px" borderRadius="md"><Heading size="sm" mb={4}>Product Details</Heading><SimpleGrid columns={{base: 1, md: 2}} spacing={4}><FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange}/></FormControl><FormControl isRequired><FormLabel>Category</FormLabel><Select name="category" value={formData.category} onChange={handleFormChange} placeholder="Select category">{categories.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}</Select></FormControl><FormControl isRequired><FormLabel>Base Price ($)</FormLabel><NumberInput value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}><NumberInputField/><NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper></NumberInput></FormControl><FormControl><FormLabel>Tags (comma-separated)</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange}/></FormControl></SimpleGrid><FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange}/></FormControl><FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={formData.isActive} onChange={handleFormChange}/></FormControl></Box>
                 <Box p={4} borderWidth="1px" borderRadius="md">
                     <Heading size="sm" mb={4}>Product Variants</Heading>
                     <RadioGroup onChange={(val) => setDefaultVariant(parseInt(val))} value={formData.variants.findIndex(v => v.isDefaultDisplay)?.toString() ?? "-1"}>

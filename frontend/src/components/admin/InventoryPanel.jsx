@@ -9,15 +9,11 @@ import {
   TabPanels,
   TabPanel,
   Icon,
-  // Text, // No longer needed for placeholders here
 } from '@chakra-ui/react';
-import { FaTags, FaShapes, FaTshirt } from 'react-icons/fa';
+import { FaTags, FaTshirt } from 'react-icons/fa';
 
 import ProductCategoryManager from './ProductCategoryManager.jsx';
-import ProductTypeManager from './ProductTypeManager.jsx';
-// --- IMPORT THE ACTUAL ProductManager ---
 import ProductManager from './ProductManager.jsx';
-
 
 const InventoryPanel = () => {
   return (
@@ -28,10 +24,7 @@ const InventoryPanel = () => {
       <Tabs variant="enclosed-colored" colorScheme="gray" isLazy>
         <TabList flexWrap="wrap">
           <Tab _selected={{ color: 'brand.textDark', bg: 'gray.100', fontWeight: 'bold' }} m={1}>
-            <Icon as={FaTags} mr={2} /> Product Categories
-          </Tab>
-          <Tab _selected={{ color: 'brand.textDark', bg: 'gray.100', fontWeight: 'bold' }} m={1}>
-            <Icon as={FaShapes} mr={2} /> Product Types
+            <Icon as={FaTags} mr={2} /> Categories
           </Tab>
           <Tab _selected={{ color: 'brand.textDark', bg: 'gray.100', fontWeight: 'bold' }} m={1}>
             <Icon as={FaTshirt} mr={2} /> Products
@@ -42,10 +35,6 @@ const InventoryPanel = () => {
             <ProductCategoryManager />
           </TabPanel>
           <TabPanel px={0} py={4}>
-            <ProductTypeManager />
-          </TabPanel>
-          <TabPanel px={0} py={4}>
-            {/* Now using the imported ProductManager */}
             <ProductManager />
           </TabPanel>
         </TabPanels>

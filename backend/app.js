@@ -1,4 +1,3 @@
-// backend/app.js
 import express from 'express';
 import mongoose from 'mongoose';
 import 'dotenv/config';
@@ -20,7 +19,7 @@ import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
 import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js';
-import adminProductTypeRoutes from './routes/adminProductTypeRoutes.js';
+// REMOVED: adminProductTypeRoutes is no longer needed
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
 
@@ -92,7 +91,7 @@ app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
 app.use('/api/admin/product-categories', adminProductCategoryRoutes);
-app.use('/api/admin/product-types', adminProductTypeRoutes);
+// REMOVED: The route for product-types is no longer needed
 app.use('/api/admin/products', adminProductRoutes);
 
 // --- Global Error Handler ---
