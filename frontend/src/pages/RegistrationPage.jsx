@@ -20,7 +20,7 @@ import {
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import AuthFooter from '../components/AuthFooter';
+import Footer from '../components/Footer.jsx'; // MODIFIED: Using your existing Footer component
 
 const RegistrationPage = () => {
   const [formData, setFormData] = useState({
@@ -176,7 +176,7 @@ const RegistrationPage = () => {
                 </Box>
             </VStack>
         </Center>
-        <AuthFooter />
+        <Footer />
     </Box>
   );
 };

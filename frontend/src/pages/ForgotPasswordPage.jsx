@@ -6,7 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
-import AuthFooter from '../components/AuthFooter';
+import Footer from '../components/Footer.jsx'; // MODIFIED: Using your existing Footer component
 
 const ForgotPasswordPage = () => {
     const [email, setEmail] = useState('');
@@ -135,7 +135,7 @@ const ForgotPasswordPage = () => {
                     </Box>
                 </VStack>
             </Center>
-            <AuthFooter />
+            <Footer />
         </Box>
     );
 };

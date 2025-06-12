@@ -20,7 +20,7 @@ import {
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
-import AuthFooter from '../components/AuthFooter';
+import Footer from '../components/Footer.jsx'; // MODIFIED: Using your existing Footer component
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -146,7 +146,7 @@ const LoginPage = () => {
                 </Box>
             </VStack>
         </Center>
-        <AuthFooter />
+        <Footer />
     </Box>
   );
 };
