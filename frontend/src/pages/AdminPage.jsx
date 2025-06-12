@@ -1,4 +1,3 @@
-// frontend/src/pages/AdminPage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -32,11 +31,11 @@ const DashboardPanel = ({ token, onViewOrder }) => {
     
     // MODIFIED: StatCard now uses a darker background and lighter text for better contrast.
     const StatCard = ({ title, stat, icon, helpText }) => (
-      <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="brand.cardBlue">
+      <Stat p={5} shadow="sm" borderWidth="1px" borderRadius="lg" bg="brand.cardBlue" borderColor="rgba(255,255,255,0.1)">
           <Flex justifyContent="space-between">
               <Box>
-                  <StatLabel color="brand.textLight" opacity={0.7}>{title}</StatLabel>
-                  <StatNumber color="white">{stat}</StatNumber>
+                  <StatLabel color="brand.textMuted">{title}</StatLabel>
+                  <StatNumber color="brand.textLight">{stat}</StatNumber>
                   {helpText && <Text fontSize="sm" color="brand.textMuted">{helpText}</Text>}
               </Box>
               <Box my="auto" color="brand.accentOrange">
@@ -60,7 +59,7 @@ const DashboardPanel = ({ token, onViewOrder }) => {
             <Box mt={8}>
                 <Heading size="md" mb={4}>Recent Orders</Heading>
                 {/* MODIFIED: Table background now matches the themed cards for consistency */}
-                <TableContainer borderWidth="1px" borderRadius="lg" bg="brand.cardBlue" p={4}>
+                <TableContainer borderWidth="1px" borderRadius="lg" bg="brand.cardBlue">
                     <Table variant="simple" size="sm">
                         <Thead><Tr><Th>Order ID</Th><Th>User</Th><Th>Date</Th><Th isNumeric>Total</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
                         <Tbody>
@@ -223,7 +222,6 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
-      {/* MODALS START HERE */}
       <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
@@ -240,7 +238,7 @@ const AdminPage = () => {
             <ModalHeader>Edit User: {selectedUser?.username}</ModalHeader>
             <ModalCloseButton />
             <ModalBody overflowY="auto" maxHeight="70vh"><VStack spacing={4} align="stretch"><FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} /></FormControl><FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} /></FormControl><FormControl display="flex" alignItems="center"><FormLabel htmlFor="isAdmin" mb="0">Admin Status</FormLabel><Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} /></FormControl><Divider my={4} /><Heading size="sm">Change Password</Heading><FormControl><FormLabel>New Password</FormLabel><InputGroup><Input name="newPassword" type={showNewPasswordInModal?'text':'password'} value={editFormData.newPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowNewPasswordInModal(!showNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl><FormControl><FormLabel>Confirm New Password</FormLabel><InputGroup><Input name="confirmNewPassword" type={showConfirmNewPasswordInModal?'text':'password'} value={editFormData.confirmNewPassword} onChange={handleEditFormChange}/><InputRightElement><ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal?<FaEyeSlash/>:<FaEye/>} onClick={()=>setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)}/></InputRightElement></InputGroup></FormControl></VStack></ModalBody>
-            <ModalFooter><Button onClick={onEditModalClose} mr={3}>Cancel</Button><Button onClick={handleSaveChanges} colorScheme="brandPrimary">Save</Button></ModalFooter>
+            <ModalFooter><Button onClick={onEditModalClose} mr={3}>Cancel</Button><Button onClick={handleSaveChanges} colorScheme="brandAccentOrange">Save</Button></ModalFooter>
         </ModalContent>
       </Modal>
 
