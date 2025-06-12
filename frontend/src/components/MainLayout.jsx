@@ -1,7 +1,8 @@
-import { Box, Flex, HStack, Link as ChakraLink, Button, Icon, Menu, MenuButton, MenuList, MenuItem, MenuDivider, Image } from '@chakra-ui/react';
+import { Box, Flex, HStack, Link as ChakraLink, Button, Icon, Menu, MenuButton, MenuList, MenuItem, MenuDivider, Image, Tooltip, IconButton as ChakraIconButton } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { FaUserCircle } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
+import Footer from './Footer.jsx'; // MODIFIED: Added the missing import for the Footer
 
 const MainLayout = ({ children }) => {
     const { user, logout } = useAuth();
@@ -26,7 +27,6 @@ const MainLayout = ({ children }) => {
             >
                 <Flex h={16} alignItems="center" justifyContent="space-between" maxW="8xl" mx="auto">
                     <RouterLink to="/">
-                        {/* MODIFIED: Using the correct logo 'logo-text.png' from the public folder */}
                         <Image src="/logo-text.png" alt="Tees From The Past Logo" height="45px" objectFit="contain" />
                     </RouterLink>
 
