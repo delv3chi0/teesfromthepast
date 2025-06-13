@@ -1,23 +1,14 @@
-// frontend/src/pages/VotingPage.jsx
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
-    HStack, useToast, Stat, StatLabel, StatNumber, Tooltip, Icon
+    HStack, useToast, Stat, StatLabel, StatNumber, Tooltip, Icon, AlertDialog, AlertDialogBody, 
+    AlertDialogFooter, AlertDialogHeader, AlertDialogContent
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaRegSadCry, FaVoteYea } from 'react-icons/fa';
 
-/**
- * Voting Page
- * REFRACTORED:
- * - Layout changed to be full-width to better suit an interactive gallery page.
- * - Removed 'brand.paper' backgrounds from cards and alerts to integrate with the dark theme.
- * - Updated all text colors to 'brand.textLight' or other light variants for readability.
- * - Enhanced hover effects and styling for a more polished, cohesive UI.
- */
 export default function VotingPage() {
     const [contestDesigns, setContestDesigns] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -28,17 +19,15 @@ export default function VotingPage() {
 
     const navigate = useNavigate();
     const toast = useToast();
+    const cancelRef = useRef();
 
-    // Fetching functions remain the same, their logic is sound.
     const fetchContestDesigns = () => {
         setLoading(true);
         setError('');
         client.get('/contest/designs')
             .then(response => {
-                // Sort designs by votes initially
                 const sortedDesigns = response.data.sort((a, b) => (b.votes || 0) - (a.votes || 0));
                 setContestDesigns(sortedDesigns);
-                setLoading(false);
             })
             .catch(err => {
                 console.error("Error fetching contest designs:", err);
@@ -48,8 +37,8 @@ export default function VotingPage() {
                     logout();
                     navigate('/login');
                 }
-                setLoading(false);
-            });
+            })
+            .finally(() => { setLoading(false); });
     };
 
     const fetchUserVoteStatus = async () => {
@@ -125,14 +114,14 @@ export default function VotingPage() {
                     <Alert status="error" bg="red.900" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={10} borderWidth="1px" borderColor="red.500">
                         <AlertIcon boxSize="40px" mr={0} color="red.300" />
                         <Text mt={4} mb={6} fontWeight="bold" color="white">{error}</Text>
-                        <Button bg="brand.accentYellow" color="brand.textDark" _hover={{ bg: "brand.accentYellowHover" }} onClick={fetchContestDesigns}>Try Again</Button>
+                        <Button colorScheme="brandAccentYellow" onClick={fetchContestDesigns}>Try Again</Button>
                     </Alert>
                 </Box>
             );
         }
         if (contestDesigns.length === 0) {
             return (
-                <VStack spacing={5} p={10} bg="brand.primaryLight" borderRadius="xl" mt={8} textAlign="center" borderWidth="1px" borderColor="whiteAlpha.200">
+                <VStack spacing={5} p={10} bg="brand.cardBlue" borderRadius="xl" mt={8} textAlign="center" borderWidth="1px" borderColor="transparent">
                     <Icon as={FaRegSadCry} boxSize="60px" color="brand.accentYellow" />
                     <Text fontSize="2xl" fontWeight="medium" color="brand.textLight">
                         No Contest Submissions Yet!
@@ -146,23 +135,24 @@ export default function VotingPage() {
         return (
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 6, md: 8 }}>
                 {contestDesigns.map(design => (
+                    // MODIFIED: Changed background to match the themed cards
                     <Box 
-                        key={design._id} bg="brand.primaryLight" borderRadius="xl" 
+                        key={design._id} bg="brand.cardBlue" borderRadius="xl" 
                         overflow="hidden" shadow="lg" display="flex"
                         flexDirection="column" transition="all 0.2s ease-in-out"
                         borderWidth="1px" borderColor="transparent"
                         _hover={{ boxShadow: "xl", transform: "translateY(-5px)", borderColor: "brand.accentYellow" }}
                     >
-                        <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h={{base: 300, md: 320}} bg="whiteAlpha.100" />
+                        <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h={{base: 300, md: 320}} bg="brand.secondary" />
                         <Box p={5} flexGrow={1} display="flex" flexDirection="column" justifyContent="space-between">
                             <Tooltip label={design.prompt || "No prompt provided"} placement="top" bg="gray.700" color="white" hasArrow>
-                                <Text fontSize="md" color="whiteAlpha.900" fontWeight="medium" noOfLines={1}>
+                                <Text fontSize="md" color="brand.textMuted" fontWeight="medium" noOfLines={1}>
                                     Submitted by: {design.user ? design.user.username : 'Unknown User'}
                                 </Text>
                             </Tooltip>
                             <HStack justifyContent="space-between" mt={4}>
                                 <Stat size="sm">
-                                    <StatLabel color="whiteAlpha.700">Votes</StatLabel> 
+                                    <StatLabel color="brand.textMuted">Votes</StatLabel> 
                                     <StatNumber color="brand.accentYellow" fontWeight="bold" fontSize="3xl">{design.votes || 0}</StatNumber>
                                 </Stat>
                                 <Tooltip 
@@ -176,8 +166,7 @@ export default function VotingPage() {
                                     placement="top" bg="gray.700" color="white" hasArrow
                                 >
                                     <Button
-                                        bg="brand.accentYellow" color="brand.textDark"
-                                        _hover={{bg: "brand.accentYellowHover"}}
+                                        colorScheme="brandAccentYellow"
                                         size="md" px={6} 
                                         leftIcon={<Icon as={FaVoteYea} />}
                                         onClick={() => user ? handleVote(design._id) : navigate('/login')}
@@ -200,7 +189,7 @@ export default function VotingPage() {
             <Box textAlign="center" py={20}>
                 <Heading color="brand.textLight" mb={4}>Contest Access Required</Heading>
                 <Text color="whiteAlpha.800" mb={6}>Please log in or create an account to view the gallery and vote.</Text>
-                <Button bg="brand.accentYellow" color="brand.textDark" _hover={{bg: "brand.accentYellowHover"}} size="lg" onClick={() => navigate('/login')}>
+                <Button colorScheme="brandAccentYellow" size="lg" onClick={() => navigate('/login')}>
                     Login or Sign Up
                 </Button>
             </Box>
@@ -208,7 +197,7 @@ export default function VotingPage() {
     }
     
     return (
-        <Box py={{base: 6, md: 8}} px={{base: 0, md: 2}}> {/* Full-width layout */}
+        <Box py={{base: 6, md: 8}}>
             <VStack spacing={4} align="stretch" mb={10}>
                 <Heading as="h1" size="2xl" color="brand.textLight" textAlign="left" w="100%"> 
                     Monthly Design Contest
