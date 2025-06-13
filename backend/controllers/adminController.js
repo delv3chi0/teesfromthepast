@@ -1,9 +1,14 @@
-kimport asyncHandler from 'express-async-handler';
+import asyncHandler from 'express-async-handler'; // Original line - WILL BE REPLACED
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Design from '../models/Design.js';
 import Product from '../models/Product.js';
+
+// NEW: Add createRequire for express-async-handler
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const asyncHandler = require('express-async-handler'); // NEW: Re-declare asyncHandler using require
 
 // --- Dashboard ---
 const getDashboardSummary = asyncHandler(async (req, res) => {
@@ -65,7 +70,7 @@ const getAllDesignsAdmin = asyncHandler(async (req, res) => {
 });
 const deleteDesignAdmin = asyncHandler(async (req, res) => {
     const design = await Design.findById(req.params.id);
-    if (design) { await Design.deleteOne({ _id: req.params.id }); res.json({ message: 'Design removed successfully' }); } 
+    if (design) { await Design.deleteOne({ _id: design._id }); res.json({ message: 'Design removed successfully' }); } 
     else { res.status(404); throw new Error('Design not found'); }
 });
 
@@ -90,7 +95,7 @@ const getProductsAdmin = asyncHandler(async (req, res) => {
 });
 
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
-    const product = await Product.findById(req.params.id); // Removed .populate('category', 'name')
+    const product = await Product.findById(req.params.id); 
     if (product) { res.json(product); } else { res.status(404); throw new Error('Product not found'); }
 });
 
@@ -120,7 +125,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
 const deleteProductAdmin = asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
-        await Product.deleteOne({ _id: req.params.id });
+        await Product.deleteOne({ _id: product._id });
         res.json({ message: 'Product removed' });
     } else {
         res.status(404); throw new Error('Product not found');
