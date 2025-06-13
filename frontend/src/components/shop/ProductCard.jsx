@@ -1,4 +1,3 @@
-\\\src/components/shop/ProductCard.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
