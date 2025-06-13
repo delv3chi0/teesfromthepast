@@ -8,7 +8,6 @@ import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaShoppingCart } from 'react-icons/fa';
 
-// ThemedSelect component remains for consistent styling
 const ThemedSelect = (props) => (
     <Select
         size="lg"
@@ -24,47 +23,42 @@ export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
-    const location = useLocation();
-
-    // State management for the form
-    const [shopData, setShopData] = useState([]);
+    
+    // MODIFIED: Simplified state
+    const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [designs, setDesigns] = useState([]);
     const [loadingDesigns, setLoadingDesigns] = useState(true);
 
     // Selections
-    const [selectedCategoryId, setSelectedCategoryId] = useState('');
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedColor, setSelectedColor] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
     
     // Derived state - this simplifies the logic
-    const selectedCategory = shopData.find(c => c.categoryId === selectedCategoryId);
-    const selectedProduct = selectedCategory?.products.find(p => p._id === selectedProductId);
+    const selectedProduct = products.find(p => p._id === selectedProductId);
     const availableColors = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
     const variantsForSelectedColor = selectedProduct?.variants.filter(v => v.colorName === selectedColor) || [];
     const selectedVariant = variantsForSelectedColor.find(v => v.size === selectedSize);
     
-    // Canvas refs remain the same
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
     
-    // MODIFIED: This useEffect now makes a single call to get all shop data.
+    // MODIFIED: This useEffect now fetches the flat list of all products.
     useEffect(() => {
         setLoading(true);
-        client.get('/storefront/shop-data')
+        client.get('/storefront/products')
             .then(res => {
-                setShopData(res.data || []);
+                setProducts(res.data || []);
             })
             .catch(err => {
-                console.error("Failed to fetch shop data:", err);
+                console.error("Failed to fetch products:", err);
                 toast({ title: "Error", description: "Could not load products. Please try again later.", status: "error" });
             })
             .finally(() => setLoading(false));
     }, [toast]);
     
-    // This useEffect for fetching designs remains the same
     useEffect(() => {
         if (user) {
             setLoadingDesigns(true);
@@ -122,20 +116,13 @@ export default function ProductStudio() {
             prompt: selectedDesign.prompt, 
             imageDataUrl: selectedDesign.imageDataUrl, 
             productImage: selectedVariant.imageSet?.find(img => img.isPrimary)?.url || selectedVariant.imageSet?.[0]?.url,
-            // Calculate price based on base and modifier
             unitPrice: (selectedProduct.basePrice + (selectedVariant.priceModifier || 0))
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
         navigate('/checkout');
     };
     
-    // Handlers are now simplified
-    const handleCategoryChange = (e) => {
-        setSelectedCategoryId(e.target.value);
-        setSelectedProductId('');
-        setSelectedColor('');
-        setSelectedSize('');
-    };
+    // Handlers are simplified
     const handleProductChange = (e) => {
         setSelectedProductId(e.target.value);
         setSelectedColor('');
@@ -154,9 +141,9 @@ export default function ProductStudio() {
                 <VStack spacing={6} align="stretch">
                     <Heading as="h2" size="xl" color="brand.textLight">1. Choose Your Apparel</Heading>
                     {loading ? <Spinner color="brand.accentYellow" /> :
-                    <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6}>
-                        <FormControl><FormLabel color="whiteAlpha.800">Category</FormLabel><ThemedSelect value={selectedCategoryId} onChange={handleCategoryChange} placeholder="Select Category">{shopData.map(cat => <option key={cat.categoryId} value={cat.categoryId}>{cat.categoryName}</option>)}</ThemedSelect></FormControl>
-                        <FormControl><FormLabel color="whiteAlpha.800">Product</FormLabel><ThemedSelect value={selectedProductId} onChange={handleProductChange} placeholder="Select Product" isDisabled={!selectedCategoryId}>{selectedCategory?.products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</ThemedSelect></FormControl>
+                    // MODIFIED: Grid now has 3 columns, Category dropdown is removed
+                    <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
+                        <FormControl><FormLabel color="whiteAlpha.800">Product</FormLabel><ThemedSelect value={selectedProductId} onChange={handleProductChange} placeholder="Select Product">{products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</ThemedSelect></FormControl>
                         <FormControl><FormLabel color="whiteAlpha.800">Color</FormLabel><ThemedSelect value={selectedColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(c => <option key={c.colorName} value={c.colorName}>{c.colorName}</option>)}</ThemedSelect></FormControl>
                         <FormControl><FormLabel color="whiteAlpha.800">Size</FormLabel><ThemedSelect value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} placeholder="Select Size" isDisabled={!selectedColor}>{variantsForSelectedColor.map(v => <option key={v.size} value={v.size}>{v.size}</option>)}</ThemedSelect></FormControl>
                     </SimpleGrid>

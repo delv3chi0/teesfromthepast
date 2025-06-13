@@ -3,6 +3,15 @@ import ProductCategory from '../models/ProductCategory.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
 
+// NEW FUNCTION: Gets a simple list of all active products
+const getAllActiveProducts = asyncHandler(async (req, res) => {
+    const products = await Product.find({ isActive: true, 'variants.0': { $exists: true } })
+        .select('name variants description basePrice category slug')
+        .populate('category', 'name')
+        .lean();
+    res.json(products);
+});
+
 // This function now gets products by a CATEGORY ID
 const getActiveProductsByCategory = asyncHandler(async (req, res) => {
   const { categoryId } = req.params;
@@ -11,7 +20,7 @@ const getActiveProductsByCategory = asyncHandler(async (req, res) => {
     throw new Error('Invalid Category ID.');
   }
   const products = await Product.find({
-    category: categoryId, // Search by category instead of productType
+    category: categoryId, 
     isActive: true,
     'variants.0': { $exists: true }
   }).select('name description basePrice variants category slug').lean();
@@ -122,8 +131,8 @@ const getProductBySlug = asyncHandler(async (req, res) => {
     res.json(product);
 });
 
-// CORRECTED: This now exports the new, correct function names.
 export {
+  getAllActiveProducts, // Added new function
   getActiveProductsByCategory,
   getShopData,
   getProductBySlug,
