@@ -1,48 +1,66 @@
-import React, { useState } from 'react';
-import { 
-    Box, 
-    Image, 
-    Text, 
-    Heading, 
-    Icon, 
-    Flex, 
-    Button, 
-    Modal, 
-    ModalOverlay, 
-    ModalContent, 
-    ModalHeader, 
-    ModalCloseButton, 
-    ModalBody, 
-    ModalFooter, 
-    Select, 
-    useDisclosure, 
-    Tooltip,
-    VStack,
-    FormControl,
-    FormLabel
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Image,
+  Text,
+  Heading,
+  Icon,
+  Button,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
+  Tooltip,
+  VStack,
+  HStack,
+  Flex,
+  Divider
 } from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { FaImage } from 'react-icons/fa';
+import { FaImage, FaCheckCircle } from 'react-icons/fa';
 
 const ProductCard = ({ product }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const navigate = useNavigate();
 
-  const [selectedColor, setSelectedColor] = useState('');
+  // State to manage selections within the modal
+  const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState('');
 
-  const handleCustomizeClick = () => {
-    onClose();
-    navigate(`/product-studio?productId=${product._id}&color=${selectedColor}&size=${selectedSize}`);
+  // When the modal opens, pre-select the first available color if possible
+  const handleOpenModal = () => {
+    if (product?.variants?.[0]) {
+      setSelectedColor(product.variants[0]);
+    }
+    onOpen();
   };
 
-  const availableColors = product ? [...new Map((product.variants || []).map(v => [v.colorName, v])).values()] : [];
-  
-  // FINAL FIX: Added a fallback to an empty array for product.variants here as well
-  const sizesForSelectedColor = (product?.variants || [])
-    .find(variant => variant.colorName === selectedColor)
-    ?.sizes?.map(sizeInfo => sizeInfo.size) || [];
-  
+  const handleCloseModal = () => {
+    setSelectedColor(null);
+    setSelectedSize('');
+    onClose();
+  };
+
+  // Logic to derive available sizes from the selected color
+  const availableSizes = selectedColor?.sizes?.filter(s => s.inStock) || [];
+
+  const handleCustomizeClick = () => {
+    if (!selectedColor || !selectedSize) {
+        // This button should be disabled, but as a safeguard:
+        alert("Please select a color and size.");
+        return;
+    }
+    handleCloseModal();
+    navigate(`/product-studio?productId=${product._id}&color=${selectedColor.colorName}&size=${selectedSize}`);
+  };
+
+  // Determine the image to display in the modal based on the selected color
+  const modalImage = selectedColor?.imageSet?.find(img => img.isPrimary)?.url || selectedColor?.imageSet?.[0]?.url || product.defaultImage;
+
   return (
     <>
       <Box 
@@ -56,7 +74,7 @@ const ProductCard = ({ product }) => {
         flexDirection="column"
         bg="brand.cardBlue"
         borderColor="transparent"
-        onClick={onOpen}
+        onClick={handleOpenModal}
       >
         <Box h="250px" bg="brand.secondary" p={2} display="flex" alignItems="center" justifyContent="center">
           <Image
@@ -81,29 +99,58 @@ const ProductCard = ({ product }) => {
         </Box>
       </Box>
 
-      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+      <Modal isOpen={isOpen} onClose={handleCloseModal} isCentered size="4xl">
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>{product.name}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <VStack spacing={4}>
-              <FormControl>
-                <FormLabel>Color</FormLabel>
-                <Select placeholder="Select color" value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)}>
-                  {availableColors.map(variant => <option key={variant.colorName} value={variant.colorName}>{variant.colorName}</option>)}
-                </Select>
-              </FormControl>
-              <FormControl>
-                <FormLabel>Size</FormLabel>
-                <Select placeholder="Select size" value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} isDisabled={!selectedColor}>
-                   {sizesForSelectedColor.map(size => <option key={size} value={size}>{size}</option>)}
-                </Select>
-              </FormControl>
-            </VStack>
+            <Flex direction={{base: 'column', md: 'row'}} gap={8}>
+              <Box flex="1">
+                <Image src={modalImage} alt="Product" borderRadius="md" objectFit="cover" />
+              </Box>
+              <VStack flex="1" align="start" spacing={6}>
+                <Box w="full">
+                    <Heading size="sm" mb={2}>Color: <Text as="span" fontWeight="normal">{selectedColor?.colorName || 'Select a color'}</Text></Heading>
+                    <HStack spacing={3}>
+                        {(product.variants || []).map(variant => (
+                            <Tooltip key={variant.colorName} label={variant.colorName} placement="top">
+                                <Box
+                                    as="button"
+                                    h="40px"
+                                    w="40px"
+                                    borderRadius="full"
+                                    bg={variant.colorHex}
+                                    border="3px solid"
+                                    borderColor={selectedColor?.colorName === variant.colorName ? 'brand.accentYellow' : 'transparent'}
+                                    onClick={() => { setSelectedColor(variant); setSelectedSize(''); }}
+                                />
+                            </Tooltip>
+                        ))}
+                    </HStack>
+                </Box>
+                <Divider />
+                <Box w="full">
+                    <Heading size="sm" mb={2}>Size:</Heading>
+                    <HStack spacing={3} wrap="wrap">
+                        {availableSizes.map(sizeInfo => (
+                             <Button 
+                                key={sizeInfo.size}
+                                onClick={() => setSelectedSize(sizeInfo.size)}
+                                isActive={selectedSize === sizeInfo.size}
+                                variant={selectedSize === sizeInfo.size ? 'solid' : 'outline'}
+                                colorScheme={selectedSize === sizeInfo.size ? 'yellow' : 'gray'}
+                             >
+                                 {sizeInfo.size}
+                             </Button>
+                        ))}
+                    </HStack>
+                </Box>
+              </VStack>
+            </Flex>
           </ModalBody>
           <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={onClose}>
+            <Button variant="ghost" mr={3} onClick={handleCloseModal}>
               Cancel
             </Button>
             <Button 
