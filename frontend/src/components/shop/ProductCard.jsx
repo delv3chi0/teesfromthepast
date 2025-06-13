@@ -12,12 +12,12 @@ const ProductCard = ({ product }) => {
 
   const handleCustomizeClick = () => {
     onClose();
-    // Pass selections as URL search parameters
     navigate(`/product-studio?productId=${product._id}&color=${selectedColor}&size=${selectedSize}`);
   };
 
-  const availableColors = product ? [...new Map(product.variants.map(v => [v.colorName, v])).values()] : [];
-  const sizesForSelectedColor = product?.variants.filter(v => v.colorName === selectedColor).map(v => v.size) || [];
+  // MODIFIED: Added a fallback to an empty array for product.variants
+  const availableColors = product ? [...new Map((product.variants || []).map(v => [v.colorName, v])).values()] : [];
+  const sizesForSelectedColor = product?.variants?.filter(v => v.colorName === selectedColor).map(v => v.size) || [];
   
   return (
     <>
@@ -30,7 +30,7 @@ const ProductCard = ({ product }) => {
         cursor='pointer' 
         display="flex" 
         flexDirection="column"
-        bg="brand.cardBlue" // MODIFIED: Themed background
+        bg="brand.cardBlue"
         borderColor="transparent"
         onClick={onOpen}
       >
