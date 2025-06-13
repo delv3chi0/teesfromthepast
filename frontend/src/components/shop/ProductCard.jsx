@@ -1,43 +1,98 @@
-// frontend/src/components/shop/ProductCard.jsx
-import React from 'react';
-import { Box, Image, Text, Heading, Skeleton, Icon, Flex } from '@chakra-ui/react';
-import { Link as RouterLink } from 'react-router-dom';
-import { FaImage } from 'react-icons/fa';
+import React, { useState } from 'react';
+import { Box, Image, Text, Heading, Icon, Flex, Button, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, Select, useDisclosure, Tooltip } from '@chakra-ui/react';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { FaImage, FaShoppingCart } from 'react-icons/fa';
 
 const ProductCard = ({ product }) => {
-  if (!product) {
-    return (
-      <Box><Skeleton height="220px" borderRadius="lg"/><Skeleton height="20px" mt="4" /><Skeleton height="20px" mt="2" /></Box>
-    );
-  }
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const navigate = useNavigate();
 
-  const productUrl = product.slug ? `/product/${product.slug}` : '#';
-  const isClickable = !!product.slug;
+  const [selectedColor, setSelectedColor] = useState('');
+  const [selectedSize, setSelectedSize] = useState('');
 
+  const handleCustomizeClick = () => {
+    onClose();
+    // Pass selections as URL search parameters
+    navigate(`/product-studio?productId=${product._id}&color=${selectedColor}&size=${selectedSize}`);
+  };
+
+  const availableColors = product ? [...new Map(product.variants.map(v => [v.colorName, v])).values()] : [];
+  const sizesForSelectedColor = product?.variants.filter(v => v.colorName === selectedColor).map(v => v.size) || [];
+  
   return (
-    <Box as={isClickable ? RouterLink : 'div'} to={productUrl} borderWidth="1px" borderRadius="lg" overflow="hidden" transition="all 0.2s ease-in-out" _hover={isClickable ? { shadow: 'lg', transform: 'translateY(-4px)' } : {}} cursor={isClickable ? 'pointer' : 'not-allowed'} display="flex" flexDirection="column" bg="white">
-      <Box h="220px" bg="gray.100" p={4} display="flex" alignItems="center" justifyContent="center">
-        <Image
-          src={product.defaultImage}
-          alt={`Image of ${product.name}`}
-          objectFit="contain"
-          w="100%"
-          h="100%"
-          fallback={<Icon as={FaImage} boxSize="50px" color="gray.300" />}
-        />
+    <>
+      <Box 
+        borderWidth="1px" 
+        borderRadius="lg" 
+        overflow="hidden" 
+        transition="all 0.2s ease-in-out" 
+        _hover={{ shadow: 'lg', transform: 'translateY(-4px)', borderColor: "brand.accentYellow" }} 
+        cursor='pointer' 
+        display="flex" 
+        flexDirection="column"
+        bg="brand.cardBlue" // MODIFIED: Themed background
+        borderColor="transparent"
+        onClick={onOpen}
+      >
+        <Box h="250px" bg="brand.secondary" p={2} display="flex" alignItems="center" justifyContent="center">
+          <Image
+            src={product.defaultImage}
+            alt={`Image of ${product.name}`}
+            objectFit="contain"
+            w="100%"
+            h="100%"
+            fallback={<Icon as={FaImage} boxSize="50px" color="gray.500" />}
+          />
+        </Box>
+        <Box p="4" flex="1" display="flex" flexDirection="column">
+          <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name} color="brand.textLight">
+            {product.name}
+          </Heading>
+          <Text fontSize="sm" color="brand.textMuted" mt={1} noOfLines={2} h="40px" flex="1">
+            {product.description}
+          </Text>
+          <Text mt={2} fontSize="xl" color="brand.accentYellow" fontWeight="bold">
+            ${product.basePrice.toFixed(2)}
+          </Text>
+        </Box>
       </Box>
-      <Box p="4" mt="auto">
-        <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name}>
-          {product.name}
-        </Heading>
-        <Text fontSize="sm" color="gray.600" mt={1} noOfLines={2} h="40px">
-          {product.description}
-        </Text>
-        <Text mt={2} fontSize="xl" color="brand.textDark" fontWeight="bold">
-          ${product.basePrice.toFixed(2)}
-        </Text>
-      </Box>
-    </Box>
+
+      <Modal isOpen={isOpen} onClose={onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{product.name}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4}>
+              <FormControl>
+                <FormLabel>Color</FormLabel>
+                <Select placeholder="Select color" value={selectedColor} onChange={(e) => setSelectedColor(e.target.value)}>
+                  {availableColors.map(variant => <option key={variant.colorName} value={variant.colorName}>{variant.colorName}</option>)}
+                </Select>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Size</FormLabel>
+                <Select placeholder="Select size" value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} isDisabled={!selectedColor}>
+                   {sizesForSelectedColor.map(size => <option key={size} value={size}>{size}</option>)}
+                </Select>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button 
+              colorScheme="brandAccentOrange" 
+              onClick={handleCustomizeClick}
+              isDisabled={!selectedColor || !selectedSize}
+            >
+              Customize
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </>
   );
 };
 

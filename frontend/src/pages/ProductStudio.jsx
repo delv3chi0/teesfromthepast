@@ -3,7 +3,7 @@ import {
     Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
     AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink
 } from '@chakra-ui/react';
-import { useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaShoppingCart } from 'react-icons/fa';
@@ -23,37 +23,24 @@ export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
+    const location = useLocation();
 
-    // State for data fetched from API
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [designs, setDesigns] = useState([]);
     const [loadingDesigns, setLoadingDesigns] = useState(true);
 
-    // State for user selections
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedColor, setSelectedColor] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
     
-    // --- REFACTORED LOGIC ---
-    // Derivations are now based on the flat products list and current selections
     const selectedProduct = products.find(p => p._id === selectedProductId);
-    
-    const availableColors = selectedProduct 
-        ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] 
-        : [];
-
+    const availableColors = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
     const selectedColorVariant = selectedProduct?.variants.find(v => v.colorName === selectedColor);
-    
     const availableSizes = selectedColorVariant?.sizes?.filter(s => s.inStock) || [];
-
     const selectedSizeVariant = availableSizes.find(s => s.size === selectedSize);
-    
-    // Combine color and size info for the final variant object used by canvas/checkout
-    const finalVariant = selectedColorVariant && selectedSizeVariant 
-        ? { ...selectedColorVariant, ...selectedSizeVariant } 
-        : null;
+    const finalVariant = selectedColorVariant && selectedSizeVariant ? { ...selectedColorVariant, ...selectedSizeVariant } : null;
 
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
@@ -63,13 +50,22 @@ export default function ProductStudio() {
         client.get('/storefront/products')
             .then(res => {
                 setProducts(res.data || []);
+                // MODIFIED: Check for URL params after data loads
+                const params = new URLSearchParams(location.search);
+                const productId = params.get('productId');
+                const color = params.get('color');
+                const size = params.get('size');
+
+                if (productId) setSelectedProductId(productId);
+                if (color) setSelectedColor(color);
+                if (size) setSelectedSize(size);
             })
             .catch(err => {
                 console.error("Failed to fetch products:", err);
                 toast({ title: "Error", description: "Could not load products. Please try again later.", status: "error" });
             })
             .finally(() => setLoading(false));
-    }, [toast]);
+    }, [location.search, toast]);
     
     useEffect(() => {
         if (user) {
