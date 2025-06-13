@@ -1,25 +1,16 @@
-// frontend/src/pages/HomePage.jsx
-
 import React from 'react';
-import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image } from '@chakra-ui/react';
-import { useNavigate } from 'react-router-dom';
+import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Link as ChakraLink } from '@chakra-ui/react';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
-
-/**
- * Home Page
- * REFRACTORED:
- * - Restyled the FeatureCard component with a custom dark theme card style.
- * - Standardized the main call-to-action button to match the global theme.
- * - Adjusted text colors and spacing for a polished and cohesive look.
- */
 
 const FeatureCard = ({ icon, title, children }) => (
     <Box
-        bg="brand.primaryLight"
+        // MODIFIED: Changed background to the themed card color
+        bg="brand.cardBlue"
         p={8}
         borderRadius="xl"
         borderWidth="1px"
-        borderColor="whiteAlpha.200"
+        borderColor="transparent" // Start transparent
         display="flex"
         flexDirection="column"
         alignItems="center"
@@ -29,7 +20,7 @@ const FeatureCard = ({ icon, title, children }) => (
     >
         <Icon as={icon} w={12} h={12} color="brand.accentYellow" mb={5} />
         <Heading as="h3" size="lg" mb={3} color="brand.textLight">{title}</Heading>
-        <Text color="whiteAlpha.800">{children}</Text>
+        <Text color="brand.textMuted">{children}</Text>
     </Box>
 );
 
@@ -48,9 +39,7 @@ const HomePage = () => {
                     Unleash your creativity with our AI image generator, specializing in stunning retro and vintage styles. Bring your unique ideas to life on high-quality, custom apparel.
                 </Text>
                 <Button
-                    bg="brand.accentOrange"
-                    color="white"
-                    _hover={{ bg: 'brand.accentOrangeHover' }}
+                    colorScheme="brandAccentOrange"
                     size="lg"
                     px={12}
                     py={8}
