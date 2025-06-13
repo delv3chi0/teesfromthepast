@@ -3,7 +3,7 @@ import {
     Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
     AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink
 } from '@chakra-ui/react';
-import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaShoppingCart } from 'react-icons/fa';
@@ -23,29 +23,41 @@ export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
-    
-    // MODIFIED: Simplified state
+
+    // State for data fetched from API
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [designs, setDesigns] = useState([]);
     const [loadingDesigns, setLoadingDesigns] = useState(true);
 
-    // Selections
+    // State for user selections
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedColor, setSelectedColor] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
     
-    // Derived state - this simplifies the logic
+    // --- REFACTORED LOGIC ---
+    // Derivations are now based on the flat products list and current selections
     const selectedProduct = products.find(p => p._id === selectedProductId);
-    const availableColors = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
-    const variantsForSelectedColor = selectedProduct?.variants.filter(v => v.colorName === selectedColor) || [];
-    const selectedVariant = variantsForSelectedColor.find(v => v.size === selectedSize);
     
+    const availableColors = selectedProduct 
+        ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] 
+        : [];
+
+    const selectedColorVariant = selectedProduct?.variants.find(v => v.colorName === selectedColor);
+    
+    const availableSizes = selectedColorVariant?.sizes?.filter(s => s.inStock) || [];
+
+    const selectedSizeVariant = availableSizes.find(s => s.size === selectedSize);
+    
+    // Combine color and size info for the final variant object used by canvas/checkout
+    const finalVariant = selectedColorVariant && selectedSizeVariant 
+        ? { ...selectedColorVariant, ...selectedSizeVariant } 
+        : null;
+
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
     
-    // MODIFIED: This useEffect now fetches the flat list of all products.
     useEffect(() => {
         setLoading(true);
         client.get('/storefront/products')
@@ -66,7 +78,6 @@ export default function ProductStudio() {
         }
     }, [user]);
 
-    // Canvas logic remains the same
     useEffect(() => {
         const setupCanvas = (fabricInstance) => {
             if (!fabricCanvas.current && canvasEl.current) { fabricCanvas.current = new fabricInstance.Canvas(canvasEl.current, { width: 400, height: 400 }); }
@@ -74,7 +85,7 @@ export default function ProductStudio() {
             if (!FCanvas) return;
             FCanvas.clear();
             
-            const primaryImage = selectedVariant?.imageSet?.find(img => img.isPrimary) || selectedVariant?.imageSet?.[0];
+            const primaryImage = finalVariant?.imageSet?.find(img => img.isPrimary) || finalVariant?.imageSet?.[0];
             const mockupSrc = primaryImage?.url;
 
             if (mockupSrc) {
@@ -100,29 +111,29 @@ export default function ProductStudio() {
         };
         const pollForFabric = () => { if (window.fabric) setupCanvas(window.fabric); else setTimeout(pollForFabric, 100); };
         pollForFabric();
-    }, [selectedDesign, selectedVariant]);
+    }, [selectedDesign, finalVariant]);
 
     const handleProceedToCheckout = () => {
         if (!selectedDesign) { toast({ title: "Please select a design.", status: "warning", isClosable: true }); return; }
-        if (!selectedVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
+        if (!finalVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
         
+        const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
         const checkoutItem = { 
             designId: selectedDesign._id, 
             productId: selectedProductId, 
             productName: selectedProduct.name, 
-            variantSku: selectedVariant.sku, 
-            size: selectedVariant.size, 
-            color: selectedVariant.colorName, 
+            variantSku: finalVariant.sku, 
+            size: finalVariant.size, 
+            color: finalVariant.colorName, 
             prompt: selectedDesign.prompt, 
             imageDataUrl: selectedDesign.imageDataUrl, 
-            productImage: selectedVariant.imageSet?.find(img => img.isPrimary)?.url || selectedVariant.imageSet?.[0]?.url,
-            unitPrice: (selectedProduct.basePrice + (selectedVariant.priceModifier || 0))
+            productImage: primaryImage?.url,
+            unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
         navigate('/checkout');
     };
     
-    // Handlers are simplified
     const handleProductChange = (e) => {
         setSelectedProductId(e.target.value);
         setSelectedColor('');
@@ -141,11 +152,10 @@ export default function ProductStudio() {
                 <VStack spacing={6} align="stretch">
                     <Heading as="h2" size="xl" color="brand.textLight">1. Choose Your Apparel</Heading>
                     {loading ? <Spinner color="brand.accentYellow" /> :
-                    // MODIFIED: Grid now has 3 columns, Category dropdown is removed
                     <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
                         <FormControl><FormLabel color="whiteAlpha.800">Product</FormLabel><ThemedSelect value={selectedProductId} onChange={handleProductChange} placeholder="Select Product">{products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}</ThemedSelect></FormControl>
                         <FormControl><FormLabel color="whiteAlpha.800">Color</FormLabel><ThemedSelect value={selectedColor} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>{availableColors.map(c => <option key={c.colorName} value={c.colorName}>{c.colorName}</option>)}</ThemedSelect></FormControl>
-                        <FormControl><FormLabel color="whiteAlpha.800">Size</FormLabel><ThemedSelect value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} placeholder="Select Size" isDisabled={!selectedColor}>{variantsForSelectedColor.map(v => <option key={v.size} value={v.size}>{v.size}</option>)}</ThemedSelect></FormControl>
+                        <FormControl><FormLabel color="whiteAlpha.800">Size</FormLabel><ThemedSelect value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} placeholder="Select Size" isDisabled={!selectedColor}>{availableSizes.map(s => <option key={s.sku} value={s.size}>{s.size}</option>)}</ThemedSelect></FormControl>
                     </SimpleGrid>
                     }
                 </VStack>
@@ -174,9 +184,9 @@ export default function ProductStudio() {
                     <Box w="400px" h="400px" bg="rgba(0,0,0,0.2)" mx="auto" borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.300">
                         <canvas ref={canvasEl} />
                     </Box>
-                    {selectedDesign && selectedVariant ? (
+                    {selectedDesign && finalVariant ? (
                         <VStack spacing={4} mt={4}>
-                            <Text fontSize="xl" fontWeight="medium" color="brand.textLight">Your design on a {selectedVariant.size} {selectedVariant.colorName} shirt.</Text>
+                            <Text fontSize="xl" fontWeight="medium" color="brand.textLight">Your design on a {finalVariant.size} {finalVariant.colorName} shirt.</Text>
                             <Button colorScheme="brandAccentOrange" size="lg" onClick={handleProceedToCheckout} leftIcon={<Icon as={FaShoppingCart} />}>Proceed to Checkout</Button>
                         </VStack>
                     ) : (
