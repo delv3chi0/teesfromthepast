@@ -1,7 +1,28 @@
 import React, { useState } from 'react';
-import { Box, Image, Text, Heading, Icon, Flex, Button, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, Select, useDisclosure, Tooltip } from '@chakra-ui/react';
+import { 
+    Box, 
+    Image, 
+    Text, 
+    Heading, 
+    Icon, 
+    Flex, 
+    Button, 
+    Modal, 
+    ModalOverlay, 
+    ModalContent, 
+    ModalHeader, 
+    ModalCloseButton, 
+    ModalBody, 
+    ModalFooter, 
+    Select, 
+    useDisclosure, 
+    Tooltip,
+    VStack, // MODIFIED: Added missing VStack import
+    FormControl,
+    FormLabel
+} from '@chakra-ui/react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { FaImage, FaShoppingCart } from 'react-icons/fa';
+import { FaImage } from 'react-icons/fa';
 
 const ProductCard = ({ product }) => {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -12,12 +33,16 @@ const ProductCard = ({ product }) => {
 
   const handleCustomizeClick = () => {
     onClose();
+    // Pass selections as URL search parameters
     navigate(`/product-studio?productId=${product._id}&color=${selectedColor}&size=${selectedSize}`);
   };
 
-  // MODIFIED: Added a fallback to an empty array for product.variants
   const availableColors = product ? [...new Map((product.variants || []).map(v => [v.colorName, v])).values()] : [];
-  const sizesForSelectedColor = product?.variants?.filter(v => v.colorName === selectedColor).map(v => v.size) || [];
+  
+  // Correctly find the sizes for the selected color from the new data structure
+  const sizesForSelectedColor = product?.variants
+    .find(variant => variant.colorName === selectedColor)
+    ?.sizes?.map(sizeInfo => sizeInfo.size) || [];
   
   return (
     <>
