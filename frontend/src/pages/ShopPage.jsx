@@ -5,23 +5,16 @@ import { Box, Heading, VStack, Spinner, Alert, AlertIcon, SimpleGrid, Text } fro
 import { client } from '../api/client';
 import ProductCard from '../components/shop/ProductCard';
 
-/**
- * Shop Page
- * REFRACTORED:
- * - Replaced default Card components with custom-styled dark cards for category sections.
- * - Updated heading and divider styles to match the dark theme aesthetic.
- * - Styled loader and alert states for better visual consistency.
- * - Ensured a full-width layout suitable for a product gallery.
- */
 const ShopPage = () => {
-    const [shopData, setShopData] = useState([]);
+    const [products, setProducts] = useState([]); // Renamed from shopData
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         setLoading(true);
-        client.get('/storefront/shop-data')
-            .then(res => setShopData(res.data))
+        // Changed API endpoint to fetch all products directly
+        client.get('/storefront/products') 
+            .then(res => setProducts(res.data)) // Updated state setter
             .catch(() => setError('Could not load products. Please try again later.'))
             .finally(() => setLoading(false));
     }, []);
@@ -50,33 +43,20 @@ const ShopPage = () => {
                 Browse Our Collection
             </Heading>
 
-            {shopData.length === 0 && !loading && (
+            {products.length === 0 && !loading && ( // Updated state check
                 <Box textAlign="center" py={10}>
                     <Text fontSize="xl" color="whiteAlpha.800">No products are currently available.</Text>
                 </Box>
             )}
 
-            {shopData.map((category) => (
-                // Use a styled Box instead of a default Card for theming
-                <Box key={category.categoryId} bg="brand.primaryLight" p={{base: 5, md: 8}} borderRadius="xl">
-                    <Heading
-                        as="h2"
-                        size="xl"
-                        mb={8}
-                        color="brand.textLight"
-                        borderBottomWidth="2px"
-                        borderColor="whiteAlpha.300" // Use a lighter border color for dark theme
-                        pb={3}
-                    >
-                        {category.categoryName}
-                    </Heading>
-                    <SimpleGrid columns={{ base: 1, sm: 2, md: 3, xl: 4 }} spacing={{ base: 6, md: 8 }}>
-                        {category.products.map((product) => (
-                            <ProductCard key={product._id} product={product} />
-                        ))}
-                    </SimpleGrid>
-                </Box>
-            ))}
+            {/* Removed category mapping, now directly maps over products */}
+            <Box bg="brand.primaryLight" p={{base: 5, md: 8}} borderRadius="xl">
+                <SimpleGrid columns={{ base: 1, sm: 2, md: 3, xl: 4 }} spacing={{ base: 6, md: 8 }}>
+                    {products.map((product) => ( // Directly map products
+                        <ProductCard key={product._id} product={product} />
+                    ))}
+                </SimpleGrid>
+            </Box>
         </VStack>
     );
 };

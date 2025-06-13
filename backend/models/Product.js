@@ -26,8 +26,6 @@ const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     slug: { type: String, unique: true, sparse: true },
-    // CORRECTED: Replaced 'productType' with 'category' to match our new system
-    category: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductCategory', required: true },
     description: { type: String, required: true, trim: true },
     basePrice: { type: Number, required: true, min: 0 },
     tags: [{ type: String, trim: true }],

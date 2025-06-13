@@ -18,7 +18,7 @@ import formRoutes from './routes/formRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
-import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js';
+// REMOVED: adminProductCategoryRoutes is no longer needed
 // REMOVED: adminProductTypeRoutes is no longer needed
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
@@ -90,7 +90,7 @@ app.use('/api/storefront', storefrontProductRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
-app.use('/api/admin/product-categories', adminProductCategoryRoutes);
+// REMOVED: app.use('/api/admin/product-categories', adminProductCategoryRoutes);
 // REMOVED: The route for product-types is no longer needed
 app.use('/api/admin/products', adminProductRoutes);
 
