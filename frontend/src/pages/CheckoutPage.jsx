@@ -1,5 +1,3 @@
-// frontend/src/pages/CheckoutPage.jsx
-
 import React, { useState, useEffect } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
@@ -8,22 +6,12 @@ import CheckoutForm from '../components/CheckoutForm';
 import {
     Box, Heading, Text, Spinner, Alert, AlertIcon, VStack, Button,
     FormControl, FormLabel, Input, Checkbox, Divider, SimpleGrid, Icon,
-    useToast, HStack, Image, Grid, GridItem
+    useToast, HStack, Image, Grid, GridItem,
+    Collapse // MODIFIED: Added the missing import for Collapse
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
 import { FaArrowRight } from 'react-icons/fa';
-
-/**
- * Checkout Page
- * REFRACTORED:
- * - Page layout updated to a two-column grid for a more traditional checkout experience.
- * - All content cards (Order Summary, Address Form, Payment) styled for the dark theme.
- * - All form elements (Inputs, Checkbox) updated to use dark theme styles.
- * - CRITICAL: The Stripe Elements 'appearance' object is now configured for a dark theme,
- * making the embedded payment form look native to the site.
- * - All text, alerts, and loaders styled for consistency.
- */
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 const initialAddressState = { recipientName: '', street1: '', street2: '', city: '', state: '', zipCode: '', country: '', phone: '' };
@@ -45,7 +33,6 @@ export default function CheckoutPage() {
     const [error, setError] = useState('');
     const [paymentDetails, setPaymentDetails] = useState({ amount: 0, currency: 'usd' });
 
-    // Data fetching and state logic hooks remain the same
     useEffect(() => {
         setLoadingPageData(true);
         const storedItemJSON = localStorage.getItem('itemToCheckout');
@@ -53,7 +40,8 @@ export default function CheckoutPage() {
             try {
                 const item = JSON.parse(storedItemJSON);
                 setItemToCheckout(item);
-                localStorage.removeItem('itemToCheckout');
+                // NOTE: We are not removing the item from localStorage anymore on page load.
+                // It will be removed after a successful payment in PaymentSuccessPage.
             } catch (e) { setError("There was an error retrieving your item details."); }
         }
         if (user) {
@@ -90,7 +78,6 @@ export default function CheckoutPage() {
     const handleProceedToPayment = async () => {
         setIsProcessingAction(true);
         setError('');
-        // Address validation logic...
         const requiredAddressFields = ['recipientName', 'street1', 'city', 'state', 'zipCode', 'country'];
         for (const field of requiredAddressFields) {
             if (!addressForm.shippingAddress[field]) {
@@ -143,7 +130,6 @@ export default function CheckoutPage() {
     if (loadingPageData) return <VStack minH="60vh" justify="center"><Spinner size="xl" color="brand.accentYellow" thickness="4px" /><Text mt={4} fontSize="lg" color="brand.textLight">Loading Checkout...</Text></VStack>;
     if (!itemToCheckout && !error) return <VStack minH="60vh" justify="center" px={4}><Alert status="warning" bg="yellow.900" p={6} borderRadius="lg" flexDirection="column" maxW="md"><AlertIcon color="yellow.400" boxSize="30px"/><Heading size="md" color="brand.textLight" mt={3}>No Product Selected</Heading><Text color="whiteAlpha.800" mt={2}>Please go to the studio to customize your apparel first.</Text><Button mt={6} bg="brand.accentYellow" color="brand.textDark" _hover={{bg:"brand.accentYellowHover"}} onClick={() => navigate('/product-studio')}>Go to Product Studio</Button></Alert></VStack>;
     
-    // THEME UPDATE FOR STRIPE
     const appearance = { theme: 'night', variables: { colorPrimary: '#DD6B20', colorBackground: '#2D3748', colorText: '#F7FAFC', colorDanger: '#FC8181', fontFamily: 'Inter, sans-serif', spacingUnit: '4px', borderRadius: '8px' }};
     const stripeOptions = clientSecret ? { clientSecret, appearance } : {};
 
