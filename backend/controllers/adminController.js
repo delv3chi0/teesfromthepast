@@ -1,14 +1,14 @@
-import asyncHandler from 'express-async-handler'; // Original line - WILL BE REPLACED
+import asyncHandler from 'express-async-handler'; // Keep this original import for asyncHandler
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Design from '../models/Design.js';
 import Product from '../models/Product.js';
 
-// NEW: Add createRequire for express-async-handler
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const asyncHandler = require('express-async-handler'); // NEW: Re-declare asyncHandler using require
+// REMOVED: The following lines were causing the "already declared" error:
+// import { createRequire } from 'module';
+// const require = createRequire(import.meta.url);
+// const asyncHandler = require('express-async-handler');
 
 // --- Dashboard ---
 const getDashboardSummary = asyncHandler(async (req, res) => {
