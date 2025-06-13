@@ -4,7 +4,7 @@ const colors = {
   brand: {
     primary: '#1A1D22',       // The main dark background from your screenshot
     secondary: '#212428',     // Header background
-    cardBlue: '#2c3e50',      // The navy blue for cards
+    cardBlue: '#502c2c',      // The navy blue for cards
     
     accentOrange: '#D95A2B', // The vibrant orange from your buttons
     accentOrangeHover: '#E86A3C',
