@@ -17,7 +17,7 @@ import {
     Select, 
     useDisclosure, 
     Tooltip,
-    VStack, // MODIFIED: Added missing VStack import
+    VStack,
     FormControl,
     FormLabel
 } from '@chakra-ui/react';
@@ -33,14 +33,13 @@ const ProductCard = ({ product }) => {
 
   const handleCustomizeClick = () => {
     onClose();
-    // Pass selections as URL search parameters
     navigate(`/product-studio?productId=${product._id}&color=${selectedColor}&size=${selectedSize}`);
   };
 
   const availableColors = product ? [...new Map((product.variants || []).map(v => [v.colorName, v])).values()] : [];
   
-  // Correctly find the sizes for the selected color from the new data structure
-  const sizesForSelectedColor = product?.variants
+  // FINAL FIX: Added a fallback to an empty array for product.variants here as well
+  const sizesForSelectedColor = (product?.variants || [])
     .find(variant => variant.colorName === selectedColor)
     ?.sizes?.map(sizeInfo => sizeInfo.size) || [];
   
