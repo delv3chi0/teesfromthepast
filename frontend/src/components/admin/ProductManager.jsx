@@ -29,14 +29,13 @@ const ProductManager = () => {
   const { token } = useAuth();
   const toast = useToast();
   const [products, setProducts] = useState([]);
-  // Removed categories state: const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalLoading, setIsModalLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  // Removed category from formData:
-  const [formData, setFormData] = useState({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
+  const [formData, setFormData] = useState({ name: '', description: '', category: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onClose: onDeleteClose } = useDisclosure();
@@ -53,28 +52,36 @@ const ProductManager = () => {
     }
   }, [token]);
 
-  // Removed fetchCategories useEffect and function call
-  useEffect(() => { if (token) { fetchProducts(); } }, [token, fetchProducts]);
+  const fetchCategories = useCallback(async () => {
+    if (!token) return;
+    try {
+      const { data } = await client.get('/admin/product-categories', { headers: { Authorization: `Bearer ${token}` } });
+      setCategories(data);
+    } catch (e) {
+      toast({ title: "Error", description: "Could not load categories.", status: "error" });
+    }
+  }, [token, toast]);
+
+  useEffect(() => { if (token) { fetchProducts(); fetchCategories(); } }, [token, fetchProducts, fetchCategories]);
 
   const handleOpenModal = async (product = null) => {
     onOpen(); setIsModalLoading(true);
     try {
-      // Removed activeCategories filter
+      const activeCategories = categories.filter(pt => pt.isActive);
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
       if (product) {
         const { data: fullProductData } = await client.get(`/admin/products/${product._id}`, { headers: { Authorization: `Bearer ${token}` }});
         setIsEditing(true);
         setSelectedProduct(fullProductData);
         setFormData({
-          name: fullProductData.name, description: fullProductData.description || '', // Removed category
+          name: fullProductData.name, description: fullProductData.description || '', category: fullProductData.category?._id || fullProductData.category || '',
           basePrice: fullProductData.basePrice || 0, tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
           isActive: fullProductData.isActive,
           variants: (fullProductData.variants || []).map(v => ({...v, imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }], sizes: v.sizes || [] }))
         });
       } else {
         setIsEditing(false); setSelectedProduct(null);
-        // Removed category from initial formData
-        setFormData({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
+        setFormData({ name: '', description: '', category: activeCategories.length > 0 ? activeCategories[0]._id : '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
     } catch (err) { toast({ title: "Error", description: "Could not load data for the form.", status: "error" }); onClose(); } 
     finally { setIsModalLoading(false); }
@@ -105,14 +112,12 @@ const ProductManager = () => {
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = formData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setFormData(prev => ({ ...prev, variants: newVariants })); };
  
   const handleSubmit = async () => {
-    // Removed category validation
-    if (!formData.name.trim()) { toast({ title: "Validation Error", description: "Product Name is required.", status: "error" }); return; }
+    if (!formData.name.trim() || !formData.category) { toast({ title: "Validation Error", description: "Product Name and Category are required.", status: "error" }); return; }
     for (const variant of formData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
     if (formData.variants.length > 0 && !formData.variants.some(v => v.isDefaultDisplay)) { formData.variants[0].isDefaultDisplay = true; }
     for (const variant of formData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; } } }
     const method = isEditing ? 'put' : 'post';
     const url = isEditing ? `/admin/products/${selectedProduct._id}` : '/admin/products';
-    // Removed category from payload
     const payload = { ...formData, tags: (formData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditing ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onClose(); } 
     catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message, status: "error" }); }
@@ -132,8 +137,8 @@ const ProductManager = () => {
       </HStack>
       <TableContainer>
         <Table variant="simple" size="sm">
-          <Thead><Tr><Th>Name</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead> {/* Removed Category Th */}
-          <Tbody>{products.map((p) => (<Tr key={p._id}><Td fontWeight="medium">{p.name}</Td><Td>${p.basePrice?.toFixed(2)}</Td><Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td><Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td><Td><Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" onClick={() => handleOpenModal(p)}/></Tooltip><Tooltip label="Delete"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip></Td></Tr>))}</Tbody> {/* Removed Category Td: categories.find(pt => pt._id === p.category)?.name || 'N/A' */}
+          <Thead><Tr><Th>Name</Th><Th>Category</Th><Th>Base Price</Th><Th>Variants</Th><Th>Status</Th><Th>Actions</Th></Tr></Thead>
+          <Tbody>{products.map((p) => (<Tr key={p._id}><Td fontWeight="medium">{p.name}</Td><Td>{categories.find(pt => pt._id === p.category)?.name || 'N/A'}</Td><Td>${p.basePrice?.toFixed(2)}</Td><Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td><Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td><Td><Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" onClick={() => handleOpenModal(p)}/></Tooltip><Tooltip label="Delete"><ChakraIconButton icon={<Icon as={FaTrashAlt}/>} size="xs" variant="ghost" colorScheme="red" onClick={() => handleOpenDeleteDialog(p)}/></Tooltip></Td></Tr>))}</Tbody>
         </Table>
       </TableContainer>
      
@@ -145,7 +150,7 @@ const ProductManager = () => {
           <ModalBody pb={6}>
             {isModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
-                <Box p={4} borderWidth="1px" borderRadius="md"><Heading size="sm" mb={4}>Product Details</Heading><SimpleGrid columns={{base: 1, md: 2}} spacing={4}><FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange}/></FormControl><FormControl isRequired><FormLabel>Base Price ($)</FormLabel><NumberInput value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}><NumberInputField/><NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper></NumberInput></FormControl><FormControl><FormLabel>Tags (comma-separated)</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange}/></FormControl></SimpleGrid><FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange}/></FormControl><FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={formData.isActive} onChange={handleFormChange}/></FormControl></Box> {/* Removed Category FormControl */}
+                <Box p={4} borderWidth="1px" borderRadius="md"><Heading size="sm" mb={4}>Product Details</Heading><SimpleGrid columns={{base: 1, md: 2}} spacing={4}><FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={formData.name} onChange={handleFormChange}/></FormControl><FormControl isRequired><FormLabel>Category</FormLabel><Select name="category" value={formData.category} onChange={handleFormChange} placeholder="Select category">{categories.map(pt => (<option key={pt._id} value={pt._id}>{pt.name}</option>))}</Select></FormControl><FormControl isRequired><FormLabel>Base Price ($)</FormLabel><NumberInput value={formData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}><NumberInputField/><NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper></NumberInput></FormControl><FormControl><FormLabel>Tags (comma-separated)</FormLabel><Input name="tags" value={formData.tags} onChange={handleFormChange}/></FormControl></SimpleGrid><FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={formData.description} onChange={handleFormChange}/></FormControl><FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={formData.isActive} onChange={handleFormChange}/></FormControl></Box>
                 <Box p={4} borderWidth="1px" borderRadius="md">
                     <Heading size="sm" mb={4}>Product Variants</Heading>
                     <RadioGroup onChange={(val) => setDefaultVariant(parseInt(val))} value={formData.variants.findIndex(v => v.isDefaultDisplay)?.toString() ?? "-1"}>

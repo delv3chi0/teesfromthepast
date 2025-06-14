@@ -10,8 +10,9 @@ import {
   TabPanel,
   Icon,
 } from '@chakra-ui/react';
-import { FaTshirt } from 'react-icons/fa'; // Removed FaTags as categories are gone
+import { FaTags, FaTshirt } from 'react-icons/fa';
 
+import ProductCategoryManager from './ProductCategoryManager.jsx';
 import ProductManager from './ProductManager.jsx';
 
 const InventoryPanel = () => {
@@ -22,13 +23,17 @@ const InventoryPanel = () => {
       </Heading>
       <Tabs variant="enclosed-colored" colorScheme="gray" isLazy>
         <TabList flexWrap="wrap">
-          {/* Removed Categories Tab */}
+          <Tab _selected={{ color: 'brand.textDark', bg: 'gray.100', fontWeight: 'bold' }} m={1}>
+            <Icon as={FaTags} mr={2} /> Categories
+          </Tab>
           <Tab _selected={{ color: 'brand.textDark', bg: 'gray.100', fontWeight: 'bold' }} m={1}>
             <Icon as={FaTshirt} mr={2} /> Products
           </Tab>
         </TabList>
         <TabPanels>
-          {/* Removed Categories TabPanel */}
+          <TabPanel px={0} py={4}>
+            <ProductCategoryManager />
+          </TabPanel>
           <TabPanel px={0} py={4}>
             <ProductManager />
           </TabPanel>

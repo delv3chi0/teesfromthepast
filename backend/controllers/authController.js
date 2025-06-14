@@ -3,11 +3,7 @@ import asyncHandler from 'express-async-handler';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-// import sgMail from '@sendgrid/mail'; // Original line - REMOVED
-import { createRequire } from 'module'; // NEW: Import createRequire
-const require = createRequire(import.meta.url); // NEW: Create a require function for this module
-const sgMail = require('@sendgrid/mail'); // NEW: Use require for sendgrid/mail
-
+import sgMail from '@sendgrid/mail';
 import User from '../models/User.js';
 import 'dotenv/config';
 
