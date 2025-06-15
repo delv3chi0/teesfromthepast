@@ -8,21 +8,27 @@ import { FaSave, FaEdit, FaTimes, FaKey, FaEye, FaEyeSlash, FaChevronDown, FaChe
 const initialAddressState = { recipientName: '', street1: '', street2: '', city: '', state: '', zipCode: '', country: '', phone: '' };
 const isAddressEmpty = (address) => !address || Object.values(address).every(v => v === '');
 
+// MODIFIED: ReadOnlyInput now relies more on theme.js for input styling
 const ReadOnlyInput = (props) => (
     <Input
         isReadOnly
-        bg="whiteAlpha.100"
+        variant="filled" // Using filled variant for a distinct read-only look
+        bg="whiteAlpha.500" // A slightly more opaque white for readability
+        color="brand.textDark" // Ensure text is dark
         borderColor="transparent"
-        opacity={0.7}
+        opacity={0.9} // Slightly less transparent for better readability
         cursor="default"
         {...props}
     />
 );
 
+// MODIFIED: ThemedInput now has light text for its dark background
 const ThemedInput = (props) => (
     <Input
-        bg="brand.secondary" // Using a slightly darker input bg for better contrast on the card
+        bg="brand.secondary" // Dark background
         borderColor="whiteAlpha.300"
+        color="brand.textLight" // <--- CRITICAL: Text color is light for dark background
+        _placeholder={{ color: "brand.textMuted" }} // Placeholder is muted light
         _hover={{ borderColor: "whiteAlpha.400" }}
         focusBorderColor="brand.accentYellow"
         {...props}
@@ -61,7 +67,7 @@ export default function Profile() {
     const handleTopLevelChange = (e) => { const { name, value } = e.target; setForm(prev => ({ ...prev, [name]: value })); };
     const handleAddressChange = (e, addressType) => { const { name, value } = e.target; setForm(prevForm => { const updatedAddress = { ...prevForm[addressType], [name]: value }; if (billingSameAsShipping && addressType === 'shippingAddress') { return { ...prevForm, shippingAddress: updatedAddress, billingAddress: { ...updatedAddress } }; } return { ...prevForm, [addressType]: updatedAddress }; }); };
     const handleBillingSameAsShippingChange = (e) => { const isChecked = e.target.checked; setBillingSameAsShipping(isChecked); if (isChecked) { setForm(prev => ({ ...prev, billingAddress: { ...prev.shippingAddress } })); } };
-    
+
     const handleSave = async () => {
         setIsSaving(true);
         const getFinalAddress = (address) => isAddressEmpty(address) ? undefined : address;
@@ -70,16 +76,16 @@ export default function Profile() {
         catch (error) { toast({ title: "Error Saving Profile", description: error.response?.data?.message, status: "error", isClosable: true }); }
         finally { setIsSaving(false); }
     };
-    
+
     const handleCancel = () => {
         setEditing(false);
         const shipping = { ...initialAddressState, ...(user.shippingAddress || {}) };
         const billing = { ...initialAddressState, ...(user.billingAddress || {}) };
         setForm({ username: user.username || '', email: user.email || '', firstName: user.firstName || '', lastName: user.lastName || '', shippingAddress: shipping, billingAddress: billing });
     };
-    
+
     const handlePasswordFormChange = (e) => { const { name, value } = e.target; setPasswordForm(prev => ({ ...prev, [name]: value })); };
-    
+
     const handleChangePassword = async (e) => {
         e.preventDefault();
         if (passwordForm.newPassword !== passwordForm.confirmNewPassword) { toast({ title: "New passwords do not match", status: "error", isClosable: true }); return; }
@@ -92,80 +98,101 @@ export default function Profile() {
     if (!user) { return <Text color="brand.textLight">Please log in to view your profile.</Text>; }
 
     const renderAddressFields = (addressType) => (
-        <VStack spacing={4} align="stretch" w="100%">
-            <FormControl><FormLabel>Recipient Name</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="recipientName" value={form[addressType]?.recipientName || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.recipientName || ''} />}</FormControl>
-            <FormControl><FormLabel>Street Address</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="street1" value={form[addressType]?.street1 || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.street1 || ''} />}</FormControl>
-            <SimpleGrid columns={{base: 1, md: 3}} spacing={4}>
-                <FormControl><FormLabel>City</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="city" value={form[addressType]?.city || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.city || ''} />}</FormControl>
-                <FormControl><FormLabel>State</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="state" value={form[addressType]?.state || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.state || ''} />}</FormControl>
-                <FormControl><FormLabel>Zip</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="zipCode" value={form[addressType]?.zipCode || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.zipCode || ''} />}</FormControl>
-            </SimpleGrid>
-            <FormControl><FormLabel>Country</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="country" value={form[addressType]?.country || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.country || ''} />}</FormControl>
-        </VStack>
+        // MODIFIED: Wrap in lightCardInnerSection for two-tone effect, and add explicit color for labels in this context
+        <Box layerStyle="lightCardInnerSection" w="100%">
+            <VStack spacing={4} align="stretch" w="100%">
+                <FormControl><FormLabel>Recipient Name</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="recipientName" value={form[addressType]?.recipientName || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.recipientName || ''} />}</FormControl>
+                <FormControl><FormLabel>Street Address</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="street1" value={form[addressType]?.street1 || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.street1 || ''} />}</FormControl>
+                <SimpleGrid columns={{base: 1, md: 3}} spacing={4}>
+                    <FormControl><FormLabel>City</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="city" value={form[addressType]?.city || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.city || ''} />}</FormControl>
+                    <FormControl><FormLabel>State</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="state" value={form[addressType]?.state || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.state || ''} />}</FormControl>
+                    <FormControl><FormLabel>Zip</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="zipCode" value={form[addressType]?.zipCode || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.zipCode || ''} />}</FormControl>
+                </SimpleGrid>
+                <FormControl><FormLabel>Country</FormLabel>{editing && !(addressType === 'billingAddress' && billingSameAsShipping) ? <ThemedInput name="country" value={form[addressType]?.country || ''} onChange={(e) => handleAddressChange(e, addressType)} /> : <ReadOnlyInput value={form[addressType]?.country || ''} />}</FormControl>
+            </VStack>
+        </Box>
     );
-    
+
     const renderPasswordInput = (name, value, setter, show, toggleShow) => (
         <InputGroup>
+            {/* MODIFIED: ThemedInput now explicitly sets light text on its dark background */}
             <ThemedInput name={name} type={show ? "text":"password"} value={value} onChange={setter} />
-            <InputRightElement><IconButton variant="ghost" color="whiteAlpha.600" _hover={{color: "whiteAlpha.900", bg:"whiteAlpha.200"}} icon={show ? <FaEyeSlash />:<FaEye />} onClick={toggleShow}/></InputRightElement>
+            {/* MODIFIED: Icon button color for visibility */}
+            <InputRightElement><IconButton variant="ghost" color="brand.textLight" _hover={{color: "brand.accentYellow", bg:"whiteAlpha.200"}} icon={show ? <FaEyeSlash />:<FaEye />} onClick={toggleShow}/></InputRightElement>
         </InputGroup>
     );
 
     return (
         <VStack spacing={8} align="stretch">
             <Heading as="h1" size="2xl" color="brand.textLight">My Profile</Heading>
-            
-            {/* MODIFIED: Changed bg="brand.primaryLight" to bg="brand.cardBlue" */}
-            <Box bg="brand.cardBlue" p={{base: 5, md: 8}} borderRadius="xl">
-                <VStack spacing={6} align="stretch" as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}>
-                    <Heading as="h2" size="lg" color="brand.textLight">Account Information</Heading>
-                    <FormControl><FormLabel>Username</FormLabel>{editing ? <ThemedInput name="username" value={form.username} onChange={handleTopLevelChange}/> : <ReadOnlyInput value={form.username}/>}</FormControl>
-                    <FormControl><FormLabel>Email</FormLabel><ReadOnlyInput name="email" type="email" value={form.email} /></FormControl>
-                    <SimpleGrid columns={{base: 1, md: 2}} spacing={4}>
-                        <FormControl><FormLabel>First Name</FormLabel>{editing ? <ThemedInput name="firstName" value={form.firstName} onChange={handleTopLevelChange}/> : <ReadOnlyInput value={form.firstName}/>}</FormControl>
-                        <FormControl><FormLabel>Last Name</FormLabel>{editing ? <ThemedInput name="lastName" value={form.lastName} onChange={handleTopLevelChange}/> : <ReadOnlyInput value={form.lastName}/>}</FormControl>
-                    </SimpleGrid>
 
-                    <Divider my={6} borderColor="whiteAlpha.300"/>
-                    <Heading as="h3" size="lg" color="brand.textLight">Shipping Address</Heading>
-                    {renderAddressFields('shippingAddress')}
-                    
-                    <Divider my={6} borderColor="whiteAlpha.300" />
-                    <Heading as="h3" size="lg" color="brand.textLight">Billing Address</Heading>
+            {/* MODIFIED: Apply layerStyle="cardBlue" */}
+            <Box layerStyle="cardBlue" p={{base: 5, md: 8}}>
+                <VStack spacing={6} align="stretch" as="form" onSubmit={(e) => { e.preventDefault(); if(editing) handleSave(); }}>
+                    {/* MODIFIED: Heading will inherit from layerStyle="cardBlue" (brand.textBurnt) */}
+                    <Heading as="h2" size="lg">Account Information</Heading>
+                    {/* MODIFIED: Account info fields wrapped in inner section for two-tone */}
+                    <Box layerStyle="lightCardInnerSection" w="100%">
+                        <VStack spacing={4} align="stretch">
+                            <FormControl><FormLabel>Username</FormLabel>{editing ? <ThemedInput name="username" value={form.username} onChange={handleTopLevelChange}/> : <ReadOnlyInput value={form.username}/>}</FormControl>
+                            <FormControl><FormLabel>Email</FormLabel><ReadOnlyInput name="email" type="email" value={form.email} /></FormControl>
+                            <SimpleGrid columns={{base: 1, md: 2}} spacing={4}>
+                                <FormControl><FormLabel>First Name</FormLabel>{editing ? <ThemedInput name="firstName" value={form.firstName} onChange={handleTopLevelChange}/> : <ReadOnlyInput value={form.firstName}/>}</FormControl>
+                                <FormControl><FormLabel>Last Name</FormLabel>{editing ? <ThemedInput name="lastName" value={form.lastName} onChange={handleTopLevelChange}/> : <ReadOnlyInput value={form.lastName}/>}</FormControl>
+                            </SimpleGrid>
+                        </VStack>
+                    </Box>
+
+                    {/* MODIFIED: Divider color */}
+                    <Divider my={6} borderColor="rgba(0,0,0,0.1)"/>
+                    {/* MODIFIED: Heading will inherit from layerStyle="cardBlue" (brand.textBurnt) */}
+                    <Heading as="h3" size="lg">Shipping Address</Heading>
+                    {renderAddressFields('shippingAddress')} {/* This function now wraps its content in lightCardInnerSection */}
+
+                    {/* MODIFIED: Divider color */}
+                    <Divider my={6} borderColor="rgba(0,0,0,0.1)" />
+                    {/* MODIFIED: Heading will inherit from layerStyle="cardBlue" (brand.textBurnt) */}
+                    <Heading as="h3" size="lg">Billing Address</Heading>
+                    {/* Checkbox text color will inherit from layerStyle="cardBlue" */}
                     <Checkbox isChecked={billingSameAsShipping} onChange={handleBillingSameAsShippingChange} isDisabled={!editing} size="lg" colorScheme="yellow">
                         Billing address is the same as shipping
                     </Checkbox>
                     <Collapse in={!billingSameAsShipping} animateOpacity>
                         {renderAddressFields('billingAddress')}
                     </Collapse>
-                    
+
                     <Stack direction={{base: 'column', md: 'row'}} spacing={4} mt={8} w="full">
                         {!editing ? (
                             <Button onClick={() => setEditing(true)} colorScheme="brandAccentYellow" leftIcon={<Icon as={FaEdit}/>} size="lg">Edit Profile</Button>
                         ) : (
                             <>
                                 <Button type="submit" colorScheme="brandAccentOrange" isLoading={isSaving} leftIcon={<Icon as={FaSave}/>} size="lg">Save Changes</Button>
-                                <Button variant="ghost" onClick={handleCancel} leftIcon={<Icon as={FaTimes}/>} size="lg" _hover={{bg: 'whiteAlpha.200'}}>Cancel</Button>
+                                <Button variant="ghost" onClick={handleCancel} leftIcon={<Icon as={FaTimes}/>} size="lg" _hover={{bg: 'brand.subtleLightBg', color: 'brand.textDark'}}>Cancel</Button> {/* MODIFIED: Hover color */}
                             </>
                         )}
                     </Stack>
                 </VStack>
             </Box>
 
-            {/* MODIFIED: Changed bg="brand.primaryLight" to bg="brand.cardBlue" */}
-            <Box bg="brand.cardBlue" p={{base: 5, md: 8}} borderRadius="xl">
+            {/* MODIFIED: Apply layerStyle="cardBlue" */}
+            <Box layerStyle="cardBlue" p={{base: 5, md: 8}}>
                 <Flex as="button" onClick={onPasswordSectionToggle} align="center" justify="space-between" w="100%">
-                    <Heading as="h2" size="lg" color="brand.textLight"><Icon as={FaKey} mr={3} verticalAlign="middle"/>Change Password</Heading>
+                    {/* MODIFIED: Heading will inherit from layerStyle="cardBlue" (brand.textBurnt). Icon color too. */}
+                    <Heading as="h2" size="lg"><Icon as={FaKey} mr={3} verticalAlign="middle"/>Change Password</Heading>
+                    {/* Icon will inherit from layerStyle="cardBlue" (brand.textBurnt) */}
                     <Icon as={isPasswordSectionOpen ? FaChevronUp : FaChevronDown} boxSize={6} />
                 </Flex>
                 <Collapse in={isPasswordSectionOpen} animateOpacity>
                     <Box as="form" onSubmit={handleChangePassword} pt={6}>
-                        <VStack spacing={4} align="stretch">
-                            <FormControl isRequired><FormLabel>Current Password</FormLabel>{renderPasswordInput("currentPassword", passwordForm.currentPassword, handlePasswordFormChange, showCurrentPassword, () => setShowCurrentPassword(!showCurrentPassword))}</FormControl>
-                            <FormControl isRequired><FormLabel>New Password</FormLabel>{renderPasswordInput("newPassword", passwordForm.newPassword, handlePasswordFormChange, showNewPassword, () => setShowNewPassword(!showNewPassword))}</FormControl>
-                            <FormControl isRequired><FormLabel>Confirm New Password</FormLabel>{renderPasswordInput("confirmNewPassword", passwordForm.confirmNewPassword, handlePasswordFormChange, showConfirmNewPassword, () => setShowConfirmNewPassword(!showConfirmNewPassword))}</FormControl>
-                            <Button type="submit" colorScheme="brandAccentOrange" w="auto" alignSelf="flex-start" isLoading={isPasswordSaving}>Update Password</Button>
-                        </VStack>
+                        {/* MODIFIED: Wrap password form fields in lightCardInnerSection */}
+                        <Box layerStyle="lightCardInnerSection" w="100%">
+                            <VStack spacing={4} align="stretch">
+                                <FormControl isRequired><FormLabel>Current Password</FormLabel>{renderPasswordInput("currentPassword", passwordForm.currentPassword, handlePasswordFormChange, showCurrentPassword, () => setShowCurrentPassword(!showCurrentPassword))}</FormControl>
+                                <FormControl isRequired><FormLabel>New Password</FormLabel>{renderPasswordInput("newPassword", passwordForm.newPassword, handlePasswordFormChange, showNewPassword, () => setShowNewPassword(!showNewPassword))}</FormControl>
+                                <FormControl isRequired><FormLabel>Confirm New Password</FormLabel>{renderPasswordInput("confirmNewPassword", passwordForm.confirmNewPassword, handlePasswordFormChange, showConfirmNewPassword, () => setShowConfirmNewPassword(!showConfirmNewPassword))}</FormControl>
+                            </VStack>
+                        </Box>
+                        <Button type="submit" colorScheme="brandAccentOrange" w="auto" alignSelf="flex-start" isLoading={isPasswordSaving} mt={4}>Update Password</Button> {/* MODIFIED: Added mt for spacing */}
                     </Box>
                 </Collapse>
             </Box>
