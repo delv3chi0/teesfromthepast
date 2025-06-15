@@ -24,9 +24,6 @@ const colors = {
   ui: {
     background: '#1E3A39', // General UI background, similar to primary
   },
-  // Adding more standard color palettes for Tags to reference, if needed
-  // Chakra UI provides default colors like 'green', 'red', 'gray', 'orange', 'blue'
-  // We can explicitly set their shades for Tag component.
   green: { 50: '#F0FFF4', 100: '#C6F6D5', 200: '#9AE6B4', 300: '#68D391', 400: '#48BB78', 500: '#38A169', 600: '#2F855A', 700: '#276749', 800: '#22543D', 900: '#1C4532' },
   red: { 50: '#FFF5F5', 100: '#FED7D7', 200: '#FC8181', 300: '#E53E3E', 400: '#C53030', 500: '#9B2C2C', 600: '#822727', 700: '#63171B', 800: '#441C20', 900: '#2C1717' },
   gray: { 50: '#F7FAFC', 100: '#EDF2F7', 200: '#E2E8F0', 300: '#CBD5E0', 400: '#A0AEC0', 500: '#718096', 600: '#4A5568', 700: '#2D3748', 800: '#1A202C', 900: '#171923' },
@@ -255,49 +252,78 @@ const components = {
       panel: {},
     },
   },
-  // NEW: Tag Component Theming
   Tag: {
     baseStyle: {
-        // Default text color for tags (if not overridden by colorScheme variant)
-        // Let's ensure text is usually light for tags with dark backgrounds
         container: {
-            fontWeight: 'bold', // Make tags stand out
-            borderRadius: 'full', // Consistent full rounding
-            // Text color will be set by variant below
+            fontWeight: 'bold',
+            borderRadius: 'full',
         },
-        label: {
-            // Text for the label inside the tag
-        },
-        closeButton: {
-            // Close button color, will inherit from container color
-        }
     },
     variants: {
-        // Overriding default Chakra color schemes for better contrast
         subtle: (props) => ({
             container: {
-                // Use a slightly darker shade for the background
-                bg: `${props.colorScheme}.600`, // e.g., green.600
-                color: 'white', // Ensure text is white
+                bg: `${props.colorScheme}.600`,
+                color: 'white',
             }
         }),
         solid: (props) => ({
             container: {
-                bg: `${props.colorScheme}.700`, // Even darker for solid variant
+                bg: `${props.colorScheme}.700`,
                 color: 'white',
             }
         }),
         outline: (props) => ({
              container: {
-                color: `${props.colorScheme}.600`, // Text color for outline
-                borderColor: `${props.colorScheme}.600`, // Border color for outline
+                color: `${props.colorScheme}.600`,
+                borderColor: `${props.colorScheme}.600`,
              }
         })
     },
     defaultProps: {
-        variant: 'subtle', // Set subtle as the default variant if not specified
+        variant: 'subtle',
     }
-  }
+  },
+  // NEW: MenuList Component Theming
+  MenuList: {
+    baseStyle: {
+      bg: 'brand.cardBlue', // MenuList background is light
+      color: 'brand.textDark', // Default text color for items (dark)
+      borderColor: 'rgba(0,0,0,0.1)', // Subtle dark border
+      boxShadow: 'lg', // Add a subtle shadow
+    },
+  },
+  // NEW: MenuItem Component Theming
+  MenuItem: {
+    baseStyle: {
+      // Text color is inherited from MenuList (brand.textDark)
+      _hover: {
+        bg: 'brand.secondary', // Hover background is dark teal
+        color: 'brand.textLight', // Hover text color is light
+      },
+      _focus: { // Apply same styles for keyboard navigation focus
+        bg: 'brand.secondary',
+        color: 'brand.textLight',
+      },
+      // Specific styling for the Logout item
+      '&[data-chakra-menu-item="true"][color="red.600"]': { // Target the logout item by its explicit color prop
+          color: 'red.600', // Keep the red color
+          _hover: {
+              bg: 'red.800', // Darker red on hover
+              color: 'white', // White text on darker red
+          },
+          _focus: {
+              bg: 'red.800', // Darker red on focus
+              color: 'white',
+          }
+      }
+    },
+  },
+  // NEW: MenuDivider Component Theming
+  MenuDivider: {
+    baseStyle: {
+      borderColor: 'rgba(0,0,0,0.1)', // Subtle dark border
+    },
+  },
 };
 
 const config = {
@@ -339,19 +365,17 @@ const layerStyles = {
       color: 'brand.textBurnt !important',
     },
   },
-  // NEW: Layer style for inner sections within LIGHT cards (e.g., homepage feature cards)
   lightCardInnerSection: {
-    bg: 'brand.subtleLightBg', // Subtle darker tone
-    color: 'brand.textDark', // Ensure text inside this light section is dark
+    bg: 'brand.subtleLightBg',
+    color: 'brand.textDark',
     borderRadius: 'md',
     p: 4,
     borderWidth: '1px',
     borderColor: 'rgba(0,0,0,0.1)',
   },
-  // NEW: Layer style for inner sections within DARK modal backgrounds
   darkModalInnerSection: {
-    bg: 'brand.primary', // Darkest brand color for contrast on brand.secondary
-    color: 'brand.textLight', // Ensure text inside this dark section is light
+    bg: 'brand.primary',
+    color: 'brand.textLight',
     borderRadius: 'md',
     p: 4,
     borderWidth: '1px',
