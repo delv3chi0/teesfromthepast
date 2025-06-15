@@ -5,9 +5,9 @@ const colors = {
     primary: '#184C4A',           // Deep teal background
     secondary: '#1B3B3A',         // Slightly darker header/nav
 
-    cardBlue: '#F8DFA7',          // ✅ New buff card color (was tan)
-    cardBuff: '#F8DFA7',          // Alias for clarity
-    cardGold: '#F1C666',          // Optional alternate
+    cardBlue: '#F8DFA7',          // ✅ Buff retro card color
+    cardBuff: '#F8DFA7',          // Optional alias
+    cardGold: '#F1C666',          // Optional alt card tone
 
     accentOrange: '#D16930',
     accentOrangeHover: '#E17A45',
@@ -15,10 +15,10 @@ const colors = {
     accentYellow: '#FFE9A0',
     accentYellowHover: '#FDD97A',
 
-    textLight: '#FDF6EE',
+    textLight: '#FDF6EE',         // For dark backgrounds
     textMuted: '#B7C4C4',
-    textDark: '#2A2A2A',
-    textBurnt: '#3B2F1B',          // ✅ New dark text for buff cards
+    textDark: '#2A2A2A',          // For use on light backgrounds
+    textBurnt: '#3B2F1B',         // ✅ For high contrast on buff
   },
   ui: {
     background: '#1E3A39',
@@ -34,7 +34,7 @@ const components = {
   Card: {
     baseStyle: {
       container: {
-        bg: 'brand.cardBuff',
+        bg: 'brand.cardBlue',       // Using updated buff color
         color: 'brand.textBurnt',
         borderRadius: 'xl',
         boxShadow: 'lg',
