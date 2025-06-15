@@ -41,21 +41,18 @@ const components = {
     baseStyle: {
         container: {
             bg: 'brand.cardBlue',
-            color: 'brand.textDark', // Default color for direct children (e.g. paragraphs)
+            color: 'brand.textDark',
             borderRadius: 'xl',
             boxShadow: 'lg',
             _dark: {
-                // Headings within light cards now use brand.textBurnt (darker brown)
                 'h1, h2, h3, h4, h5, h6': {
                     color: 'brand.textBurnt !important',
                     fontFamily: `${fonts.heading} !important`,
                 },
-                // Body text/generic divs/spans within light cards use brand.textDark
                 'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
                     color: 'brand.textDark !important',
                     fontFamily: `${fonts.body} !important`,
                 },
-                // Icons within light cards use brand.textBurnt (darker brown)
                 'svg': {
                     color: 'brand.textBurnt !important',
                 },
@@ -73,7 +70,7 @@ const components = {
         fontSize: { base: '3xl', md: '4xl' },
         lineHeight: 'shorter',
         mb: 8,
-        color: 'brand.textLight', // Page title remains light (on dark primary background)
+        color: 'brand.textLight',
       },
     },
   },
@@ -87,7 +84,7 @@ const components = {
     baseStyle: {
       dialog: {
         bg: 'brand.secondary',
-        color: 'brand.textLight', // Global text color for direct children of ModalContent
+        color: 'brand.textLight',
       },
       header: {
         color: 'brand.textLight',
@@ -95,12 +92,12 @@ const components = {
         borderColor: 'rgba(255, 255, 255, 0.1)',
       },
       body: {
-        color: 'brand.textLight', // Explicitly setting for modal body content
+        color: 'brand.textLight',
         'label': {
-            color: 'brand.textLight !important', // Force labels to be light
+            color: 'brand.textLight !important',
         },
         'h1, h2, h3, h4, h5, h6': {
-            color: 'brand.textLight !important', // Headings in modals are light (on dark background)
+            color: 'brand.textLight !important',
         },
       },
       footer: {
@@ -283,45 +280,42 @@ const components = {
         variant: 'subtle',
     }
   },
-  // NEW: MenuList Component Theming
   MenuList: {
     baseStyle: {
-      bg: 'brand.cardBlue', // MenuList background is light
+      bg: 'brand.cardBlue',
       color: 'brand.textDark', // Default text color for items (dark)
-      borderColor: 'rgba(0,0,0,0.1)', // Subtle dark border
-      boxShadow: 'lg', // Add a subtle shadow
+      borderColor: 'rgba(0,0,0,0.1)',
+      boxShadow: 'lg',
     },
   },
-  // NEW: MenuItem Component Theming
   MenuItem: {
     baseStyle: {
-      // Text color is inherited from MenuList (brand.textDark)
+      color: 'brand.textDark !important', // <--- Apply !important here
       _hover: {
-        bg: 'brand.secondary', // Hover background is dark teal
-        color: 'brand.textLight', // Hover text color is light
+        bg: 'brand.secondary',
+        color: 'brand.textLight',
       },
-      _focus: { // Apply same styles for keyboard navigation focus
+      _focus: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
       },
       // Specific styling for the Logout item
-      '&[data-chakra-menu-item="true"][color="red.600"]': { // Target the logout item by its explicit color prop
-          color: 'red.600', // Keep the red color
+      '&[data-chakra-menu-item="true"][color="red.600"]': {
+          color: 'red.600 !important', // <--- Also apply !important here
           _hover: {
-              bg: 'red.800', // Darker red on hover
-              color: 'white', // White text on darker red
+              bg: 'red.800',
+              color: 'white',
           },
           _focus: {
-              bg: 'red.800', // Darker red on focus
+              bg: 'red.800',
               color: 'white',
           }
       }
     },
   },
-  // NEW: MenuDivider Component Theming
   MenuDivider: {
     baseStyle: {
-      borderColor: 'rgba(0,0,0,0.1)', // Subtle dark border
+      borderColor: 'rgba(0,0,0,0.1)',
     },
   },
 };
@@ -334,7 +328,7 @@ const config = {
 const layerStyles = {
   cardBlue: {
     bg: 'brand.cardBlue',
-    color: 'brand.textDark', // Default text color for direct children (e.g. paragraphs)
+    color: 'brand.textDark',
     borderRadius: 'xl',
     boxShadow: 'lg',
     p: 8,
