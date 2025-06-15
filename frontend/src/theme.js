@@ -5,7 +5,7 @@ const colors = {
     primary: '#184C4A',
     secondary: '#1B3B3A',
 
-    cardBlue: '#F8DFA7',         // Soft tan background for cards
+    cardBlue: '#F8DFA7',         // Retro buff for card backgrounds
 
     accentOrange: '#D16930',
     accentOrangeHover: '#E17A45',
@@ -15,8 +15,8 @@ const colors = {
 
     textLight: '#FDF6EE',
     textMuted: '#B7C4C4',
-    textDark: '#2A2A2A',
-    textBurnt: '#3B2F1B',
+    textDark: '#2A2A2A',          // Best for body text on light bg
+    textBurnt: '#3B2F1B',         // Great for headers/icons on light bg
   },
   ui: {
     background: '#1E3A39',
@@ -107,20 +107,21 @@ const theme = extendTheme({
         bg: 'brand.primary',
         color: 'brand.textLight',
       },
-      // 👇 Auto-style any container with bg=brand.cardBlue
+
+      // 💡 AUTO-FIX for any card with cardBlue (buff) background
       '[style*="background-color: rgb(248, 223, 167)"]': {
-        color: 'brand.textDark !important',
-      },
-      '[style*="background-color: rgb(248, 223, 167)"] svg': {
-        color: '#3B2F1B !important',
+        color: '#2A2A2A !important', // body text
       },
       '[style*="background-color: rgb(248, 223, 167)"] h1, \
        [style*="background-color: rgb(248, 223, 167)"] h2, \
        [style*="background-color: rgb(248, 223, 167)"] h3': {
-        color: '#3B2F1B !important',
+        color: '#3B2F1B !important', // heading text
       },
       '[style*="background-color: rgb(248, 223, 167)"] p': {
-        color: '#2A2A2A !important',
+        color: '#2A2A2A !important', // body text
+      },
+      '[style*="background-color: rgb(248, 223, 167)"] svg': {
+        color: '#3B2F1B !important', // icon color
       },
     },
   },
