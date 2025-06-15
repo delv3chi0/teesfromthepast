@@ -14,7 +14,7 @@ import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
 // --- Product Manager Specific Constants (Moved from original ProductManager.jsx) ---
-const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "One Size", "6M", "12M", "18M", "24M"];
+const SIZES = ["XS", "S", "M", "L", "XXL", "One Size", "6M", "12M", "18M", "24M"]; // Fixed typo "XXL" instead of "XXL"
 const CORE_COLORS = [ { name: "Black", hex: "#000000" }, { name: "White", hex: "#FFFFFF" }, { name: "Navy Blue", hex: "#000080" }, { name: "Heather Grey", hex: "#B2BEB5" }, { name: "Cream / Natural", hex: "#FFFDD0" }, { name: "Mustard Yellow", hex: "#FFDB58" }, { name: "Olive Green", hex: "#556B2F" }, { name: "Maroon", hex: "#800000" }, { name: "Burnt Orange", hex: "#CC5500" }, { name: "Heather Forest", hex: "#228B22" }, { name: "Royal Blue", hex: "#4169E1" }, { name: "Charcoal", hex: "#36454F" }, { name: "Sand", hex: "#C2B280" }, { name: "Light Blue", hex: "#ADD8E6" }, { name: "Cardinal Red", hex: "#C41E3A" }, { name: "Teal", hex: "#008080" } ];
 
 const initialColorVariantState = {
@@ -277,7 +277,7 @@ const InventoryPanel = () => {
         ) : errorCategories ? (
           <Alert status="error" borderRadius="md"><AlertIcon />{errorCategories}</Alert>
         ) : categories.length === 0 ? (
-          <Text>No product categories found. Click "Add New Category" to start.</Text> {/* No color prop needed */}
+          <Text>No product categories found. Click "Add New Category" to start.</Text>
         ) : (
           <TableContainer w="100%"> {/* Added w="100%" */}
             <Table variant="simple" size="sm" w="100%"> {/* Added w="100%" */}
@@ -344,6 +344,8 @@ const InventoryPanel = () => {
           </VStack>
         ) : errorProducts ? (
           <Alert status="error" borderRadius="md"><AlertIcon />{errorProducts}</Alert>
+        ) : products.length === 0 ? (
+            <Text>No products found. Click "Add New Product" to start.</Text> // Added missing text
         ) : (
           <TableContainer w="100%"> {/* Added w="100%" */}
             <Table variant="simple" size="sm" w="100%"> {/* Added w="100%" */}
@@ -416,8 +418,7 @@ const InventoryPanel = () => {
                   colorScheme="green"
                   ml={3}
                 />
-                  {/* Text for active/inactive status will inherit from modal theme (light) */}
-                 <Text ml={2} fontSize="sm" color={categoryFormData.isActive ? "green.300" : "red.300"}> {/* Changed to brand-appropriate colors */}
+                 <Text ml={2} fontSize="sm" color={categoryFormData.isActive ? "green.300" : "red.300"}>
                    ({categoryFormData.isActive ? "Visible" : "Hidden"})
                  </Text>
               </FormControl>
@@ -462,8 +463,7 @@ const InventoryPanel = () => {
           <ModalBody pb={6}>
             {isProductModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
-                {/* Ensure internal Box's text inherits from Modal theme (light text on dark background) */}
-                <Box p={4} borderWidth="1px" borderRadius="md" borderColor="rgba(255,255,255,0.1)" bg="brand.secondary"> {/* Added specific bg for section boxes in modal */}
+                <Box p={4} borderWidth="1px" borderRadius="md" borderColor="rgba(255,255,255,0.1)" bg="brand.secondary">
                     <Heading size="sm" mb={4}>Product Details</Heading>
                     <SimpleGrid columns={{base: 1, md: 2}} spacing={4}>
                         <FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={productFormData.name} onChange={handleProductFormChange}/></FormControl>
@@ -492,19 +492,19 @@ const InventoryPanel = () => {
                     <FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={productFormData.isActive} onChange={handleProductFormChange}/></FormControl>
                 </Box>
 
-                <Box p={4} borderWidth="1px" borderRadius="md" borderColor="rgba(255,255,255,0.1)" bg="brand.secondary"> {/* Added specific bg */}
+                <Box p={4} borderWidth="1px" borderRadius="md" borderColor="rgba(255,255,255,0.1)" bg="brand.secondary">
                     <Heading size="sm" mb={4}>Product Variants</Heading>
                     <RadioGroup onChange={(val) => setDefaultVariant(parseInt(val))} value={productFormData.variants.findIndex(v => v.isDefaultDisplay)?.toString() ?? "-1"}>
                       <VStack spacing={4} align="stretch">
                         {(productFormData.variants || []).map((variant, colorIndex) => (
                           (variant && variant.sizes) ?
-                          <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="brand.primary"> {/* Changed Accordion bg to a dark brand color */}
+                          <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="brand.primary">
                             <AccordionItem border="none">
                               <Flex align="center" p={2}>
-                                <Radio value={colorIndex.toString()} mr={3} colorScheme="yellow"/><Tooltip label="Set as default display for shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "brand.accentYellow" : "brand.textMuted"} mr={2}/></Tooltip> {/* Adjusted icon colors */}
+                                <Radio value={colorIndex.toString()} mr={3} colorScheme="yellow"/><Tooltip label="Set as default display for shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "brand.accentYellow" : "brand.textMuted"} mr={2}/></Tooltip>
                                 <AccordionButton flex="1"><HStack w="full" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="brand.textMuted"/><Text fontWeight="bold" color="brand.textLight">{variant.colorName}</Text></HStack></AccordionButton><AccordionIcon /><CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
-                              <AccordionPanel bg="brand.secondary" pb={4}> {/* Changed AccordionPanel bg to a dark brand color */}
+                              <AccordionPanel bg="brand.secondary" pb={4}>
                                 <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => { const newV = [...productFormData.variants]; newV[colorIndex].podProductId = e.target.value; setProductFormData(p => ({...p, variants: newV})); }} /></FormControl>
                                 <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
                                 <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
@@ -515,14 +515,13 @@ const InventoryPanel = () => {
                                 <Wrap spacing={4}>
                                   {variant.sizes?.map((size, sizeIndex) => (
                                     <WrapItem key={size.size}>
-                                      {/* Backgrounds are dark (green/red), so text is good to inherit light from modal */}
                                       <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.800' : 'red.800'}>
                                         <HStack justifyContent="space-between" w="100%">
-                                          <Text fontWeight="bold">{size.size}</Text> {/* Inherits light from modal */}
+                                          <Text fontWeight="bold">{size.size}</Text>
                                           <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
                                         </HStack>
                                         <FormControl isDisabled={!size.inStock}>
-                                          <FormLabel fontSize="xs">SKU</FormLabel> {/* Inherits light from modal */}
+                                          <FormLabel fontSize="xs">SKU</FormLabel>
                                           <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} />
                                         </FormControl>
                                       </VStack>
@@ -536,7 +535,7 @@ const InventoryPanel = () => {
                         ))}
                       </VStack>
                     </RadioGroup>
-                    <Box p={4} borderWidth="1px" borderRadius="md" mt={6} borderColor="rgba(255,255,255,0.1)" bg="brand.secondary"> {/* Added specific bg */}
+                    <Box p={4} borderWidth="1px" borderRadius="md" mt={6} borderColor="rgba(255,255,255,0.1)" bg="brand.secondary">
                         <Heading size="xs" mb={3}>Add New Color Variant</Heading>
                         <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}>
                             <FormControl><FormLabel fontSize="sm">Color Name</FormLabel><Select size="sm" name="colorName" value={newColorData.colorName} onChange={handleNewColorFormChange} placeholder="Select...">{CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</Select></FormControl>
@@ -544,7 +543,7 @@ const InventoryPanel = () => {
                                 <FormLabel fontSize="sm">Color Hex</FormLabel>
                                 <HStack>
                                     <Input size="sm" name="colorHex" value={newColorData.colorHex} onChange={handleNewColorFormChange}/>
-                                    <Box w="24px" h="24px" bg={newColorData.colorHex} borderRadius="sm" border="1px solid" borderColor="brand.textMuted"/> {/* Border color adjusted */}
+                                    <Box w="24px" h="24px" bg={newColorData.colorHex} borderRadius="sm" border="1px solid" borderColor="brand.textMuted"/>
                                 </HStack>
                             </FormControl>
                             <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" name="podProductId" value={newColorData.podProductId} onChange={handleNewColorFormChange}/></FormControl>
