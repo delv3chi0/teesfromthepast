@@ -283,55 +283,60 @@ const components = {
   MenuList: {
     baseStyle: {
       bg: 'brand.cardBlue',
-      color: 'brand.textDark',
+      color: 'brand.textDark', // Default text color for items (dark)
       borderColor: 'rgba(0,0,0,0.1)',
       boxShadow: 'lg',
-      // NEW: Target direct text nodes or generic containers within MenuList
-      'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
-        color: 'brand.textDark !important',
-      },
+      // This rule was for direct children. If the text is wrapped in <p>, etc., it doesn't apply.
+      // 'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+      //   color: 'brand.textDark !important',
+      // },
     },
   },
   MenuItem: {
     baseStyle: {
-      color: 'brand.textDark !important', // Force dark text directly on MenuItem
-      // NEW: Target direct text nodes or generic containers within MenuItem
-      'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
-        color: 'brand.textDark !important',
+      // This is the problematic part. Let's make it universally target all text inside.
+      _dark: { // Apply this in dark mode (your theme's initial mode)
+          // Target all descendant text elements with !important
+          'p, div, span, strong': { // Broaden this to target more potential elements
+              color: 'brand.textDark !important',
+          },
+          // Also set the color directly on the MenuItem container itself as a fallback
+          color: 'brand.textDark !important',
       },
       _hover: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
-        // NEW: Force direct text nodes or generic containers on hover
-        'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+        // Ensure hover also applies to descendants
+        'p, div, span, strong': {
             color: 'brand.textLight !important',
         },
       },
       _focus: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
-        // NEW: Force direct text nodes or generic containers on focus
-        'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+        // Ensure focus also applies to descendants
+        'p, div, span, strong': {
             color: 'brand.textLight !important',
         },
       },
       // Specific styling for the Logout item
+      // This targets the MenuItem itself IF it has color="red.600" prop
       '&[data-chakra-menu-item="true"][color="red.600"]': {
           color: 'red.600 !important',
-          'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+          'p, div, span, strong': {
               color: 'red.600 !important',
           },
           _hover: {
               bg: 'red.800',
               color: 'white',
-              'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+              'p, div, span, strong': {
                   color: 'white !important',
               },
           },
           _focus: {
               bg: 'red.800',
               color: 'white',
-              'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+              'p, div, span, strong': {
                   color: 'white !important',
               },
           }
@@ -369,14 +374,17 @@ const layerStyles = {
       boxShadow: 'xl',
       borderColor: 'brand.accentYellow',
     },
+    // Headings within light cards now use brand.textBurnt (darker brown)
     '& h1, & h2, & h3, & h4, & h5, & h6': {
       color: 'brand.textBurnt !important',
       fontFamily: `${fonts.heading} !important`,
     },
+    // Body text/generic divs/spans within light cards use brand.textDark
     '& p, & div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), & span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
       color: 'brand.textDark !important',
       fontFamily: `${fonts.body} !important`,
     },
+    // Icons within light cards use brand.textBurnt (darker brown)
     '& svg': {
       color: 'brand.textBurnt !important',
     },
