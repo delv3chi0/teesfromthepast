@@ -5,8 +5,9 @@ const colors = {
     primary: '#184C4A',           // Deep teal background
     secondary: '#1B3B3A',         // Slightly darker header/nav
 
-    cardTan: '#FFE9A0',           // Soft tan for cards
-    cardGold: '#F1C666',          // Optional alternate card color
+    cardBlue: '#FFE9A0',          // ✅ Re-added and set to tan
+    cardTan: '#FFE9A0',           // Optional alias
+    cardGold: '#F1C666',          // Optional alternate
 
     accentOrange: '#D16930',      // Muted burnt orange
     accentOrangeHover: '#E17A45',
@@ -100,17 +101,6 @@ const components = {
         }
       }
     }
-  },
-  Box: {
-    variants: {
-      card: {
-        bg: 'brand.cardTan',
-        color: 'brand.textDark',
-        borderRadius: 'xl',
-        boxShadow: 'lg',
-        p: 6,
-      },
-    },
   },
 };
 
