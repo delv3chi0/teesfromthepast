@@ -1,29 +1,72 @@
-/* --- START: ABSOLUTE FINAL SOLUTION FOR MENU ITEM TEXT --- */
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+/* --- START: ABSOLUTE FINAL SOLUTION FOR MENU ITEM TEXT (from previous discussions) --- */
 /* This directly targets the text content within Chakra UI MenuItems */
 
 /* Default state: dark brown text */
 /* Targeting the MenuItem button itself */
-.chakra-menu__menuitem[data-chakra-menu-item] {
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) {
   color: var(--chakra-colors-brand-textDark) !important;
 }
 
-/* Targeting common text-wrapping elements (span, p, div) within the MenuItem */
-.chakra-menu__menuitem[data-chakra-menu-item] span,
-.chakra-menu__menuitem[data-chakra-menu-item] p,
-.chakra-menu__menuitem[data-chakra-menu-item] div {
+/* Targeting common text-wrapping elements within the MenuItem for default state */
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) span,
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) p,
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) div {
     color: var(--chakra-colors-brand-textDark) !important;
 }
 
 /* Hover/Focus state: light text on dark teal background */
-.chakra-menu__menuitem[data-chakra-menu-item][data-hover],
-.chakra-menu__menuitem[data-chakra-menu-item][data-focus] {
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]),
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) {
   background: var(--chakra-colors-brand-secondary) !important;
   color: var(--chakra-colors-brand-textLight) !important;
 }
 
 /* Targeting common text-wrapping elements for hover/focus state */
-.chakra-menu__menuitem[data-chakra-menu-item][data-hover] span,
-.chakra-menu__menuitem[data-chakra-menu-item][data-focus] span,
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) span,
 .chakra-menu__menuitem[data-chakra-menu-item][data-focus] p,
 .chakra-menu__menuitem[data-chakra-menu-item][data-hover] p,
 .chakra-menu__menuitem[data-chakra-menu-item][data-focus] div,
@@ -60,13 +103,14 @@
 }
 /* --- END: ABSOLUTE FINAL SOLUTION FOR MENU ITEM TEXT --- */
 
-/* ... (your existing index.css content, including MenuItem overrides) ... */
 
-/* --- START: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT --- */
+/* --- START: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT & FILTER --- */
 /* Target Text components directly within the order item Flex containers */
 .my-orders-item-flex span,
 .my-orders-item-flex p,
-.my-orders-item-flex div { /* Include div as text might be wrapped */
-    color: var(--chakra-colors-brand-textLight) !important;
+.my-orders-item-flex div,
+.my-orders-item-flex strong {
+    color: white !important; /* Force absolute white for readability */
+    filter: none !important; /* <--- CRITICAL: Disable any brightness filter */
 }
-/* --- END: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT --- */
+/* --- END: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT & FILTER --- */

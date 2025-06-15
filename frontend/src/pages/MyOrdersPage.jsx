@@ -15,11 +15,12 @@ import {
   Icon,
   Image,
   HStack,
+  Tooltip, // Added Tooltip for item details
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { FaBoxOpen, FaUser, FaShippingFast } from 'react-icons/fa'; // Added new icons
+import { FaBoxOpen, FaUser, FaShippingFast, FaMapMarkerAlt } from 'react-icons/fa'; // Added FaMapMarkerAlt
 
 const MyOrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -80,23 +81,20 @@ const MyOrdersPage = () => {
         <VStack spacing={6} align="stretch">
           {orders.map(order => (
             <Box key={order._id} layerStyle="cardBlue" p={6}>
-              {/* Top-level Order Summary */}
+              {/* Order Summary Header */}
               <SimpleGrid columns={{ base: 1, md: 4 }} spacing={{ base: 4, md: 6 }} alignItems="center">
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Order #</Heading>
                   <Text fontSize="sm" title={order._id}>{(order._id || '').substring(18)}</Text>
                 </Box>
-
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Date Placed</Heading>
                   <Text fontSize="sm">{new Date(order.createdAt).toLocaleDateString()}</Text>
                 </Box>
-
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Total</Heading>
                   <Text fontSize="sm">${(typeof order.totalAmount === 'number' && !isNaN(order.totalAmount) ? (order.totalAmount / 100) : 0).toFixed(2)}</Text>
                 </Box>
-
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Status</Heading>
                   <Tag size="md" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'yellow'} mt={1}>{order.orderStatus}</Tag>
@@ -105,20 +103,19 @@ const MyOrdersPage = () => {
 
               <Divider my={4} borderColor="rgba(0,0,0,0.1)" />
 
-              {/* Customer and Shipping Info */}
+              {/* Customer and Shipping Info - Two Column Layout */}
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={4}>
-                {/* Customer Info */}
-                <Box layerStyle="lightCardInnerSection"> {/* Apply inner section style */}
+                {/* Customer Info Box */}
+                <Box layerStyle="lightCardInnerSection" p={4}> {/* Added padding here */}
                   <HStack mb={2}><Icon as={FaUser} mr={2} boxSize={4}/><Heading size="sm">Customer Info</Heading></HStack>
                   <Text>{order.user?.username || 'N/A'}</Text>
                   <Text>{order.user?.email || 'N/A'}</Text>
                 </Box>
 
-                {/* Shipping Address */}
-                <Box layerStyle="lightCardInnerSection"> {/* Apply inner section style */}
+                {/* Shipping Address Box */}
+                <Box layerStyle="lightCardInnerSection" p={4}> {/* Added padding here */}
                   <HStack mb={2}><Icon as={FaShippingFast} mr={2} boxSize={4}/><Heading size="sm">Shipping Address</Heading></HStack>
                   <Text>{order.shippingAddress?.recipientName}</Text>
-                  {/* Use street1 and street2, which are expected by frontend */}
                   <Text>{order.shippingAddress?.street1}</Text>
                   {order.shippingAddress?.street2 && <Text>{order.shippingAddress.street2}</Text>}
                   <Text>{order.shippingAddress?.city}, {order.shippingAddress?.state} {order.shippingAddress?.zipCode}</Text>
@@ -133,39 +130,59 @@ const MyOrdersPage = () => {
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
-                    // MODIFIED: Item Flex layout
                     <Flex
                       key={item._id}
                       className="my-orders-item-flex" // For index.css override
-                      justify="space-between"
-                      align="center"
+                      justifyContent="space-between" // Pushes image/details left, price right
+                      alignItems="center"
                       bg="brand.secondary" // Dark background for item box
                       p={3}
                       borderRadius="md"
-                      flexWrap="wrap" // Allow wrapping on small screens
-                      gap={4} // Increased gap between elements
+                      flexWrap={{ base: "wrap", sm: "nowrap" }} // Wrap on extra small, no wrap on small+
+                      gap={4} // Gap between image, details, and price
+                      minH="100px" // Ensure consistent height
                     >
-                      {/* Image and Name/Qty on the left, now allowing more space */}
-                      <HStack spacing={4} flexGrow={1} flexShrink={1} flexBasis="auto">
-                        <Image
-                          src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
-                          alt={item.productName || 'Order Item'}
-                          boxSize="80px" // MODIFIED: Increased image size for better visibility
-                          objectFit="cover"
-                          borderRadius="md"
-                          fallback={<Icon as={FaBoxOpen} boxSize="40px" color="brand.textMuted" />} // Fallback icon size adjusted
-                        />
-                        {/* MODIFIED: Consolidated name and qty on a single line if possible */}
-                        <HStack align="center" spacing={2} flexWrap="wrap">
-                          <Text fontWeight="bold" color="brand.textLight">{item.productName || item.name}</Text>
-                          {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
-                            <Text fontSize="xs" color="brand.textLight">(Qty: {item.quantity})</Text> // Qty next to name
-                          )}
-                        </HStack>
-                      </HStack>
-                      {/* Price on the right */}
+                      {/* Image (Left) */}
+                      <Image
+                        src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
+                        alt={item.productName || 'Order Item'}
+                        boxSize="100px" // MODIFIED: Increased image size for better visibility
+                        minW="100px" // Ensure image doesn't shrink
+                        objectFit="cover"
+                        borderRadius="md"
+                        fallback={<Icon as={FaBoxOpen} boxSize="50px" color="brand.textLight" />} // MODIFIED: Fallback icon size/color
+                      />
+
+                      {/* Product Name & Quantity (Middle, Flexible) */}
+                      <VStack align="flex-start" spacing={0} flexGrow={1} flexShrink={1} flexBasis={{ base: "100%", sm: "auto" }}>
+                        <Text fontWeight="bold" fontSize="md" color="white">
+                            {item.productName || item.name}
+                        </Text>
+                        {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
+                            <Text fontSize="sm" color="white">Qty: {item.quantity}</Text>
+                        )}
+                        {/* Optional: Add customImageURL if you want to link it */}
+                        {item.customImageURL && (
+                            <Tooltip label="View Custom Image">
+                                <ChakraLink href={item.customImageURL} isExternal color="brand.accentYellow" fontSize="sm">
+                                    <Icon as={FaMapMarkerAlt} mr={1} />Custom Design
+                                </ChakraLink>
+                            </Tooltip>
+                        )}
+                         {item.designId?.prompt && (
+                            <Tooltip label={item.designId.prompt}>
+                                <Text fontSize="xs" color="whiteAlpha.700" isTruncated maxW="200px">
+                                    Prompt: {item.designId.prompt}
+                                </Text>
+                            </Tooltip>
+                        )}
+                      </VStack>
+
+                      {/* Price (Right) */}
                       {typeof item.priceAtPurchase === 'number' && typeof item.quantity === 'number' && !isNaN(item.priceAtPurchase) && !isNaN(item.quantity) && (
-                        <Text fontSize="md" fontWeight="bold" color="brand.textLight">${((item.priceAtPurchase || item.price) * item.quantity / 100).toFixed(2)}</Text> // Ensure division by 100
+                        <Text fontSize="lg" fontWeight="bold" color="white" flexShrink={0}>
+                          ${((item.priceAtPurchase || item.price) * item.quantity / 100).toFixed(2)}
+                        </Text>
                       )}
                     </Flex>
                   ))}
