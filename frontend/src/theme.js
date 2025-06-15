@@ -286,57 +286,60 @@ const components = {
       color: 'brand.textDark', // Default text color for items (dark)
       borderColor: 'rgba(0,0,0,0.1)',
       boxShadow: 'lg',
-      // This rule was for direct children. If the text is wrapped in <p>, etc., it doesn't apply.
-      // 'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
-      //   color: 'brand.textDark !important',
-      // },
+      // The MenuItem should handle its own descendant text color now.
     },
   },
   MenuItem: {
     baseStyle: {
       // This is the problematic part. Let's make it universally target all text inside.
       _dark: { // Apply this in dark mode (your theme's initial mode)
-          // Target all descendant text elements with !important
-          'p, div, span, strong': { // Broaden this to target more potential elements
-              color: 'brand.textDark !important',
+          // Redefine the global body text variable specifically for MenuItem and its children
+          // Using a higher specificity selector that matches Chakra's internal structure
+          '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
+              '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textDark) !important', // THIS IS THE KEY
+              color: 'var(--chakra-colors-brand-textDark) !important', // Direct color fallback
           },
           // Also set the color directly on the MenuItem container itself as a fallback
-          color: 'brand.textDark !important',
+          color: 'var(--chakra-colors-brand-textDark) !important',
       },
       _hover: {
         bg: 'brand.secondary',
-        color: 'brand.textLight',
-        // Ensure hover also applies to descendants
-        'p, div, span, strong': {
-            color: 'brand.textLight !important',
+        color: 'brand.textLight', // This color is for the MenuItem itself
+        // Ensure hover also applies to descendants by redefining the variable and direct color
+        '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
+            '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
+            color: 'var(--chakra-colors-brand-textLight) !important',
         },
       },
       _focus: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
         // Ensure focus also applies to descendants
-        'p, div, span, strong': {
-            color: 'brand.textLight !important',
+        '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
+            '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
+            color: 'var(--chakra-colors-brand-textLight) !important',
         },
       },
       // Specific styling for the Logout item
-      // This targets the MenuItem itself IF it has color="red.600" prop
       '&[data-chakra-menu-item="true"][color="red.600"]': {
           color: 'red.600 !important',
-          'p, div, span, strong': {
+          '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': { // Specificity for children
+              '--chakra-colors-chakra-body-text': 'var(--chakra-colors-red-600) !important',
               color: 'red.600 !important',
           },
           _hover: {
               bg: 'red.800',
               color: 'white',
-              'p, div, span, strong': {
+              '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
+                  '--chakra-colors-chakra-body-text': 'var(--chakra-colors-white) !important',
                   color: 'white !important',
               },
           },
           _focus: {
               bg: 'red.800',
               color: 'white',
-              'p, div, span, strong': {
+              'p, div, span, strong': { // For focus state, might not need .chakra-menu__menuitem prefix
+                  '--chakra-colors-chakra-body-text': 'var(--chakra-colors-white) !important',
                   color: 'white !important',
               },
           }
@@ -374,17 +377,14 @@ const layerStyles = {
       boxShadow: 'xl',
       borderColor: 'brand.accentYellow',
     },
-    // Headings within light cards now use brand.textBurnt (darker brown)
     '& h1, & h2, & h3, & h4, & h5, & h6': {
       color: 'brand.textBurnt !important',
       fontFamily: `${fonts.heading} !important`,
     },
-    // Body text/generic divs/spans within light cards use brand.textDark
     '& p, & div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), & span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
       color: 'brand.textDark !important',
       fontFamily: `${fonts.body} !important`,
     },
-    // Icons within light cards use brand.textBurnt (darker brown)
     '& svg': {
       color: 'brand.textBurnt !important',
     },
