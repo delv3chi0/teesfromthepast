@@ -1,8 +1,7 @@
 #root {
-  /* REMOVED: max-width: 1280px; */
-  /* REMOVED: margin: 0 auto; */
-  padding: 2rem;
-  text-align: center;
+  /* Removed max-width and margin: auto in previous step */
+  /* REMOVED: padding: 2rem; */ /* <--- REMOVED THIS LINE */
+  text-align: center; /* Keep if desired, doesn't affect width */
 }
 
 .logo {
@@ -15,7 +14,7 @@
   filter: drop-shadow(0 0 2em #646cffaa);
 }
 .logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  filter: drop_shadow(0 0 2em #61dafbaa);
 }
 
 @keyframes logo-spin {
