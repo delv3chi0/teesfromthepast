@@ -2,21 +2,24 @@ import { extendTheme } from '@chakra-ui/react';
 
 const colors = {
   brand: {
-    primary: '#1A1D22',       // The main dark background from your screenshot
-    secondary: '#212428',     // Header background
-    cardBlue: '#502c2c',      // The navy blue for cards
-    
-    accentOrange: '#D95A2B', // The vibrant orange from your buttons
-    accentOrangeHover: '#E86A3C',
-    accentYellow: '#FFEE58',
-    
-    textLight: '#EAEAEA',      // The main off-white text color
-    textMuted: '#949494',       // Muted gray for less important text
-    textDark: '#1A1D22',       // Dark text for use on light backgrounds
+    primary: '#184C4A',           // Deep teal background
+    secondary: '#1B3B3A',         // Slightly darker header/nav
+
+    cardGold: '#F1C666',          // Vintage card color
+    cardTan: '#FFE9A0',           // Accent tan
+
+    accentOrange: '#D16930',      // Muted burnt orange
+    accentOrangeHover: '#E17A45',
+
+    accentYellow: '#FFE9A0',      // Soft yellow-tan
+    accentYellowHover: '#FDD97A',
+
+    textLight: '#FDF6EE',         // Creamy white
+    textMuted: '#B7C4C4',         // Muted gray-teal
+    textDark: '#2A2A2A',          // For light backgrounds
   },
-  // Added this ui color for solid panel backgrounds
   ui: {
-      background: '#2D3748', // A solid, dark gray
+    background: '#1E3A39',        // For sections, modals
   }
 };
 
@@ -28,34 +31,33 @@ const fonts = {
 const components = {
   Card: {
     baseStyle: {
-        container: {
-            bg: 'brand.cardBlue',
-            color: 'brand.textLight', 
-            borderRadius: 'xl',
-            boxShadow: 'lg',
-        }
+      container: {
+        bg: 'brand.cardGold',
+        color: 'brand.textDark',
+        borderRadius: 'xl',
+        boxShadow: 'lg',
+      }
     }
   },
-  // MODIFIED: Corrected the Modal component style
   Modal: {
-      baseStyle: (props) => ({
-          dialog: {
-              bg: colors.brand.cardBlue, // Use the solid blue color
-              color: 'brand.textLight'
-          },
-          header: {
-              color: 'brand.textLight',
-              borderBottomWidth: '1px',
-              borderColor: 'rgba(255, 255, 255, 0.1)' // A subtle border color
-          },
-          body: {
-              color: 'brand.textLight'
-          },
-          footer: {
-              borderTopWidth: '1px',
-              borderColor: 'rgba(255, 255, 255, 0.1)'
-          }
-      })
+    baseStyle: {
+      dialog: {
+        bg: 'brand.ui.background',
+        color: 'brand.textLight'
+      },
+      header: {
+        color: 'brand.textLight',
+        borderBottomWidth: '1px',
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+      },
+      body: {
+        color: 'brand.textLight'
+      },
+      footer: {
+        borderTopWidth: '1px',
+        borderColor: 'rgba(255, 255, 255, 0.1)'
+      }
+    }
   },
   Heading: {
     baseStyle: {
@@ -64,7 +66,7 @@ const components = {
       fontWeight: 'normal',
     },
     sizes: {
-      'pageTitle': {
+      pageTitle: {
         fontFamily: fonts.heading,
         fontSize: { base: '3xl', md: '4xl' },
         lineHeight: 'shorter',
@@ -74,29 +76,29 @@ const components = {
   },
   Text: {
     baseStyle: {
-      fontFamily: 'body',
+      fontFamily: fonts.body,
       color: 'brand.textLight',
       lineHeight: 'tall',
     },
   },
   Button: {
     variants: {
-        solid: (props) => {
-            if (props.colorScheme === 'brandAccentOrange') {
-                return {
-                    bg: 'brand.accentOrange',
-                    color: 'white',
-                    _hover: { bg: 'brand.accentOrangeHover' }
-                };
-            }
-             if (props.colorScheme === 'brandAccentYellow') {
-                return {
-                    bg: 'brand.accentYellow',
-                    color: 'brand.textDark',
-                    _hover: { bg: '#FDD835' } // a slightly darker yellow
-                };
-            }
+      solid: (props) => {
+        if (props.colorScheme === 'brandAccentOrange') {
+          return {
+            bg: 'brand.accentOrange',
+            color: 'white',
+            _hover: { bg: 'brand.accentOrangeHover' },
+          };
         }
+        if (props.colorScheme === 'brandAccentYellow') {
+          return {
+            bg: 'brand.accentYellow',
+            color: 'brand.textDark',
+            _hover: { bg: 'brand.accentYellowHover' },
+          };
+        }
+      }
     }
   },
 };
