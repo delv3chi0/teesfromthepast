@@ -65,12 +65,16 @@ const MyOrdersPage = () => {
 
   return (
     <Box w="100%">
+      {/* Page title, already brand.textLight, which is good on dark background */}
       <Heading as="h1" size="2xl" mb={8} color="brand.textLight">My Orders</Heading>
-      
+
       {orders.length === 0 ? (
-        <Box bg="brand.cardBlue" p={10} borderRadius="xl" textAlign="center">
+        // MODIFIED: Apply layerStyle="cardBlue" for consistency
+        <Box layerStyle="cardBlue" p={10} textAlign="center">
             <VStack spacing={5}>
-                <Icon as={FaBoxOpen} boxSize="50px" color="brand.accentYellow" />
+                {/* Icon color will inherit from layerStyle="cardBlue" (brand.textBurnt) */}
+                <Icon as={FaBoxOpen} boxSize="50px" />
+                {/* Text will inherit from layerStyle="cardBlue" (brand.textDark) */}
                 <Text fontSize="xl" fontWeight="medium">You haven't placed any orders yet.</Text>
                 <Button colorScheme="brandAccentOrange" onClick={() => navigate('/shop')}>Start Shopping</Button>
             </VStack>
@@ -78,51 +82,62 @@ const MyOrdersPage = () => {
       ) : (
         <VStack spacing={6} align="stretch">
           {orders.map(order => (
-            <Box key={order._id} p={6} bg="brand.cardBlue" borderRadius="xl" shadow="lg">
+            // MODIFIED: Apply layerStyle="cardBlue" to each order card
+            <Box key={order._id} layerStyle="cardBlue" p={6}>
               <SimpleGrid columns={{ base: 1, md: 4 }} spacing={{ base: 4, md: 6 }} alignItems="center">
-                
+
                 <Box>
-                  <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Order #</Heading>
+                  {/* Headings will inherit brand.textBurnt from layerStyle="cardBlue" */}
+                  <Heading size="xs" textTransform="uppercase">Order #</Heading>
+                  {/* Text will inherit brand.textDark from layerStyle="cardBlue" */}
                   <Text fontSize="sm" title={order._id}>{(order._id || '').substring(18)}</Text>
                 </Box>
-                
+
                 <Box>
-                  <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Date Placed</Heading>
+                  <Heading size="xs" textTransform="uppercase">Date Placed</Heading>
                   <Text fontSize="sm">{new Date(order.createdAt).toLocaleDateString()}</Text>
                 </Box>
-                
+
                 <Box>
-                  <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Total</Heading>
+                  <Heading size="xs" textTransform="uppercase">Total</Heading>
                   <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text>
                 </Box>
-                
+
                 <Box>
-                  <Heading size="xs" color="brand.textMuted" textTransform="uppercase">Status</Heading>
+                  <Heading size="xs" textTransform="uppercase">Status</Heading>
+                  {/* Tag styling handled by theme.js */}
                   <Tag size="md" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'yellow'} mt={1}>{order.orderStatus}</Tag>
                 </Box>
 
               </SimpleGrid>
-              
-              <Divider my={4} borderColor="whiteAlpha.300" />
+
+              {/* MODIFIED: Divider color for visibility on light card */}
+              <Divider my={4} borderColor="rgba(0,0,0,0.1)" />
 
               <Box>
+                {/* Heading will inherit brand.textBurnt from layerStyle="cardBlue" */}
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
-                    <Flex key={item._id} justify="space-between" align="center" bg="brand.primary" p={3} borderRadius="md">
+                    // MODIFIED: Apply darker background and light text for item boxes
+                    <Flex key={item._id} justify="space-between" align="center" bg="brand.secondary" color="brand.textLight" p={3} borderRadius="md">
                       <HStack spacing={4}>
-                        <Image 
-                          src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'} 
+                        <Image
+                          src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
                           alt={item.name}
                           boxSize="60px"
                           objectFit="cover"
                           borderRadius="md"
+                          fallback={<Icon as={FaBoxOpen} boxSize="30px" color="brand.textMuted" />} // Fallback icon color adjusted
+                          mr={4} mb={{base: 2, md: 0}}
                         />
                         <VStack align="start" spacing={0}>
+                          {/* Text will inherit brand.textLight from parent Flex */}
                           <Text fontWeight="bold">{item.name}</Text>
-                          <Text fontSize="xs" color="brand.textMuted">Qty: {item.qty}</Text>
+                          <Text fontSize="xs">Qty: {item.qty}</Text>
                         </VStack>
                       </HStack>
+                      {/* Text will inherit brand.textLight from parent Flex */}
                       <Text fontSize="sm" fontWeight="bold">${(item.price * item.qty).toFixed(2)}</Text>
                     </Flex>
                   ))}
