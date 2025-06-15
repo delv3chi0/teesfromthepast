@@ -16,12 +16,12 @@ import {
   Image,
   HStack,
   Tooltip,
-  Link as ChakraLink, // <--- ADDED ChakraLink IMPORT HERE
+  Link as ChakraLink, // Ensure ChakraLink is imported
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { FaBoxOpen, FaUser, FaShippingFast, FaMapMarkerAlt } from 'react-icons/fa';
+import { FaBoxOpen, FaUser, FaShippingFast, FaMapMarkerAlt } from 'react-icons/fa'; // Ensure all icons are imported
 
 const MyOrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -134,37 +134,38 @@ const MyOrdersPage = () => {
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
+                    // MODIFIED: Layout and Styling for single-line item display
                     <Flex
                       key={item._id}
-                      className="my-orders-item-flex"
-                      justifyContent="space-between"
+                      className="my-orders-item-flex" // For index.css override
+                      justifyContent="space-between" // Pushes image/details left, price right
                       alignItems="center"
-                      bg="brand.secondary"
+                      bg="brand.secondary" // Dark background for item box
                       p={3}
                       borderRadius="md"
-                      gap={4}
-                      minH="100px"
-                      flexWrap={{ base: "wrap", sm: "nowrap" }}
-                      overflowX="auto"
+                      gap={4} // Consistent gap between major sections (image, name/qty, price)
+                      minH="100px" // Ensure consistent height
+                      flexWrap={{ base: "wrap", sm: "nowrap" }} // Wrap on small, no wrap on medium+
+                      overflowX="auto" // Allows horizontal scroll if content overflows
                     >
-                      {/* Image */}
+                      {/* Image (Left) */}
                       <Image
                         src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
                         alt={item.productName || 'Order Item'}
-                        boxSize="100px"
-                        minW="100px"
+                        boxSize="100px" // Increased image size
+                        minW="100px" // Ensure image doesn't shrink
                         objectFit="cover"
                         borderRadius="md"
-                        fallback={<Icon as={FaBoxOpen} boxSize="50px" color="brand.textLight" />}
+                        fallback={<Icon as={FaBoxOpen} boxSize="50px" color="brand.textLight" />} // Fallback icon size/color
                       />
 
-                      {/* Product Name & Quantity (Flexible Middle) */}
-                      <VStack align="flex-start" spacing={0} flexGrow={1} flexShrink={1} flexBasis={{ base: "100%", sm: "auto" }}>
-                          <Text fontWeight="bold" fontSize="md" color="white">
+                      {/* Product Name & Quantity (Middle, Flexible) */}
+                      <VStack align="flex-start" spacing={0} flexGrow={1} flexShrink={1} flexBasis={{ base: "100%", sm: "auto" }} minW={{ base: "150px", sm: "200px" }}> {/* Ensure minW for text content */}
+                          <Text fontWeight="bold" fontSize="md" color="white" flexShrink={0}> {/* Explicit white color */}
                               {item.productName || item.name}
                           </Text>
                           {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
-                              <Text fontSize="sm" color="white">Qty: {item.quantity}</Text>
+                              <Text fontSize="sm" color="white">Qty: {item.quantity}</Text> {/* Explicit white color */}
                           )}
                           {item.customImageURL && (
                               <Tooltip label="View Custom Image">
@@ -184,7 +185,7 @@ const MyOrdersPage = () => {
 
                       {/* Price (Right) */}
                       {(typeof item.priceAtPurchase === 'number' || typeof item.price === 'number') && typeof item.quantity === 'number' && !isNaN(item.priceAtPurchase) && !isNaN(item.quantity) && (
-                        <Text fontSize="lg" fontWeight="bold" color="white" flexShrink={0}>
+                        <Text fontSize="lg" fontWeight="bold" color="white" flexShrink={0} minW="80px" textAlign="right"> {/* Explicit white color, minW for price */}
                           ${((item.priceAtPurchase || item.price) * item.quantity / 100).toFixed(2)}
                         </Text>
                       )}
