@@ -286,61 +286,59 @@ const components = {
       color: 'brand.textDark', // Default text color for items (dark)
       borderColor: 'rgba(0,0,0,0.1)',
       boxShadow: 'lg',
-      // The MenuItem should handle its own descendant text color now.
     },
   },
   MenuItem: {
     baseStyle: {
-      // This is the problematic part. Let's make it universally target all text inside.
+      // This is the most targeted approach within the theme
       _dark: { // Apply this in dark mode (your theme's initial mode)
-          // Redefine the global body text variable specifically for MenuItem and its children
-          // Using a higher specificity selector that matches Chakra's internal structure
-          '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
-              '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textDark) !important', // THIS IS THE KEY
-              color: 'var(--chakra-colors-brand-textDark) !important', // Direct color fallback
+          // Target the MenuItem button itself
+          color: 'var(--chakra-colors-brand-textDark) !important', // Direct color on the button
+
+          // Target specific text wrappers within the MenuItem
+          'p, span, div, strong': {
+              color: 'var(--chakra-colors-brand-textDark) !important',
+              // Also ensure the Chakra body text variable is overridden here
+              '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textDark) !important',
           },
-          // Also set the color directly on the MenuItem container itself as a fallback
-          color: 'var(--chakra-colors-brand-textDark) !important',
       },
       _hover: {
         bg: 'brand.secondary',
-        color: 'brand.textLight', // This color is for the MenuItem itself
-        // Ensure hover also applies to descendants by redefining the variable and direct color
-        '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
+        color: 'brand.textLight', // Color for the MenuItem button itself on hover
+        'p, span, div, strong': {
+            color: 'var(--chakra-colors-brand-textLight) !important', // Color for text wrappers on hover
             '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
-            color: 'var(--chakra-colors-brand-textLight) !important',
         },
       },
       _focus: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
-        // Ensure focus also applies to descendants
-        '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
-            '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
+        'p, div, span, strong': {
             color: 'var(--chakra-colors-brand-textLight) !important',
+            '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
         },
       },
       // Specific styling for the Logout item
       '&[data-chakra-menu-item="true"][color="red.600"]': {
           color: 'red.600 !important',
-          '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': { // Specificity for children
-              '--chakra-colors-chakra-body-text': 'var(--chakra-colors-red-600) !important',
+          'p, div, span, strong': {
               color: 'red.600 !important',
+              '--chakra-colors-chakra-body-text': 'var(--chakra-colors-red-600) !important',
           },
           _hover: {
               bg: 'red.800',
               color: 'white',
-              '.chakra-menu__menuitem p, .chakra-menu__menuitem span, .chakra-menu__menuitem div, .chakra-menu__menuitem strong': {
-                  '--chakra-colors-chakra-body-text': 'var(--chakra-colors-white) !important',
+              'p, div, span, strong': {
                   color: 'white !important',
+                  '--chakra-colors-chakra-body-text': 'var(--chakra-colors-white) !important',
               },
           },
           _focus: {
               bg: 'red.800',
               color: 'white',
-              'p, div, span, strong': { // For focus state, might not need .chakra-menu__menuitem prefix
-                  '--chakra-colors-chakra-body-text': 'var(--chakra-colors-white) !important',
+              'p, div, span, strong': {
                   color: 'white !important',
+                  '--chakra-colors-chakra-body-text': 'var(--chakra-colors-white) !important',
               },
           }
       }
@@ -424,6 +422,34 @@ const theme = extendTheme({
         _hover: {
           textDecoration: 'underline',
         },
+      },
+      // Keep the direct index.css override for maximum safety, even with the theme fix
+      // This is here as a fallback of last resort if the theme object itself is being overridden.
+      '.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus])': {
+        color: 'var(--chakra-colors-brand-textDark) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) span, .chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) p, .chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) div': {
+          color: 'var(--chakra-colors-brand-textDark) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]), .chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled])': {
+        background: 'var(--chakra-colors-brand-secondary) !important',
+        color: 'var(--chakra-colors-brand-textLight) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) span, .chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) span, .chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) p, .chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) p, .chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) div, .chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) div': {
+          color: 'var(--chakra-colors-brand-textLight) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled])': {
+        color: 'var(--chakra-colors-red-600) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) span, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) p, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) div': {
+          color: 'var(--chakra-colors-red-600) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]), .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled])': {
+          background: 'var(--chakra-colors-red-800) !important',
+          color: 'var(--chakra-colors-white) !important',
+      },
+      '.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) span, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) span, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) p, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) p, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) div, .chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) div': {
+          color: 'var(--chakra-colors-white) !important',
       },
     },
   },
