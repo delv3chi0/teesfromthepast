@@ -9,7 +9,7 @@ import {
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa'; // FaToggleOn, FaToggleOff no longer needed
 import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
@@ -31,16 +31,16 @@ const InventoryPanel = () => {
   const { token } = useAuth();
   const toast = useToast();
 
-  // --- REMOVED: All category-specific state variables (categories, loadingCategories, etc.) ---
+  // --- State for Categories (only for product manager dropdown, not for separate management UI) ---
+  const [categories, setCategories] = useState([]); // This state remains for product manager dropdown
 
   // --- State for Products ---
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState(true); // Fixed: This was accidentally 'true', should be an array.
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [errorProducts, setErrorProducts] = useState('');
   const [isProductModalLoading, setIsProductModalLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
-  // MODIFIED: Removed 'category' from initial product form state
   const [productFormData, setProductFormData] = useState({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
   const { isOpen: isProductModalOpen, onOpen: onProductModalOpen, onClose: onProductModalClose } = useDisclosure();
@@ -48,7 +48,7 @@ const InventoryPanel = () => {
 
   // --- Fetching Logic ---
 
-  // Removed fetchCategories and fetchAllCategoriesForProductManager
+  // Removed fetchCategories (for categories table)
 
   // Fetch Products for Product Management table
   const fetchProducts = useCallback(async () => {
@@ -63,11 +63,24 @@ const InventoryPanel = () => {
     }
   }, [token]);
 
+  // Fetch Categories for Product Manager's category dropdown
+  const fetchAllCategoriesForProductManager = useCallback(async () => {
+    if (!token) return;
+    try {
+      const { data } = await client.get('/admin/product-categories', { headers: { Authorization: `Bearer ${token}` } });
+      setCategories(data); // Populates the 'categories' state for the product manager's dropdown
+    } catch (e) {
+      toast({ title: "Error", description: "Could not load categories for product form.", status: "error" });
+    }
+  }, [token, toast]);
+
+
   useEffect(() => {
     if (token) {
       fetchProducts(); // Initial fetch for product table
+      fetchAllCategoriesForProductManager(); // Initial fetch for product manager dropdown
     }
-  }, [token, fetchProducts]);
+  }, [token, fetchProducts, fetchAllCategoriesForProductManager]);
 
   // --- Removed all Category-specific handlers ---
 
@@ -75,6 +88,7 @@ const InventoryPanel = () => {
   const handleOpenProductModal = async (product = null) => {
     onProductModalOpen(); setIsProductModalLoading(true);
     try {
+      const activeCategories = categories.filter(c => c.isActive);
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
       if (product) {
         const { data: fullProductData } = await client.get(`/admin/products/${product._id}`, { headers: { Authorization: `Bearer ${token}` }});
@@ -83,7 +97,6 @@ const InventoryPanel = () => {
         setProductFormData({
           name: fullProductData.name,
           description: fullProductData.description || '',
-          // Removed 'category' from productFormData initialization
           basePrice: fullProductData.basePrice || 0,
           tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
           isActive: fullProductData.isActive,
@@ -91,7 +104,6 @@ const InventoryPanel = () => {
         });
       } else {
         setIsEditingProduct(false); setSelectedProduct(null);
-        // MODIFIED: Removed 'category' from new product form state
         setProductFormData({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
     } catch (err) { toast({ title: "Error", description: "Could not load data for the product form.", status: "error" }); onProductModalClose(); }
@@ -123,16 +135,12 @@ const InventoryPanel = () => {
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = productFormData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setProductFormData(prev => ({ ...prev, variants: newVariants })); };
 
   const handleProductSubmit = async () => {
-    // MODIFIED: Removed 'category' check from validation
     if (!productFormData.name.trim()) { toast({ title: "Validation Error", description: "Product Name is required.", status: "error" }); return; }
     for (const variant of productFormData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
     if (productFormData.variants.length > 0 && !productFormData.variants.some(v => v.isDefaultDisplay)) { productFormData.variants[0].isDefaultDisplay = true; }
     for (const variant of productFormData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; } } }
     const method = isEditingProduct ? 'put' : 'post';
     const url = isEditingProduct ? `/admin/products/${selectedProduct._id}` : '/admin/products';
-    // MODIFIED: Removed 'category' from payload if not needed by backend, or set to null/empty string
-    // Assuming backend can handle 'category' being omitted or null if it's not a mandatory field now.
-    // If backend requires it, you'd need to provide a default value here.
     const payload = { ...productFormData, tags: (productFormData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditingProduct ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onProductModalClose(); }
     catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message, status: "error" }); }
@@ -148,28 +156,26 @@ const InventoryPanel = () => {
         Inventory Management
       </Heading>
 
-      {/* --- Product Management Section --- */}
       <Box layerStyle="cardBlue" w="100%" p={{ base: 2, md: 4 }}>
         <HStack justifyContent="space-between" mb={6} w="100%">
           <Heading size="md">Manage Products</Heading>
           <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandAccentOrange" onClick={() => handleOpenProductModal()}>Add New Product</Button>
         </HStack>
-        {loadingProducts ? (
+        {Array.isArray(products) && products.length === 0 ? ( // Added Array.isArray check for safety
+          <Text>No products found. Click "Add New Product" to start.</Text>
+        ) : loadingProducts ? (
           <VStack justifyContent="center" alignItems="center" minH="200px">
             <Spinner size="xl" />
             <Text mt={2}>Loading Products...</Text>
           </VStack>
         ) : errorProducts ? (
           <Alert status="error" borderRadius="md"><AlertIcon />{errorProducts}</Alert>
-        ) : products.length === 0 ? (
-            <Text>No products found. Click "Add New Product" to start.</Text>
         ) : (
           <TableContainer w="100%">
             <Table variant="simple" size="sm" w="100%">
               <Thead>
                 <Tr>
                   <Th>Name</Th>
-                  {/* REMOVED: Category Column Header */}
                   <Th>Base Price</Th>
                   <Th>Variants</Th>
                   <Th>Status</Th>
@@ -180,7 +186,6 @@ const InventoryPanel = () => {
                 {products.map((p) => (
                   <Tr key={p._id}>
                     <Td fontWeight="medium">{p.name}</Td>
-                    {/* REMOVED: Category Data Cell */}
                     <Td>${p.basePrice?.toFixed(2)}</Td>
                     <Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td>
                     <Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
@@ -205,11 +210,11 @@ const InventoryPanel = () => {
           <ModalBody pb={6}>
             {isProductModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
-                <Box p={4} borderWidth="1px" borderRadius="md" borderColor="rgba(255,255,255,0.1)" bg="brand.secondary">
+                {/* Applied darkModalInnerSection layerStyle */}
+                <Box layerStyle="darkModalInnerSection" mb={6}>
                     <Heading size="sm" mb={4}>Product Details</Heading>
                     <SimpleGrid columns={{base: 1, md: 2}} spacing={4}>
                         <FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={productFormData.name} onChange={handleProductFormChange}/></FormControl>
-                        {/* REMOVED: Category FormControl */}
                         <FormControl isRequired>
                             <FormLabel>Base Price ($)</FormLabel>
                             <NumberInput value={productFormData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}>
@@ -228,12 +233,14 @@ const InventoryPanel = () => {
                     <FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={productFormData.isActive} onChange={handleProductFormChange}/></FormControl>
                 </Box>
 
-                <Box p={4} borderWidth="1px" borderRadius="md" borderColor="rgba(255,255,255,0.1)" bg="brand.secondary">
+                {/* Applied darkModalInnerSection layerStyle */}
+                <Box layerStyle="darkModalInnerSection">
                     <Heading size="sm" mb={4}>Product Variants</Heading>
                     <RadioGroup onChange={(val) => setDefaultVariant(parseInt(val))} value={productFormData.variants.findIndex(v => v.isDefaultDisplay)?.toString() ?? "-1"}>
                       <VStack spacing={4} align="stretch">
                         {(productFormData.variants || []).map((variant, colorIndex) => (
                           (variant && variant.sizes) ?
+                          // Accordion also uses a brand.primary background, fitting the two-tone
                           <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="brand.primary">
                             <AccordionItem border="none">
                               <Flex align="center" p={2}>
@@ -271,7 +278,8 @@ const InventoryPanel = () => {
                         ))}
                       </VStack>
                     </RadioGroup>
-                    <Box p={4} borderWidth="1px" borderRadius="md" mt={6} borderColor="rgba(255,255,255,0.1)" bg="brand.secondary">
+                    {/* Applied darkModalInnerSection layerStyle */}
+                    <Box layerStyle="darkModalInnerSection" mt={6}>
                         <Heading size="xs" mb={3}>Add New Color Variant</Heading>
                         <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}>
                             <FormControl><FormLabel fontSize="sm">Color Name</FormLabel><Select size="sm" name="colorName" value={newColorData.colorName} onChange={handleNewColorFormChange} placeholder="Select...">{CORE_COLORS.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</Select></FormControl>

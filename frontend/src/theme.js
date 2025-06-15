@@ -15,9 +15,12 @@ const colors = {
     textLight: '#FDF6EE', // Very light text, for use on dark backgrounds (primary, secondary, ui.background, MODALS)
     textMuted: '#B7C4C4', // Muted text for subtle elements on dark backgrounds
     textDark: '#2A2A2A', // Dark text, for use on light backgrounds (like cardBlue, INPUT FIELDS)
-    textBurnt: '#3B2F1B', // Even darker, burnt-sienna like text for strong contrast on light elements
+    textBurnt: '#3B2F1B', // Even darker, burnt-sienna like text for strong contrast on light elements - NEW PRIMARY FOR HEADINGS ON LIGHT CARDS
 
     paper: '#2D3748', // This color matches the 'ui.background' you previously had, providing a muted dark background
+
+    // NEW COLOR FOR TWO-TONE EFFECT ON LIGHT CARDS
+    subtleLightBg: 'rgba(0,0,0,0.05)', // A very faint black overlay for inner sections on light cards
   },
   ui: {
     background: '#1E3A39', // General UI background, similar to primary
@@ -34,24 +37,21 @@ const components = {
     baseStyle: {
         container: {
             bg: 'brand.cardBlue',
-            color: 'brand.textDark', // Default color for text directly inside Card
+            color: 'brand.textDark', // Default color for text directly inside Card (for paragraph text, etc.)
             borderRadius: 'xl',
             boxShadow: 'lg',
             _dark: {
+                // MODIFIED: Headings within light cards now use brand.textBurnt
                 'h1, h2, h3, h4, h5, h6': {
                     color: 'brand.textBurnt !important',
                     fontFamily: `${fonts.heading} !important`,
                 },
-                'p': {
+                // Body text and generic divs/spans within light cards use brand.textDark
+                'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
                     color: 'brand.textDark !important',
                     fontFamily: `${fonts.body} !important`,
                 },
-                'div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
-                  color: 'brand.textDark !important', // Target generic divs
-                },
-                'span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
-                  color: 'brand.textDark !important', // Target generic spans
-                },
+                // Icons within light cards use brand.textBurnt
                 'svg': {
                     color: 'brand.textBurnt !important',
                 },
@@ -69,7 +69,7 @@ const components = {
         fontSize: { base: '3xl', md: '4xl' },
         lineHeight: 'shorter',
         mb: 8,
-        color: 'brand.textLight',
+        color: 'brand.textLight', // Page title remains light (on dark primary background)
       },
     },
   },
@@ -83,7 +83,7 @@ const components = {
     baseStyle: {
       dialog: {
         bg: 'brand.secondary',
-        color: 'brand.textLight', // Global text color for direct children of ModalContent
+        color: 'brand.textLight',
       },
       header: {
         color: 'brand.textLight',
@@ -91,13 +91,12 @@ const components = {
         borderColor: 'rgba(255, 255, 255, 0.1)',
       },
       body: {
-        color: 'brand.textLight', // Explicitly setting for modal body content
-        // NEW: Target FormLabels and Headings specifically within the modal body
-        'label': { // Target all FormLabel elements
-            color: 'brand.textLight !important', // Force them to be light
+        color: 'brand.textLight',
+        'label': {
+            color: 'brand.textLight !important',
         },
-        'h1, h2, h3, h4, h5, h6': { // Target all Heading elements
-            color: 'brand.textLight !important', // Force them to be light
+        'h1, h2, h3, h4, h5, h6': {
+            color: 'brand.textLight !important', // Headings in modals are light (on dark background)
         },
       },
       footer: {
@@ -223,7 +222,6 @@ const components = {
   },
   FormLabel: {
     baseStyle: {
-      // Removed color here, as it's handled by Modal.body's explicit selector for labels
       mb: 1,
     },
   },
@@ -260,7 +258,7 @@ const config = {
 const layerStyles = {
   cardBlue: {
     bg: 'brand.cardBlue',
-    color: 'brand.textDark', // Default text color for elements using this layer style
+    color: 'brand.textDark', // Default text color for direct children (e.g. paragraphs)
     borderRadius: 'xl',
     boxShadow: 'lg',
     p: 8,
@@ -276,17 +274,38 @@ const layerStyles = {
       boxShadow: 'xl',
       borderColor: 'brand.accentYellow',
     },
+    // Headings within light cards now use brand.textBurnt (darker brown)
     '& h1, & h2, & h3, & h4, & h5, & h6': {
       color: 'brand.textBurnt !important',
       fontFamily: `${fonts.heading} !important`,
     },
+    // Body text/generic divs/spans within light cards use brand.textDark
     '& p, & div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), & span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
       color: 'brand.textDark !important',
       fontFamily: `${fonts.body} !important`,
     },
+    // Icons within light cards use brand.textBurnt (darker brown)
     '& svg': {
       color: 'brand.textBurnt !important',
     },
+  },
+  // NEW: Layer style for inner sections within LIGHT cards (e.g., homepage feature cards)
+  lightCardInnerSection: {
+    bg: 'brand.subtleLightBg', // Subtle darker tone
+    // Text colors within this will naturally inherit from parent Card's brand.textDark / brand.textBurnt
+    borderRadius: 'md', // Small rounded corners for inner boxes
+    p: 4, // Padding for content inside
+    borderWidth: '1px',
+    borderColor: 'rgba(0,0,0,0.1)', // Subtle border
+  },
+  // NEW: Layer style for inner sections within DARK modal backgrounds
+  darkModalInnerSection: {
+    bg: 'brand.primary', // Darkest brand color for contrast on brand.secondary
+    // Text colors within this will naturally inherit from Modal's brand.textLight
+    borderRadius: 'md',
+    p: 4,
+    borderWidth: '1px',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
 };
 

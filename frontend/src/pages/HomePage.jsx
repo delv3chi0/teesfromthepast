@@ -1,3 +1,4 @@
+// frontend/src/pages/HomePage.jsx
 import React from 'react';
 import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Link as ChakraLink } from '@chakra-ui/react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -5,12 +6,12 @@ import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
 
 const FeatureCard = ({ icon, title, children }) => (
     <Box
-        // MODIFIED: Changed background to the themed card color
-        bg="brand.cardBlue"
+        layerStyle="cardBlue" // <--- Ensures all card styling (including text/icon color) comes from theme
+        // REMOVED: bg="brand.cardBlue" (redundant with layerStyle)
         p={8}
         borderRadius="xl"
         borderWidth="1px"
-        borderColor="transparent" // Start transparent
+        borderColor="transparent"
         display="flex"
         flexDirection="column"
         alignItems="center"
@@ -18,9 +19,14 @@ const FeatureCard = ({ icon, title, children }) => (
         transition="all 0.2s ease-in-out"
         _hover={{ transform: "translateY(-5px)", boxShadow: "lg", borderColor: "brand.accentYellow" }}
     >
-        <Icon as={icon} w={12} h={12} color="brand.accentYellow" mb={5} />
-        <Heading as="h3" size="lg" mb={3} color="brand.textLight">{title}</Heading>
-        <Text color="brand.textMuted">{children}</Text>
+        {/* ICON COLOR: Will now inherit from layerStyle="cardBlue" which sets svg to brand.textBurnt */}
+        <Icon as={icon} w={12} h={12} mb={5} /> 
+
+        {/* HEADING COLOR: Will now inherit from layerStyle="cardBlue" which sets h3 to brand.textBurnt */}
+        <Heading as="h3" size="lg" mb={3}>{title}</Heading>
+
+        {/* TEXT COLOR: Will now inherit from layerStyle="cardBlue" which sets p to brand.textDark */}
+        <Text>{children}</Text>
     </Box>
 );
 
@@ -64,7 +70,7 @@ const HomePage = () => {
                     <FeatureCard icon={FaUserCheck} title="Your Designs, Your Choice">
                         Keep your creations private or share them with the community. Every design you save is added to your personal collection to use any time you want.
                     </FeatureCard>
-                </SimpleGrid>
+                 </SimpleGrid>
             </VStack>
         </VStack>
     );
