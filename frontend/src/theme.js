@@ -3,7 +3,7 @@ import { extendTheme } from '@chakra-ui/react';
 const colors = {
   brand: {
     primary: '#184C4A', // Main dark background (a deep teal/green)
-    secondary: '#1B3B3A', // Header/darker background (slightly darker teal/green), used for modal backgrounds
+    secondary: '#1B3B3A', // Header/darker background (slightly lighter dark teal), used for modal backgrounds
     cardBlue: '#F8DFA7', // The new light, warm card background (light beige/gold)
 
     accentOrange: '#D16930', // Vibrant orange
@@ -283,32 +283,57 @@ const components = {
   MenuList: {
     baseStyle: {
       bg: 'brand.cardBlue',
-      color: 'brand.textDark', // Default text color for items (dark)
+      color: 'brand.textDark',
       borderColor: 'rgba(0,0,0,0.1)',
       boxShadow: 'lg',
+      // NEW: Target direct text nodes or generic containers within MenuList
+      'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+        color: 'brand.textDark !important',
+      },
     },
   },
   MenuItem: {
     baseStyle: {
-      color: 'brand.textDark !important', // <--- Apply !important here
+      color: 'brand.textDark !important', // Force dark text directly on MenuItem
+      // NEW: Target direct text nodes or generic containers within MenuItem
+      'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+        color: 'brand.textDark !important',
+      },
       _hover: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
+        // NEW: Force direct text nodes or generic containers on hover
+        'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+            color: 'brand.textLight !important',
+        },
       },
       _focus: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
+        // NEW: Force direct text nodes or generic containers on focus
+        'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+            color: 'brand.textLight !important',
+        },
       },
       // Specific styling for the Logout item
       '&[data-chakra-menu-item="true"][color="red.600"]': {
-          color: 'red.600 !important', // <--- Also apply !important here
+          color: 'red.600 !important',
+          'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+              color: 'red.600 !important',
+          },
           _hover: {
               bg: 'red.800',
               color: 'white',
+              'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+                  color: 'white !important',
+              },
           },
           _focus: {
               bg: 'red.800',
               color: 'white',
+              'p, div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+                  color: 'white !important',
+              },
           }
       }
     },
@@ -344,17 +369,14 @@ const layerStyles = {
       boxShadow: 'xl',
       borderColor: 'brand.accentYellow',
     },
-    // Headings within light cards now use brand.textBurnt (darker brown)
     '& h1, & h2, & h3, & h4, & h5, & h6': {
       color: 'brand.textBurnt !important',
       fontFamily: `${fonts.heading} !important`,
     },
-    // Body text/generic divs/spans within light cards use brand.textDark
     '& p, & div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), & span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
       color: 'brand.textDark !important',
       fontFamily: `${fonts.body} !important`,
     },
-    // Icons within light cards use brand.textBurnt (darker brown)
     '& svg': {
       color: 'brand.textBurnt !important',
     },
