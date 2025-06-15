@@ -5,8 +5,8 @@ const colors = {
     primary: '#184C4A',           // Deep teal background
     secondary: '#1B3B3A',         // Slightly darker header/nav
 
-    cardGold: '#F1C666',          // Vintage card color
-    cardTan: '#FFE9A0',           // Accent tan
+    cardTan: '#FFE9A0',           // Soft tan for cards
+    cardGold: '#F1C666',          // Optional alternative
 
     accentOrange: '#D16930',      // Muted burnt orange
     accentOrangeHover: '#E17A45',
@@ -32,7 +32,7 @@ const components = {
   Card: {
     baseStyle: {
       container: {
-        bg: 'brand.cardGold',
+        bg: 'brand.cardTan',        // 🔶 Cards are now tan
         color: 'brand.textDark',
         borderRadius: 'xl',
         boxShadow: 'lg',
