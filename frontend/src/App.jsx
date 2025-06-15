@@ -1,3 +1,5 @@
+import './index.css'; 
+
 import React from 'react';
 import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Link as ChakraLink, ChakraProvider } from '@chakra-ui/react'; // Ensure ChakraProvider is imported
 import { useNavigate, Link as RouterLink, Routes, Route, Navigate } from 'react-router-dom'; // Ensure all react-router-dom imports are here

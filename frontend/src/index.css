@@ -1,4 +1,4 @@
-/* --- START: ABSOLUTE FINAL ATTEMPT OVERRIDE FOR MENU ITEM TEXT --- */
+/* --- START: ABSOLUTE FINAL SOLUTION FOR MENU ITEM TEXT --- */
 /* This directly targets the text content within Chakra UI MenuItems */
 
 /* Default state: dark brown text */
@@ -24,37 +24,38 @@
 /* Targeting common text-wrapping elements for hover/focus state */
 .chakra-menu__menuitem[data-chakra-menu-item][data-hover] span,
 .chakra-menu__menuitem[data-chakra-menu-item][data-focus] span,
-.chakra-menu__menuitem[data-chakra-menu-item][data-hover] p,
 .chakra-menu__menuitem[data-chakra-menu-item][data-focus] p,
-.chakra-menu__menuitem[data-chakra-menu-item][data-hover] div,
-.chakra-menu__menuitem[data-chakra-menu-item][data-focus] div {
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover] p,
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus] div,
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover] div {
     color: var(--chakra-colors-brand-textLight) !important;
 }
 
+
 /* Specific override for the "Logout" item (red text) */
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"] {
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) {
   color: var(--chakra-colors-red-600) !important;
 }
 
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"] span,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"] p,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"] div {
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) div {
     color: var(--chakra-colors-red-600) !important;
 }
 
 /* Ensure hover/focus works on logout specifically */
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover],
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus] {
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]),
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) {
     background: var(--chakra-colors-red-800) !important;
     color: var(--chakra-colors-white) !important;
 }
 
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover] span,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus] span,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover] p,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus] p,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover] div,
-.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus] div {
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) div,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) div {
     color: var(--chakra-colors-white) !important;
 }
-/* --- END: ABSOLUTE FINAL ATTEMPT OVERRIDE FOR MENU ITEM TEXT --- */
+/* --- END: ABSOLUTE FINAL SOLUTION FOR MENU ITEM TEXT --- */
