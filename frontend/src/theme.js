@@ -83,7 +83,7 @@ const components = {
     baseStyle: {
       dialog: {
         bg: 'brand.secondary',
-        color: 'brand.textLight', // Ensures all text directly in modal content is light by default
+        color: 'brand.textLight', // Global text color for direct children of ModalContent
       },
       header: {
         color: 'brand.textLight',
@@ -92,6 +92,13 @@ const components = {
       },
       body: {
         color: 'brand.textLight', // Explicitly setting for modal body content
+        // NEW: Target FormLabels and Headings specifically within the modal body
+        'label': { // Target all FormLabel elements
+            color: 'brand.textLight !important', // Force them to be light
+        },
+        'h1, h2, h3, h4, h5, h6': { // Target all Heading elements
+            color: 'brand.textLight !important', // Force them to be light
+        },
       },
       footer: {
         borderTopWidth: '1px',
@@ -137,8 +144,8 @@ const components = {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark', // Text typed by user should be dark
-          bg: 'whiteAlpha.900', // <--- Set a light background for input fields
+          color: 'brand.textDark !important',
+          bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _placeholder: {
             color: 'brand.textMuted',
@@ -158,8 +165,8 @@ const components = {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark', // Text chosen by user should be dark
-          bg: 'whiteAlpha.900', // <--- Set a light background for select fields
+          color: 'brand.textDark !important',
+          bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _hover: {
             borderColor: 'brand.accentOrange',
@@ -172,12 +179,12 @@ const components = {
       },
     },
   },
-  Textarea: { // NEW: Add Textarea theming
+  Textarea: {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark', // Text typed by user should be dark
-          bg: 'whiteAlpha.900', // <--- Set a light background for textarea fields
+          color: 'brand.textDark !important',
+          bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _placeholder: {
             color: 'brand.textMuted',
@@ -193,12 +200,12 @@ const components = {
       },
     },
   },
-  NumberInput: { // NEW: Add NumberInput theming
+  NumberInput: {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark', // Text typed by user should be dark
-          bg: 'whiteAlpha.900', // <--- Set a light background for number input fields
+          color: 'brand.textDark !important',
+          bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _placeholder: {
             color: 'brand.textMuted',
@@ -216,9 +223,7 @@ const components = {
   },
   FormLabel: {
     baseStyle: {
-      // REMOVED: color: 'brand.textDark'. This allows it to inherit from parent.
-      // In modals (dark background), it will inherit brand.textLight.
-      // In light cards, it will inherit brand.textDark from the card's baseStyle.
+      // Removed color here, as it's handled by Modal.body's explicit selector for labels
       mb: 1,
     },
   },
@@ -232,22 +237,17 @@ const components = {
           }
       }
   },
-  Accordion: { // New theming for Accordion component used in ProductManager modal
+  Accordion: {
     baseStyle: {
       container: {
-        // No explicit background here, let individual AccordionItem control it
-        borderWidth: '0 !important', // Remove default Chakra accordion borders
+        borderWidth: '0 !important',
       },
       button: {
-        // The AccordionButton's background is controlled by its parent AccordionItem
-        // Text color should inherit from the AccordionItem's background color
         _hover: {
-          bg: 'whiteAlpha.100', // Subtle hover on dark background
+          bg: 'whiteAlpha.100',
         },
       },
-      panel: {
-        // Panel background is set in JSX (brand.secondary), text should inherit light
-      },
+      panel: {},
     },
   },
 };
