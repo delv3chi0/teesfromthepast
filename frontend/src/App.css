@@ -40,3 +40,63 @@
 .read-the-docs {
   color: #888;
 }
+
+/* --- START: ABSOLUTE LAST RESORT OVERRIDE FOR MENU ITEM TEXT --- */
+/* This directly targets the text content within Chakra UI MenuItems */
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) {
+  /* Default state: dark brown text */
+  color: var(--chakra-colors-brand-textDark) !important;
+}
+
+/* Targeting common text-wrapping elements within the MenuItem for default state */
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) span,
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) p,
+.chakra-menu__menuitem[data-chakra-menu-item]:not([data-disabled]):not([data-focus]) div {
+    color: var(--chakra-colors-brand-textDark) !important;
+}
+
+/* Hover/Focus state: light text on dark teal background */
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]),
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) {
+  background: var(--chakra-colors-brand-secondary) !important;
+  color: var(--chakra-colors-brand-textLight) !important;
+}
+
+/* Targeting common text-wrapping elements within the MenuItem for hover/focus state */
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][data-focus]:not([data-disabled]) div,
+.chakra-menu__menuitem[data-chakra-menu-item][data-hover]:not([data-disabled]) div {
+    color: var(--chakra-colors-brand-textLight) !important;
+}
+
+
+/* Specific override for the "Logout" item if it has color="red.600" prop */
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) {
+  color: var(--chakra-colors-red-600) !important;
+}
+/* Targeting common text-wrapping elements within the Logout MenuItem for default state */
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"]:not([data-hover]):not([data-focus]):not([data-disabled]) div {
+    color: var(--chakra-colors-red-600) !important;
+}
+
+/* Ensure hover/focus works on logout specifically */
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]),
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) {
+    background: var(--chakra-colors-red-800) !important;
+    color: var(--chakra-colors-white) !important;
+}
+/* Targeting common text-wrapping elements within the Logout MenuItem for hover/focus state */
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) span,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) p,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-focus]:not([data-disabled]) div,
+.chakra-menu__menuitem[data-chakra-menu-item][color="red.600"][data-hover]:not([data-disabled]) div {
+    color: var(--chakra-colors-white) !important;
+}
+/* --- END: ABSOLUTE LAST RESORT OVERRIDE FOR MENU ITEM TEXT --- */
