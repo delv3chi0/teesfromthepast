@@ -1,6 +1,6 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
+  /* REMOVED: max-width: 1280px; */
+  /* REMOVED: margin: 0 auto; */
   padding: 2rem;
   text-align: center;
 }
@@ -111,6 +111,6 @@
 .my-orders-item-flex div,
 .my-orders-item-flex strong {
     color: white !important; /* Force absolute white for readability */
-    filter: none !important; /* <--- CRITICAL: Disable any brightness filter */
+    filter: none !important; /* Disable any brightness filter */
 }
 /* --- END: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT & FILTER --- */
