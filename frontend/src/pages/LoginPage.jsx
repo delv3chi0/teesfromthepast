@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
-  Box,
+  Box, // Ensure Box is imported
   Button,
   FormControl,
   FormLabel,
   Input,
-  VStack,
+  VStack, // VStack is still used for internal spacing
   Heading,
   Text,
   useToast,
@@ -16,12 +16,12 @@ import {
   Image,
   Link as ChakraLink,
   Center,
-  Flex
+  Flex // Ensure Flex is imported
 } from '@chakra-ui/react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
-import Footer from '../components/Footer.jsx';
+import Footer from '../components/Footer.jsx'; // Assuming Footer path is correct
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -68,78 +68,83 @@ const LoginPage = () => {
           <RouterLink to="/">
             <Image src="/logo.png" alt="Tees From The Past Logo" maxH="100px" mb={4} objectFit="contain" />
           </RouterLink>
-          <VStack
-            as="form"
+
+          {/* This Box now explicitly uses the 'cardBlue' layer style from theme.js */}
+          <Box
+            as="form" // Keep as="form" to maintain form semantics
             onSubmit={handleSubmit}
-            spacing={6}
             p={{ base: 6, md: 10 }}
-            bg="brand.cardBlue"
-            borderRadius="xl"
-            boxShadow="xl"
-            w="100%"
+            layerStyle="cardBlue" // <--- CRITICAL CHANGE: Apply the global card style
+            w="100%" // Ensure it takes full width
           >
-            <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">
-              Welcome Back
-            </Heading>
-            
-            <FormControl isRequired>
-              <FormLabel>Email Address</FormLabel>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                size="lg"
-              />
-            </FormControl>
+            {/* Inner VStack to maintain spacing between form elements, now inside the Box */}
+            <VStack spacing={6} w="100%">
+              {/* Removed explicit 'color' prop. Will now inherit from 'layerStyle="cardBlue"'. */}
+              <Heading as="h1" size="lg" textAlign="center" fontFamily="heading">
+                Welcome Back
+              </Heading>
 
-            <FormControl isRequired>
-              <FormLabel>Password</FormLabel>
-              <InputGroup size="lg">
+              <FormControl isRequired>
+                <FormLabel>Email Address</FormLabel>
                 <Input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  size="lg"
                 />
-                <InputRightElement>
-                  <IconButton
-                    variant="ghost"
-                    icon={showPassword ? <FaEyeSlash /> : <FaEye />}
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Password</FormLabel>
+                <InputGroup size="lg">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
                   />
-                </InputRightElement>
-              </InputGroup>
-              <Text textAlign="right" mt={2}>
-                  <ChakraLink as={RouterLink} to="/forgot-password" fontSize="sm" color="brand.accentYellow" _hover={{ textDecoration: 'underline' }}>
-                      Forgot Password?
-                  </ChakraLink>
+                  <InputRightElement>
+                    <IconButton
+                      variant="ghost"
+                      icon={showPassword ? <FaEyeSlash /> : <FaEye />}
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+                {/* Text for Forgot Password link - its color is correctly set to brand.accentYellow, which is good contrast */}
+                <Text textAlign="right" mt={2}>
+                    <ChakraLink as={RouterLink} to="/forgot-password" fontSize="sm" color="brand.accentYellow" _hover={{ textDecoration: 'underline' }}>
+                        Forgot Password?
+                    </ChakraLink>
+                </Text>
+              </FormControl>
+
+              <Button
+                type="submit"
+                isLoading={loading}
+                loadingText="Logging In..."
+                colorScheme="brandAccentOrange"
+                width="full"
+                size="lg"
+                fontSize="md"
+              >
+                Log In
+              </Button>
+
+              {/* Removed explicit 'color' prop. Will now inherit from 'layerStyle="cardBlue"'. */}
+              <Text pt={2} textAlign="center">
+                Don't have an account?{' '}
+                <ChakraLink as={RouterLink} to="/register" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
+                  Sign up now
+                </ChakraLink>
               </Text>
-            </FormControl>
-
-            <Button
-              type="submit"
-              isLoading={loading}
-              loadingText="Logging In..."
-              colorScheme="brandAccentOrange"
-              width="full"
-              size="lg"
-              fontSize="md"
-            >
-              Log In
-            </Button>
-
-            <Text pt={2} textAlign="center" color="brand.textMuted">
-              Don't have an account?{' '}
-              <ChakraLink as={RouterLink} to="/register" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
-                Sign up now
-              </ChakraLink>
-            </Text>
-          </VStack>
+            </VStack>
+          </Box> {/* End Box */}
         </VStack>
       </Container>
-      <Footer />
+      <Footer /> {/* Assuming Footer is a separate component */}
     </Flex>
   );
 };
