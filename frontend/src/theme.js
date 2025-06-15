@@ -15,12 +15,11 @@ const colors = {
 
     textLight: '#FDF6EE', // Very light text, for use on dark backgrounds (primary, secondary, ui.background)
     textMuted: '#B7C4C4', // Muted text for subtle elements on dark backgrounds
-    textDark: '#2A2A2A', // Dark text, for use on light backgrounds (like cardBlue)
+    textDark: '#2A2A2A', // Dark text, for use on light backgrounds (like cardBlue, modals)
     textBurnt: '#3B2F1B', // Even darker, burnt-sienna like text for strong contrast on light elements
   },
   ui: {
     background: '#1E3A39', // A solid dark background for general UI elements (similar to primary/secondary)
-    // modalBackground: '#2D3748', // An alternative if you wanted a distinct modal background, but brand.secondary works well.
   }
 };
 
@@ -30,12 +29,11 @@ const fonts = {
 };
 
 const components = {
-  // Added back the Card component's baseStyle for direct Chakra <Card> usage
   Card: {
     baseStyle: {
       container: {
         bg: 'brand.cardBlue', // Use the light card background
-        color: 'brand.textDark', // Ensure dark text on light card
+        color: 'brand.textDark', // <--- IMPORTANT: This sets the default text color for ALL children of a Chakra <Card> to dark.
         borderRadius: 'xl',
         boxShadow: 'lg',
       }
@@ -45,23 +43,26 @@ const components = {
     baseStyle: {
       fontFamily: fonts.heading,
       fontWeight: 'normal',
-      color: 'brand.textDark', // Default to dark text for headings, assuming they might appear on light backgrounds (like Cards)
+      // We are *not* setting a default color here. Chakra's cascade will use the color from the parent (e.g., Card)
+      // or the global body color if no parent explicitly sets it.
     },
     sizes: {
       pageTitle: {
-        // fontFamily is inherited from baseStyle, no need to repeat unless different
         fontSize: { base: '3xl', md: '4xl' },
         lineHeight: 'shorter',
         mb: 8,
-        color: 'brand.textLight', // Override for pageTitle, assuming it's on a dark primary background
+        color: 'brand.textLight', // Explicitly set pageTitle to light, as it's on a dark background.
       },
+      // You can define other heading sizes/styles here if needed,
+      // and explicitly set their colors based on their expected background.
     },
   },
   Text: {
     baseStyle: {
       fontFamily: fonts.body,
       lineHeight: 'tall',
-      color: 'brand.textDark', // Default to dark text for general text, assuming they might appear on light backgrounds (like Cards)
+      // We are *not* setting a default color here. Chakra's cascade will use the color from the parent (e.g., Card)
+      // or the global body color if no parent explicitly sets it.
     },
   },
   Modal: {
@@ -90,7 +91,7 @@ const components = {
         if (props.colorScheme === 'brandAccentOrange') {
           return {
             bg: 'brand.accentOrange',
-            color: 'white', // White text on orange button
+            color: 'white',
             _hover: { bg: 'brand.accentOrangeHover' },
           };
         }
@@ -101,6 +102,7 @@ const components = {
             _hover: { bg: 'brand.accentYellowHover' },
           };
         }
+        return {}; // Return empty object for other colorSchemes or fallback
       },
     },
   },
@@ -112,7 +114,7 @@ const config = {
 };
 
 const layerStyles = {
-  // This is used for specific components where you apply a layer style prop
+  // This is for custom components or divs where you apply the layerStyle prop
   cardBlue: {
     bg: 'brand.cardBlue',
     color: 'brand.textDark', // Main text color for elements using this layer style
@@ -139,7 +141,7 @@ const layerStyles = {
     },
     // Ensure headings within this layer style are also dark
     '& h1, & h2, & h3, & h4, & h5, & h6': {
-      color: 'brand.textBurnt',
+      color: 'brand.textBurnt', // Use textBurnt for headings on the light card background
       fontFamily: 'heading',
     },
     // Ensure paragraphs within this layer style are also dark
@@ -160,6 +162,13 @@ const theme = extendTheme({
       body: {
         bg: 'brand.primary', // Global body background remains dark
         color: 'brand.textLight', // Global text color remains light (for elements on the dark body background)
+      },
+      // You might also want to ensure links are visible
+      a: {
+        color: 'brand.accentYellow', // Example: make links stand out
+        _hover: {
+          textDecoration: 'underline',
+        },
       },
     },
   },
