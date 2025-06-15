@@ -9,12 +9,12 @@ import {
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa'; // FaToggleOn, FaToggleOff no longer needed
+import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa';
 import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
-// --- Product Manager Specific Constants (Moved from original ProductManager.jsx) ---
-const SIZES = ["XS", "S", "M", "L", "XXL", "One Size", "6M", "12M", "18M", "24M"];
+// --- Product Manager Specific Constants ---
+const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "One Size", "6M", "12M", "18M", "24M"];
 const CORE_COLORS = [ { name: "Black", hex: "#000000" }, { name: "White", hex: "#FFFFFF" }, { name: "Navy Blue", hex: "#000080" }, { name: "Heather Grey", hex: "#B2BEB5" }, { name: "Cream / Natural", hex: "#FFFDD0" }, { name: "Mustard Yellow", hex: "#FFDB58" }, { name: "Olive Green", hex: "#556B2F" }, { name: "Maroon", hex: "#800000" }, { name: "Burnt Orange", hex: "#CC5500" }, { name: "Heather Forest", hex: "#228B22" }, { name: "Royal Blue", hex: "#4169E1" }, { name: "Charcoal", hex: "#36454F" }, { name: "Sand", hex: "#C2B280" }, { name: "Light Blue", hex: "#ADD8E6" }, { name: "Cardinal Red", hex: "#C41E3A" }, { name: "Teal", hex: "#008080" } ];
 
 const initialColorVariantState = {
@@ -31,24 +31,24 @@ const InventoryPanel = () => {
   const { token } = useAuth();
   const toast = useToast();
 
-  // --- State for Categories (only for product manager dropdown, not for separate management UI) ---
-  const [categories, setCategories] = useState([]); // This state remains for product manager dropdown
+  // --- REMOVED: All category-specific state variables (categories, loadingCategories, etc.) ---
 
-  // --- State for Products (Moved from original ProductManager.jsx) ---
+  // --- State for Products ---
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [errorProducts, setErrorProducts] = useState('');
   const [isProductModalLoading, setIsProductModalLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
-  const [productFormData, setProductFormData] = useState({ name: '', description: '', category: '', basePrice: 0, tags: '', isActive: true, variants: [] });
+  // MODIFIED: Removed 'category' from initial product form state
+  const [productFormData, setProductFormData] = useState({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
   const { isOpen: isProductModalOpen, onOpen: onProductModalOpen, onClose: onProductModalClose } = useDisclosure();
   const { isOpen: isDeleteProductModalOpen, onOpen: onDeleteProductModalOpen, onClose: onDeleteProductModalClose } = useDisclosure();
 
-  // --- Fetching Logic (Combined and Adjusted) ---
+  // --- Fetching Logic ---
 
-  // Removed fetchCategories (for categories table)
+  // Removed fetchCategories and fetchAllCategoriesForProductManager
 
   // Fetch Products for Product Management table
   const fetchProducts = useCallback(async () => {
@@ -63,47 +63,36 @@ const InventoryPanel = () => {
     }
   }, [token]);
 
-  // Fetch Categories for Product Manager's category dropdown
-  const fetchAllCategoriesForProductManager = useCallback(async () => {
-    if (!token) return;
-    try {
-      const { data } = await client.get('/admin/product-categories', { headers: { Authorization: `Bearer ${token}` } });
-      setCategories(data); // Populates the 'categories' state for the product manager's dropdown
-    } catch (e) {
-      toast({ title: "Error", description: "Could not load categories for product form.", status: "error" });
-    }
-  }, [token, toast]);
-
-
   useEffect(() => {
     if (token) {
       fetchProducts(); // Initial fetch for product table
-      fetchAllCategoriesForProductManager(); // Initial fetch for product manager dropdown
     }
-  }, [token, fetchProducts, fetchAllCategoriesForProductManager]);
+  }, [token, fetchProducts]);
 
   // --- Removed all Category-specific handlers ---
 
-  // --- Handlers for Products (Moved from original ProductManager.jsx) ---
+  // --- Handlers for Products ---
   const handleOpenProductModal = async (product = null) => {
     onProductModalOpen(); setIsProductModalLoading(true);
     try {
-      // Use the 'categories' state directly from this component's state
-      const activeCategories = categories.filter(c => c.isActive);
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
       if (product) {
         const { data: fullProductData } = await client.get(`/admin/products/${product._id}`, { headers: { Authorization: `Bearer ${token}` }});
         setIsEditingProduct(true);
         setSelectedProduct(fullProductData);
         setProductFormData({
-          name: fullProductData.name, description: fullProductData.description || '', category: fullProductData.category?._id || fullProductData.category || '',
-          basePrice: fullProductData.basePrice || 0, tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
+          name: fullProductData.name,
+          description: fullProductData.description || '',
+          // Removed 'category' from productFormData initialization
+          basePrice: fullProductData.basePrice || 0,
+          tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
           isActive: fullProductData.isActive,
           variants: (fullProductData.variants || []).map(v => ({...v, imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }], sizes: v.sizes || [] }))
         });
       } else {
         setIsEditingProduct(false); setSelectedProduct(null);
-        setProductFormData({ name: '', description: '', category: activeCategories.length > 0 ? activeCategories[0]._id : '', basePrice: 0, tags: '', isActive: true, variants: [] });
+        // MODIFIED: Removed 'category' from new product form state
+        setProductFormData({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
     } catch (err) { toast({ title: "Error", description: "Could not load data for the product form.", status: "error" }); onProductModalClose(); }
     finally { setIsProductModalLoading(false); }
@@ -134,12 +123,16 @@ const InventoryPanel = () => {
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = productFormData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setProductFormData(prev => ({ ...prev, variants: newVariants })); };
 
   const handleProductSubmit = async () => {
-    if (!productFormData.name.trim() || !productFormData.category) { toast({ title: "Validation Error", description: "Product Name and Category are required.", status: "error" }); return; }
+    // MODIFIED: Removed 'category' check from validation
+    if (!productFormData.name.trim()) { toast({ title: "Validation Error", description: "Product Name is required.", status: "error" }); return; }
     for (const variant of productFormData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
     if (productFormData.variants.length > 0 && !productFormData.variants.some(v => v.isDefaultDisplay)) { productFormData.variants[0].isDefaultDisplay = true; }
     for (const variant of productFormData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; } } }
     const method = isEditingProduct ? 'put' : 'post';
     const url = isEditingProduct ? `/admin/products/${selectedProduct._id}` : '/admin/products';
+    // MODIFIED: Removed 'category' from payload if not needed by backend, or set to null/empty string
+    // Assuming backend can handle 'category' being omitted or null if it's not a mandatory field now.
+    // If backend requires it, you'd need to provide a default value here.
     const payload = { ...productFormData, tags: (productFormData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditingProduct ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onProductModalClose(); }
     catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message, status: "error" }); }
@@ -151,13 +144,11 @@ const InventoryPanel = () => {
 
   return (
     <Box w="100%">
-      {/* Heading is already textLight in AdminPage context, this is fine */}
       <Heading size="lg" mb={6} color="brand.textLight" textAlign={{ base: "center", md: "left" }}>
         Inventory Management
       </Heading>
 
       {/* --- Product Management Section --- */}
-      {/* This section now directly replaces the old tabs content */}
       <Box layerStyle="cardBlue" w="100%" p={{ base: 2, md: 4 }}>
         <HStack justifyContent="space-between" mb={6} w="100%">
           <Heading size="md">Manage Products</Heading>
@@ -178,7 +169,7 @@ const InventoryPanel = () => {
               <Thead>
                 <Tr>
                   <Th>Name</Th>
-                  <Th>Category</Th>
+                  {/* REMOVED: Category Column Header */}
                   <Th>Base Price</Th>
                   <Th>Variants</Th>
                   <Th>Status</Th>
@@ -189,7 +180,7 @@ const InventoryPanel = () => {
                 {products.map((p) => (
                   <Tr key={p._id}>
                     <Td fontWeight="medium">{p.name}</Td>
-                    <Td>{categories.find(cat => cat._id === p.category)?.name || 'N/A'}</Td>
+                    {/* REMOVED: Category Data Cell */}
                     <Td>${p.basePrice?.toFixed(2)}</Td>
                     <Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td>
                     <Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
@@ -205,7 +196,7 @@ const InventoryPanel = () => {
         )}
       </Box>
 
-      {/* --- Product Modals (Moved from original ProductManager.jsx) --- */}
+      {/* --- Product Modals --- */}
       <Modal isOpen={isProductModalOpen} onClose={onProductModalClose} size="6xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
@@ -218,12 +209,7 @@ const InventoryPanel = () => {
                     <Heading size="sm" mb={4}>Product Details</Heading>
                     <SimpleGrid columns={{base: 1, md: 2}} spacing={4}>
                         <FormControl isRequired><FormLabel>Name</FormLabel><Input name="name" value={productFormData.name} onChange={handleProductFormChange}/></FormControl>
-                        <FormControl isRequired>
-                            <FormLabel>Category</FormLabel>
-                            <Select name="category" value={productFormData.category} onChange={handleProductFormChange} placeholder="Select category">
-                                {categories.map(c => (<option key={c._id} value={c._id}>{c.name}</option>))}
-                            </Select>
-                        </FormControl>
+                        {/* REMOVED: Category FormControl */}
                         <FormControl isRequired>
                             <FormLabel>Base Price ($)</FormLabel>
                             <NumberInput value={productFormData.basePrice} onChange={handleBasePriceChange} min={0} precision={2}>
