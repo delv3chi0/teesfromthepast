@@ -15,12 +15,13 @@ import {
   Icon,
   Image,
   HStack,
-  Tooltip, // Added Tooltip for item details
+  Tooltip,
+  Link as ChakraLink, // <--- ADDED ChakraLink IMPORT HERE
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { FaBoxOpen, FaUser, FaShippingFast, FaMapMarkerAlt } from 'react-icons/fa'; // Added FaMapMarkerAlt
+import { FaBoxOpen, FaUser, FaShippingFast, FaMapMarkerAlt } from 'react-icons/fa';
 
 const MyOrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -33,7 +34,7 @@ const MyOrdersPage = () => {
     if (user) {
       setLoading(true);
       setError('');
-      client.get('/orders/myorders') // Reverted API endpoint back to /orders/myorders
+      client.get('/orders/myorders')
         .then(response => {
           setOrders(response.data);
         })
@@ -87,14 +88,17 @@ const MyOrdersPage = () => {
                   <Heading size="xs" textTransform="uppercase">Order #</Heading>
                   <Text fontSize="sm" title={order._id}>{(order._id || '').substring(18)}</Text>
                 </Box>
+
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Date Placed</Heading>
                   <Text fontSize="sm">{new Date(order.createdAt).toLocaleDateString()}</Text>
                 </Box>
+
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Total</Heading>
                   <Text fontSize="sm">${(typeof order.totalAmount === 'number' && !isNaN(order.totalAmount) ? (order.totalAmount / 100) : 0).toFixed(2)}</Text>
                 </Box>
+
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Status</Heading>
                   <Tag size="md" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'yellow'} mt={1}>{order.orderStatus}</Tag>
@@ -106,14 +110,14 @@ const MyOrdersPage = () => {
               {/* Customer and Shipping Info - Two Column Layout */}
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={4}>
                 {/* Customer Info Box */}
-                <Box layerStyle="lightCardInnerSection" p={4}> {/* Added padding here */}
+                <Box layerStyle="lightCardInnerSection" p={4}>
                   <HStack mb={2}><Icon as={FaUser} mr={2} boxSize={4}/><Heading size="sm">Customer Info</Heading></HStack>
                   <Text>{order.user?.username || 'N/A'}</Text>
                   <Text>{order.user?.email || 'N/A'}</Text>
                 </Box>
 
                 {/* Shipping Address Box */}
-                <Box layerStyle="lightCardInnerSection" p={4}> {/* Added padding here */}
+                <Box layerStyle="lightCardInnerSection" p={4}>
                   <HStack mb={2}><Icon as={FaShippingFast} mr={2} boxSize={4}/><Heading size="sm">Shipping Address</Heading></HStack>
                   <Text>{order.shippingAddress?.recipientName}</Text>
                   <Text>{order.shippingAddress?.street1}</Text>
@@ -132,54 +136,54 @@ const MyOrdersPage = () => {
                   {order.orderItems && order.orderItems.map(item => (
                     <Flex
                       key={item._id}
-                      className="my-orders-item-flex" // For index.css override
-                      justifyContent="space-between" // Pushes image/details left, price right
+                      className="my-orders-item-flex"
+                      justifyContent="space-between"
                       alignItems="center"
-                      bg="brand.secondary" // Dark background for item box
+                      bg="brand.secondary"
                       p={3}
                       borderRadius="md"
-                      flexWrap={{ base: "wrap", sm: "nowrap" }} // Wrap on extra small, no wrap on small+
-                      gap={4} // Gap between image, details, and price
-                      minH="100px" // Ensure consistent height
+                      gap={4}
+                      minH="100px"
+                      flexWrap={{ base: "wrap", sm: "nowrap" }}
+                      overflowX="auto"
                     >
-                      {/* Image (Left) */}
+                      {/* Image */}
                       <Image
                         src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
                         alt={item.productName || 'Order Item'}
-                        boxSize="100px" // MODIFIED: Increased image size for better visibility
-                        minW="100px" // Ensure image doesn't shrink
+                        boxSize="100px"
+                        minW="100px"
                         objectFit="cover"
                         borderRadius="md"
-                        fallback={<Icon as={FaBoxOpen} boxSize="50px" color="brand.textLight" />} // MODIFIED: Fallback icon size/color
+                        fallback={<Icon as={FaBoxOpen} boxSize="50px" color="brand.textLight" />}
                       />
 
-                      {/* Product Name & Quantity (Middle, Flexible) */}
+                      {/* Product Name & Quantity (Flexible Middle) */}
                       <VStack align="flex-start" spacing={0} flexGrow={1} flexShrink={1} flexBasis={{ base: "100%", sm: "auto" }}>
-                        <Text fontWeight="bold" fontSize="md" color="white">
-                            {item.productName || item.name}
-                        </Text>
-                        {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
-                            <Text fontSize="sm" color="white">Qty: {item.quantity}</Text>
-                        )}
-                        {/* Optional: Add customImageURL if you want to link it */}
-                        {item.customImageURL && (
-                            <Tooltip label="View Custom Image">
-                                <ChakraLink href={item.customImageURL} isExternal color="brand.accentYellow" fontSize="sm">
-                                    <Icon as={FaMapMarkerAlt} mr={1} />Custom Design
-                                </ChakraLink>
-                            </Tooltip>
-                        )}
-                         {item.designId?.prompt && (
-                            <Tooltip label={item.designId.prompt}>
-                                <Text fontSize="xs" color="whiteAlpha.700" isTruncated maxW="200px">
-                                    Prompt: {item.designId.prompt}
-                                </Text>
-                            </Tooltip>
-                        )}
+                          <Text fontWeight="bold" fontSize="md" color="white">
+                              {item.productName || item.name}
+                          </Text>
+                          {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
+                              <Text fontSize="sm" color="white">Qty: {item.quantity}</Text>
+                          )}
+                          {item.customImageURL && (
+                              <Tooltip label="View Custom Image">
+                                  <ChakraLink href={item.customImageURL} isExternal color="brand.accentYellow" fontSize="sm">
+                                      <Icon as={FaMapMarkerAlt} mr={1} />Custom Design
+                                  </ChakraLink>
+                              </Tooltip>
+                          )}
+                           {item.designId?.prompt && (
+                              <Tooltip label={item.designId.prompt}>
+                                  <Text fontSize="xs" color="whiteAlpha.700" isTruncated maxW="200px">
+                                      Prompt: {item.designId.prompt}
+                                  </Text>
+                              </Tooltip>
+                          )}
                       </VStack>
 
                       {/* Price (Right) */}
-                      {typeof item.priceAtPurchase === 'number' && typeof item.quantity === 'number' && !isNaN(item.priceAtPurchase) && !isNaN(item.quantity) && (
+                      {(typeof item.priceAtPurchase === 'number' || typeof item.price === 'number') && typeof item.quantity === 'number' && !isNaN(item.priceAtPurchase) && !isNaN(item.quantity) && (
                         <Text fontSize="lg" fontWeight="bold" color="white" flexShrink={0}>
                           ${((item.priceAtPurchase || item.price) * item.quantity / 100).toFixed(2)}
                         </Text>
