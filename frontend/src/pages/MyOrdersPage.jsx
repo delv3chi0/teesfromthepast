@@ -1,4 +1,5 @@
-import { useState, useEffect } => {
+import { useState, useEffect } from 'react';
+import {
   Box,
   Heading,
   Text,
@@ -14,7 +15,7 @@ import { useState, useEffect } => {
   Icon,
   Image,
   HStack,
-} from '@chakra-ui/react';
+} from '@chakra-ui/react'; // <--- CORRECTED SYNTAX HERE
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -31,7 +32,7 @@ const MyOrdersPage = () => {
     if (user) {
       setLoading(true);
       setError('');
-      client.get('/orders/myorders')
+      client.get('/orders/myorders') // Reverted API endpoint back to /orders/myorders
         .then(response => {
           setOrders(response.data);
         })
@@ -143,6 +144,7 @@ const MyOrdersPage = () => {
                   ))}
                 </VStack>
               </Box>
+
             </Box>
           ))}
         </VStack>
@@ -150,4 +152,5 @@ const MyOrdersPage = () => {
     </Box>
   );
 };
+
 export default MyOrdersPage;
