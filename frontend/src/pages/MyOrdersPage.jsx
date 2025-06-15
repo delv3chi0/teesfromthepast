@@ -65,16 +65,12 @@ const MyOrdersPage = () => {
 
   return (
     <Box w="100%">
-      {/* Page title, already brand.textLight, which is good on dark background */}
       <Heading as="h1" size="2xl" mb={8} color="brand.textLight">My Orders</Heading>
 
       {orders.length === 0 ? (
-        // MODIFIED: Apply layerStyle="cardBlue" for consistency
         <Box layerStyle="cardBlue" p={10} textAlign="center">
             <VStack spacing={5}>
-                {/* Icon color will inherit from layerStyle="cardBlue" (brand.textBurnt) */}
                 <Icon as={FaBoxOpen} boxSize="50px" />
-                {/* Text will inherit from layerStyle="cardBlue" (brand.textDark) */}
                 <Text fontSize="xl" fontWeight="medium">You haven't placed any orders yet.</Text>
                 <Button colorScheme="brandAccentOrange" onClick={() => navigate('/shop')}>Start Shopping</Button>
             </VStack>
@@ -82,14 +78,11 @@ const MyOrdersPage = () => {
       ) : (
         <VStack spacing={6} align="stretch">
           {orders.map(order => (
-            // MODIFIED: Apply layerStyle="cardBlue" to each order card
             <Box key={order._id} layerStyle="cardBlue" p={6}>
               <SimpleGrid columns={{ base: 1, md: 4 }} spacing={{ base: 4, md: 6 }} alignItems="center">
 
                 <Box>
-                  {/* Headings will inherit brand.textBurnt from layerStyle="cardBlue" */}
                   <Heading size="xs" textTransform="uppercase">Order #</Heading>
-                  {/* Text will inherit brand.textDark from layerStyle="cardBlue" */}
                   <Text fontSize="sm" title={order._id}>{(order._id || '').substring(18)}</Text>
                 </Box>
 
@@ -105,21 +98,18 @@ const MyOrdersPage = () => {
 
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Status</Heading>
-                  {/* Tag styling handled by theme.js */}
                   <Tag size="md" colorScheme={order.orderStatus === 'Delivered' ? 'green' : 'yellow'} mt={1}>{order.orderStatus}</Tag>
                 </Box>
 
               </SimpleGrid>
 
-              {/* MODIFIED: Divider color for visibility on light card */}
               <Divider my={4} borderColor="rgba(0,0,0,0.1)" />
 
               <Box>
-                {/* Heading will inherit brand.textBurnt from layerStyle="cardBlue" */}
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
-                    // MODIFIED: Apply darker background and light text for item boxes
+                    // MODIFIED: bg to brand.secondary and color to brand.textLight for the container
                     <Flex key={item._id} justify="space-between" align="center" bg="brand.secondary" color="brand.textLight" p={3} borderRadius="md">
                       <HStack spacing={4}>
                         <Image
@@ -132,13 +122,13 @@ const MyOrdersPage = () => {
                           mr={4} mb={{base: 2, md: 0}}
                         />
                         <VStack align="start" spacing={0}>
-                          {/* Text will inherit brand.textLight from parent Flex */}
-                          <Text fontWeight="bold">{item.name}</Text>
-                          <Text fontSize="xs">Qty: {item.qty}</Text>
+                          {/* MODIFIED: Explicitly set color for Text components to brand.textLight */}
+                          <Text fontWeight="bold" color="brand.textLight">{item.name}</Text>
+                          <Text fontSize="xs" color="brand.textLight">Qty: {item.qty}</Text>
                         </VStack>
                       </HStack>
-                      {/* Text will inherit brand.textLight from parent Flex */}
-                      <Text fontSize="sm" fontWeight="bold">${(item.price * item.qty).toFixed(2)}</Text>
+                      {/* MODIFIED: Explicitly set color for Text component to brand.textLight */}
+                      <Text fontSize="sm" fontWeight="bold" color="brand.textLight">${(item.price * item.qty).toFixed(2)}</Text>
                     </Flex>
                   ))}
                 </VStack>
