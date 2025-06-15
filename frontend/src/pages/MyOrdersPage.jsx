@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import {
+import { useState, useEffect } => {
   Box,
   Heading,
   Text,
@@ -14,7 +13,7 @@ import {
   Flex,
   Icon,
   Image,
-  HStack, // Ensure HStack is imported
+  HStack,
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -38,7 +37,7 @@ const MyOrdersPage = () => {
         })
         .catch(err => {
           console.error("Error fetching orders:", err);
-          setError('Could not load your orders.');
+          setError('Could not load your orders. Please try again later.');
           if (err.response?.status === 401) {
             logout();
             navigate('/login');
@@ -49,6 +48,7 @@ const MyOrdersPage = () => {
         });
     }
   }, [user, logout, navigate]);
+
 
   if (loading) {
     return (
@@ -93,7 +93,7 @@ const MyOrdersPage = () => {
 
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Total</Heading>
-                  <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text> {/* Check total price */}
+                  <Text fontSize="sm">${(typeof order.totalAmount === 'number' && !isNaN(order.totalAmount) ? (order.totalAmount / 100) : 0).toFixed(2)}</Text>
                 </Box>
 
                 <Box>
@@ -109,42 +109,40 @@ const MyOrdersPage = () => {
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
-                    // MODIFIED: Added className for CSS override, adjusted layout props
-                    <Flex key={item._id}
-                          className="my-orders-item-flex" // <--- ADD THIS CLASS NAME
-                          justify="space-between"
-                          align="center"
-                          bg="brand.secondary"
-                          p={3}
-                          borderRadius="md"
-                          flexWrap="wrap" // Allow wrapping on small screens
-                          gap={2} // Add gap between items
+                    <Flex
+                      key={item._id}
+                      className="my-orders-item-flex"
+                      justify="space-between"
+                      align="center"
+                      bg="brand.secondary"
+                      p={3}
+                      borderRadius="md"
+                      flexWrap="wrap"
+                      gap={2}
                     >
-                      <HStack spacing={4} flex="1"> {/* flex="1" to take up available space before price */}
+                      <HStack spacing={4} flex="1">
                         <Image
                           src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
-                          alt={item.name}
+                          alt={item.productName || 'Order Item'}
                           boxSize="60px"
                           objectFit="cover"
                           borderRadius="md"
                           fallback={<Icon as={FaBoxOpen} boxSize="30px" color="brand.textMuted" />}
                         />
-                        {/* MODIFIED: VStack to HStack for inline text, removed explicit colors (handled by CSS override) */}
-                        <HStack align="start" spacing={1} flexWrap="wrap"> {/* Added flexWrap for small screens */}
-                          <Text fontWeight="bold">{item.name}</Text>
-                          {/* MODIFIED: Check for item.qty validity */}
-                          {item.qty && item.qty > 0 && <Text fontSize="xs">Qty: {item.qty}</Text>}
-                        </HStack>
+                        <VStack align="start" spacing={0}>
+                          <Text fontWeight="bold" color="brand.textLight">{item.productName || item.name}</Text>
+                          {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
+                            <Text fontSize="xs" color="brand.textLight">Qty: {item.quantity}</Text>
+                          )}
+                        </VStack>
                       </HStack>
-                      {/* MODIFIED: Check for price validity before displaying */}
-                      {typeof item.price === 'number' && typeof item.qty === 'number' && !isNaN(item.price) && !isNaN(item.qty) && (
-                        <Text fontSize="sm" fontWeight="bold">${(item.price * item.qty).toFixed(2)}</Text>
+                      {(typeof item.priceAtPurchase === 'number' || typeof item.price === 'number') && typeof item.quantity === 'number' && !isNaN(item.quantity) && (
+                        <Text fontSize="sm" fontWeight="bold" color="brand.textLight">${( (item.priceAtPurchase || item.price) * item.quantity / 100).toFixed(2)}</Text>
                       )}
                     </Flex>
                   ))}
                 </VStack>
               </Box>
-
             </Box>
           ))}
         </VStack>
@@ -152,5 +150,4 @@ const MyOrdersPage = () => {
     </Box>
   );
 };
-
 export default MyOrdersPage;
