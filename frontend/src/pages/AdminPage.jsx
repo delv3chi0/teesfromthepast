@@ -36,24 +36,22 @@ const DashboardPanel = ({ token, onViewOrder }) => {
         fetchSummary();
     }, [token, toast]);
 
-    // MODIFIED: StatCard now uses layerStyle="cardBlue" for consistent theming
     const StatCard = ({ title, stat, icon, helpText }) => (
       <Stat
         p={5}
         shadow="sm"
         borderWidth="1px"
         borderRadius="lg"
-        layerStyle="cardBlue" // <--- CRITICAL CHANGE: Use layerStyle for consistent card theming
-        borderColor="rgba(255,255,255,0.1)" // Keep borderColor if not part of layerStyle
+        layerStyle="cardBlue"
+        borderColor="rgba(255,255,255,0.1)"
       >
           <Flex justifyContent="space-between">
               <Box>
-                  {/* REMOVED: explicit color props. Let layerStyle/theme handle it. */}
                   <StatLabel>{title}</StatLabel>
                   <StatNumber>{stat}</StatNumber>
                   {helpText && <Text fontSize="sm">{helpText}</Text>}
               </Box>
-              <Box my="auto" color="brand.accentOrange"> {/* Icon color is fine as an accent */}
+              <Box my="auto" color="brand.accentOrange">
                   <Icon as={icon} w={8} h={8} />
               </Box>
           </Flex>
@@ -65,17 +63,16 @@ const DashboardPanel = ({ token, onViewOrder }) => {
     if (!summary) return <Text p={4}>No summary data available.</Text>;
 
     return (
-        <VStack spacing={6} align="stretch">
-            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
+        <VStack spacing={6} align="stretch" w="100%"> {/* Ensure this VStack takes full width */}
+            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} w="100%"> {/* Ensure grid takes full width */}
                 <StatCard title="Total Revenue" stat={`$${(summary.totalRevenue / 100).toFixed(2)}`} icon={FaDollarSign} helpText="All successful orders"/>
                 <StatCard title="Total Orders" stat={summary.totalOrders} icon={FaBoxes} helpText="All orders placed"/>
                 <StatCard title="New Users" stat={summary.newUserCount} icon={FaUserPlus} helpText="In the last 7 days"/>
             </SimpleGrid>
-            <Box mt={8}>
+            <Box mt={8} w="100%"> {/* Ensure this Box takes full width */}
                 <Heading size="md" mb={4}>Recent Orders</Heading>
-                {/* MODIFIED: Table background now matches the themed cards for consistency */}
-                <TableContainer borderWidth="1px" borderRadius="lg" layerStyle="cardBlue"> {/* <--- CRITICAL CHANGE: Use layerStyle */}
-                    <Table variant="simple" size="sm">
+                <TableContainer borderWidth="1px" borderRadius="lg" layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
+                    <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
                         <Thead>
                             <Tr>
                                 <Th>Order ID</Th>
@@ -139,21 +136,21 @@ const AdminPage = () => {
 
   const dataFetchers = {
     1: useCallback(async () => {
-      if (users.length > 0) return; // Only fetch if data isn't already present
+      if (users.length > 0) return;
       setLoadingUsers(true); setUsersError('');
       try { const { data } = await client.get('/admin/users', { headers: { Authorization: `Bearer ${token}` }}); setUsers(data); }
       catch (e) { setUsersError('Failed to fetch users'); }
       finally { setLoadingUsers(false); }
     }, [token, users.length]),
     2: useCallback(async () => {
-      if (orders.length > 0) return; // Only fetch if data isn't already present
+      if (orders.length > 0) return;
       setLoadingOrders(true); setOrdersError('');
       try { const { data } = await client.get('/admin/orders', { headers: { Authorization: `Bearer ${token}` }}); setOrders(data); }
       catch (e) { setOrdersError('Failed to fetch orders'); }
       finally { setLoadingOrders(false); }
     }, [token, orders.length]),
     3: useCallback(async () => {
-      if (designs.length > 0) return; // Only fetch if data isn't already present
+      if (designs.length > 0) return;
       setLoadingDesigns(true); setDesignsError('');
       try { const { data } = await client.get('/admin/designs', { headers: { Authorization: `Bearer ${token}` }}); setDesigns(data); }
       catch (e) { setDesignsError('Failed to fetch designs'); }
@@ -216,10 +213,10 @@ const AdminPage = () => {
   };
 
   const UsersPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue"> {/* Apply layerStyle for this panel */}
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
       <Heading size="md" mb={4}>User Management</Heading>
-      <TableContainer> {/* No need to set bg here, it's inherited from parent Box's layerStyle */}
-        <Table variant="simple" size="sm">
+      <TableContainer w="100%"> {/* <--- ADDED w="100%" */}
+        <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
           <Thead>
             <Tr>
               <Th>ID</Th>
@@ -255,10 +252,10 @@ const AdminPage = () => {
   const OrdersPanel = () => {
     const getStatusColor = (status) => { if (status === 'Delivered') return 'green.200'; if (status === 'Shipped') return 'blue.200'; if (status === 'Cancelled') return 'red.200'; return 'gray.200'; };
     return (
-      <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue"> {/* Apply layerStyle for this panel */}
+      <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
         <Heading size="md" mb={4}>Order Management</Heading>
-        <TableContainer>
-          <Table variant="simple" size="sm">
+        <TableContainer w="100%"> {/* <--- ADDED w="100%" */}
+          <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
             <Thead>
               <Tr>
                 <Th>ID</Th>
@@ -280,7 +277,6 @@ const AdminPage = () => {
                   <Td>${(order.totalAmount/100).toFixed(2)}</Td>
                   <Td><Tag size="sm" colorScheme={order.paymentStatus==='Succeeded'?'green':'orange'}>{order.paymentStatus}</Tag></Td>
                   <Td>
-                    {/* MODIFIED: Changed color="black" to color="brand.textDark" */}
                     <Select size="xs" variant="outline" color="brand.textDark" value={order.orderStatus} onChange={e => handleStatusChange(order._id, e.target.value)} bg={getStatusColor(order.orderStatus)} borderRadius="md" maxW="120px">
                       <option value="Processing">Processing</option>
                       <option value="Shipped">Shipped</option>
@@ -302,10 +298,10 @@ const AdminPage = () => {
     );
   };
   const DesignsPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue"> {/* Apply layerStyle for this panel */}
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
       <Heading size="md" mb={4}>Design Management</Heading>
-      <TableContainer>
-        <Table variant="simple" size="sm">
+      <TableContainer w="100%"> {/* <--- ADDED w="100%" */}
+        <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
           <Thead>
             <Tr>
               <Th>Preview</Th>
@@ -319,8 +315,7 @@ const AdminPage = () => {
             {designs.map(design => (
               <Tr key={design._id}>
                 <Td><Image src={design.imageDataUrl} boxSize="50px" objectFit="cover" borderRadius="md"/></Td>
-                {/* Text is explicitly gray.400, which is light. It needs to be dark for the light card. */}
-                {/* Removed explicit color prop, relying on layerStyle="cardBlue" */}
+                {/* Text color now correctly inherited from layerStyle="cardBlue" */}
                 <Td fontSize="xs" maxW="300px" whiteSpace="normal">{design.prompt}</Td>
                 <Td>{design.user?.username || 'N/A'}</Td>
                 <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
@@ -339,14 +334,11 @@ const AdminPage = () => {
   return (
     <Box w="100%" pb={10}>
       <VStack spacing={6} align="stretch">
-        {/* Page Title is on dark background, so textLight is correct */}
         <Heading as="h1" size="pageTitle" color="brand.textLight" w="100%">Admin Console</Heading>
 
-        {/* This main Box now uses brand.paper (dark muted background) */}
-        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }}>
+        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }} w="100%"> {/* <--- ADDED w="100%" */}
           <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy onChange={handleTabsChange} index={tabIndex}>
             <TabList mb="1em" flexWrap="wrap">
-              {/* Tab colors should be fine as they are defined by colorScheme="brandPrimary" and _selected props */}
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaTachometerAlt} mr={2}/> Dashboard</Tab>
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaUsersCog} mr={2} /> Users</Tab>
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaBoxOpen} mr={2} /> Orders</Tab>
@@ -355,7 +347,6 @@ const AdminPage = () => {
             </TabList>
             <TabPanels>
               <TabPanel px={0} py={2}><DashboardPanel token={token} onViewOrder={handleViewOrder} /></TabPanel>
-              {/* Apply layerStyle to UsersPanel, OrdersPanel, DesignsPanel directly in their definitions */}
               <TabPanel px={0} py={2}>{loadingUsers ? <VStack p={10}><Spinner/></VStack> : usersError ? <Alert status="error">{usersError}</Alert> : <UsersPanel />}</TabPanel>
               <TabPanel px={0} py={2}>{loadingOrders ? <VStack p={10}><Spinner/></VStack> : ordersError ? <Alert status="error">{ordersError}</Alert> : <OrdersPanel />}</TabPanel>
               <TabPanel px={0} py={2}>{loadingDesigns ? <VStack p={10}><Spinner/></VStack> : designsError ? <Alert status="error">{designsError}</Alert> : <DesignsPanel />}</TabPanel>
@@ -365,10 +356,7 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
-      {/* --- MODALS --- */}
-      {/* Modals are themed in theme.js to have dark backgrounds (brand.secondary) and light text (brand.textLight) */}
-      {/* We need to ensure their *internal* text components aren't explicitly light. */}
-
+      {/* --- MODALS (No changes needed, as they are separate from the card width issue) --- */}
       <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
@@ -376,7 +364,6 @@ const AdminPage = () => {
             <ModalCloseButton />
             <ModalBody>
                 <VStack spacing={3} align="start">
-                    {/* REMOVED: explicit color props from Text. Will inherit from Modal's theme */}
                     <Text><strong>ID:</strong> {selectedUser?._id}</Text>
                     <Text><strong>Username:</strong> {selectedUser?.username}</Text>
                     <Text><strong>Email:</strong> {selectedUser?.email}</Text>
@@ -414,7 +401,6 @@ const AdminPage = () => {
                         <Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} />
                     </FormControl>
                     <Divider my={4} />
-                    {/* Heading color will inherit from modal theme */}
                     <Heading size="sm">Change Password</Heading>
                     <FormControl>
                         <FormLabel>New Password</FormLabel>
@@ -446,9 +432,8 @@ const AdminPage = () => {
             <ModalHeader>Confirm Deletion</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-                {/* REMOVED: explicit color props from Text. Will inherit from Modal's theme */}
                 <Text>Delete <strong>{selectedUser?.username}</strong>?</Text>
-                <Text mt={2} color="red.500">This action cannot be undone.</Text> {/* Red is an override, likely intentional */}
+                <Text mt={2} color="red.500">This action cannot be undone.</Text>
             </ModalBody>
             <ModalFooter><Button onClick={onDeleteUserModalClose} mr={3}>Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete</Button></ModalFooter>
         </ModalContent>
@@ -460,7 +445,6 @@ const AdminPage = () => {
             <ModalHeader>Confirm Deletion</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-                {/* REMOVED: explicit color props from Text. Will inherit from Modal's theme */}
                 <Text>Delete order <strong>{orderToDelete?._id}</strong>?</Text>
                 <Alert mt={4} status="warning"><AlertIcon/>This does not issue a refund in Stripe.</Alert>
             </ModalBody>
@@ -478,15 +462,12 @@ const AdminPage = () => {
                     <VStack spacing={6} align="stretch">
                         <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)"}} gap={6}>
                             <GridItem>
-                                {/* Headings inside modal will inherit from modal theme (light text) */}
                                 <Heading size="sm" mb={2}>Customer</Heading>
-                                {/* REMOVED: explicit color props from Text. Will inherit from Modal's theme */}
                                 <Text><strong>Name:</strong> {selectedOrder.user?.firstName || ''} {selectedOrder.user?.lastName || ''}</Text>
                                 <Text><strong>Email:</strong> {selectedOrder.user?.email}</Text>
                             </GridItem>
                             <GridItem>
                                 <Heading size="sm" mb={2}>Summary</Heading>
-                                {/* REMOVED: explicit color props from Text. Will inherit from Modal's theme */}
                                 <Text><strong>ID:</strong> {selectedOrder._id}</Text>
                                 <Text><strong>Date:</strong> {new Date(selectedOrder.createdAt).toLocaleString()}</Text>
                                 <Text><strong>Total:</strong> <Tag colorScheme='green'>${(selectedOrder.totalAmount/100).toFixed(2)}</Tag></Text>
@@ -494,7 +475,6 @@ const AdminPage = () => {
                         </Grid>
                         <Box>
                             <Heading size="sm" mb={2}>Shipping Address</Heading>
-                            {/* REMOVED: explicit color props from Text. Will inherit from Modal's theme */}
                             <Text>{selectedOrder.shippingAddress.recipientName}</Text>
                             <Text>{selectedOrder.shippingAddress.street1}</Text>
                             {selectedOrder.shippingAddress.street2 && <Text>{selectedOrder.shippingAddress.street2}</Text>}
@@ -509,7 +489,6 @@ const AdminPage = () => {
                                     <Flex key={index} p={3} borderWidth="1px" borderRadius="md" alignItems="center" flexWrap="wrap">
                                         <Image src={item.designId?.imageDataUrl || 'https://via.placeholder.com/100'} boxSize="100px" objectFit="cover" borderRadius="md" mr={4} mb={{base: 2, md: 0}} />
                                         <VStack align="start" spacing={1} fontSize="sm">
-                                            {/* All Text components here will inherit from Modal theme (light text) */}
                                             <Text fontWeight="bold">{item.productName}</Text>
                                             <Text><strong>SKU:</strong> {item.variantSku}</Text>
                                             <Text><strong>Color:</strong> {item.color} | <strong>Size:</strong> {item.size}</Text>
@@ -539,7 +518,6 @@ const AdminPage = () => {
                 {selectedDesign && (
                     <VStack>
                         <Image src={selectedDesign.imageDataUrl} maxW="100%" maxH="60vh" objectFit="contain" />
-                        {/* REMOVED: explicit color="gray.400". Text will inherit from modal theme (light) */}
                         <Text fontSize="sm" mt={2} p={2} bg="gray.800" borderRadius="md">{selectedDesign.prompt}</Text>
                     </VStack>
                 )}
@@ -553,7 +531,7 @@ const AdminPage = () => {
         <ModalContent>
             <ModalHeader>Confirm Deletion</ModalHeader>
             <ModalCloseButton />
-            <ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody> {/* Will inherit from modal theme (light) */}
+            <ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody>
             <ModalFooter><Button variant="ghost" mr={3} onClick={onCloseDeleteDesignModal}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button></ModalFooter>
         </ModalContent>
       </Modal>
