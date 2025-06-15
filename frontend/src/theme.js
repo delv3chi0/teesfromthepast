@@ -3,8 +3,7 @@ import { extendTheme } from '@chakra-ui/react';
 const colors = {
   brand: {
     primary: '#184C4A', // Main dark background (a deep teal/green)
-    secondary: '#1B3B3A', // Header/darker background (slightly darker teal/green)
-
+    secondary: '#1B3B3A', // Header/darker background (slightly darker teal/green), used for modal backgrounds
     cardBlue: '#F8DFA7', // The new light, warm card background (light beige/gold)
 
     accentOrange: '#D16930', // Vibrant orange
@@ -13,13 +12,11 @@ const colors = {
     accentYellow: '#FFE9A0', // Light yellow for accents
     accentYellowHover: '#FDD97A', // Slightly darker yellow for hover
 
-    textLight: '#FDF6EE', // Very light text, for use on dark backgrounds (primary, secondary, ui.background)
+    textLight: '#FDF6EE', // Very light text, for use on dark backgrounds (primary, secondary, ui.background, MODALS)
     textMuted: '#B7C4C4', // Muted text for subtle elements on dark backgrounds
-    textDark: '#2A2A2A', // Dark text, for use on light backgrounds (like cardBlue, modals)
+    textDark: '#2A2A2A', // Dark text, for use on light backgrounds (like cardBlue, INPUT FIELDS)
     textBurnt: '#3B2F1B', // Even darker, burnt-sienna like text for strong contrast on light elements
 
-    // Adding a 'paper' color for the Tabs container in AdminPage, as you used it.
-    // It seems you intend for this to be a light dark/muted background, not a bright card.
     paper: '#2D3748', // This color matches the 'ui.background' you previously had, providing a muted dark background
   },
   ui: {
@@ -37,20 +34,26 @@ const components = {
     baseStyle: {
         container: {
             bg: 'brand.cardBlue',
-            color: 'brand.textDark', // Default color for text directly inside Card (e.g., a simple div)
+            color: 'brand.textDark', // Default color for text directly inside Card
             borderRadius: 'xl',
             boxShadow: 'lg',
-            _dark: { // Apply these styles in dark mode (which is your initialColorMode)
-                'h1, h2, h3, h4, h5, h6': { // Target all heading tags directly
-                    color: 'brand.textBurnt !important', // Force headings to burnt
-                    fontFamily: `${fonts.heading} !important`, // Force Bungee
+            _dark: {
+                'h1, h2, h3, h4, h5, h6': {
+                    color: 'brand.textBurnt !important',
+                    fontFamily: `${fonts.heading} !important`,
                 },
-                'p': { // Target paragraph tags directly
-                    color: 'brand.textDark !important', // Force paragraphs to dark
-                    fontFamily: `${fonts.body} !important`, // Force Montserrat
+                'p': {
+                    color: 'brand.textDark !important',
+                    fontFamily: `${fonts.body} !important`,
+                },
+                'div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+                  color: 'brand.textDark !important', // Target generic divs
+                },
+                'span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+                  color: 'brand.textDark !important', // Target generic spans
                 },
                 'svg': {
-                    color: 'brand.textBurnt !important', // Ensure SVGs within card are dark
+                    color: 'brand.textBurnt !important',
                 },
             }
         }
@@ -66,7 +69,7 @@ const components = {
         fontSize: { base: '3xl', md: '4xl' },
         lineHeight: 'shorter',
         mb: 8,
-        color: 'brand.textLight', // Explicitly light for page title on dark background
+        color: 'brand.textLight',
       },
     },
   },
@@ -79,8 +82,8 @@ const components = {
   Modal: {
     baseStyle: {
       dialog: {
-        bg: 'brand.secondary', // Use a dark background for modals
-        color: 'brand.textLight', // Light text for dark modal background
+        bg: 'brand.secondary',
+        color: 'brand.textLight', // Ensures all text directly in modal content is light by default
       },
       header: {
         color: 'brand.textLight',
@@ -88,7 +91,7 @@ const components = {
         borderColor: 'rgba(255, 255, 255, 0.1)',
       },
       body: {
-        color: 'brand.textLight'
+        color: 'brand.textLight', // Explicitly setting for modal body content
       },
       footer: {
         borderTopWidth: '1px',
@@ -117,35 +120,31 @@ const components = {
       }
     }
   },
-  // NEW: Table Component Theming for text colors within Tables
   Table: {
     baseStyle: {
-      th: { // Table Headers
-        color: 'brand.textDark !important', // Force dark text for headers
-        borderColor: 'rgba(0,0,0,0.1) !important', // Light border for tables on light cards
-        textTransform: 'uppercase', // Often uppercase in tables
+      th: {
+        color: 'brand.textDark !important',
+        borderColor: 'rgba(0,0,0,0.1) !important',
+        textTransform: 'uppercase',
       },
-      td: { // Table Data cells
-        color: 'brand.textDark !important', // Force dark text for data cells
-        borderColor: 'rgba(0,0,0,0.05) !important', // Lighter border for data cells
+      td: {
+        color: 'brand.textDark !important',
+        borderColor: 'rgba(0,0,0,0.05) !important',
       },
-      // You can add styles for table variants if you have custom ones
-      // This will ensure proper contrast on light backgrounds (like brand.cardBlue)
     },
   },
-  // NEW: Input component styling to ensure text is visible on its default white/light background
   Input: {
     variants: {
       outline: {
         field: {
           color: 'brand.textDark', // Text typed by user should be dark
-          bg: 'whiteAlpha.900', // Set a background for inputs if not default
-          borderColor: 'brand.textMuted', // Muted border
+          bg: 'whiteAlpha.900', // <--- Set a light background for input fields
+          borderColor: 'brand.textMuted',
           _placeholder: {
-            color: 'brand.textMuted', // Placeholder text color
+            color: 'brand.textMuted',
           },
           _hover: {
-            borderColor: 'brand.accentOrange', // Highlight on hover
+            borderColor: 'brand.accentOrange',
           },
           _focus: {
             borderColor: 'brand.accentOrange',
@@ -155,13 +154,12 @@ const components = {
       },
     },
   },
-  // NEW: Select component styling
   Select: {
     variants: {
       outline: {
         field: {
           color: 'brand.textDark', // Text chosen by user should be dark
-          bg: 'whiteAlpha.900', // Set a background for select if not default
+          bg: 'whiteAlpha.900', // <--- Set a light background for select fields
           borderColor: 'brand.textMuted',
           _hover: {
             borderColor: 'brand.accentOrange',
@@ -174,29 +172,84 @@ const components = {
       },
     },
   },
-  // NEW: FormLabel component styling
-  FormLabel: {
-    baseStyle: {
-      color: 'brand.textDark', // Labels inside light cards should be dark
-      mb: 1, // Add some margin bottom for spacing
+  Textarea: { // NEW: Add Textarea theming
+    variants: {
+      outline: {
+        field: {
+          color: 'brand.textDark', // Text typed by user should be dark
+          bg: 'whiteAlpha.900', // <--- Set a light background for textarea fields
+          borderColor: 'brand.textMuted',
+          _placeholder: {
+            color: 'brand.textMuted',
+          },
+          _hover: {
+            borderColor: 'brand.accentOrange',
+          },
+          _focus: {
+            borderColor: 'brand.accentOrange',
+            boxShadow: '0 0 0 1px var(--chakra-colors-brand-accentOrange)',
+          },
+        },
+      },
     },
   },
-  // NEW: Stat component styling to ensure its internal elements respect theme
+  NumberInput: { // NEW: Add NumberInput theming
+    variants: {
+      outline: {
+        field: {
+          color: 'brand.textDark', // Text typed by user should be dark
+          bg: 'whiteAlpha.900', // <--- Set a light background for number input fields
+          borderColor: 'brand.textMuted',
+          _placeholder: {
+            color: 'brand.textMuted',
+          },
+          _hover: {
+            borderColor: 'brand.accentOrange',
+          },
+          _focus: {
+            borderColor: 'brand.accentOrange',
+            boxShadow: '0 0 0 1px var(--chakra-colors-brand-accentOrange)',
+          },
+        },
+      },
+    },
+  },
+  FormLabel: {
+    baseStyle: {
+      // REMOVED: color: 'brand.textDark'. This allows it to inherit from parent.
+      // In modals (dark background), it will inherit brand.textLight.
+      // In light cards, it will inherit brand.textDark from the card's baseStyle.
+      mb: 1,
+    },
+  },
   Stat: {
       baseStyle: {
-          container: {
-              // The StatCard component already explicitly used layerStyle="cardBlue",
-              // but if you were using a plain <Stat> it would inherit from here.
-              // We'll primarily rely on layerStyles.cardBlue and its child selectors.
-          },
           label: {
-              color: 'brand.textDark', // Ensure StatLabel is dark inside cards
+              color: 'brand.textDark',
           },
           number: {
-              color: 'brand.textBurnt', // Ensure StatNumber is very dark inside cards
+              color: 'brand.textBurnt',
           }
       }
-  }
+  },
+  Accordion: { // New theming for Accordion component used in ProductManager modal
+    baseStyle: {
+      container: {
+        // No explicit background here, let individual AccordionItem control it
+        borderWidth: '0 !important', // Remove default Chakra accordion borders
+      },
+      button: {
+        // The AccordionButton's background is controlled by its parent AccordionItem
+        // Text color should inherit from the AccordionItem's background color
+        _hover: {
+          bg: 'whiteAlpha.100', // Subtle hover on dark background
+        },
+      },
+      panel: {
+        // Panel background is set in JSX (brand.secondary), text should inherit light
+      },
+    },
+  },
 };
 
 const config = {
@@ -223,20 +276,17 @@ const layerStyles = {
       boxShadow: 'xl',
       borderColor: 'brand.accentYellow',
     },
-    // Ensure headings and paragraphs within this layer style are also dark
     '& h1, & h2, & h3, & h4, & h5, & h6': {
-      color: 'brand.textBurnt !important', // Use textBurnt for headings on the light card background
-      fontFamily: `${fonts.heading} !important`, // Make sure native headings use Bungee
+      color: 'brand.textBurnt !important',
+      fontFamily: `${fonts.heading} !important`,
     },
-    '& p, & div, & span': { // Broaden this to include more generic text containers
-      color: 'brand.textDark !important', // Use textDark for paragraphs on the light card background
-      fontFamily: `${fonts.body} !important`, // Make sure native paragraphs use Montserrat
+    '& p, & div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), & span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
+      color: 'brand.textDark !important',
+      fontFamily: `${fonts.body} !important`,
     },
     '& svg': {
-      color: 'brand.textBurnt !important', // Ensure SVGs within this layer are dark
+      color: 'brand.textBurnt !important',
     },
-    // Also include specific Chakra components if you expect them inside this layerStyle,
-    // though the baseStyle for Input/Select/FormLabel should handle these.
   },
 };
 
