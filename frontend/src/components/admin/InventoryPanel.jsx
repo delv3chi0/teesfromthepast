@@ -9,12 +9,12 @@ import {
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaToggleOn, FaToggleOff, FaImage, FaStar } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa'; // FaToggleOn, FaToggleOff no longer needed
 import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
 // --- Product Manager Specific Constants (Moved from original ProductManager.jsx) ---
-const SIZES = ["XS", "S", "M", "L", "XXL", "One Size", "6M", "12M", "18M", "24M"]; // Fixed typo "XXL" instead of "XXL"
+const SIZES = ["XS", "S", "M", "L", "XXL", "One Size", "6M", "12M", "18M", "24M"];
 const CORE_COLORS = [ { name: "Black", hex: "#000000" }, { name: "White", hex: "#FFFFFF" }, { name: "Navy Blue", hex: "#000080" }, { name: "Heather Grey", hex: "#B2BEB5" }, { name: "Cream / Natural", hex: "#FFFDD0" }, { name: "Mustard Yellow", hex: "#FFDB58" }, { name: "Olive Green", hex: "#556B2F" }, { name: "Maroon", hex: "#800000" }, { name: "Burnt Orange", hex: "#CC5500" }, { name: "Heather Forest", hex: "#228B22" }, { name: "Royal Blue", hex: "#4169E1" }, { name: "Charcoal", hex: "#36454F" }, { name: "Sand", hex: "#C2B280" }, { name: "Light Blue", hex: "#ADD8E6" }, { name: "Cardinal Red", hex: "#C41E3A" }, { name: "Teal", hex: "#008080" } ];
 
 const initialColorVariantState = {
@@ -31,15 +31,8 @@ const InventoryPanel = () => {
   const { token } = useAuth();
   const toast = useToast();
 
-  // --- State for Product Categories (Moved from original ProductCategoryManager.jsx) ---
-  const [categories, setCategories] = useState([]);
-  const [loadingCategories, setLoadingCategories] = useState(true);
-  const [errorCategories, setErrorCategories] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [isEditingCategory, setIsEditingCategory] = useState(false);
-  const [categoryFormData, setCategoryFormData] = useState({ name: '', description: '', isActive: true });
-  const { isOpen: isCategoryModalOpen, onOpen: onCategoryModalOpen, onClose: onCategoryModalClose } = useDisclosure();
-  const { isOpen: isDeleteCategoryModalOpen, onOpen: onDeleteCategoryModalOpen, onClose: onDeleteCategoryModalClose } = useDisclosure();
+  // --- State for Categories (only for product manager dropdown, not for separate management UI) ---
+  const [categories, setCategories] = useState([]); // This state remains for product manager dropdown
 
   // --- State for Products (Moved from original ProductManager.jsx) ---
   const [products, setProducts] = useState([]);
@@ -55,23 +48,7 @@ const InventoryPanel = () => {
 
   // --- Fetching Logic (Combined and Adjusted) ---
 
-  // Fetch Categories for Category Management table
-  const fetchCategories = useCallback(async () => {
-    setLoadingCategories(true);
-    setErrorCategories('');
-    try {
-      const response = await client.get('/admin/product-categories', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setCategories(response.data);
-    } catch (err) {
-      console.error("Error fetching categories:", err);
-      setErrorCategories(err.response?.data?.message || 'Failed to fetch product categories.');
-      toast({ title: "Error", description: err.response?.data?.message || 'Failed to fetch categories.', status: "error", duration: 5000, isClosable: true });
-    } finally {
-      setLoadingCategories(false);
-    }
-  }, [token, toast]);
+  // Removed fetchCategories (for categories table)
 
   // Fetch Products for Product Management table
   const fetchProducts = useCallback(async () => {
@@ -86,12 +63,12 @@ const InventoryPanel = () => {
     }
   }, [token]);
 
-  // Fetch Categories for Product Manager's category dropdown (renamed to avoid conflict with `categories` state)
+  // Fetch Categories for Product Manager's category dropdown
   const fetchAllCategoriesForProductManager = useCallback(async () => {
     if (!token) return;
     try {
       const { data } = await client.get('/admin/product-categories', { headers: { Authorization: `Bearer ${token}` } });
-      setCategories(data); // Using the same 'categories' state as the Category Manager, which is fine as they represent the same data
+      setCategories(data); // Populates the 'categories' state for the product manager's dropdown
     } catch (e) {
       toast({ title: "Error", description: "Could not load categories for product form.", status: "error" });
     }
@@ -100,88 +77,12 @@ const InventoryPanel = () => {
 
   useEffect(() => {
     if (token) {
-      fetchCategories(); // Initial fetch for category table
       fetchProducts(); // Initial fetch for product table
       fetchAllCategoriesForProductManager(); // Initial fetch for product manager dropdown
     }
-  }, [token, fetchCategories, fetchProducts, fetchAllCategoriesForProductManager]);
+  }, [token, fetchProducts, fetchAllCategoriesForProductManager]);
 
-  // --- Handlers for Product Categories (Moved from original ProductCategoryManager.jsx) ---
-  const handleOpenCategoryModal = (category = null) => {
-    if (category) {
-      setIsEditingCategory(true);
-      setSelectedCategory(category);
-      setCategoryFormData({ name: category.name, description: category.description || '', isActive: category.isActive });
-    } else {
-      setIsEditingCategory(false);
-      setSelectedCategory(null);
-      setCategoryFormData({ name: '', description: '', isActive: true });
-    }
-    onCategoryModalOpen();
-  };
-
-  const handleCategoryFormChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setCategoryFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value }));
-  };
-
-  const handleCategorySubmit = async () => {
-    if (!categoryFormData.name.trim()) {
-      toast({ title: "Validation Error", description: "Category name is required.", status: "error", duration: 3000, isClosable: true });
-      return;
-    }
-
-    const method = isEditingCategory ? 'put' : 'post';
-    const url = isEditingCategory ? `/admin/product-categories/${selectedCategory._id}` : '/admin/product-categories';
-
-    try {
-      const response = await client[method](url, categoryFormData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      toast({
-        title: `Category ${isEditingCategory ? 'Updated' : 'Created'}`,
-        description: `Category "${response.data.name}" has been successfully ${isEditingCategory ? 'updated' : 'created'}.`,
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-      fetchCategories(); // Re-fetch categories to update table
-      fetchAllCategoriesForProductManager(); // Also update categories for product manager dropdown
-      onCategoryModalClose();
-    } catch (err) {
-      console.error(`Error ${isEditingCategory ? 'updating' : 'creating'} category:`, err);
-      toast({
-        title: `Error ${isEditingCategory ? 'Updating' : 'Creating'} Category`,
-        description: err.response?.data?.message || `Could not ${isEditingCategory ? 'update' : 'create'} category.`,
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleOpenDeleteCategoryDialog = (category) => {
-    setSelectedCategory(category);
-    onDeleteCategoryModalOpen();
-  };
-
-  const handleDeleteCategory = async () => {
-    if (!selectedCategory) return;
-    try {
-      await client.delete(`/admin/product-categories/${selectedCategory._id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      toast({ title: "Category Deleted", description: `Category "${selectedCategory.name}" has been removed.`, status: "success", duration: 3000, isClosable: true });
-      fetchCategories(); // Re-fetch categories
-      fetchAllCategoriesForProductManager(); // Re-fetch for dropdown
-      onDeleteCategoryModalClose();
-    } catch (err) {
-      console.error("Error deleting category:", err);
-      toast({ title: "Delete Failed", description: err.response?.data?.message || "Could not delete category.", status: "error", duration: 5000, isClosable: true });
-      onDeleteCategoryModalClose();
-    }
-  };
+  // --- Removed all Category-specific handlers ---
 
   // --- Handlers for Products (Moved from original ProductManager.jsx) ---
   const handleOpenProductModal = async (product = null) => {
@@ -252,86 +153,11 @@ const InventoryPanel = () => {
     <Box w="100%">
       {/* Heading is already textLight in AdminPage context, this is fine */}
       <Heading size="lg" mb={6} color="brand.textLight" textAlign={{ base: "center", md: "left" }}>
-        Inventory & Product Management
+        Inventory Management
       </Heading>
 
-      {/* --- Product Categories Section --- */}
-      <Box layerStyle="cardBlue" w="100%" p={{ base: 2, md: 4 }} mb={8}> {/* Added margin-bottom for spacing */}
-        <HStack justifyContent="space-between" mb={6} w="100%">
-          <Heading size="md">Manage Categories</Heading>
-          <Button
-            leftIcon={<Icon as={FaPlus} />}
-            colorScheme="brandAccentOrange"
-            onClick={() => handleOpenCategoryModal()}
-            size="sm"
-          >
-            Add New Category
-          </Button>
-        </HStack>
-
-        {loadingCategories ? (
-          <VStack justifyContent="center" alignItems="center" minH="200px">
-            <Spinner size="xl" /> {/* No color prop needed, inherits from parent Box */}
-            <Text mt={2}>Loading Product Categories...</Text> {/* No color prop needed */}
-          </VStack>
-        ) : errorCategories ? (
-          <Alert status="error" borderRadius="md"><AlertIcon />{errorCategories}</Alert>
-        ) : categories.length === 0 ? (
-          <Text>No product categories found. Click "Add New Category" to start.</Text>
-        ) : (
-          <TableContainer w="100%"> {/* Added w="100%" */}
-            <Table variant="simple" size="sm" w="100%"> {/* Added w="100%" */}
-              <Thead>
-                <Tr>
-                  <Th>Name</Th>
-                  <Th>Description</Th>
-                  <Th>Status</Th>
-                  <Th>Actions</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {categories.map((category) => (
-                  <Tr key={category._id}>
-                    <Td fontWeight="medium">{category.name}</Td>
-                    <Td fontSize="xs" maxW="300px" whiteSpace="normal">{category.description || 'N/A'}</Td>
-                    <Td>
-                      <Tag size="sm" colorScheme={category.isActive ? 'green' : 'red'} borderRadius="full">
-                        <Icon as={category.isActive ? FaToggleOn : FaToggleOff} mr={1} />
-                        {category.isActive ? 'Active' : 'Inactive'}
-                      </Tag>
-                    </Td>
-                    <Td>
-                      <Tooltip label="Edit Category" placement="top">
-                        <ChakraIconButton
-                          icon={<Icon as={FaEdit} />}
-                          size="xs"
-                          variant="ghost"
-                          colorScheme="brandAccentYellow" // Consistent color for edit actions
-                          mr={2}
-                          onClick={() => handleOpenCategoryModal(category)}
-                          aria-label="Edit Category"
-                        />
-                      </Tooltip>
-                      <Tooltip label="Delete Category" placement="top">
-                        <ChakraIconButton
-                          icon={<Icon as={FaTrashAlt} />}
-                          size="xs"
-                          variant="ghost"
-                          colorScheme="red"
-                          onClick={() => handleOpenDeleteCategoryDialog(category)}
-                          aria-label="Delete Category"
-                        />
-                      </Tooltip>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </TableContainer>
-        )}
-      </Box>
-
       {/* --- Product Management Section --- */}
+      {/* This section now directly replaces the old tabs content */}
       <Box layerStyle="cardBlue" w="100%" p={{ base: 2, md: 4 }}>
         <HStack justifyContent="space-between" mb={6} w="100%">
           <Heading size="md">Manage Products</Heading>
@@ -339,16 +165,16 @@ const InventoryPanel = () => {
         </HStack>
         {loadingProducts ? (
           <VStack justifyContent="center" alignItems="center" minH="200px">
-            <Spinner size="xl" /> {/* No color prop needed */}
-            <Text mt={2}>Loading Products...</Text> {/* No color prop needed */}
+            <Spinner size="xl" />
+            <Text mt={2}>Loading Products...</Text>
           </VStack>
         ) : errorProducts ? (
           <Alert status="error" borderRadius="md"><AlertIcon />{errorProducts}</Alert>
         ) : products.length === 0 ? (
-            <Text>No products found. Click "Add New Product" to start.</Text> // Added missing text
+            <Text>No products found. Click "Add New Product" to start.</Text>
         ) : (
-          <TableContainer w="100%"> {/* Added w="100%" */}
-            <Table variant="simple" size="sm" w="100%"> {/* Added w="100%" */}
+          <TableContainer w="100%">
+            <Table variant="simple" size="sm" w="100%">
               <Thead>
                 <Tr>
                   <Th>Name</Th>
@@ -363,7 +189,6 @@ const InventoryPanel = () => {
                 {products.map((p) => (
                   <Tr key={p._id}>
                     <Td fontWeight="medium">{p.name}</Td>
-                    {/* Categories array holds all category data, find by ID */}
                     <Td>{categories.find(cat => cat._id === p.category)?.name || 'N/A'}</Td>
                     <Td>${p.basePrice?.toFixed(2)}</Td>
                     <Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td>
@@ -379,80 +204,6 @@ const InventoryPanel = () => {
           </TableContainer>
         )}
       </Box>
-
-      {/* --- Category Modals (Moved from original ProductCategoryManager.jsx) --- */}
-      <Modal isOpen={isCategoryModalOpen} onClose={onCategoryModalClose} isCentered>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{isEditingCategory ? 'Edit' : 'Add New'} Product Category</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Category Name</FormLabel>
-                <Input
-                  name="name"
-                  value={categoryFormData.name}
-                  onChange={handleCategoryFormChange}
-                  placeholder="e.g., Men's Apparel, Accessories"
-                />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Description (Optional)</FormLabel>
-                <Input
-                  name="description"
-                  value={categoryFormData.description}
-                  onChange={handleCategoryFormChange}
-                  placeholder="Brief description of the category"
-                />
-              </FormControl>
-              <FormControl display="flex" alignItems="center">
-                <FormLabel htmlFor="isActive-category" mb="0">
-                  Active:
-                </FormLabel>
-                <Switch
-                  id="isActive-category"
-                  name="isActive"
-                  isChecked={categoryFormData.isActive}
-                  onChange={handleCategoryFormChange}
-                  colorScheme="green"
-                  ml={3}
-                />
-                 <Text ml={2} fontSize="sm" color={categoryFormData.isActive ? "green.300" : "red.300"}>
-                   ({categoryFormData.isActive ? "Visible" : "Hidden"})
-                 </Text>
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={onCategoryModalClose} mr={3} variant="ghost">Cancel</Button>
-            <Button
-              colorScheme="brandAccentOrange"
-              onClick={handleCategorySubmit}
-            >
-              {isEditingCategory ? 'Save Changes' : 'Create Category'}
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {selectedCategory && (
-        <Modal isOpen={isDeleteCategoryModalOpen} onClose={onDeleteCategoryModalClose} isCentered>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Confirm Deletion</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              <Text>Are you sure you want to delete the category "<strong>{selectedCategory.name}</strong>"?</Text>
-              <Text mt={2} color="red.500" fontWeight="bold">This action cannot be undone.</Text>
-            </ModalBody>
-            <ModalFooter>
-              <Button variant="ghost" onClick={onDeleteCategoryModalClose} mr={3}>Cancel</Button>
-              <Button colorScheme="red" onClick={handleDeleteCategory}>Delete Category</Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
-      )}
 
       {/* --- Product Modals (Moved from original ProductManager.jsx) --- */}
       <Modal isOpen={isProductModalOpen} onClose={onProductModalClose} size="6xl" scrollBehavior="inside">
@@ -485,8 +236,7 @@ const InventoryPanel = () => {
                         </FormControl>
                         <FormControl>
                             <FormLabel>Tags (comma-separated)</FormLabel>
-                            <Input name="tags" value={productFormData.tags} onChange={handleProductFormChange}/>
-                        </FormControl>
+                            <Input name="tags" value={productFormData.tags} onChange={handleProductFormChange}/></FormControl>
                     </SimpleGrid>
                     <FormControl mt={4}><FormLabel>Description</FormLabel><Textarea name="description" value={productFormData.description} onChange={handleProductFormChange}/></FormControl>
                     <FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={productFormData.isActive} onChange={handleProductFormChange}/></FormControl>
