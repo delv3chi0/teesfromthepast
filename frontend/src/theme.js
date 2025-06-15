@@ -6,7 +6,7 @@ const colors = {
     secondary: '#1B3B3A',         // Slightly darker header/nav
 
     cardTan: '#FFE9A0',           // Soft tan for cards
-    cardGold: '#F1C666',          // Optional alternative
+    cardGold: '#F1C666',          // Optional alternate card color
 
     accentOrange: '#D16930',      // Muted burnt orange
     accentOrangeHover: '#E17A45',
@@ -32,12 +32,12 @@ const components = {
   Card: {
     baseStyle: {
       container: {
-        bg: 'brand.cardTan',        // 🔶 Cards are now tan
+        bg: 'brand.cardTan',
         color: 'brand.textDark',
         borderRadius: 'xl',
         boxShadow: 'lg',
-      }
-    }
+      },
+    },
   },
   Modal: {
     baseStyle: {
@@ -100,6 +100,17 @@ const components = {
         }
       }
     }
+  },
+  Box: {
+    variants: {
+      card: {
+        bg: 'brand.cardTan',
+        color: 'brand.textDark',
+        borderRadius: 'xl',
+        boxShadow: 'lg',
+        p: 6,
+      },
+    },
   },
 };
 
