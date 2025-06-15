@@ -5,22 +5,23 @@ const colors = {
     primary: '#184C4A',           // Deep teal background
     secondary: '#1B3B3A',         // Slightly darker header/nav
 
-    cardBlue: '#FFE9A0',          // ✅ Re-added and set to tan
-    cardTan: '#FFE9A0',           // Optional alias
+    cardBlue: '#F8DFA7',          // ✅ New buff card color (was tan)
+    cardBuff: '#F8DFA7',          // Alias for clarity
     cardGold: '#F1C666',          // Optional alternate
 
-    accentOrange: '#D16930',      // Muted burnt orange
+    accentOrange: '#D16930',
     accentOrangeHover: '#E17A45',
 
-    accentYellow: '#FFE9A0',      // Soft yellow-tan
+    accentYellow: '#FFE9A0',
     accentYellowHover: '#FDD97A',
 
-    textLight: '#FDF6EE',         // Creamy white
-    textMuted: '#B7C4C4',         // Muted gray-teal
-    textDark: '#2A2A2A',          // For light backgrounds
+    textLight: '#FDF6EE',
+    textMuted: '#B7C4C4',
+    textDark: '#2A2A2A',
+    textBurnt: '#3B2F1B',          // ✅ New dark text for buff cards
   },
   ui: {
-    background: '#1E3A39',        // For sections, modals
+    background: '#1E3A39',
   }
 };
 
@@ -33,8 +34,8 @@ const components = {
   Card: {
     baseStyle: {
       container: {
-        bg: 'brand.cardTan',
-        color: 'brand.textDark',
+        bg: 'brand.cardBuff',
+        color: 'brand.textBurnt',
         borderRadius: 'xl',
         boxShadow: 'lg',
       },
