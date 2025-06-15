@@ -14,7 +14,7 @@ import {
   Flex,
   Icon,
   Image,
-  HStack,
+  HStack, // Ensure HStack is imported
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -93,7 +93,7 @@ const MyOrdersPage = () => {
 
                 <Box>
                   <Heading size="xs" textTransform="uppercase">Total</Heading>
-                  <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text>
+                  <Text fontSize="sm">${(order.totalPrice || 0).toFixed(2)}</Text> {/* Check total price */}
                 </Box>
 
                 <Box>
@@ -109,26 +109,37 @@ const MyOrdersPage = () => {
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
-                    // MODIFIED: bg to brand.secondary and color to brand.textLight for the container
-                    <Flex key={item._id} justify="space-between" align="center" bg="brand.secondary" color="brand.textLight" p={3} borderRadius="md">
-                      <HStack spacing={4}>
+                    // MODIFIED: Added className for CSS override, adjusted layout props
+                    <Flex key={item._id}
+                          className="my-orders-item-flex" // <--- ADD THIS CLASS NAME
+                          justify="space-between"
+                          align="center"
+                          bg="brand.secondary"
+                          p={3}
+                          borderRadius="md"
+                          flexWrap="wrap" // Allow wrapping on small screens
+                          gap={2} // Add gap between items
+                    >
+                      <HStack spacing={4} flex="1"> {/* flex="1" to take up available space before price */}
                         <Image
                           src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
                           alt={item.name}
                           boxSize="60px"
                           objectFit="cover"
                           borderRadius="md"
-                          fallback={<Icon as={FaBoxOpen} boxSize="30px" color="brand.textMuted" />} // Fallback icon color adjusted
-                          mr={4} mb={{base: 2, md: 0}}
+                          fallback={<Icon as={FaBoxOpen} boxSize="30px" color="brand.textMuted" />}
                         />
-                        <VStack align="start" spacing={0}>
-                          {/* MODIFIED: Explicitly set color for Text components to brand.textLight */}
-                          <Text fontWeight="bold" color="brand.textLight">{item.name}</Text>
-                          <Text fontSize="xs" color="brand.textLight">Qty: {item.qty}</Text>
-                        </VStack>
+                        {/* MODIFIED: VStack to HStack for inline text, removed explicit colors (handled by CSS override) */}
+                        <HStack align="start" spacing={1} flexWrap="wrap"> {/* Added flexWrap for small screens */}
+                          <Text fontWeight="bold">{item.name}</Text>
+                          {/* MODIFIED: Check for item.qty validity */}
+                          {item.qty && item.qty > 0 && <Text fontSize="xs">Qty: {item.qty}</Text>}
+                        </HStack>
                       </HStack>
-                      {/* MODIFIED: Explicitly set color for Text component to brand.textLight */}
-                      <Text fontSize="sm" fontWeight="bold" color="brand.textLight">${(item.price * item.qty).toFixed(2)}</Text>
+                      {/* MODIFIED: Check for price validity before displaying */}
+                      {typeof item.price === 'number' && typeof item.qty === 'number' && !isNaN(item.price) && !isNaN(item.qty) && (
+                        <Text fontSize="sm" fontWeight="bold">${(item.price * item.qty).toFixed(2)}</Text>
+                      )}
                     </Flex>
                   ))}
                 </VStack>

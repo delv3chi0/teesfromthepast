@@ -59,3 +59,14 @@
     color: var(--chakra-colors-white) !important;
 }
 /* --- END: ABSOLUTE FINAL SOLUTION FOR MENU ITEM TEXT --- */
+
+/* ... (your existing index.css content, including MenuItem overrides) ... */
+
+/* --- START: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT --- */
+/* Target Text components directly within the order item Flex containers */
+.my-orders-item-flex span,
+.my-orders-item-flex p,
+.my-orders-item-flex div { /* Include div as text might be wrapped */
+    color: var(--chakra-colors-brand-textLight) !important;
+}
+/* --- END: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT --- */
