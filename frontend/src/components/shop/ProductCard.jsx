@@ -11,25 +11,10 @@ const ProductCard = ({ product }) => {
   }
 
   // --- MODIFICATION START ---
-
-  let displayPrice = 0; // Default to 0 in case no variants or prices are found
-
-  // Check if product has variants and at least one variant exists
-  if (product.variants && product.variants.length > 0) {
-    // Option 1: Display the price of the first variant (common for simple shop pages)
-    displayPrice = product.variants[0].price;
-
-    // Option 2 (Alternative): Find the lowest price among all variants
-    // const prices = product.variants.map(variant => variant.price);
-    // if (prices.length > 0) {
-    //   displayPrice = Math.min(...prices);
-    // }
-  }
-
-  // Ensure displayPrice is a number before calling toFixed.
-  // The nullish coalescing (?? 0) helps, but an explicit check is safer if the backend might send non-numbers.
-  const finalDisplayPrice = typeof displayPrice === 'number' ? displayPrice : 0;
-
+  // Revert to using product.basePrice and product.defaultImage directly
+  // as per your backend's current shop-data response structure
+  const displayPrice = typeof product.basePrice === 'number' ? product.basePrice : 0;
+  const imageUrl = product.defaultImage || ''; // Use defaultImage, fallback to empty string
   // --- MODIFICATION END ---
 
   const productUrl = product.slug ? `/product/${product.slug}` : '#';
@@ -52,7 +37,7 @@ const ProductCard = ({ product }) => {
     >
       <Box h="220px" bg="brand.secondary" p={4} display="flex" alignItems="center" justifyContent="center">
         <Image
-          src={product.defaultImage}
+          src={imageUrl} // Use the derived imageUrl
           alt={`Image of ${product.name}`}
           objectFit="contain"
           w="100%"
@@ -68,7 +53,7 @@ const ProductCard = ({ product }) => {
           {product.description}
         </Text>
         <Text mt={2} fontSize="xl" color="brand.accentYellow" fontWeight="bold">
-          ${finalDisplayPrice.toFixed(2)} {/* Use the calculated finalDisplayPrice */}
+          ${displayPrice.toFixed(2)} {/* Use the derived displayPrice */}
         </Text>
       </Box>
     </Box>

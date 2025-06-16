@@ -6,25 +6,25 @@ import ProductCard from '../components/shop/ProductCard';
 /**
  * Shop Page
  * Displays all products in a single, responsive grid, without categories.
+ * Updated to expect a flat array of products from the backend.
  */
 const ShopPage = () => {
-    const [products, setProducts] = useState([]); // Renamed from shopData for clarity
+    // Renamed from shopData to products for clarity, as it will now hold a flat list
+    const [products, setProducts] = useState([]); 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         setLoading(true);
-        // Assuming your backend endpoint /storefront/shop-data now returns a flat array of products
         client.get('/storefront/shop-data')
             .then(res => {
-                // If backend still sends categories, flatten it here for now (TEMPORARY FIX)
-                // This is a fallback if you can't update the backend immediately.
-                // It's better to change the backend.
-                // const allProducts = res.data.flatMap(category => category.products);
-                // setProducts(allProducts);
+                // If backend still sends categories, flatten it here.
+                // This is a temporary fallback until the backend is fully adjusted.
+                const allProducts = res.data.flatMap(category => category.products);
+                setProducts(allProducts);
 
-                // If backend directly sends a flat array of products (IDEAL)
-                setProducts(res.data);
+                // If backend already sends a flat array of products, use this:
+                // setProducts(res.data);
             })
             .catch(() => setError('Could not load products. Please try again later.'))
             .finally(() => setLoading(false));
@@ -49,19 +49,19 @@ const ShopPage = () => {
     }
 
     return (
-        <VStack spacing={8} align="stretch" py={8} px={{ base: 4, md: 8 }}> {/* Added padding for better spacing */}
+        <VStack spacing={8} align="stretch" py={8} px={{ base: 4, md: 8 }}>
             <Heading as="h1" size="2xl" color="brand.textLight" textAlign="center" mb={6}>
                 Our Awesome Collection
             </Heading>
 
-            {products.length === 0 && ( // Removed !loading as it's already handled by the loading state check
+            {products.length === 0 && (
                 <Box textAlign="center" py={10}>
                     <Text fontSize="xl" color="whiteAlpha.800">No products are currently available. Check back soon!</Text>
                 </Box>
             )}
 
             {products.length > 0 && (
-                <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={{ base: 6, md: 8 }}> {/* Adjusted columns for potentially 12 items */}
+                <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={{ base: 6, md: 8 }}>
                     {products.map((product) => (
                         <ProductCard key={product._id} product={product} />
                     ))}
