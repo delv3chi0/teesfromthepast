@@ -10,11 +10,32 @@ const ProductCard = ({ product }) => {
     );
   }
 
+  // --- MODIFICATION START ---
+
+  let displayPrice = 0; // Default to 0 in case no variants or prices are found
+
+  // Check if product has variants and at least one variant exists
+  if (product.variants && product.variants.length > 0) {
+    // Option 1: Display the price of the first variant (common for simple shop pages)
+    displayPrice = product.variants[0].price;
+
+    // Option 2 (Alternative): Find the lowest price among all variants
+    // const prices = product.variants.map(variant => variant.price);
+    // if (prices.length > 0) {
+    //   displayPrice = Math.min(...prices);
+    // }
+  }
+
+  // Ensure displayPrice is a number before calling toFixed.
+  // The nullish coalescing (?? 0) helps, but an explicit check is safer if the backend might send non-numbers.
+  const finalDisplayPrice = typeof displayPrice === 'number' ? displayPrice : 0;
+
+  // --- MODIFICATION END ---
+
   const productUrl = product.slug ? `/product/${product.slug}` : '#';
   const isClickable = !!product.slug;
 
   return (
-    // MODIFIED: Applied themed background and border colors
     <Box 
         as={isClickable ? RouterLink : 'div'} 
         to={productUrl} 
@@ -29,7 +50,6 @@ const ProductCard = ({ product }) => {
         bg="brand.cardBlue"
         borderColor="transparent"
     >
-      {/* MODIFIED: Updated image container background */}
       <Box h="220px" bg="brand.secondary" p={4} display="flex" alignItems="center" justifyContent="center">
         <Image
           src={product.defaultImage}
@@ -41,7 +61,6 @@ const ProductCard = ({ product }) => {
         />
       </Box>
       <Box p="4" mt="auto">
-        {/* MODIFIED: Updated text colors for dark theme */}
         <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name} color="brand.textLight">
           {product.name}
         </Heading>
@@ -49,7 +68,7 @@ const ProductCard = ({ product }) => {
           {product.description}
         </Text>
         <Text mt={2} fontSize="xl" color="brand.accentYellow" fontWeight="bold">
-          ${product.basePrice.toFixed(2)}
+          ${finalDisplayPrice.toFixed(2)} {/* Use the calculated finalDisplayPrice */}
         </Text>
       </Box>
     </Box>
