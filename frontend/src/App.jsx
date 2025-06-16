@@ -26,7 +26,7 @@ import ShopPage from './pages/ShopPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
-import ProductStudio from './pages/ProductJS/ProductStudio'; // Assuming ProductStudio.jsx is in ProductJS folder
+import ProductStudio from './pages/ProductStudio'; // Assuming ProductStudio.jsx is in ProductJS folder
 import VotingPage from './pages/VotingPage';
 import Profile from './pages/Profile';
 import CheckoutPage from './pages/CheckoutPage';
