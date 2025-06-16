@@ -247,47 +247,47 @@ const AdminPage = () => {
                 <Td fontSize="xs" title={user._id}>{user._id.substring(0, 8)}...</Td>
                 <Td>{user.username}</Td>
                 <Td>{user.email}</Td>
-                <Td>{`${user.firstName || ''} <span class="math-inline">\{user\.lastName \|\| ''\}\`\.trim\(\)\}</Td\>
-<Td\><Tag size\="sm" colorScheme\=\{user\.isAdmin ? 'green' \: 'gray'\}\>\{user\.isAdmin ? 'Yes' \: 'No'\}</Tag\></Td\>
-<Td\>\{new Date\(user\.createdAt\)\.toLocaleDateString\(\)\}</Td\>
-<Td\>
-<Tooltip label\="View User Details"\><ChakraIconButton size\="xs" variant\="ghost" icon\=\{<Icon as\=\{FaEye\} /\>\} onClick\=\{\(\) \=\> handleViewUser\(user\)\}/\></Tooltip\>
-<Tooltip label\="Edit User"\><ChakraIconButton size\="xs" variant\="ghost" icon\=\{<Icon as\=\{FaEdit\} /\>\} onClick\=\{\(\) \=\> handleOpenEditUser\(user\)\}/\></Tooltip\>
-<Tooltip label\="Delete User"\><ChakraIconButton size\="xs" variant\="ghost" colorScheme\="red" icon\=\{<Icon as\=\{FaTrashAlt\} /\>\} onClick\=\{\(\) \=\> handleOpenDeleteUser\(user\)\}/\></Tooltip\>
-</Td\>
-</Tr\>
-\)\)\}
-</Tbody\>
-</Table\>
-</TableContainer\>
-</Box\>
-\);
-const OrdersPanel \= \(\) \=\> \{
-const getStatusColor \= \(status\) \=\> \{ if \(status \=\=\= 'Delivered'\) return 'green\.200'; if \(status \=\=\= 'Shipped'\) return 'blue\.200'; if \(status \=\=\= 'Cancelled'\) return 'red\.200'; return 'gray\.200'; \};
-return \(
-<Box p\=\{\{ base\: 2, md\: 4 \}\} layerStyle\="cardBlue" w\="100%"\>
-<Heading size\="md" mb\=\{4\}\>Order Management</Heading\>
-<TableContainer w\="100%"\>
-<Table variant\="simple" size\="sm" w\="100%"\>
-<Thead\>
-<Tr\>
-<Th\>ID</Th\>
-<Th\>User</Th\>
-<Th\>Date</Th\>
-<Th\>Total</Th\>
-<Th\>Pay Status</Th\>
-<Th\>Order Status</Th\>
-<Th\>Items</Th\>
-<Th\>Actions</Th\>
-</Tr\>
-</Thead\>
-<Tbody\>
-\{orders\.map\(order \=\> \(
-<Tr key\=\{order\.\_id\}\>
-<Td fontSize\="xs"\>\{order\.\_id\.substring\(0,8\)\}\.\.\.</Td\>
-<Td\>\{order\.user?\.email\}</Td\>
-<Td\>\{new Date\(order\.createdAt\)\.toLocaleDateString\(\)\}</Td\>
-<Td\></span>{(order.totalAmount / 100).toFixed(2)}</Td>
+                <Td>{`${user.firstName || ''} ${user.lastName || ''}`.trim()}</Td>
+                <Td><Tag size="sm" colorScheme={user.isAdmin ? 'green' : 'gray'}>{user.isAdmin ? 'Yes' : 'No'}</Tag></Td>
+                <Td>{new Date(user.createdAt).toLocaleDateString()}</Td>
+                <Td>
+                  <Tooltip label="View User Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)}/></Tooltip>
+                  <Tooltip label="Edit User"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)}/></Tooltip>
+                  <Tooltip label="Delete User"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteUser(user)}/></Tooltip>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </TableContainer>
+    </Box>
+  );
+  const OrdersPanel = () => {
+    const getStatusColor = (status) => { if (status === 'Delivered') return 'green.200'; if (status === 'Shipped') return 'blue.200'; if (status === 'Cancelled') return 'red.200'; return 'gray.200'; };
+    return (
+      <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+        <Heading size="md" mb={4}>Order Management</Heading>
+        <TableContainer w="100%">
+          <Table variant="simple" size="sm" w="100%">
+            <Thead>
+              <Tr>
+                <Th>ID</Th>
+                <Th>User</Th>
+                <Th>Date</Th>
+                <Th>Total</Th>
+                <Th>Pay Status</Th>
+                <Th>Order Status</Th>
+                <Th>Items</Th>
+                <Th>Actions</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {orders.map(order => (
+                <Tr key={order._id}>
+                  <Td fontSize="xs">{order._id.substring(0,8)}...</Td>
+                  <Td>{order.user?.email}</Td>
+                  <Td>{new Date(order.createdAt).toLocaleDateString()}</Td>
+                  <Td>${(order.totalAmount / 100).toFixed(2)}</Td>
                   <Td><Tag size="sm" colorScheme={order.paymentStatus==='Succeeded'?'green':'orange'}>{order.paymentStatus}</Tag></Td>
                   <Td>
                     <Select size="xs" variant="outline" color="brand.textDark" value={order.orderStatus} onChange={e => handleStatusChange(order._id, e.target.value)} bg={getStatusColor(order.orderStatus)} borderRadius="md" maxW="120px">
