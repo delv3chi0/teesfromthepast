@@ -5,25 +5,19 @@ import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 import { FaMagic, FaSave } from 'react-icons/fa';
 
-// MODIFIED: ThemedSelect now uses brand.secondary for background and brand.textLight for text
 const ThemedSelect = (props) => (
     <Select
         size="lg"
-        bg="brand.secondary" // Consistent dark background for select
-        color="brand.textLight" // Ensure text is light
+        bg="brand.secondary"
+        color="brand.textLight"
         borderColor="whiteAlpha.300"
-        _placeholder={{ color: "brand.textMuted" }} // Ensure placeholder is themed
+        _placeholder={{ color: "brand.textMuted" }}
         _hover={{ borderColor: "whiteAlpha.400" }}
         focusBorderColor="brand.accentYellow"
         {...props}
     />
 );
 
-/**
- * AI Image Generator Page
- * This GeneratorControls component is now defined OUTSIDE the main Generate function
- * to prevent unnecessary re-mounts of its children (like the Textarea).
- */
 const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, setArtStyle, isRetro, setIsRetro, decade, setDecade, handleGenerate }) => (
     <VStack spacing={6} w="100%" bg="brand.secondary" p={{base: 5, md: 8}} borderRadius="xl">
         <Textarea
@@ -33,7 +27,7 @@ const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, set
             isDisabled={loading || isSaving}
             size="lg"
             minHeight="120px"
-            resize="vertical" // Allows vertical resizing
+            resize="vertical"
         />
         <SimpleGrid columns={{base: 1, md: 3}} spacing={5} w="100%">
             <FormControl>
@@ -130,8 +124,9 @@ export default function Generate() {
         setError("");
         setImageUrl("");
         try {
+            // MODIFIED: Changed API endpoint to match backend route
             const finalPrompt = constructFinalPrompt();
-            const response = await client.post('/stability/generate', { prompt: finalPrompt });
+            const response = await client.post('/designs/create', { prompt: finalPrompt }); // <--- CRITICAL FIX HERE
             setImageUrl(response.data.imageUrl);
         } catch (err) {
             handleApiError(err, 'Failed to generate image.', 'Generation');
@@ -178,7 +173,6 @@ export default function Generate() {
                         </VStack>
                     )}
                 </Box>
-                {/* MODIFIED: Pass props to GeneratorControls */}
                 <GeneratorControls
                     prompt={prompt}
                     setPrompt={setPrompt}
