@@ -19,16 +19,12 @@ const colors = {
 
     paper: '#2D3748', // This color matches the 'ui.background' you previously had, providing a muted dark background
 
-    subtleLightBg: 'rgba(0,0,0,0.05)', // A very faint black overlay for inner sections on light cards (original usage)
-    // NEW: Add a clearer light inner background for light cards
-    brightCardInner: '#FFFFFF', // Pure white for a crisp inner section on light cards
-    // OR, if you prefer a subtle off-white that matches textLight:
-    // brightCardInner: '#FDF6EE', // Matches textLight, could be used for inner background
+    subtleLightBg: 'rgba(0,0,0,0.05)', // A very faint black overlay for inner sections on light cards (original use)
+    // NOTE: 'brightCardInner' is removed as we're going with a darker inner section for light cards.
   },
   ui: {
     background: '#1E3A39', // General UI background, similar to primary
   },
-  // ... other standard colors (green, red, gray, orange, blue) - no changes here
   green: { 50: '#F0FFF4', 100: '#C6F6D5', 200: '#9AE6B4', 300: '#68D391', 400: '#48BB78', 500: '#38A169', 600: '#2F855A', 700: '#276749', 800: '#22543D', 900: '#1C4532' },
   red: { 50: '#FFF5F5', 100: '#FED7D7', 200: '#FC8181', 300: '#E53E3E', 400: '#C53030', 500: '#9B2C2C', 600: '#822727', 700: '#63171B', 800: '#441C20', 900: '#2C1717' },
   gray: { 50: '#F7FAFC', 100: '#EDF2F7', 200: '#E2E8F0', 300: '#CBD5E0', 400: '#A0AEC0', 500: '#718096', 600: '#4A5568', 700: '#2D3748', 800: '#1A202C', 900: '#171923' },
@@ -49,10 +45,6 @@ const components = {
         color: 'brand.textDark', // Default text color on card is dark
         borderRadius: 'xl',
         boxShadow: 'lg',
-        // The _dark pseudo-prop should ideally apply to elements within a Card
-        // when the overall color mode is 'dark'. Your current global styles
-        // handle this for headings/text/svgs inside Card components.
-        // It's also applied through the `layerStyles.cardBlue` directly on the Box.
       }
     }
   },
@@ -74,8 +66,6 @@ const components = {
     baseStyle: {
       fontFamily: fonts.body,
       lineHeight: 'tall',
-      // No explicit color here, should inherit from parent or be set explicitly
-      // For general text on brand.cardBlue, it will be brand.textDark from Card baseStyle
     },
   },
   Modal: {
@@ -91,10 +81,10 @@ const components = {
       },
       body: {
         color: 'brand.textLight',
-        'label': { // Labels inside modals are light
+        'label': {
           color: 'brand.textLight !important',
         },
-        'h1, h2, h3, h4, h5, h6': { // Headings inside modals are light
+        'h1, h2, h3, h4, h5, h6': {
           color: 'brand.textLight !important',
         },
       },
@@ -117,15 +107,15 @@ const components = {
         if (props.colorScheme === 'brandAccentYellow') {
           return {
             bg: 'brand.accentYellow',
-            color: 'brand.textDark', // Buttons with yellow background need dark text
+            color: 'brand.textDark',
             _hover: { bg: 'brand.accentYellowHover' }
           };
         }
         return {};
       },
-      outline: (props) => ({ // ADDED/MODIFIED: Outline variant for buttons
-        borderColor: 'brand.textMuted', // Default outline for dark themes
-        color: 'brand.textLight',
+      outline: (props) => ({
+        borderColor: 'brand.textMuted',
+        color: 'brand.textLight', // Assuming outline buttons are often on dark backgrounds
         _hover: {
           bg: 'whiteAlpha.200',
           color: 'brand.accentYellow',
@@ -133,19 +123,19 @@ const components = {
         },
       }),
     },
-    defaultProps: { // Set default variant if you have a common one
+    defaultProps: {
       variant: 'solid',
     },
   },
   Table: {
     baseStyle: {
       th: {
-        color: 'brand.textDark !important', // Table headers on light backgrounds are dark
+        color: 'brand.textDark !important',
         borderColor: 'rgba(0,0,0,0.1) !important',
         textTransform: 'uppercase',
       },
       td: {
-        color: 'brand.textDark !important', // Table data on light backgrounds is dark
+        color: 'brand.textDark !important',
         borderColor: 'rgba(0,0,0,0.05) !important',
       },
     },
@@ -154,8 +144,8 @@ const components = {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark !important', // Text input on light backgrounds (like cardBlue) is dark
-          bg: 'whiteAlpha.900 !important', // Solid white background for editable inputs
+          color: 'brand.textDark !important',
+          bg: 'whiteAlpha.900 !important', // Opaque white background for editable inputs on light cards
           borderColor: 'brand.textMuted',
           _placeholder: {
             color: 'brand.textMuted',
@@ -169,26 +159,27 @@ const components = {
           },
         },
       },
-      filled: { // NEW: For read-only inputs on light backgrounds
+      // MODIFIED: For read-only inputs on light backgrounds
+      filled: {
         field: {
-          bg: 'rgba(0,0,0,0.08) !important', // Slightly darker, subtle fill on light cards
-          color: 'brand.textDark !important', // Text color is dark
+          bg: 'rgba(0,0,0,0.1) !important', // Slightly darker, more visible fill for read-only fields on light cards
+          color: 'brand.textDark !important',
           borderColor: 'transparent',
-          _hover: { bg: 'rgba(0,0,0,0.1) !important' },
-          _focus: { bg: 'rgba(0,0,0,0.1) !important' },
+          _hover: { bg: 'rgba(0,0,0,0.12) !important' },
+          _focus: { bg: 'rgba(0,0,0,0.12) !important' },
           isReadOnly: true,
         },
       },
     },
     defaultProps: {
-      variant: 'outline', // Default for inputs, for editable fields
+      variant: 'outline',
     },
   },
   Select: {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark !important', // Ensure text is dark on light backgrounds
+          color: 'brand.textDark !important',
           bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _hover: {
@@ -206,7 +197,7 @@ const components = {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark !important', // Ensure text is dark on light backgrounds
+          color: 'brand.textDark !important',
           bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _placeholder: {
@@ -227,7 +218,7 @@ const components = {
     variants: {
       outline: {
         field: {
-          color: 'brand.textDark !important', // Ensure text is dark on light backgrounds
+          color: 'brand.textDark !important',
           bg: 'whiteAlpha.900 !important',
           borderColor: 'brand.textMuted',
           _placeholder: {
@@ -246,18 +237,18 @@ const components = {
   },
   FormLabel: {
     baseStyle: {
-      mb: 2, // Added more spacing
+      mb: 2,
       color: 'brand.textDark', // IMPORTANT: Labels on light backgrounds must be dark
-      fontWeight: 'medium', // Make labels slightly bolder
+      fontWeight: 'medium',
     },
   },
   Stat: {
     baseStyle: {
       label: {
-        color: 'brand.textDark', // Stats on light backgrounds are dark
+        color: 'brand.textDark',
       },
       number: {
-        color: 'brand.textBurnt', // Stats numbers pop with burnt color
+        color: 'brand.textBurnt',
       }
     }
   },
@@ -307,32 +298,30 @@ const components = {
   },
   MenuList: {
     baseStyle: {
-      bg: 'brand.cardBlue', // Menu is light
-      color: 'brand.textDark', // Default text color for items (dark)
+      bg: 'brand.cardBlue',
+      color: 'brand.textDark',
       borderColor: 'rgba(0,0,0,0.1)',
       boxShadow: 'lg',
     },
   },
   MenuItem: {
     baseStyle: {
-      // This is the most targeted approach within the theme for MenuItems
-      // Apply this for default (not hovered/focused) state
-      _dark: { // Assuming the general site color mode is 'dark'
-        color: 'var(--chakra-colors-brand-textDark) !important', // Direct color on the button
-        'p, span, div, strong': { // Target specific text wrappers within the MenuItem
+      _dark: {
+        color: 'var(--chakra-colors-brand-textDark) !important',
+        'p, span, div, strong': {
           color: 'var(--chakra-colors-brand-textDark) !important',
-          '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textDark) !important', // Override Chakra's internal text var
+          '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textDark) !important',
         },
       },
       _hover: {
-        bg: 'brand.secondary', // Hover state is dark
-        color: 'brand.textLight', // Color for the MenuItem button itself on hover is light
+        bg: 'brand.secondary',
+        color: 'brand.textLight',
         'p, span, div, strong': {
-          color: 'var(--chakra-colors-brand-textLight) !important', // Color for text wrappers on hover is light
+          color: 'var(--chakra-colors-brand-textLight) !important',
           '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
         },
       },
-      _focus: { // Focus state is similar to hover
+      _focus: {
         bg: 'brand.secondary',
         color: 'brand.textLight',
         'p, div, span, strong': {
@@ -340,7 +329,6 @@ const components = {
           '--chakra-colors-chakra-body-text': 'var(--chakra-colors-brand-textLight) !important',
         },
       },
-      // Specific styling for the Logout item (no change needed here, it correctly overrides for red)
       '&[data-chakra-menu-item="true"][color="red.600"]': {
         color: 'red.600 !important',
         'p, div, span, strong': {
@@ -374,23 +362,25 @@ const components = {
 };
 
 const config = {
-  initialColorMode: 'dark', // Keep initial color mode dark
+  initialColorMode: 'dark',
   useSystemColorMode: false,
 };
 
 const layerStyles = {
   cardBlue: { // This defines your main light card style
-    bg: 'brand.cardBlue', // Light background
+    bg: 'brand.cardBlue',
     color: 'brand.textDark', // Default text color for items directly inside this layer
     borderRadius: 'xl',
     boxShadow: 'lg',
     p: 8,
-    textAlign: 'center',
+    // Removed textAlign and alignItems if not universally needed for all cardBlue usages
+    // Profile page will provide its own alignment within its VStack.
     borderWidth: '1px',
     borderColor: 'transparent',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
+    // Removed display flex properties here, let the consuming component decide its layout.
+    // display: 'flex',
+    // flexDirection: 'column',
+    // alignItems: 'center',
     transition: 'all 0.2s ease-in-out',
     _hover: {
       transform: 'translateY(-5px)',
@@ -399,25 +389,25 @@ const layerStyles = {
     },
     // Global overrides for headings, paragraphs, and SVGs within this card
     '& h1, & h2, & h3, & h4, & h5, & h6': {
-      color: 'brand.textBurnt !important', // Headings within light card are burnt
+      color: 'brand.textBurnt !important',
       fontFamily: `${fonts.heading} !important`,
     },
     '& p, & div:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component]), & span:not([role="group"]):not([class^="chakra-"]):not([data-chakra-component])': {
-      color: 'brand.textDark !important', // Text within light card is dark
+      color: 'brand.textDark !important',
       fontFamily: `${fonts.body} !important`,
     },
     '& svg': {
-      color: 'brand.textBurnt !important', // Icons within light card are burnt
+      color: 'brand.textBurnt !important',
     },
   },
-  // MODIFIED: This is for INNER SECTIONS on a LIGHT CARD. Make it more distinct.
+  // MODIFIED: This is for INNER SECTIONS on a LIGHT CARD. Make it a darker overlay.
   lightCardInnerSection: {
-    bg: 'brand.brightCardInner', // Use the newly defined brighter white for inner sections
+    bg: 'blackAlpha.200', // A more visible, semi-transparent dark overlay on light cards
     color: 'brand.textDark', // Text within this section is dark
     borderRadius: 'md',
-    p: 6, // Increased padding slightly for better visual breathing room
+    p: 6, // Increased padding
     borderWidth: '1px',
-    borderColor: 'rgba(0,0,0,0.15)', // More visible border
+    borderColor: 'rgba(0,0,0,0.2)', // More visible border
     boxShadow: 'sm', // Add a subtle shadow for depth
   },
   // ADDED: A specific dark inner section for cases like the password form
@@ -429,19 +419,12 @@ const layerStyles = {
     borderWidth: '1px',
     borderColor: 'rgba(255,255,255,0.1)',
     boxShadow: 'sm',
-    // Ensure labels and inputs within this section are styled for dark background
     '& .chakra-form__label': { // Target FormLabel specifically within this layer
       color: 'brand.textLight !important',
     },
-    '& .chakra-input__field, & .chakra-textarea__field, & .chakra-select__field, & .chakra-numberinput__field': {
-      // These will be styled by ThemedInput in Profile.jsx for the dark context
-      // but if you were using standard inputs here, you'd need overrides.
-    },
   },
-  // Renamed darkModalInnerSection to darkModalOverlay to clarify its purpose (if used for modals)
-  // Or remove it if darkInnerSection replaces its use completely outside of actual modals.
-  // Keeping it as is for now, but consider renaming for clarity if it's not a modal overlay.
-  darkModalInnerSection: { // Retained, assuming it's for modal *content* backgrounds
+  // Renamed darkModalInnerSection to darkModalContent, assuming it's for modal *content* backgrounds
+  darkModalContent: {
     bg: 'brand.primary',
     color: 'brand.textLight',
     borderRadius: 'md',
@@ -456,12 +439,12 @@ const theme = extendTheme({
   colors,
   fonts,
   components,
-  layerStyles, // Ensure layerStyles is included here
+  layerStyles,
   styles: {
     global: {
       body: {
-        bg: 'brand.primary', // Overall site background is dark
-        color: 'brand.textLight', // Default body text is light
+        bg: 'brand.primary',
+        color: 'brand.textLight',
       },
       a: {
         color: 'brand.accentYellow',
@@ -469,10 +452,10 @@ const theme = extendTheme({
           textDecoration: 'underline',
         },
       },
-      // Keep direct index.css overrides for MenuItems only if absolutely necessary
-      // The MenuItem theme component style should be sufficient now.
-      // I've removed the global overrides here, relying on `components.MenuItem.baseStyle` now.
-      // If issues persist, you might need to bring back targeted !important rules in index.css.
+      // Global overrides for MenuItems are removed here, relying solely on
+      // `components.MenuItem.baseStyle` now. This keeps `index.css` cleaner.
+      // If menu items still appear white on light background, a targeted
+      // `!important` in `index.css` might be needed as a last resort.
     },
   },
 });
