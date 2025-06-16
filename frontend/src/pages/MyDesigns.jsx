@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
     Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
-    useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent,
-    useToast, Icon, HStack
+    useDisclosure,
+    AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, // <--- ADDED ALL MISSING ALERTLOG IMPORTS HERE
+    useToast, Icon, HStack,
+    Link as ChakraLink // Ensure ChakraLink is imported if used
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
@@ -94,17 +96,17 @@ export default function MyDesigns() {
     if (loading) {
         return (
             <VStack justifyContent="center" minH="60vh">
-                <Spinner size="xl" color="brand.accentYellow" thickness="4px" />
+                <Spinner size="xl" />
                 <Text mt={4} fontSize="lg" color="brand.textLight">Loading Your Designs...</Text>
             </VStack>
         );
     }
-    
+
     if (error) {
         return (
-            <Alert status="error" bg="red.900" borderRadius="md" p={6} borderWidth="1px" borderColor="red.500">
-                <AlertIcon color="red.300" />
-                <Text color="white">{error}</Text>
+            <Alert status="error" colorScheme="red" borderRadius="md" p={6} borderWidth="1px">
+                <AlertIcon />
+                <Text>{error}</Text>
             </Alert>
         );
     }
@@ -120,24 +122,40 @@ export default function MyDesigns() {
                 )}
             </VStack>
             {designs.length === 0 ? (
-                // MODIFIED: Changed background to match the themed cards
-                <Box bg="brand.cardBlue" p={10} borderRadius="xl" textAlign="center">
+                <Box layerStyle="cardBlue" p={10} textAlign="center">
                     <VStack spacing={5}>
-                        <Icon as={FaPlusSquare} boxSize="50px" color="brand.accentYellow" />
-                        <Text fontSize="xl" fontWeight="medium" color="brand.textLight">You haven't saved any designs yet!</Text>
+                        <Icon as={FaPlusSquare} boxSize="50px" />
+                        <Text fontSize="xl" fontWeight="medium">You haven't saved any designs yet!</Text>
                         <Button colorScheme="brandAccentOrange" onClick={() => navigate('/generate')}>Let’s Create Your First Design!</Button>
                     </VStack>
                 </Box>
             ) : (
                 <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={6}>
                     {designs.map(design => (
-                        // MODIFIED: Changed background to match the themed cards
-                        <Box as="div" key={design._id} bg="brand.cardBlue" borderRadius="xl" overflow="hidden" cursor="pointer" onClick={() => handleImageClick(design)} _hover={{ transform: "translateY(-5px)", boxShadow: "lg", borderColor: "brand.accentYellow" }} transition="all 0.2s ease-in-out" borderWidth="2px" borderColor="transparent">
-                            <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="brand.secondary"/>
+                        <Box
+                            as="div"
+                            key={design._id}
+                            layerStyle="cardBlue"
+                            overflow="hidden"
+                            cursor="pointer"
+                            onClick={() => handleImageClick(design)}
+                            _hover={{ transform: "translateY(-5px)", boxShadow: "lg", borderColor: "brand.accentYellow" }}
+                            transition="all 0.2s ease-in-out"
+                            borderWidth="2px"
+                        >
+                            <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h="250px" bg="brand.primary"/>
                             <Box p={4}>
-                                <Text noOfLines={2} title={design.prompt} fontWeight="medium" color="brand.textLight">
+                                <Text noOfLines={2} title={design.prompt} fontWeight="medium">
                                     {design.prompt || "Untitled Design"}
                                 </Text>
+                                {design.isSubmittedForContest && design.contestSubmissionMonth ? (
+                                    <HStack mt={2} justifyContent="center">
+                                        <Icon as={FaTrophy} color="brand.accentYellow" />
+                                        <Text fontSize="sm" color="brand.textDark">Submitted: {design.contestSubmissionMonth} ({design.votes || 0} votes)</Text>
+                                    </HStack>
+                                ) : (
+                                    <Text fontSize="sm" color="brand.textMuted" mt={2}>Not yet submitted to contest.</Text>
+                                )}
                             </Box>
                         </Box>
                     ))}
@@ -157,7 +175,14 @@ export default function MyDesigns() {
                         <ModalFooter bg="brand.secondary" borderBottomRadius="md" justifyContent="space-between">
                             <Button colorScheme="red" onClick={() => handleOpenDeleteConfirmation(selectedDesign)} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>Delete</Button>
                             <HStack>
-                                <Button colorScheme="brandAccentYellow" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>Submit to Contest</Button>
+                                {/* Conditionally render submit button */}
+                                {!selectedDesign.isSubmittedForContest || selectedDesign.contestSubmissionMonth !== getCurrentMonthYYYYMM() ? (
+                                    <Button colorScheme="brandAccentYellow" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>
+                                        Submit to Contest
+                                    </Button>
+                                ) : (
+                                    <Button colorScheme="green" isDisabled leftIcon={<Icon as={FaTrophy} />}>Submitted for {selectedDesign.contestSubmissionMonth}</Button>
+                                )}
                                 <Button variant="ghost" onClick={onImageModalClose} _hover={{bg:"whiteAlpha.200"}}>Close</Button>
                             </HStack>
                         </ModalFooter>
@@ -197,3 +222,11 @@ export default function MyDesigns() {
         </Box>
     );
 }
+
+// Helper function duplicated from backend/routes/contest.js for frontend use
+const getCurrentMonthYYYYMM = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
