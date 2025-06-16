@@ -10,8 +10,8 @@ import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaRegSadCry, FaVoteYea } from 'react-icons/fa';
 
-const MyOrdersPage = () => { /* This is VotingPage, name mismatch here, but assumed it's MyOrdersPage in context */
-    const [orders, setOrders] = useState([]);
+export default function VotingPage() { // <--- CORRECTED: Function name matches export
+    const [contestDesigns, setContestDesigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const { user, logout } = useAuth();
@@ -21,6 +21,14 @@ const MyOrdersPage = () => { /* This is VotingPage, name mismatch here, but assu
     const navigate = useNavigate();
     const toast = useToast();
     const cancelRef = useRef();
+
+    // Helper function duplicated from backend/routes/contest.js for frontend use
+    const getCurrentMonthYYYYMM = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        return `${year}-${month}`;
+    };
 
     const fetchContestDesigns = () => {
         setLoading(true);
@@ -70,8 +78,7 @@ const MyOrdersPage = () => { /* This is VotingPage, name mismatch here, but assu
             fetchContestDesigns();
             fetchUserVoteStatus();
         }
-    }, [user]); // Removed dependency array for exhaustive-deps linting
-
+    }, [user]);
 
     const handleVote = async (designId) => {
         try {
@@ -147,17 +154,10 @@ const MyOrdersPage = () => { /* This is VotingPage, name mismatch here, but assu
                         <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h={{base: 300, md: 320}} bg="brand.primary" />
                         <Box p={5} flexGrow={1} display="flex" flexDirection="column" justifyContent="space-between">
                             <Tooltip label={design.prompt || "No prompt provided"} placement="top" bg="brand.secondary" color="brand.textLight" hasArrow>
-                                <Text fontSize="md" color="brand.textDark" fontWeight="medium" noOfLines={1}> {/* MODIFIED: Text color */}
+                                <Text fontSize="md" color="brand.textDark" fontWeight="medium" noOfLines={1}>
                                     Submitted by: {design.user ? design.user.username : 'Unknown User'}
                                 </Text>
                             </Tooltip>
-                            {/* REMOVED: Redundant "Votes This Month" Text */}
-                            {/* design.votes !== undefined && (
-                                <Text fontSize="sm" color="brand.textDark" mb={2}>
-                                    Votes This Month: {design.votes}
-                                </Text>
-                            ) */}
-
                             <HStack justifyContent="space-between" mt={4}>
                                 <Stat size="sm">
                                     <StatLabel>Votes</StatLabel>
