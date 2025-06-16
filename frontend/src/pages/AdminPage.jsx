@@ -368,7 +368,8 @@ return \(
         </Box>
       </VStack>
 
-      {/* --- MODALS (No changes needed, as they are separate from the card width issue) --- */}
+      {/* --- MODALS --- */}
+
       <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
         <ModalOverlay />
         <ModalContent>
