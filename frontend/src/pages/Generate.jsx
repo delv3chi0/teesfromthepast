@@ -1,9 +1,16 @@
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Link as ChakraLink } from "@chakra-ui/react";
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Link as ChakraLink, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Tooltip as ChakraTooltip, IconButton, Input as ChakraInput } from "@chakra-ui/react"; // <--- ADDED Slider, SliderTrack, SliderFilledTrack, SliderThumb IMPORTS HERE
 import { useState, useCallback } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
-import { FaMagic, FaSave } from 'react-icons/fa';
+import { FaMagic, FaSave, FaUpload, FaChevronCircleRight, FaChevronCircleLeft } from 'react-icons/fa';
+
+// Utility for mapping slider values to string options and vice-versa
+const ART_STYLES_MAP = ["Classic Art", "Stencil Art", "Embroidery Style"];
+const DECADES_MAP = ["1960s", "1970s", "1980s", "1990s"];
+
+const getMappedValue = (map, index) => map[index];
+const getMappedIndex = (map, value) => map.indexOf(value);
 
 const ThemedSelect = (props) => (
     <Select
@@ -18,10 +25,12 @@ const ThemedSelect = (props) => (
     />
 );
 
+// NEW: Custom Knob Slider Component
 const KnobSlider = ({ label, value, onChange, optionsMap, isDisabled }) => {
     const currentIndex = getMappedIndex(optionsMap, value);
     const displayValue = optionsMap[currentIndex];
 
+    // Handle slider change (number to string)
     const handleSliderChange = (newIndex) => {
         onChange(getMappedValue(optionsMap, newIndex));
     };
@@ -44,16 +53,16 @@ const KnobSlider = ({ label, value, onChange, optionsMap, isDisabled }) => {
                     <SliderTrack bg="whiteAlpha.300" borderRadius="full">
                         <SliderFilledTrack bg="brand.accentYellow" />
                     </SliderTrack>
-                    <ChakraLink
-                        as={SliderThumb} // Using ChakraLink as SliderThumb here is a non-standard usage, but possible
+                    <ChakraTooltip
                         hasArrow
                         placement="top"
                         label={displayValue}
-                        bg="brand.accentOrange"
+                        bg="brand.accentYellow"
                         color="brand.textDark"
                     >
-                        {/* Placeholder for custom thumb content if any */}
-                    </ChakraLink>
+                        {/* MODIFIED: SliderThumb is now used directly */}
+                        <SliderThumb boxSize={6} bg="brand.accentOrange" border="2px solid" borderColor="brand.accentYellow" />
+                    </ChakraTooltip>
                 </Slider>
                 <Text fontSize="md" color="brand.textLight" fontWeight="medium">{displayValue}</Text>
             </VStack>
@@ -61,6 +70,7 @@ const KnobSlider = ({ label, value, onChange, optionsMap, isDisabled }) => {
     );
 };
 
+// NEW: VCR Component for Image Upload (Visual only for now)
 const VcrUpload = ({ onFileChange, isDisabled }) => {
     const [fileName, setFileName] = useState("No file chosen");
 
@@ -120,12 +130,6 @@ const VcrUpload = ({ onFileChange, isDisabled }) => {
         </Box>
     );
 };
-
-const ART_STYLES_MAP = ["Classic Art", "Stencil Art", "Embroidery Style"];
-const DECADES_MAP = ["1960s", "1970s", "1980s", "1990s"];
-
-const getMappedValue = (map, index) => map[index];
-const getMappedIndex = (map, value) => map.indexOf(value);
 
 const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, setArtStyle, isRetro, setIsRetro, decade, setDecade, handleGenerate, handleImageUploadFileChange }) => (
     <VStack spacing={6} w="100%" bg="brand.secondary" p={{base: 5, md: 8}} borderRadius="xl">
@@ -242,7 +246,7 @@ export default function Generate() {
                 requestBody.initImageBase64 = base64Image;
             }
 
-            const response = await client.post('/designs/create', requestBody); // MODIFIED: Send requestBody with optional initImageBase64
+            const response = await client.post('/designs/create', requestBody);
 
             setImageUrl(response.data.imageDataUrl);
         } catch (err) {
@@ -255,8 +259,7 @@ export default function Generate() {
     const handleSaveDesign = async () => {
         setIsSaving(true);
         try {
-            // MODIFIED: Changed API endpoint to match backend route
-            await client.post('/mydesigns', { prompt, imageDataUrl: imageUrl }); // <--- CRITICAL FIX HERE
+            await client.post('/mydesigns', { prompt, imageDataUrl: imageUrl });
             toast({ title: 'Design Saved!', description: "It's now available in 'My Designs'.", status: 'success', isClosable: true });
         } catch (err) {
             handleApiError(err, 'Failed to save design.', 'Save');
@@ -267,15 +270,14 @@ export default function Generate() {
 
     const handleImageUploadFileChange = useCallback((file) => {
         setUploadedImageFile(file);
-        // Optional: Display a local preview of the selected image
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setImageUrl(reader.result); // Display uploaded image as temporary preview
+                setImageUrl(reader.result);
             };
             reader.readAsDataURL(file);
         } else {
-            setImageUrl(""); // Clear preview if no file
+            setImageUrl("");
         }
     }, []);
 
