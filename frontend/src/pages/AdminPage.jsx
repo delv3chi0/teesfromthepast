@@ -557,4 +557,5 @@ return \(
     </Box>
   );
 };
+
 export default AdminPage;
