@@ -11,14 +11,23 @@ const addressSchemaDefinition = {
   state: { type: String, trim: true, default: '' }, // Or province
   zipCode: { type: String, trim: true, default: '' },
   country: { type: String, trim: true, default: '' },
-  phone: { type: String, trim: true, default: '' },   // Optional, but often useful
+  phone: { type: String, trim: true, default: '' },    // Optional, but often useful
 };
 
 const addressSchema = new mongoose.Schema(addressSchemaDefinition, { _id: false });
 
+// Define the schema for a user's monthly vote record
+const monthlyVoteRecordSchema = new mongoose.Schema({
+    month: { type: String, required: true }, // 'YYYY-MM' format
+    designsVotedFor: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Design'
+    }]
+}, { _id: false }); // Don't need an _id for subdocuments in this array
+
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, trim: true },
-  email: { type: String, required: true, unique: true, trim: true, lowercase: true }, // Added lowercase
+  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
   password: { type: String, required: true },
   firstName: { type: String, default: '', trim: true },
   lastName: { type: String, default: '', trim: true },
@@ -27,38 +36,31 @@ const UserSchema = new mongoose.Schema({
     required: true,
     default: false,
   },
-  lastContestSubmissionMonth: {
+  // --- NEW CONTEST FIELDS ---
+  lastContestSubmissionMonth: { // Stores 'YYYY-MM' of last design submitted by user
     type: String
   },
-  monthlyVoteRecord: [{
-    month: String, // 'YYYY-MM'
-    designsVotedFor: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Design'
-    }]
-  }],
+  monthlyVoteRecord: [monthlyVoteRecordSchema], // Array to track votes per month
+  // --- END CONTEST FIELDS ---
+
   shippingAddress: addressSchema,
   billingAddress: addressSchema,
 
   // ---- NEW FIELDS FOR PASSWORD RESET ----
   passwordResetToken: {
     type: String,
-    select: false, // By default, don't return this field unless explicitly asked
+    select: false,
   },
   passwordResetExpires: {
     type: Date,
-    select: false, // By default, don't return this field
+    select: false,
   },
   // ---- END OF NEW FIELDS ----
-
-  // Optional: Flag to force password change on next login
-  // forcePasswordChange: { type: Boolean, default: false },
 
 }, { timestamps: true });
 
 // Middleware to hash password before saving (if it's modified)
 UserSchema.pre('save', async function (next) {
-  // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) {
     return next();
   }
@@ -66,10 +68,6 @@ UserSchema.pre('save', async function (next) {
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    // If you implement forcePasswordChange and a password is being reset:
-    // if (this.isNew || this.isModified('password')) { // And some condition indicates it's a reset
-    //   this.forcePasswordChange = true; // Example logic
-    // }
     next();
   } catch (error) {
     next(error);
@@ -81,11 +79,9 @@ UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-
 // Ensure virtuals are included when converting to JSON (e.g. for 'id')
 UserSchema.set('toJSON', { virtuals: true });
 UserSchema.set('toObject', { virtuals: true });
-
 
 const User = mongoose.model('User', UserSchema);
 export default User;
