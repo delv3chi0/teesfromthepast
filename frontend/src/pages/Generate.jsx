@@ -1,10 +1,18 @@
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Link as ChakraLink } from "@chakra-ui/react";
-import { useState } from "react";
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Tooltip as ChakraTooltip, IconButton, Input as ChakraInput } from "@chakra-ui/react"; // Added Slider components, Tooltip, IconButton, Input
+import { useState, useCallback } from "react"; // Added useCallback
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
-import { FaMagic, FaSave } from 'react-icons/fa';
+import { FaMagic, FaSave, FaUpload, FaChevronCircleRight, FaChevronCircleLeft } from 'react-icons/fa'; // Added upload icons
 
+// Utility for mapping slider values to string options and vice-versa
+const ART_STYLES_MAP = ["Classic Art", "Stencil Art", "Embroidery Style"];
+const DECADES_MAP = ["1960s", "1970s", "1980s", "1990s"];
+
+const getMappedValue = (map, index) => map[index];
+const getMappedIndex = (map, value) => map.indexOf(value);
+
+// MODIFIED: ThemedSelect is no longer used for knobs, but kept for other potential uses
 const ThemedSelect = (props) => (
     <Select
         size="lg"
@@ -18,7 +26,118 @@ const ThemedSelect = (props) => (
     />
 );
 
-const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, setArtStyle, isRetro, setIsRetro, decade, setDecade, handleGenerate }) => (
+// NEW: Custom Knob Slider Component
+const KnobSlider = ({ label, value, onChange, optionsMap, isDisabled }) => {
+    const currentIndex = getMappedIndex(optionsMap, value);
+    const displayValue = optionsMap[currentIndex];
+
+    // Handle slider change (number to string)
+    const handleSliderChange = (newIndex) => {
+        onChange(getMappedValue(optionsMap, newIndex));
+    };
+
+    return (
+        <FormControl>
+            <FormLabel mb={1} textAlign="center" fontSize={{ base: "sm", md: "md" }} fontWeight="bold">{label}</FormLabel>
+            <VStack spacing={2}>
+                <Slider
+                    value={currentIndex}
+                    min={0}
+                    max={optionsMap.length - 1}
+                    step={1}
+                    onChange={handleSliderChange}
+                    isDisabled={isDisabled}
+                    colorScheme="yellow"
+                    width="100%"
+                    p={2}
+                >
+                    <SliderTrack bg="whiteAlpha.300" borderRadius="full">
+                        <SliderFilledTrack bg="brand.accentYellow" />
+                    </SliderTrack>
+                    <ChakraTooltip
+                        hasArrow
+                        placement="top"
+                        label={displayValue}
+                        bg="brand.accentYellow"
+                        color="brand.textDark"
+                    >
+                        <SliderThumb boxSize={6} bg="brand.accentOrange" border="2px solid" borderColor="brand.accentYellow" />
+                    </ChakraTooltip>
+                </Slider>
+                <Text fontSize="md" color="brand.textLight" fontWeight="medium">{displayValue}</Text>
+            </VStack>
+        </FormControl>
+    );
+};
+
+// NEW: VCR Component for Image Upload (Visual only for now)
+const VcrUpload = ({ onFileChange, isDisabled }) => {
+    const [fileName, setFileName] = useState("No file chosen");
+
+    const handleInternalFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setFileName(file.name);
+            onFileChange(file); // Pass file up to parent handler
+        } else {
+            setFileName("No file chosen");
+            onFileChange(null);
+        }
+    };
+
+    return (
+        <Box
+            bg="gray.800"
+            p={4}
+            borderRadius="md"
+            border="2px solid"
+            borderColor="whiteAlpha.300"
+            shadow="inner"
+            w="100%"
+            textAlign="center"
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            minH="100px"
+            position="relative"
+            overflow="hidden"
+        >
+            <FormLabel
+                htmlFor="vcr-file-upload"
+                cursor={isDisabled ? "not-allowed" : "pointer"}
+                width="100%"
+                height="100%"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                m={0} // Remove default margin
+            >
+                <VStack spacing={2} color="whiteAlpha.700">
+                    <Icon as={FaUpload} boxSize={8} />
+                    <Text fontSize="sm">Insert Image into VCR</Text>
+                    <Text fontSize="xs" mt={1}>{fileName}</Text>
+                </VStack>
+            </FormLabel>
+            <ChakraInput
+                type="file"
+                id="vcr-file-upload"
+                accept="image/*"
+                onChange={handleInternalFileChange}
+                isDisabled={isDisabled}
+                display="none" // Hide native input, use FormLabel as custom trigger
+            />
+        </Box>
+    );
+};
+
+
+/**
+ * AI Image Generator Page
+ * This GeneratorControls component is now defined OUTSIDE the main Generate function
+ * to prevent unnecessary re-mounts of its children (like the Textarea).
+ */
+const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, setArtStyle, isRetro, setIsRetro, decade, setDecade, handleGenerate, handleImageUploadFileChange }) => (
     <VStack spacing={6} w="100%" bg="brand.secondary" p={{base: 5, md: 8}} borderRadius="xl">
         <Textarea
             placeholder="Describe your image idea here..."
@@ -28,34 +147,38 @@ const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, set
             size="lg"
             minHeight="120px"
             resize="vertical"
+            // Ensure proper styling via theme.js for Input/Textarea
         />
+
+        {/* MODIFIED: Replaced Selects with KnobSlider components */}
         <SimpleGrid columns={{base: 1, md: 3}} spacing={5} w="100%">
+            <KnobSlider
+                label="Art Style"
+                value={artStyle}
+                onChange={setArtStyle}
+                optionsMap={ART_STYLES_MAP}
+                isDisabled={loading || isSaving}
+            />
             <FormControl>
-                <FormLabel>Art Style</FormLabel>
-                <ThemedSelect value={artStyle} onChange={e => setArtStyle(e.target.value)} isDisabled={loading || isSaving}>
-                    <option value="Classic Art">Classic Art</option>
-                    <option value="Stencil Art">Stencil Art</option>
-                    <option value="Embroidery Style">Embroidery</option>
-                </ThemedSelect>
-            </FormControl>
-            <FormControl>
-                <FormLabel>Retro Mode</FormLabel>
-                <Flex align="center" h="100%" pl={2} pt={2}>
+                <FormLabel textAlign="center" mb={1} fontSize={{ base: "sm", md: "md" }} fontWeight="bold">Retro Mode</FormLabel>
+                <Flex align="center" h="100%" pl={2} pt={2} justifyContent="center">
                    <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="yellow" size="lg" isDisabled={loading || isSaving}/>
                 </Flex>
             </FormControl>
             <Collapse in={isRetro} animateOpacity style={{width: '100%'}}>
-                <FormControl>
-                    <FormLabel>Decade</FormLabel>
-                    <ThemedSelect value={decade} onChange={e => setDecade(e.target.value)} isDisabled={!isRetro || loading || isSaving}>
-                        <option value="1960s">60s</option>
-                        <option value="1970s">70s</option>
-                        <option value="1980s">80s</option>
-                        <option value="1990s">90s</option>
-                    </ThemedSelect>
-                </FormControl>
+                <KnobSlider
+                    label="Decade"
+                    value={decade}
+                    onChange={setDecade}
+                    optionsMap={DECADES_MAP}
+                    isDisabled={!isRetro || loading || isSaving}
+                />
             </Collapse>
         </SimpleGrid>
+
+        {/* NEW: VCR Upload Component */}
+        <VcrUpload onFileChange={handleImageUploadFileChange} isDisabled={loading || isSaving} />
+
         <Button
             onClick={handleGenerate}
             colorScheme="brandAccentOrange"
@@ -78,6 +201,7 @@ export default function Generate() {
     const [loading, setLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState("");
+    const [uploadedImageFile, setUploadedImageFile] = useState(null); // NEW: State for uploaded image file
 
     const [decade, setDecade] = useState("1980s");
     const [artStyle, setArtStyle] =useState("Classic Art");
@@ -99,7 +223,7 @@ export default function Generate() {
         setError(message);
     };
 
-    const constructFinalPrompt = () => {
+    const constructFinalPrompt = useCallback(() => { // Memoize this
         let finalPrompt = prompt;
         if (artStyle === 'Stencil Art') {
             finalPrompt = `monochromatic stencil art, high contrast, clean lines, vector, ${prompt}`;
@@ -108,26 +232,32 @@ export default function Generate() {
         }
 
         if (isRetro) {
-            const decadeMap = {
-                "1960s": "pop art style, vibrant colors, 1960s illustration",
-                "1970s": "70s retro aesthetic, earthy tones, groovy, psychedelic art",
-                "1980s": "80s synthwave sunset, neon colors, chrome, retro-futurism",
-                "1990s": "90s grunge aesthetic, grainy, bold graphics, early internet style",
-            };
-            finalPrompt = `${finalPrompt}, ${decadeMap[decade] || ''}`;
+            finalPrompt = `${finalPrompt}, ${getMappedValue(DECADES_MAP, getMappedIndex(DECADES_MAP, decade)) || ''}`;
         }
         return finalPrompt.trim();
-    };
+    }, [prompt, artStyle, isRetro, decade]);
 
     const handleGenerate = async () => {
         setLoading(true);
         setError("");
         setImageUrl("");
         try {
-            // MODIFIED: Changed API endpoint to match backend route
             const finalPrompt = constructFinalPrompt();
-            const response = await client.post('/designs/create', { prompt: finalPrompt }); // <--- CRITICAL FIX HERE
-            setImageUrl(response.data.imageUrl);
+            // MODIFIED: Logic for text-to-image vs image-to-image
+            let response;
+            if (uploadedImageFile) {
+                // Backend needs to handle 'image-to-image' endpoint and file upload
+                // This is a placeholder; your backend /stability/generate route needs to be updated
+                // to support image upload and pass it to Stability AI's image-to-image endpoint.
+                console.warn("Image-to-image generation is not yet fully implemented on backend.");
+                toast({title: "Feature not ready", description: "Image-to-image generation is not yet supported. Please use text prompt only.", status: "info"});
+                // For now, if file is uploaded, proceed with text-to-image as a fallback or return error
+                response = await client.post('/designs/create', { prompt: finalPrompt });
+            } else {
+                response = await client.post('/designs/create', { prompt: finalPrompt });
+            }
+            
+            setImageUrl(response.data.imageDataUrl); // Ensure this is the correct field
         } catch (err) {
             handleApiError(err, 'Failed to generate image.', 'Generation');
         } finally {
@@ -147,14 +277,41 @@ export default function Generate() {
         }
     };
 
+    // NEW: Handler for VCR file input
+    const handleImageUploadFileChange = useCallback((file) => {
+        setUploadedImageFile(file);
+        // Optional: Display a local preview of the selected image
+        // if (file) {
+        //     const reader = new FileReader();
+        //     reader.onloadend = () => {
+        //         setImageUrl(reader.result); // Display uploaded image as temporary preview
+        //     };
+        //     reader.readAsDataURL(file);
+        // } else {
+        //     setImageUrl(""); // Clear preview if no file
+        // }
+    }, []);
+
     return (
         <VStack spacing={8} w="100%">
             <Heading as="h1" size="2xl" color="brand.textLight">AI Image Generator</Heading>
-            <VStack spacing={8} bg="brand.secondary" p={{base: 4, md: 8}} borderRadius="2xl" w="100%" maxW="800px" shadow="2xl">
+            {/* NEW: TV Frame Container */}
+            <Box
+                bg="brand.secondary"
+                borderRadius="3xl"
+                p={{ base: 4, md: 8 }}
+                w="100%"
+                maxW="800px"
+                shadow="dark-lg"
+                border="8px solid"
+                borderColor="gray.800"
+                position="relative"
+            >
+                {/* TV Screen Area */}
                 <Box
                     w="100%"
                     h={{ base: "300px", md: "520px" }}
-                    bg="brand.primary"
+                    bg="brand.primary" // Screen background
                     mb={4}
                     borderRadius="lg"
                     display="flex"
@@ -163,6 +320,7 @@ export default function Generate() {
                     position="relative"
                     borderWidth="2px"
                     borderColor="whiteAlpha.300"
+                    overflow="hidden" // Ensure image stays within screen
                 >
                     {loading && <Spinner size="xl" />}
                     {!loading && imageUrl && <Image src={imageUrl} alt={prompt || "Generated Art"} maxW="100%" maxH="100%" objectFit="contain" />}
@@ -173,6 +331,7 @@ export default function Generate() {
                         </VStack>
                     )}
                 </Box>
+                {/* Controls - Knobs and VCR */}
                 <GeneratorControls
                     prompt={prompt}
                     setPrompt={setPrompt}
@@ -185,9 +344,11 @@ export default function Generate() {
                     decade={decade}
                     setDecade={setDecade}
                     handleGenerate={handleGenerate}
+                    handleImageUploadFileChange={handleImageUploadFileChange} // Pass VCR handler
                 />
-            </VStack>
+            </Box>
 
+            {/* Error Message Alert */}
             {error && (
                 <Alert status="error" colorScheme="red" borderRadius="md" p={4} borderWidth="1px">
                     <AlertIcon />
@@ -195,6 +356,7 @@ export default function Generate() {
                 </Alert>
             )}
 
+            {/* Save Design Button */}
             {imageUrl && !error && (
                 <Button
                     onClick={handleSaveDesign}
