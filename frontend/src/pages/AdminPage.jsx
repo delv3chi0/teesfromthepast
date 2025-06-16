@@ -9,7 +9,7 @@ import {
 } from '@chakra-ui/react';
 import { FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash, FaWarehouse, FaTachometerAlt, FaDollarSign, FaUserPlus, FaBoxes } from 'react-icons/fa';
 import { client } from '../api/client';
-import { useAuth } = '../context/AuthProvider';
+import { useAuth } from '../context/AuthProvider'; // <--- CORRECTED SYNTAX HERE
 import InventoryPanel from '../components/admin/InventoryPanel.jsx';
 
 // Helper function for month formatting (copied from contest/MyDesigns)
@@ -226,10 +226,10 @@ const AdminPage = () => {
   };
 
   const UsersPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
       <Heading size="md" mb={4}>User Management</Heading>
-      <TableContainer w="100%"> {/* <--- ADDED w="100%" */}
-        <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
+      <TableContainer w="100%">
+        <Table variant="simple" size="sm" w="100%">
           <Thead>
             <Tr>
               <Th>ID</Th>
@@ -265,10 +265,10 @@ const AdminPage = () => {
 const OrdersPanel \= \(\) \=\> \{
 const getStatusColor \= \(status\) \=\> \{ if \(status \=\=\= 'Delivered'\) return 'green\.200'; if \(status \=\=\= 'Shipped'\) return 'blue\.200'; if \(status \=\=\= 'Cancelled'\) return 'red\.200'; return 'gray\.200'; \};
 return \(
-<Box p\=\{\{ base\: 2, md\: 4 \}\} layerStyle\="cardBlue" w\="100%"\> \{/\* <\-\-\- ADDED w\="100%" \*/\}
+<Box p\=\{\{ base\: 2, md\: 4 \}\} layerStyle\="cardBlue" w\="100%"\>
 <Heading size\="md" mb\=\{4\}\>Order Management</Heading\>
-<TableContainer w\="100%"\> \{/\* <\-\-\- ADDED w\="100%" \*/\}
-<Table variant\="simple" size\="sm" w\="100%"\> \{/\* <\-\-\- ADDED w\="100%" \*/\}
+<TableContainer w\="100%"\>
+<Table variant\="simple" size\="sm" w\="100%"\>
 <Thead\>
 <Tr\>
 <Th\>ID</Th\>
@@ -287,68 +287,69 @@ return \(
 <Td fontSize\="xs"\>\{order\.\_id\.substring\(0,8\)\}\.\.\.</Td\>
 <Td\>\{order\.user?\.email\}</Td\>
 <Td\>\{new Date\(order\.createdAt\)\.toLocaleDateString\(\)\}</Td\>
-<Td\></span>{(order.totalAmount/100).toFixed(2)}</Td>
-                  <Td><Tag size="sm" colorScheme={order.paymentStatus==='Succeeded'?'green':'orange'}>{order.paymentStatus}</Tag></Td>
-                  <Td>
-                    <Select size="xs" variant="outline" color="brand.textDark" value={order.orderStatus} onChange={e => handleStatusChange(order._id, e.target.value)} bg={getStatusColor(order.orderStatus)} borderRadius="md" maxW="120px">
-                      <option value="Processing">Processing</option>
-                      <option value="Shipped">Shipped</option>
-                      <option value="Delivered">Delivered</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </Select>
-                  </Td>
-                  <Td>{order.orderItems.length}</Td>
-                  <Td>
-                    <Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewOrder(order._id)}/></Tooltip>
-                    <Tooltip label="Delete Order"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)}/></Tooltip>
-                  </Td>
-                </Tr>
-              ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
-    </Box>
-  );
-  const DesignsPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
-      <Heading size="md" mb={4}>Design Management</Heading>
-      <TableContainer w="100%"> {/* <--- ADDED w="100%" */}
-        <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
-          <Thead>
-            <Tr>
-              <Th>Preview</Th>
-              <Th>Prompt</Th>
-              <Th>Creator</Th>
-              <Th>Created</Th>
-              <Th>Actions</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {designs.map(design => (
-              <Tr key={design._id}>
-                <Td><Image src={design.imageDataUrl} boxSize="50px" objectFit="cover" borderRadius="md"/></Td>
-                {/* Text color now correctly inherited from layerStyle="cardBlue" */}
-                <Td fontSize="xs" maxW="300px" whiteSpace="normal">{design.prompt}</Td>
-                <Td>{design.user?.username || 'N/A'}</Td>
-                <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
-                <Td>
-                  <Tooltip label="View Design"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye}/>} onClick={() => handleViewDesign(design)}/></Tooltip>
-                  <Tooltip label="Delete Design"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt}/>} onClick={() => handleOpenDeleteDesignDialog(design)}/></Tooltip>
-                </Td>
-              </Tr>
-            ))}
-          </Tbody>
-        </Table>
-      </TableContainer>
-    </Box>
-  );
+<Td\></span>{(order.totalAmount / 100).toFixed(2)}</Td>
+                  <Td><Tag size="sm" colorScheme={order.paymentStatus==='Succeeded'?'green':'orange'}>{order.paymentStatus}</Tag></Td>
+                  <Td>
+                    <Select size="xs" variant="outline" color="brand.textDark" value={order.orderStatus} onChange={e => handleStatusChange(order._id, e.target.value)} bg={getStatusColor(order.orderStatus)} borderRadius="md" maxW="120px">
+                      <option value="Processing">Processing</option>
+                      <option value="Shipped">Shipped</option>
+                      <option value="Delivered">Delivered</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </Select>
+                  </Td>
+                  <Td>{order.orderItems.length}</Td>
+                  <Td>
+                    <Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => onViewOrder(order._id)}/></Tooltip>
+                    <Tooltip label="Delete Order"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)}/></Tooltip>
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </TableContainer>
+      </Box>
+    );
+  };
+  const DesignsPanel = () => (
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%"> {/* <--- ADDED w="100%" */}
+      <Heading size="md" mb={4}>Design Management</Heading>
+      <TableContainer w="100%"> {/* <--- ADDED w="100%" */}
+        <Table variant="simple" size="sm" w="100%"> {/* <--- ADDED w="100%" */}
+          <Thead>
+            <Tr>
+              <Th>Preview</Th>
+              <Th>Prompt</Th>
+              <Th>Creator</Th>
+              <Th>Created</Th>
+              <Th>Actions</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
+            {designs.map(design => (
+              <Tr key={design._id}>
+                <Td><Image src={design.imageDataUrl} boxSize="50px" objectFit="cover" borderRadius="md"/></Td>
+                {/* Text color now correctly inherited from layerStyle="cardBlue" */}
+                <Td fontSize="xs" maxW="300px" whiteSpace="normal">{design.prompt}</Td>
+                <Td>{design.user?.username || 'N/A'}</Td>
+                <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
+                <Td>
+                  <Tooltip label="View Design"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye}/>} onClick={() => handleViewDesign(design)}/></Tooltip>
+                  <Tooltip label="Delete Design"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt}/>} onClick={() => handleOpenDeleteDesignDialog(design)}/></Tooltip>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </TableContainer>
+    </Box>
+  );
 
   return (
     <Box w="100%" pb={10}>
       <VStack spacing={6} align="stretch">
         <Heading as="h1" size="pageTitle" color="brand.textLight" w="100%">Admin Console</Heading>
 
-        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }} w="100%"> {/* <--- ADDED w="100%" */}
+        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }} w="100%">
           <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy onChange={handleTabsChange} index={tabIndex}>
             <TabList mb="1em" flexWrap="wrap">
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaTachometerAlt} mr={2}/> Dashboard</Tab>
@@ -475,8 +476,7 @@ return \(
                         <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)"}} gap={6}>
                             <GridItem>
                                 <Heading size="sm" mb={2}>Customer</Heading>
-                                <Text><strong>ID:</strong> {selectedOrder._id}</Text>
-                                <Text><strong>Username:</strong> {selectedOrder.user?.username || 'N/A'}</Text>
+                                <Text><strong>Name:</strong> {selectedOrder.user?.firstName || ''} {selectedOrder.user?.lastName || ''}</Text>
                                 <Text><strong>Email:</strong> {selectedOrder.user?.email}</Text>
                             </GridItem>
                             <GridItem>
