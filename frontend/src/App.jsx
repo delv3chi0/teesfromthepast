@@ -1,14 +1,14 @@
 import './index.css';
 
 import React from 'react';
-import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Link as ChakraLink, ChakraProvider, Spinner } from '@chakra-ui/react'; // Ensure Spinner and Text are imported
+import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Link as ChakraLink, ChakraProvider, Spinner } from '@chakra-ui/react';
 import { useNavigate, Link as RouterLink, Routes, Route, Navigate } from 'react-router-dom';
 
 // Import your theme
-import theme from './theme'; // Make sure this path is correct relative to App.jsx
+import theme from './theme';
 
 // Import AuthProvider and all page components
-import { AuthProvider, useAuth } from './context/AuthProvider'; // Import useAuth here
+import { AuthProvider, useAuth } from './context/AuthProvider';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -18,15 +18,11 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsOfServicePage from './pages/TermsOfServicePage';
 
 import MainLayout from './components/MainLayout';
-// If HomePage.jsx exists as a separate file in pages/, you should import it from there and remove its definition from here.
-// For now, I'll keep the HomePage definition in this file as you provided it.
-// If it's a separate file, uncomment: import HomePage from './pages/HomePage';
-
 import ShopPage from './pages/ShopPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
-import ProductStudio from './pages/ProductStudio'; // Assuming ProductStudio.jsx is in ProductJS folder
+import ProductStudio from './pages/ProductStudio'; // Assuming ProductStudio.jsx is directly in pages/ now
 import VotingPage from './pages/VotingPage';
 import Profile from './pages/Profile';
 import CheckoutPage from './pages/CheckoutPage';
@@ -37,7 +33,12 @@ import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import AdminPage from './pages/AdminPage';
 
-// --- START: HomePage Component Definition (Adjusted for Readability Fix) ---
+// --- THE FIX: ADD THESE ICONS TO THE IMPORT LIST ---
+import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa'; // <--- THIS LINE IS CRUCIAL AND NOW CORRECTED
+// --- END OF FIX ---
+
+
+// --- START: HomePage Component Definition ---
 const FeatureCard = ({ icon, title, children }) => (
     <Box
         layerStyle="cardBlue" // This applies ALL styles from theme.js's layerStyles.cardBlue
@@ -109,7 +110,7 @@ const HomePage = () => {
 // --- END: HomePage Component Definition ---
 
 
-// NEW: AppContent component to handle initial loading based on AuthProvider state
+// AppContent component to handle initial loading based on AuthProvider state
 const AppContent = () => {
     const { loadingAuth } = useAuth(); // Get loading state from AuthProvider
 
