@@ -1,6 +1,4 @@
-// frontend/src/pages/Generate.jsx
-
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse } from "@chakra-ui/react";
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Link as ChakraLink } from "@chakra-ui/react"; // Added ChakraLink
 import { useState } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
@@ -17,13 +15,16 @@ import { FaMagic, FaSave } from 'react-icons/fa';
  * - Polished the image display area and all feedback states (loading, error, placeholder).
  */
 
+// MODIFIED: ThemedSelect now uses brand.secondary for background and brand.textLight for text
 const ThemedSelect = (props) => (
     <Select
         size="lg"
-        bg="brand.primaryDark"
+        bg="brand.secondary" // Consistent dark background for select
+        color="brand.textLight" // Ensure text is light
         borderColor="whiteAlpha.300"
         _hover={{ borderColor: "whiteAlpha.400" }}
         focusBorderColor="brand.accentYellow"
+        // Ensure options also have correct text color (often handled by Select baseStyle)
         {...props}
     />
 );
@@ -34,7 +35,7 @@ export default function Generate() {
     const [loading, setLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState("");
-    
+
     const [decade, setDecade] = useState("1980s");
     const [artStyle, setArtStyle] =useState("Classic Art");
     const [isRetro, setIsRetro] = useState(true);
@@ -101,9 +102,10 @@ export default function Generate() {
             setIsSaving(false);
         }
     };
-    
+
     const GeneratorControls = () => (
-        <VStack spacing={6} w="100%" bg="brand.primaryLight" p={{base: 5, md: 8}} borderRadius="xl">
+        // MODIFIED: bg to brand.secondary for consistency
+        <VStack spacing={6} w="100%" bg="brand.secondary" p={{base: 5, md: 8}} borderRadius="xl">
             <Textarea
                 placeholder="Describe your image idea here..."
                 value={prompt}
@@ -111,14 +113,14 @@ export default function Generate() {
                 isDisabled={loading || isSaving}
                 size="lg"
                 minHeight="120px"
-                bg="brand.primaryDark"
-                borderColor="whiteAlpha.300"
-                _hover={{ borderColor: "whiteAlpha.400" }}
-                focusBorderColor="brand.accentYellow"
+                // MODIFIED: Input/Textarea styling now relies on theme.js (bg, color, etc.)
+                // Explicitly set resize property for better user experience
+                resize="vertical" // <--- ADDED: Allows vertical resizing
             />
             <SimpleGrid columns={{base: 1, md: 3}} spacing={5} w="100%">
                 <FormControl>
-                    <FormLabel color="whiteAlpha.800">Art Style</FormLabel>
+                    {/* MODIFIED: Removed explicit color, will inherit from theme.js (Modal body default is textLight) */}
+                    <FormLabel>Art Style</FormLabel>
                     <ThemedSelect value={artStyle} onChange={e => setArtStyle(e.target.value)} isDisabled={loading || isSaving}>
                         <option value="Classic Art">Classic Art</option>
                         <option value="Stencil Art">Stencil Art</option>
@@ -126,14 +128,16 @@ export default function Generate() {
                     </ThemedSelect>
                 </FormControl>
                 <FormControl>
-                    <FormLabel color="whiteAlpha.800">Retro Mode</FormLabel>
+                    {/* MODIFIED: Removed explicit color */}
+                    <FormLabel>Retro Mode</FormLabel>
                     <Flex align="center" h="100%" pl={2} pt={2}>
                        <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="yellow" size="lg" isDisabled={loading || isSaving}/>
                     </Flex>
                 </FormControl>
                 <Collapse in={isRetro} animateOpacity style={{width: '100%'}}>
                     <FormControl>
-                        <FormLabel color="whiteAlpha.800">Decade</FormLabel>
+                        {/* MODIFIED: Removed explicit color */}
+                        <FormLabel>Decade</FormLabel>
                         <ThemedSelect value={decade} onChange={e => setDecade(e.target.value)} isDisabled={!isRetro || loading || isSaving}>
                             <option value="1960s">60s</option>
                             <option value="1970s">70s</option>
@@ -145,9 +149,7 @@ export default function Generate() {
             </SimpleGrid>
             <Button
                 onClick={handleGenerate}
-                bg="brand.accentOrange"
-                color="white"
-                _hover={{bg: 'brand.accentOrangeHover'}}
+                colorScheme="brandAccentOrange" // Uses theme color scheme
                 isLoading={loading}
                 loadingText="Generating..."
                 isDisabled={isSaving || loading || !prompt}
@@ -162,12 +164,18 @@ export default function Generate() {
 
     return (
         <VStack spacing={8} w="100%">
+            {/* Page Title */}
             <Heading as="h1" size="2xl" color="brand.textLight">AI Image Generator</Heading>
-            <VStack spacing={8} bg="brand.primaryDark" p={{base: 4, md: 8}} borderRadius="2xl" w="100%" maxW="800px" shadow="2xl">
+
+            {/* Main Content Card (Image Display + Controls) */}
+            {/* MODIFIED: bg to brand.secondary for main card consistency */}
+            <VStack spacing={8} bg="brand.secondary" p={{base: 4, md: 8}} borderRadius="2xl" w="100%" maxW="800px" shadow="2xl">
+                {/* Image Display Area */}
+                {/* MODIFIED: bg to brand.primary for deep contrast in image area */}
                 <Box
                     w="100%"
                     h={{ base: "300px", md: "520px" }}
-                    bg="black"
+                    bg="brand.primary"
                     mb={4}
                     borderRadius="lg"
                     display="flex"
@@ -177,10 +185,11 @@ export default function Generate() {
                     borderWidth="2px"
                     borderColor="whiteAlpha.300"
                 >
-                    {loading && <Spinner size="xl" color="brand.accentOrange" />}
+                    {/* MODIFIED: Spinner will now inherit default color from theme.js (brand.textLight) */}
+                    {loading && <Spinner size="xl" />}
                     {!loading && imageUrl && <Image src={imageUrl} alt={prompt || "Generated Art"} maxW="100%" maxH="100%" objectFit="contain" />}
                     {!loading && !imageUrl && (
-                        <VStack color="whiteAlpha.600" spacing={4}>
+                        <VStack color="whiteAlpha.600" spacing={4}> {/* Placeholder text color, can leave or change to brand.textMuted */}
                             <Icon as={FaMagic} boxSize="60px" />
                             <Text fontSize="lg" fontWeight="medium">Your Generated Image Will Appear Here</Text>
                         </VStack>
@@ -188,18 +197,22 @@ export default function Generate() {
                 </Box>
                 <GeneratorControls />
             </VStack>
+
+            {/* Error Message Alert */}
             {error && (
-                <Alert status="error" bg="red.900" borderRadius="md" p={4} borderWidth="1px" borderColor="red.500">
-                    <AlertIcon color="red.300" />
-                    <Text color="white">{error}</Text>
+                // MODIFIED: Use colorScheme for Alert
+                <Alert status="error" colorScheme="red" borderRadius="md" p={4} borderWidth="1px">
+                    <AlertIcon />
+                    {/* Text color inside alert will inherit from Alert colorScheme (usually white) */}
+                    <Text>{error}</Text>
                 </Alert>
             )}
+
+            {/* Save Design Button */}
             {imageUrl && !error && (
                 <Button
                     onClick={handleSaveDesign}
-                    bg="brand.accentYellow"
-                    color="brand.textDark"
-                    _hover={{ bg: "brand.accentYellowHover" }}
+                    colorScheme="brandAccentYellow" // Uses theme color scheme
                     isLoading={isSaving}
                     loadingText="Saving..."
                     isDisabled={loading || !imageUrl || isSaving}
