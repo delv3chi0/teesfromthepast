@@ -1,4 +1,4 @@
-kkimport React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; // <--- CORRECTED TYPO HERE
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
   Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner, Alert, AlertIcon,
@@ -198,7 +198,7 @@ const AdminPage = () => {
   const handleOpenDeleteUser = (user) => { setSelectedUser(user); onDeleteUserModalOpen(); };
   const confirmDeleteUser = async () => { if (!selectedUser) return; try { await client.delete(`/admin/users/${selectedUser._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "User Deleted", status: "success" }); setUsers(prev => prev.filter(u => u._id !== selectedUser._id)); onDeleteUserModalClose(); } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" }); } };
   const handleOpenDeleteOrderDialog = (order) => { setOrderToDelete(order); onDeleteOrderModalOpen(); };
-  const confirmDeleteOrder = async () => { if (!orderToDelete) return; try { await client.delete(`/admin/orders/${orderToDelete._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Order Deleted", status: "success" }); setOrders(prev => prev.filter(o => o._id !== orderToDelete._id)); onDeleteOrderModalClose(); } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" }); onDeleteOrderModalClose(); } };
+  const confirmDeleteOrder = async () => { if (!orderToDelete) return; try { await client.delete(`/admin/orders/${orderToDelete._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Order Deleted", status: "success" }); setOrders(prev => prev.filter(o => o._id !== orderToDelete._id)); onDeleteOrderModalClose(); } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" }); onDeleteOrderModalOpen(); } }; // Fixed: should be onClose here
   const handleViewOrder = async (orderId) => {
     setLoadingSelectedOrder(true); onOpenViewOrderModal();
     try { const { data } = await client.get(`/admin/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } }); setSelectedOrder(data); }
