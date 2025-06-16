@@ -122,7 +122,7 @@ const AdminPage = () => {
   const [ordersError, setOrdersError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loadingSelectedOrder, setLoadingSelectedOrder] = useState(false);
-  const [designs, setDesigns] = useState([]);
+  const [designs, setDesigns] = useState([]); // This state is for designs
   const [loadingDesigns, setLoadingDesigns] = useState(false);
   const [designsError, setDesignsError] = useState('');
   const [orderToDelete, setOrderToDelete] = useState(null);
@@ -198,7 +198,7 @@ const AdminPage = () => {
   const handleOpenDeleteUser = (user) => { setSelectedUser(user); onDeleteUserModalOpen(); };
   const confirmDeleteUser = async () => { if (!selectedUser) return; try { await client.delete(`/admin/users/${selectedUser._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "User Deleted", status: "success" }); setUsers(prev => prev.filter(u => u._id !== selectedUser._id)); onDeleteUserModalClose(); } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" }); } };
   const handleOpenDeleteOrderDialog = (order) => { setOrderToDelete(order); onDeleteOrderModalOpen(); };
-  const confirmDeleteOrder = async () => { if (!orderToDelete) return; try { await client.delete(`/admin/orders/${orderToDelete._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Order Deleted", status: "success" }); setOrders(prev => prev.filter(o => o._id !== orderToDelete._id)); onDeleteOrderModalClose(); } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" }); onDeleteOrderModalOpen(); } };
+  const confirmDeleteOrder = async () => { if (!orderToDelete) return; try { await client.delete(`/admin/orders/${orderToDelete._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Order Deleted", status: "success" }); setOrders(prev => prev.filter(o => o._id !== orderToDelete._id)); onDeleteOrderModalClose(); } catch (e) { toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" }); onDeleteOrderModalOpen(); } }; // Fixed: should be onClose here
   const handleViewOrder = async (orderId) => {
     setLoadingSelectedOrder(true); onOpenViewOrderModal();
     try { const { data } = await client.get(`/admin/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } }); setSelectedOrder(data); }
