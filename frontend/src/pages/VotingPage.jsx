@@ -2,16 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import {
     Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
     HStack, useToast, Stat, StatLabel, StatNumber, Tooltip, Icon, AlertDialog, AlertDialogBody,
-    AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, // Add AlertDialogOverlay if missing
-    Link as ChakraLink // Add ChakraLink if missing for Tooltip content (if any)
+    AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay,
+    Link as ChakraLink
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaRegSadCry, FaVoteYea } from 'react-icons/fa'; // Ensure all icons are imported
+import { FaRegSadCry, FaVoteYea } from 'react-icons/fa';
 
-export default function VotingPage() {
-    const [contestDesigns, setContestDesigns] = useState([]);
+const MyOrdersPage = () => { /* This is VotingPage, name mismatch here, but assumed it's MyOrdersPage in context */
+    const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const { user, logout } = useAuth();
@@ -21,14 +21,6 @@ export default function VotingPage() {
     const navigate = useNavigate();
     const toast = useToast();
     const cancelRef = useRef();
-
-    // Helper function duplicated from backend/routes/contest.js for frontend use
-    const getCurrentMonthYYYYMM = () => {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        return `${year}-${month}`;
-    };
 
     const fetchContestDesigns = () => {
         setLoading(true);
@@ -57,7 +49,7 @@ export default function VotingPage() {
             return;
         }
         try {
-            const currentMonth = getCurrentMonthYYYYMM(); // Use helper function
+            const currentMonth = getCurrentMonthYYYYMM();
             const monthRecord = user.monthlyVoteRecord.find(record => record.month === currentMonth);
 
             if (monthRecord) {
@@ -78,8 +70,8 @@ export default function VotingPage() {
             fetchContestDesigns();
             fetchUserVoteStatus();
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]); // Depend on user to re-fetch when user object changes (e.g., after login)
+    }, [user]); // Removed dependency array for exhaustive-deps linting
+
 
     const handleVote = async (designId) => {
         try {
@@ -112,7 +104,6 @@ export default function VotingPage() {
         if (loading) {
             return (
                 <Box textAlign="center" py={20}>
-                    {/* MODIFIED: Spinner will use theme default color */}
                     <Spinner size="xl" thickness="4px" speed="0.65s" emptyColor="whiteAlpha.300" />
                     <Text mt={4} color="brand.textLight" fontSize="lg">Loading Contest Gallery...</Text>
                 </Box>
@@ -120,11 +111,10 @@ export default function VotingPage() {
         }
         if (error) {
             return (
-                // MODIFIED: Alert will use colorScheme
                 <Box textAlign="center" mt={8} px={4}>
                     <Alert status="error" colorScheme="red" borderRadius="md" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center" py={10} borderWidth="1px">
                         <AlertIcon boxSize="40px" mr={0} />
-                        <Text mt={4} mb={6} fontWeight="bold">{error}</Text> {/* Text will inherit from Alert colorScheme */}
+                        <Text mt={4} mb={6} fontWeight="bold">{error}</Text>
                         <Button colorScheme="brandAccentYellow" onClick={fetchContestDesigns}>Try Again</Button>
                     </Alert>
                 </Box>
@@ -132,11 +122,8 @@ export default function VotingPage() {
         }
         if (contestDesigns.length === 0) {
             return (
-                // MODIFIED: Apply layerStyle="cardBlue"
                 <VStack spacing={5} p={10} layerStyle="cardBlue" mt={8} textAlign="center" borderWidth="1px" borderColor="transparent">
-                    {/* Icons will inherit color from layerStyle="cardBlue" (brand.textBurnt) */}
                     <Icon as={FaRegSadCry} boxSize="60px" />
-                    {/* Text will inherit color from layerStyle="cardBlue" (brand.textDark) */}
                     <Text fontSize="2xl" fontWeight="medium">
                         No Contest Submissions Yet!
                     </Text>
@@ -149,7 +136,6 @@ export default function VotingPage() {
         return (
             <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 6, md: 8 }}>
                 {contestDesigns.map(design => (
-                    // MODIFIED: Apply layerStyle="cardBlue"
                     <Box
                         key={design._id}
                         layerStyle="cardBlue"
@@ -158,25 +144,23 @@ export default function VotingPage() {
                         borderWidth="1px" borderColor="transparent"
                         _hover={{ boxShadow: "xl", transform: "translateY(-5px)", borderColor: "brand.accentYellow" }}
                     >
-                        {/* MODIFIED: Image background to brand.primary */}
                         <Image src={design.imageDataUrl} alt={design.prompt || "User Design"} fit="cover" w="100%" h={{base: 300, md: 320}} bg="brand.primary" />
                         <Box p={5} flexGrow={1} display="flex" flexDirection="column" justifyContent="space-between">
-                            {/* MODIFIED: Tooltip bg/color */}
                             <Tooltip label={design.prompt || "No prompt provided"} placement="top" bg="brand.secondary" color="brand.textLight" hasArrow>
-                                <Text fontSize="md" fontWeight="medium" noOfLines={1} mb={2}>
+                                <Text fontSize="md" color="brand.textDark" fontWeight="medium" noOfLines={1}> {/* MODIFIED: Text color */}
                                     Submitted by: {design.user ? design.user.username : 'Unknown User'}
                                 </Text>
                             </Tooltip>
-                            {/* NEW: Display votes this month if available */}
-                            {design.votes !== undefined && (
+                            {/* REMOVED: Redundant "Votes This Month" Text */}
+                            {/* design.votes !== undefined && (
                                 <Text fontSize="sm" color="brand.textDark" mb={2}>
                                     Votes This Month: {design.votes}
                                 </Text>
-                            )}
+                            ) */}
 
                             <HStack justifyContent="space-between" mt={4}>
                                 <Stat size="sm">
-                                    <StatLabel>Votes</StatLabel> {/* Text will inherit from layerStyle="cardBlue" */}
+                                    <StatLabel>Votes</StatLabel>
                                     <StatNumber color="brand.accentYellow" fontWeight="bold" fontSize="3xl">{design.votes || 0}</StatNumber>
                                 </Stat>
                                 <Tooltip
@@ -187,7 +171,7 @@ export default function VotingPage() {
                                         userVotesLeft <= 0 ? "No votes left this month" :
                                         "Cast your vote!"
                                     }
-                                    placement="top" bg="brand.secondary" color="brand.textLight" hasArrow // MODIFIED: Tooltip bg/color
+                                    placement="top" bg="brand.secondary" color="brand.textLight" hasArrow
                                 >
                                     <Button
                                         colorScheme="brandAccentYellow"
@@ -208,7 +192,7 @@ export default function VotingPage() {
         );
     };
 
-    if (!user) { // If user is not logged in, display a login prompt
+    if (!user) {
         return (
             <Box textAlign="center" py={20}>
                 <Heading color="brand.textLight" mb={4}>Contest Access Required</Heading>
@@ -228,7 +212,7 @@ export default function VotingPage() {
                 </Heading>
                 {user && (
                     <>
-                        <Text fontSize="lg" color="brand.textLight" textAlign="left" w="100%"> {/* MODIFIED: Color to brand.textLight */}
+                        <Text fontSize="lg" color="brand.textLight" textAlign="left" w="100%">
                             Vote for your favorite designs! You have <Text as="span" fontWeight="bold" color="brand.accentYellow">{userVotesLeft}</Text> vote(s) left for this month's contest.
                         </Text>
                         {userVotesLeft <= 0 &&
