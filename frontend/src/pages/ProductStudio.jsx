@@ -1,22 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
     AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink,
-    // Added Flex, Tooltip, AspectRatio for better layout and design gallery
-    Flex, Tooltip, AspectRatio
+    Flex, Tooltip, AspectRatio // Added Flex, Tooltip, AspectRatio
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical } from 'react-icons/fa'; // Added FaTshirt, FaPalette, FaRulerVertical for labels
+import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical } from 'react-icons/fa'; // Added icons for labels
 
-// Reusable ThemedSelect for consistency (updated for proper dark theme background & light text)
+// Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
     <Select
         size="lg"
         bg="brand.secondary" // Dark background for select field
         borderColor="whiteAlpha.300"
-        color="brand.textLight" // Ensure text is light on dark background
+        color="brand.textLight" // Default text color in the field
         _placeholder={{ color: "brand.textMuted" }} // Muted light placeholder
         _hover={{ borderColor: "whiteAlpha.400" }}
         focusBorderColor="brand.accentYellow"
@@ -25,9 +24,14 @@ const ThemedSelect = (props) => (
                 bg: 'brand.secondary', // Option background also dark
                 color: 'brand.textLight', // Option text light
             },
+            // CRITICAL FIX: Target the selected value's text color.
+            // This ensures the chosen option text within the visible select box is light.
+            '.chakra-select__field': {
+                color: 'brand.textLight !important',
+            },
             // Style for the dropdown arrow
             '.chakra-select__icon': {
-                color: 'brand.textLight', // Make the arrow light
+                color: 'brand.textLight',
             },
         }}
         {...props}
@@ -52,15 +56,12 @@ export default function ProductStudio() {
     
     // Derived states
     const selectedProduct = products.find(p => p._id === selectedProductId);
-    // Use a Set to get unique color variants based on colorName
     const uniqueColorVariants = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
     
-    // Find the full color variant object based on selectedColorName
     const selectedColorVariant = selectedProduct?.variants.find(v => v.colorName === selectedColorName);
     const availableSizes = selectedColorVariant?.sizes?.filter(s => s.inStock) || [];
     const selectedSizeVariant = availableSizes.find(s => s.size === selectedSize);
 
-    // Combine color variant and size variant details for the final selected product item
     const finalVariant = selectedColorVariant && selectedSizeVariant
         ? { ...selectedColorVariant, ...selectedSizeVariant }
         : null;
@@ -71,7 +72,6 @@ export default function ProductStudio() {
     // Fetch products and initialize selections from URL params
     useEffect(() => {
         setLoading(true);
-        // This endpoint MUST return products with full variants and sizes
         client.get('/storefront/products') // This calls getAllActiveProducts
             .then(res => {
                 const fetchedProducts = res.data || [];
@@ -119,10 +119,8 @@ export default function ProductStudio() {
         } else {
             setDesigns([]);
             setLoadingDesigns(false);
-            // Optionally redirect to login if not logged in and on this page
-            // navigate('/login', { state: { from: location } });
         }
-    }, [user, location, navigate]); // Added navigate to dependencies
+    }, [user, location, navigate]);
 
     // Fabric.js canvas setup and update logic
     useEffect(() => {
@@ -139,8 +137,15 @@ export default function ProductStudio() {
 
             FCanvas.clear();
 
-            const primaryImage = finalVariant?.imageSet?.find(img => img.isPrimary) || finalVariant?.imageSet?.[0];
-            const mockupSrc = primaryImage?.url;
+            // MODIFIED: Prioritize 'tee_' images for mockupSrc
+            const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_'));
+            const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_'));
+            const primaryImage = finalVariant?.imageSet?.find(img => img.isPrimary === true); // Explicitly find primary
+            const firstAvailableImage = finalVariant?.imageSet?.[0]; // Fallback to first if no primary
+
+            // Prioritize: explicit tee_ image > explicit primary image > explicit man_ image > first image in set
+            const mockupSrc = teeMockupImage?.url || primaryImage?.url || manMockupImage?.url || firstAvailableImage?.url;
+
 
             if (mockupSrc) {
                 fabricInstance.Image.fromURL(mockupSrc, (img) => {
@@ -219,7 +224,7 @@ export default function ProductStudio() {
     const handleProductChange = (e) => {
         const newProductId = e.target.value;
         setSelectedProductId(newProductId);
-        setSelectedColorName(''); // Reset color and size when product changes
+        setSelectedColorName('');
         setSelectedSize('');
 
         const newSelectedProduct = products.find(p => p._id === newProductId);
@@ -235,7 +240,7 @@ export default function ProductStudio() {
     const handleColorChange = (e) => {
         const newColor = e.target.value;
         setSelectedColorName(newColor);
-        setSelectedSize(''); // Reset size when color changes
+        setSelectedSize('');
 
         const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
         if (newColorVariant?.sizes?.length > 0) {
