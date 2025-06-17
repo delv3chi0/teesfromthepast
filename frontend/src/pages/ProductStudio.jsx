@@ -4,15 +4,15 @@ import {
     AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink,
     Flex, Tooltip, AspectRatio, Input, InputGroup, InputRightElement, IconButton, RadioGroup, Stack,
     Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverCloseButton, PopoverHeader, PopoverBody,
-    Slider, SliderTrack, SliderFilledTrack, SliderThumb, // Existing imports
-    NumberInput, NumberInputField, NumberInputStepper, // Added NumberInput components
+    Slider, SliderTrack, SliderFilledTrack, SliderThumb,
+    NumberInput, NumberInputField, NumberInputStepper,
     NumberIncrementStepper, NumberDecrementStepper, HStack // Added HStack, NumberInputSteppers
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 // Added icons for new tools and controls
-import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush } from 'react-icons/fa';
+import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush, FaArrowsAltH, FaArrowsAltV } from 'react-icons/fa'; // FaArrowsAltH/V for center
 
 // Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
@@ -22,15 +22,15 @@ const ThemedSelect = (props) => (
         borderColor="whiteAlpha.300"
         color="brand.textLight" // Default text color in the field
         _placeholder={{ color: "brand.textMuted" }} // Muted light placeholder
-        _hover={{ borderColor: "whiteAlpha.400" }}
+        _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
         sx={{
             option: { // Style for options within the dropdown
                 bg: 'brand.secondary', // Option background also dark
                 color: 'brand.textLight', // Option text light
             },
-            // CRITICAL FIX: Target the selected value's text color.
-            // This ensures the chosen option text within the visible select box is light.
+            // CRITICAL FIX: Ensure the selected value's text is light.
+            // Using !important as a last resort due to potential Chakra/browser specificity conflicts.
             '.chakra-select__field': {
                 color: 'brand.textLight !important',
             },
@@ -75,12 +75,13 @@ export default function ProductStudio() {
     const [selectedDesign, setSelectedDesign] = useState(null);
     const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
 
-    // New states for customization tools (Text & Shapes)
+    // New states for customization tools (Text only, Shapes removed)
     const [textInputValue, setTextInputValue] = useState('');
     const [textColor, setTextColor] = useState('#FDF6EE'); // Default to brand.textLight
     const [fontSize, setFontSize] = useState(30);
     const [fontFamily, setFontFamily] = useState('Montserrat'); // Default body font
-    const [shapeFillColor, setShapeFillColor] = useState('#D16930'); // Default to brand.accentOrange
+    // Removed shapeFillColor state as shapes are removed
+    // const [shapeFillColor, setShapeFillColor] = useState('#D16930');
 
     // Derived states based on selections
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -102,8 +103,10 @@ export default function ProductStudio() {
     useEffect(() => {
         // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
+            // Set canvas dimensions using an appropriate multiplier or fixed size for better quality
+            // For example, 600x600 for display, might be multiplied for print.
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
-                width: 600, // Make canvas larger for more working space
+                width: 600, // Larger canvas for better working space
                 height: 600, // Maintain aspect ratio
                 backgroundColor: 'rgba(0,0,0,0)', // Transparent canvas background
             });
@@ -155,12 +158,18 @@ export default function ProductStudio() {
 
             if (mockupSrc) {
                 fabricInstance.Image.fromURL(mockupSrc, (img) => {
+                    // FIX: Ensure man_ image maintains aspect ratio and centers
                     FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
                         scaleX: FCanvas.width / img.width,
                         scaleY: FCanvas.height / img.height,
                         crossOrigin: 'anonymous',
-                        selectable: false, // Background image should not be selectable
-                        evented: false,   // It doesn't emit events
+                        selectable: false,
+                        evented: false,
+                        // --- FIX FOR STRETCHED IMAGE ---
+                        alignX: 'center', // Center horizontally
+                        alignY: 'center', // Center vertically
+                        meetOrSlice: 'meet' // Scale down to fit without stretching
+                        // --- END FIX ---
                     });
                 }, { crossOrigin: 'anonymous' });
             } else {
@@ -168,50 +177,55 @@ export default function ProductStudio() {
             }
         };
         
-        // This function continuously polls until window.fabric is defined
         const pollForFabricAndSetupContent = () => {
-            if (window.fabric) { // Check if fabric.js has loaded
-                updateCanvasBackground(window.fabric); // Set the correct background mockup
+            if (window.fabric) {
+                updateCanvasBackground(window.fabric);
 
                 // Handle selected design (add or update)
-                // Filter out previous design images to replace them if a new design is selected
+                // Remove previous design images to ensure only current selected design is present
                 FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
                 
                 if (selectedDesign?.imageDataUrl) {
-                    window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
-                        if (!img) return;
-                        img.id = `design-${selectedDesign._id}`; // Assign an ID for easy identification
-                        img.scaleToWidth(FCanvas.width * 0.33); // Scale relative to new canvas size
-                        img.set({
-                            top: FCanvas.height * 0.24,
-                            left: (FCanvas.width - img.getScaledWidth()) / 2,
-                            hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
-                            cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-                            lockMovementX: false, lockMovementY: false, lockRotation: false,
-                            lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
-                        });
-                        FCanvas.add(img);
+                    // Check if the selected design is already on canvas, add it if not
+                    const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
+                    if (!existingDesignObject) { // Only add if not already there
+                        window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
+                            if (!img) return;
+                            img.id = `design-${selectedDesign._id}`; // Assign an ID for easy identification
+                            img.scaleToWidth(FCanvas.width * 0.33); // Scale relative to new canvas size
+                            img.set({
+                                top: FCanvas.height * 0.24,
+                                left: (FCanvas.width - img.getScaledWidth()) / 2,
+                                hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
+                                cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
+                                lockMovementX: false, lockMovementY: false, lockRotation: false,
+                                lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
+                            });
+                            FCanvas.add(img);
+                            FCanvas.renderAll();
+                            FCanvas.setActiveObject(img); // Make the new design active
+                        }, { crossOrigin: 'anonymous' });
+                    } else {
+                        FCanvas.setActiveObject(existingDesignObject); // If already on canvas, just make it active
                         FCanvas.renderAll();
-                        FCanvas.setActiveObject(img); // Make the new design active
-                    }, { crossOrigin: 'anonymous' });
+                    }
                 } else {
                     // If no design is selected, ensure no design image is on canvas
                     FCanvas.renderAll();
                 }
 
             } else {
-                setTimeout(pollForFabricAndSetupContent, 100); // Poll every 100ms
+                setTimeout(pollForFabricAndSetupContent, 100);
             }
         };
-        pollForFabricAndSetupContent(); // Start polling
+        pollForFabricAndSetupContent();
 
-    }, [finalVariant, currentMockupType, selectedDesign]); // Dependencies for this useEffect
+    }, [finalVariant, currentMockupType, selectedDesign]);
 
 
     // Fetch products and initialize selections from URL params
     useEffect(() => {
         setLoading(true);
-        // This endpoint MUST return products with full variants and sizes (getAllActiveProducts)
         client.get('/storefront/products')
             .then(res => {
                 const fetchedProducts = res.data || [];
@@ -293,40 +307,12 @@ export default function ProductStudio() {
         setTextInputValue(''); // Clear input after adding
     }, [textInputValue, textColor, fontSize, fontFamily]);
 
-    const addShapeToCanvas = useCallback((shapeType) => {
-        if (!fabricCanvas.current) return;
-        let shapeObject;
-        const commonProps = {
-            left: (fabricCanvas.current.width / 2) - 50, // Center shape roughly
-            top: (fabricCanvas.current.height / 2) - 50,
-            fill: shapeFillColor,
-            hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
-            cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-        };
-
-        if (shapeType === 'rect') {
-            shapeObject = new window.fabric.Rect({
-                width: 100,
-                height: 100,
-                ...commonProps,
-            });
-        } else if (shapeType === 'circle') {
-            shapeObject = new window.fabric.Circle({
-                radius: 50,
-                ...commonProps,
-            });
-        }
-        if (shapeObject) {
-            fabricCanvas.current.add(shapeObject);
-            fabricCanvas.current.setActiveObject(shapeObject); // Make it active immediately
-            fabricCanvas.current.renderAll();
-        }
-    }, [shapeFillColor]);
+    // Removed addShapeToCanvas and shapeFillColor state
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
             // Keep background image, remove all other objects (designs, text, shapes)
-            fabricCanvas.current.getObjects().filter(obj => obj.type !== 'image' || obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => fabricCanvas.current.remove(obj));
+            fabricCanvas.current.getObjects().filter(obj => !obj.isType('Image') || obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => fabricCanvas.current.remove(obj));
             fabricCanvas.current.renderAll();
             setSelectedDesign(null); // Deselect any chosen design
         }
@@ -334,25 +320,42 @@ export default function ProductStudio() {
 
     // Function to delete the currently selected Fabric.js object
     const deleteSelectedObject = useCallback(() => {
-        if (fabricCanvas.current && activeObjectRef.current) {
-            fabricCanvas.current.remove(activeObjectRef.current);
-            fabricCanvas.current.discardActiveObject(); // Clear selection
-            fabricCanvas.current.renderAll();
-            activeObjectRef.current = null; // Clear ref
-            // If the deleted object was the selected AI design, deselect it
-            if (selectedDesign && activeObjectRef.current?.id === `design-${selectedDesign._id}`) {
-                setSelectedDesign(null);
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject(); // Get the currently active object
+            if (activeObject) {
+                fabricCanvas.current.remove(activeObject);
+                fabricCanvas.current.discardActiveObject(); // Clear selection
+                fabricCanvas.current.renderAll();
+                activeObjectRef.current = null; // Clear ref
+                // If the deleted object was the selected AI design, deselect it
+                if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
+                    setSelectedDesign(null);
+                }
+            } else {
+                toast({ title: "No object selected", description: "Select an object on the canvas to delete it.", status: "info", isClosable: true });
             }
         }
-    }, [selectedDesign]);
+    }, [selectedDesign, toast]);
+
+    // Function to center the currently selected Fabric.js object
+    const centerSelectedObject = useCallback(() => {
+        if (fabricCanvas.current && activeObjectRef.current) {
+            activeObjectRef.current.centerH(); // Center horizontally
+            activeObjectRef.current.centerV(); // Center vertically
+            fabricCanvas.current.renderAll();
+        } else {
+            toast({ title: "No object selected", description: "Select an object on the canvas to center it.", status: "info", isClosable: true });
+        }
+    }, [toast]);
 
 
     const handleProceedToCheckout = useCallback(() => {
         // Check if there are ANY objects on the canvas beyond the background
-        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type !== 'image' || obj.id?.startsWith('design-'));
+        // The background image itself is an object, so we filter it out.
+        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type !== 'image' || (obj.id && obj.id.startsWith('design-')));
 
         if (!hasCustomizations) {
-            toast({ title: "No customizations", description: "Please select a design or add text/shapes to customize your apparel.", status: "warning", isClosable: true });
+            toast({ title: "No customizations", description: "Please select a design or add custom elements.", status: "warning", isClosable: true });
             return;
         }
         if (!finalVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
@@ -375,14 +378,13 @@ export default function ProductStudio() {
 
         // Clone and add only the customizable objects to the print-ready canvas
         fabricCanvas.current.getObjects().filter(obj => 
-            obj.type === 'i-text' || obj.type === 'rect' || obj.type === 'circle' || obj.id?.startsWith('design-')
-        ).forEach(obj => {
+            obj.type === 'i-text' || obj.id?.startsWith('design-')
+        ).forEach(obj => { // Filter for 'i-text' and 'design-' images only
             const clonedObj = window.fabric.util.object.clone(obj);
             // Position/scale for print-ready file might differ from display preview.
             // For simplicity, we'll center and scale it to fit the print canvas if possible.
-            // This part requires precise POD print area specifications.
             if (clonedObj.scaleToWidth) clonedObj.scaleToWidth(printReadyCanvas.width * 0.8); // Scale to 80% of print canvas
-            if (clonedObj.scaleToHeight) clonedObj.scaleToHeight(printReadyCanvas.height * 0.8); // Scale to 80% of print canvas
+            // if (clonedObj.scaleToHeight) clonedObj.scaleToHeight(printReadyCanvas.height * 0.8); // Scale to 80% of print canvas
 
             clonedObj.set({
                 left: (printReadyCanvas.width - clonedObj.getScaledWidth()) / 2,
@@ -396,14 +398,12 @@ export default function ProductStudio() {
             format: 'png', // PNG for transparency
             quality: 1.0,
             multiplier: 1, // This multiplier determines DPI. PODs often require 300 DPI.
-                           // E.g., if Printful needs a 12x16 inch design, that's 3600x4800 pixels at 300 DPI.
-                           // You'd need to adjust printReadyCanvas width/height and multiplier accordingly.
         });
         printReadyCanvas.dispose(); // Clean up temporary canvas
 
         const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
         const checkoutItem = {
-            designId: selectedDesign?._id || 'custom-design-' + Date.now(), // Unique ID for custom work
+            designId: selectedDesign?._2id || 'custom-design-' + Date.now(), // Unique ID for custom work
             productId: selectedProductId,
             productName: selectedProduct.name,
             variantSku: finalVariant.sku,
@@ -530,7 +530,7 @@ export default function ProductStudio() {
                         </Alert>
                     ) : (
                         <Text color="brand.textMuted" textAlign="center" fontSize="md">
-                            Drag, scale, and rotate your design. Add text or shapes from the tools below.
+                            Drag, scale, and rotate your design. Add text from the tools below.
                         </Text>
                     )}
 
@@ -547,24 +547,25 @@ export default function ProductStudio() {
 
                             {/* Canvas Container - made larger and responsive */}
                             <Box
-                                // Max width to ensure it doesn't get too huge on very wide screens
-                                maxW="800px" 
-                                // Width 100% of its parent column, will scale down on small screens
-                                w="100%" 
+                                maxW="800px" // Max width to ensure it doesn't get too huge on very wide screens
+                                w="100%" // Width 100% of its parent column, will scale down on small screens
                                 aspectRatio={1 / 1} // Maintain square aspect ratio
-                                bg="brand.primary" 
+                                bg="brand.primary"
                                 mx="auto" // Center horizontally
-                                borderRadius="md" 
-                                borderWidth="1px" 
+                                borderRadius="md"
+                                borderWidth="1px"
                                 borderColor="whiteAlpha.300"
                                 overflow="hidden" // Ensure no overflow from canvas
                                 position="relative" // For positioning canvas directly
                             >
+                                {/* The canvas element will inherit 100% width/height from its parent Box */}
                                 <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
                             </Box>
                             
                             <Button onClick={clearCanvas} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Clear All Customizations</Button>
-                            <Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Delete Selected Object</Button> {/* NEW: Delete selected object */}
+                            <Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Delete Selected Object</Button> {/* Delete selected object */}
+                            <Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="gray" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Center Selected</Button> {/* NEW: Center selected object */}
+
                         </VStack>
 
                         {/* Right Column: Customization Tools */}
@@ -611,10 +612,9 @@ export default function ProductStudio() {
                                 <ThemedSelect
                                     value={fontFamily}
                                     onChange={(e) => { setFontFamily(e.target.value); updateActiveObject('fontFamily', e.target.value); }}
-                                    size="md" // Smaller size for controls
-                                    // Use 'darkForm' variant if it was defined, otherwise ensure styles are consistent
+                                    size="md"
                                     sx={{
-                                        option: { // Ensure option text is readable
+                                        option: {
                                             bg: 'brand.secondary',
                                             color: 'brand.textLight',
                                         },
@@ -630,8 +630,8 @@ export default function ProductStudio() {
                             </FormControl>
                             <Button onClick={addTextToCanvas} leftIcon={<Icon as={FaFont} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!textInputValue.trim() || !isCustomizeEnabled}>Add Text</Button>
 
-                            <Divider my={4} borderColor="whiteAlpha.300" />
-
+                            {/* Removed Add Shapes section */}
+                            {/* <Divider my={4} borderColor="whiteAlpha.300" />
                             <Heading size="md" mb={2} color="brand.textLight">Add Shapes</Heading>
                             <SimpleGrid columns={2} spacing={3}>
                                 <FormControl isDisabled={!isCustomizeEnabled}>
@@ -650,12 +650,13 @@ export default function ProductStudio() {
                                         </InputRightElement>
                                     </InputGroup>
                                 </FormControl>
-                                <Box> {/* Placeholder for potential stroke color later */} </Box>
+                                <Box> {} </Box>
                             </SimpleGrid>
                             <HStack>
                                 <Button onClick={() => addShapeToCanvas('rect')} leftIcon={<Icon as={FaSquare} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!isCustomizeEnabled}>Add Rectangle</Button>
                                 <Button onClick={() => addShapeToCanvas('circle')} leftIcon={<Icon as={FaCircle} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!isCustomizeEnabled}>Add Circle</Button>
-                            </HStack>
+                            </HStack> */}
+
                         </VStack>
                     </SimpleGrid>
 
