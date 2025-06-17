@@ -91,10 +91,7 @@ app.use('/api/storefront', storefrontProductRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
-// REMOVED: The route for product-categories is no longer needed
-// app.use('/api/admin/product-categories', adminProductCategoryRoutes); // THIS LINE IS NOW REMOVED
-// REMOVED: The route for product-types is no longer needed (already commented out or removed)
-app.use('/api/admin/products', adminProductRoutes); // This route now handles all product CRUD for admin
+app.use('/api/admin/', adminProductRoutes); // This route now handles all product CRUD for admin
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
