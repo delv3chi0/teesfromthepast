@@ -10,12 +10,13 @@ const ProductCard = ({ product }) => {
     );
   }
 
-  // --- MODIFICATION START ---
-  // Revert to using product.basePrice and product.defaultImage directly
-  // as per your backend's current shop-data response structure
-  const displayPrice = typeof product.basePrice === 'number' ? product.basePrice : 0;
-  const imageUrl = product.defaultImage || ''; // Use defaultImage, fallback to empty string
-  // --- MODIFICATION END ---
+  let displayPrice = 0; // Default to 0 in case no variants or prices are found
+
+  if (product.variants && product.variants.length > 0) {
+    displayPrice = product.variants[0].price;
+  }
+  const finalDisplayPrice = typeof displayPrice === 'number' ? displayPrice : 0;
+  const imageUrl = product.defaultImage || '';
 
   const productUrl = product.slug ? `/product/${product.slug}` : '#';
   const isClickable = !!product.slug;
@@ -32,12 +33,12 @@ const ProductCard = ({ product }) => {
         cursor={isClickable ? 'pointer' : 'not-allowed'} 
         display="flex" 
         flexDirection="column" 
-        bg="brand.cardBlue"
+        layerStyle="cardBlue" // Applies the light background and dark default text
         borderColor="transparent"
     >
       <Box h="220px" bg="brand.secondary" p={4} display="flex" alignItems="center" justifyContent="center">
         <Image
-          src={imageUrl} // Use the derived imageUrl
+          src={imageUrl}
           alt={`Image of ${product.name}`}
           objectFit="contain"
           w="100%"
@@ -46,14 +47,17 @@ const ProductCard = ({ product }) => {
         />
       </Box>
       <Box p="4" mt="auto">
-        <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name} color="brand.textLight">
+        {/* MODIFIED: Removed explicit color="brand.textLight". It will now inherit brand.textBurnt from layerStyle="cardBlue" */}
+        <Heading as="h3" size="sm" fontWeight="semibold" noOfLines={1} title={product.name}>
           {product.name}
         </Heading>
-        <Text fontSize="sm" color="brand.textMuted" mt={1} noOfLines={2} h="40px">
+        {/* MODIFIED: Removed explicit color="brand.textMuted". It will now inherit brand.textDark from layerStyle="cardBlue" */}
+        <Text fontSize="sm" mt={1} noOfLines={2} h="40px">
           {product.description}
         </Text>
-        <Text mt={2} fontSize="xl" color="brand.accentYellow" fontWeight="bold">
-          ${displayPrice.toFixed(2)} {/* Use the derived displayPrice */}
+        {/* MODIFIED: Changed color to brand.textBurnt for strong contrast on light background */}
+        <Text mt={2} fontSize="xl" color="brand.textBurnt" fontWeight="bold">
+          ${finalDisplayPrice.toFixed(2)}
         </Text>
       </Box>
     </Box>
