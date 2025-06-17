@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Design from '../models/Design.js';
-import ProductCategory from '../models/ProductCategory.js';
+// REMOVED: import ProductCategory from '../models/ProductCategory.js'; // No longer exists
 import Product from '../models/Product.js';
 
 // --- Dashboard ---
@@ -18,7 +18,7 @@ const getDashboardSummary = asyncHandler(async (req, res) => {
     res.json({ totalRevenue, totalOrders, newUserCount, recentOrders });
 });
 
-// --- User Management ---
+// --- User Management --- (No changes needed here)
 const getAllUsersAdmin = asyncHandler(async (req, res) => {
     const users = await User.find({}).select('-password');
     res.json(users || []);
@@ -38,7 +38,7 @@ const deleteUserAdmin = asyncHandler(async (req, res) => {
     if (user) { await User.deleteOne({ _id: user._id }); res.json({ message: 'User removed successfully' }); } else { res.status(404); throw new Error('User not found'); }
 });
 
-// --- Order Management ---
+// --- Order Management --- (No changes needed here)
 const getAllOrdersAdmin = asyncHandler(async (req, res) => {
     const orders = await Order.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
     res.json(orders || []);
@@ -59,92 +59,62 @@ const updateOrderStatusAdmin = asyncHandler(async (req, res) => {
     if (order) { order.orderStatus = status; const updatedOrder = await order.save(); res.json(updatedOrder); } else { res.status(404); throw new Error('Order not found'); }
 });
 
-// --- Design Management ---
+// --- Design Management --- (No changes needed here)
 const getAllDesignsAdmin = asyncHandler(async (req, res) => {
     const designs = await Design.find({}).populate('user', 'id username email').sort({ createdAt: -1 });
     res.json(designs || []);
 });
 const deleteDesignAdmin = asyncHandler(async (req, res) => {
     const design = await Design.findById(req.params.id);
-    if (design) { await Design.deleteOne({ _id: req.params.id }); res.json({ message: 'Design removed successfully' }); } 
+    if (design) { await Design.deleteOne({ _id: req.params.id }); res.json({ message: 'Design removed successfully' }); }
     else { res.status(404); throw new Error('Design not found'); }
 });
 
-// --- Category Management ---
-const createProductCategoryAdmin = asyncHandler(async (req, res) => {
-    const { name, description, isActive } = req.body;
-    const categoryExists = await ProductCategory.findOne({ name });
-    if (categoryExists) { res.status(400); throw new Error(`Category '${name}' already exists`); }
-    const category = new ProductCategory({ name, description: description || '', isActive: isActive !== undefined ? isActive : true });
-    const createdCategory = await category.save();
-    res.status(201).json(createdCategory);
-});
-const getProductCategoriesAdmin = asyncHandler(async (req, res) => {
-    const categories = await ProductCategory.find({}).sort({ name: 1 });
-    res.json(categories);
-});
-const getProductCategoryByIdAdmin = asyncHandler(async (req, res) => {
-    const category = await ProductCategory.findById(req.params.id);
-    if (category) { res.json(category); } else { res.status(404); throw new Error('Category not found'); }
-});
-const updateProductCategoryAdmin = asyncHandler(async (req, res) => {
-    const { name, description, isActive } = req.body;
-    const category = await ProductCategory.findById(req.params.id);
-    if (category) {
-        if (name && name !== category.name) {
-            const categoryExists = await ProductCategory.findOne({ name: name, _id: { $ne: req.params.id } });
-            if (categoryExists) { res.status(400); throw new Error(`Category name '${name}' already exists.`); }
-        }
-        category.name = name || category.name;
-        category.description = description !== undefined ? description : category.description;
-        category.isActive = isActive !== undefined ? isActive : category.isActive;
-        const updatedCategory = await category.save();
-        res.json(updatedCategory);
-    } else {
-        res.status(404); throw new Error('Category not found');
-    }
-});
-const deleteProductCategoryAdmin = asyncHandler(async (req, res) => {
-    const category = await ProductCategory.findById(req.params.id);
-    if (category) {
-        const productUsingCategory = await Product.findOne({ category: req.params.id });
-        if (productUsingCategory) { res.status(400); throw new Error('Cannot delete category. It is currently in use by one or more products.'); }
-        await ProductCategory.deleteOne({ _id: req.params.id });
-        res.json({ message: 'Category removed' });
-    } else {
-        res.status(404); throw new Error('Category not found');
-    }
-});
+// --- Category Management --- (ALL REMOVED)
+// Removed: createProductCategoryAdmin
+// Removed: getProductCategoriesAdmin
+// Removed: getProductCategoryByIdAdmin
+// Removed: updateProductCategoryAdmin
+// Removed: deleteProductCategoryAdmin
+// These functions are no longer relevant as ProductCategory model is removed.
 
-// --- Product Management ---
+// --- Product Management --- (MODIFIED to remove 'category' references)
 const createProductAdmin = asyncHandler(async (req, res) => {
-    const { name, category, description, basePrice, tags, isActive, variants } = req.body;
-    if (!category) { res.status(400); throw new Error('Category is required.'); }
-    const categoryExists = await ProductCategory.findById(category);
-    if (!categoryExists) { res.status(400); throw new Error('Selected category does not exist.'); }
+    // REMOVED 'category' from destructuring
+    const { name, description, basePrice, tags, isActive, variants } = req.body;
+
+    // REMOVED category validation:
+    // if (!category) { res.status(400); throw new Error('Category is required.'); }
+    // const categoryExists = await ProductCategory.findById(category);
+    // if (!categoryExists) { res.status(400); throw new Error('Selected category does not exist.'); }
+
     if (variants) {
         if (!Array.isArray(variants)) { res.status(400); throw new Error('Variants must be an array.'); }
         if (variants.length > 0 && variants.filter(v => v.isDefaultDisplay).length !== 1) {
             res.status(400); throw new Error('Exactly one variant must be marked as the default display.');
         }
     }
-    const product = new Product({ name, category, description, basePrice, tags, isActive, variants });
+    // REMOVED 'category' from product creation
+    const product = new Product({ name, description, basePrice, tags, isActive, variants });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
 });
 
 const getProductsAdmin = asyncHandler(async (req, res) => {
+    // Removed .populate('category', 'name') as 'category' no longer exists on Product
     const products = await Product.find({}).select('-variants').sort({ name: 1 }).lean();
     res.json(products);
 });
 
 const getProductByIdAdmin = asyncHandler(async (req, res) => {
-    const product = await Product.findById(req.params.id).populate({ path: 'category', select: 'name' });
+    // Removed .populate('category', 'name') as 'category' no longer exists on Product
+    const product = await Product.findById(req.params.id); // Removed .populate() for category
     if (product) { res.json(product); } else { res.status(404); throw new Error('Product not found'); }
 });
 
 const updateProductAdmin = asyncHandler(async (req, res) => {
-    const { name, category, description, basePrice, tags, isActive, variants } = req.body;
+    // REMOVED 'category' from destructuring
+    const { name, description, basePrice, tags, isActive, variants } = req.body;
     const product = await Product.findById(req.params.id);
     if (product) {
         if (variants) {
@@ -154,7 +124,7 @@ const updateProductAdmin = asyncHandler(async (req, res) => {
             }
         }
         product.name = name;
-        product.category = category;
+        // REMOVED: product.category = category; // No longer assign category
         product.description = description;
         product.basePrice = basePrice;
         product.tags = tags;
@@ -181,6 +151,6 @@ export {
     getDashboardSummary, getAllUsersAdmin, getUserByIdAdmin, updateUserAdmin, deleteUserAdmin,
     getAllOrdersAdmin, deleteOrderAdmin, getOrderByIdAdmin, updateOrderStatusAdmin,
     getAllDesignsAdmin, deleteDesignAdmin,
-    createProductCategoryAdmin, getProductCategoriesAdmin, getProductCategoryByIdAdmin, updateProductCategoryAdmin, deleteProductCategoryAdmin,
+    // REMOVED category-related exports: createProductCategoryAdmin, getProductCategoriesAdmin, getProductCategoryByIdAdmin, updateProductCategoryAdmin, deleteProductCategoryAdmin,
     createProductAdmin, getProductsAdmin, getProductByIdAdmin, updateProductAdmin, deleteProductAdmin
 };

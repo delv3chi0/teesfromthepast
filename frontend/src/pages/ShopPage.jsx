@@ -8,10 +8,9 @@ import ProductCard from '../components/shop/ProductCard';
 /**
  * Shop Page
  * Displays all products in a single, responsive grid, without categories.
- * Updated to expect a flat array of products directly from the backend.
+ * Now directly expects and processes a flat array of products from the backend.
  */
 const ShopPage = () => {
-    // Renamed from shopData to products for clarity, as it will now hold a flat list
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -20,12 +19,11 @@ const ShopPage = () => {
         setLoading(true);
         client.get('/storefront/shop-data')
             .then(res => {
-                // --- FIX STARTS HERE ---
-                // Backend now sends a flat array of products, so no need to flatten categories.
-                setProducts(res.data); // Directly set the response data as products
-                // --- FIX ENDS HERE ---
+                // Backend now consistently sends a flat array of products.
+                // The previous `flatMap` logic for handling categories is no longer needed.
+                setProducts(res.data);
             })
-            .catch((err) => { // Added err parameter to log more details
+            .catch((err) => {
                 console.error("Error loading products:", err);
                 setError('Could not load products. Please try again later.');
             })
@@ -35,7 +33,8 @@ const ShopPage = () => {
     if (loading) {
         return (
             <VStack justifyContent="center" minH="60vh">
-                <Spinner size="xl" color="brand.accentYellow" thickness="4px" />
+                {/* Removed explicit color prop; Spinner will now use its default from theme.js */}
+                <Spinner size="xl" thickness="4px" />
                 <Text mt={4} fontSize="lg" color="brand.textLight">Loading Collection...</Text>
             </VStack>
         );

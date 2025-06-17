@@ -18,14 +18,17 @@ import { FaPalette, FaRulerVertical, FaPlus, FaImage } from 'react-icons/fa';
  * - Restyled image viewer, color swatches, and all text for a cohesive dark theme.
  * - Implemented the themed <Select> component for size selection.
  * - Updated the loading skeleton to better match the final dark layout.
+ * - REMOVED: `productType` from navigation to `ProductStudio` as categories are no longer used.
  */
 
 // Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
     <Select
         size="lg"
-        bg="brand.primaryDark"
+        bg="brand.secondary" // Use brand.secondary for dark select background
         borderColor="whiteAlpha.300"
+        color="brand.textLight" // Ensure text is light on dark background
+        _placeholder={{ color: "brand.textMuted" }} // Muted light placeholder
         _hover={{ borderColor: "whiteAlpha.400" }}
         focusBorderColor="brand.accentYellow"
         {...props}
@@ -51,6 +54,7 @@ const ProductDetailPage = () => {
             if (!slug) { setError("Product not found."); setLoading(false); return; }
             setLoading(true); setError('');
             try {
+                // Backend's getProductBySlug no longer populates category
                 const { data } = await client.get(`/storefront/products/slug/${slug}`);
                 setProduct(data);
                 if (data?.variants?.length > 0) {
@@ -87,7 +91,7 @@ const ProductDetailPage = () => {
             if (!sizeDetails || !sizeDetails.sku) { toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error", isClosable: true }); return; }
             const searchParams = new URLSearchParams({
                 productId: product._id,
-                productTypeId: product.productType,
+                // REMOVED: productTypeId: product.productType, // No longer needed as categories are removed
                 color: selectedColor.colorName,
                 size: selectedSize,
             });
@@ -102,19 +106,19 @@ const ProductDetailPage = () => {
         return (
             <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={{base: 6, md: 10}} p={{base: 2, md: 4}}>
                 <GridItem>
-                    <Skeleton height={{ base: "300px", md: "500px" }} borderRadius="lg" startColor="brand.primaryLight" endColor="brand.primaryDark" />
+                    <Skeleton height={{ base: "300px", md: "500px" }} borderRadius="lg" startColor="brand.primary" endColor="brand.secondary" /> {/* Updated skeleton colors */}
                     <HStack mt={4} spacing={4}>
-                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primaryLight" endColor="brand.primaryDark" />
-                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primaryLight" endColor="brand.primaryDark" />
-                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primaryLight" endColor="brand.primaryDark" />
+                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
+                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
+                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
                     </HStack>
                 </GridItem>
                 <GridItem>
                     <VStack align="start" spacing={6}>
-                        <SkeletonText noOfLines={1} skeletonHeight="40px" width="80%" startColor="brand.primaryLight" endColor="brand.primaryDark" />
-                        <SkeletonText noOfLines={1} skeletonHeight="30px" width="40%" startColor="brand.primaryLight" endColor="brand.primaryDark" />
-                        <SkeletonText noOfLines={6} spacing="4" startColor="brand.primaryLight" endColor="brand.primaryDark" />
-                        <Skeleton height="60px" width="100%" borderRadius="md" startColor="brand.primaryLight" endColor="brand.primaryDark" />
+                        <SkeletonText noOfLines={1} skeletonHeight="40px" width="80%" startColor="brand.primary" endColor="brand.secondary" />
+                        <SkeletonText noOfLines={1} skeletonHeight="30px" width="40%" startColor="brand.primary" endColor="brand.secondary" />
+                        <SkeletonText noOfLines={6} spacing="4" startColor="brand.primary" endColor="brand.secondary" />
+                        <Skeleton height="60px" width="100%" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
                     </VStack>
                 </GridItem>
             </Grid>
@@ -130,7 +134,7 @@ const ProductDetailPage = () => {
         <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={{ base: 6, md: 10 }}>
             <GridItem>
                 <VStack spacing={4} align="stretch" position="sticky" top="8rem">
-                    <Box bg="brand.primaryLight" borderRadius="xl" p={4} display="flex" justifyContent="center" alignItems="center" h={{ base: "300px", md: "500px" }} borderWidth="1px" borderColor="whiteAlpha.200">
+                    <Box bg="brand.primary" borderRadius="xl" p={4} display="flex" justifyContent="center" alignItems="center" h={{ base: "300px", md: "500px" }} borderWidth="1px" borderColor="whiteAlpha.200"> {/* Changed bg to brand.primary */}
                         <Image src={currentDisplayImage} alt="Main product view" maxH="100%" objectFit="contain" fallback={<Icon as={FaImage} boxSize="100px" color="whiteAlpha.400"/>} />
                     </Box>
                     <HStack spacing={3} overflowX="auto" py={2}>

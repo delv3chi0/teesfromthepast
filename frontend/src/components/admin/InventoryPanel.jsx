@@ -9,7 +9,7 @@ import {
   Image, Accordion, AccordionItem, AccordionButton, AccordionPanel, AccordionIcon,
   Wrap, WrapItem, Radio, RadioGroup, Stack, Flex
 } from '@chakra-ui/react';
-import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa'; // FaToggleOn, FaToggleOff no longer needed
+import { FaPlus, FaEdit, FaTrashAlt, FaImage, FaStar } from 'react-icons/fa';
 import { client } from '../../api/client';
 import { useAuth } from '../../context/AuthProvider';
 
@@ -31,16 +31,17 @@ const InventoryPanel = () => {
   const { token } = useAuth();
   const toast = useToast();
 
-  // --- State for Categories (only for product manager dropdown, not for separate management UI) ---
-  const [categories, setCategories] = useState([]); // This state remains for product manager dropdown
+  // --- State for Categories (REMOVED: categories state and related logic are now gone) ---
+  // const [categories, setCategories] = useState([]); // This state is no longer needed
 
   // --- State for Products ---
-  const [products, setProducts] = useState(true); // Fixed: This was accidentally 'true', should be an array.
+  const [products, setProducts] = useState([]); // FIXED: Initialize as an empty array, not 'true'
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [errorProducts, setErrorProducts] = useState('');
   const [isProductModalLoading, setIsProductModalLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
+  // REMOVED 'category' from initial productFormData state
   const [productFormData, setProductFormData] = useState({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
   const { isOpen: isProductModalOpen, onOpen: onProductModalOpen, onClose: onProductModalClose } = useDisclosure();
@@ -48,12 +49,14 @@ const InventoryPanel = () => {
 
   // --- Fetching Logic ---
 
-  // Removed fetchCategories (for categories table)
+  // Removed fetchCategories (for categories table) and fetchAllCategoriesForProductManager (for category dropdown)
+  // These functions are no longer relevant.
 
-  // Fetch Products for Product Management table
+  // Fetch Products for Product Management table (no change here, as it doesn't fetch category directly)
   const fetchProducts = useCallback(async () => {
     setLoadingProducts(true); setErrorProducts('');
     try {
+      // The backend /admin/products route now returns products WITHOUT category field.
       const { data } = await client.get('/admin/products', { headers: { Authorization: `Bearer ${token}` } });
       setProducts(data);
     } catch (err) {
@@ -63,24 +66,12 @@ const InventoryPanel = () => {
     }
   }, [token]);
 
-  // Fetch Categories for Product Manager's category dropdown
-  const fetchAllCategoriesForProductManager = useCallback(async () => {
-    if (!token) return;
-    try {
-      const { data } = await client.get('/admin/product-categories', { headers: { Authorization: `Bearer ${token}` } });
-      setCategories(data); // Populates the 'categories' state for the product manager's dropdown
-    } catch (e) {
-      toast({ title: "Error", description: "Could not load categories for product form.", status: "error" });
-    }
-  }, [token, toast]);
-
-
   useEffect(() => {
     if (token) {
       fetchProducts(); // Initial fetch for product table
-      fetchAllCategoriesForProductManager(); // Initial fetch for product manager dropdown
+      // REMOVED: fetchAllCategoriesForProductManager(); // No longer needed
     }
-  }, [token, fetchProducts, fetchAllCategoriesForProductManager]);
+  }, [token, fetchProducts]); // Removed fetchAllCategoriesForProductManager from dependencies
 
   // --- Removed all Category-specific handlers ---
 
@@ -88,9 +79,10 @@ const InventoryPanel = () => {
   const handleOpenProductModal = async (product = null) => {
     onProductModalOpen(); setIsProductModalLoading(true);
     try {
-      const activeCategories = categories.filter(c => c.isActive);
+      // REMOVED: activeCategories filtering or fetching
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
       if (product) {
+        // Fetch full product data (should NOT contain category field anymore from backend)
         const { data: fullProductData } = await client.get(`/admin/products/${product._id}`, { headers: { Authorization: `Bearer ${token}` }});
         setIsEditingProduct(true);
         setSelectedProduct(fullProductData);
@@ -100,13 +92,18 @@ const InventoryPanel = () => {
           basePrice: fullProductData.basePrice || 0,
           tags: Array.isArray(fullProductData.tags) ? fullProductData.tags.join(', ') : '',
           isActive: fullProductData.isActive,
-          variants: (fullProductData.variants || []).map(v => ({...v, imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }], sizes: v.sizes || [] }))
+          variants: (fullProductData.variants || []).map(v => ({
+            ...v,
+            imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }],
+            sizes: v.sizes || []
+          }))
         });
       } else {
         setIsEditingProduct(false); setSelectedProduct(null);
+        // REMOVED 'category' from initial productFormData state for new product
         setProductFormData({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
-    } catch (err) { toast({ title: "Error", description: "Could not load data for the product form.", status: "error" }); onProductModalClose(); }
+    } catch (err) { toast({ title: "Error", description: err.response?.data?.message || "Could not load data for the product form.", status: "error" }); onProductModalClose(); }
     finally { setIsProductModalLoading(false); }
   };
 
@@ -139,9 +136,13 @@ const InventoryPanel = () => {
     for (const variant of productFormData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
     if (productFormData.variants.length > 0 && !productFormData.variants.some(v => v.isDefaultDisplay)) { productFormData.variants[0].isDefaultDisplay = true; }
     for (const variant of productFormData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; } } }
+    
     const method = isEditingProduct ? 'put' : 'post';
     const url = isEditingProduct ? `/admin/products/${selectedProduct._id}` : '/admin/products';
+    // REMOVED 'category' from payload before sending to backend
     const payload = { ...productFormData, tags: (productFormData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
+    delete payload.category; // Ensure no category field is sent, even if it was accidentally copied.
+
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditingProduct ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onProductModalClose(); }
     catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message, status: "error" }); }
   };
@@ -161,7 +162,7 @@ const InventoryPanel = () => {
           <Heading size="md">Manage Products</Heading>
           <Button leftIcon={<Icon as={FaPlus} />} colorScheme="brandAccentOrange" onClick={() => handleOpenProductModal()}>Add New Product</Button>
         </HStack>
-        {Array.isArray(products) && products.length === 0 ? ( // Added Array.isArray check for safety
+        {Array.isArray(products) && products.length === 0 ? (
           <Text>No products found. Click "Add New Product" to start.</Text>
         ) : loadingProducts ? (
           <VStack justifyContent="center" alignItems="center" minH="200px">
@@ -187,7 +188,10 @@ const InventoryPanel = () => {
                   <Tr key={p._id}>
                     <Td fontWeight="medium">{p.name}</Td>
                     <Td>${p.basePrice?.toFixed(2)}</Td>
-                    <Td>{p.variantCount !== undefined ? p.variantCount : '-'}</Td>
+                    {/* The variantCount will likely come from a custom aggregation in backend,
+                        or you might need to compute it on the frontend if not fetched.
+                        For now, assuming it's available or can be derived. */}
+                    <Td>{p.variants ? p.variants.length : '-'}</Td> {/* Display actual variant count */}
                     <Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
                     <Td>
                       <Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" colorScheme="brandAccentYellow" onClick={() => handleOpenProductModal(p)}/></Tooltip>
@@ -240,38 +244,37 @@ const InventoryPanel = () => {
                       <VStack spacing={4} align="stretch">
                         {(productFormData.variants || []).map((variant, colorIndex) => (
                           (variant && variant.sizes) ?
-                          // Accordion also uses a brand.primary background, fitting the two-tone
                           <Accordion key={colorIndex} defaultIndex={[0]} allowToggle borderWidth="1px" borderRadius="md" bg="brand.primary">
                             <AccordionItem border="none">
                               <Flex align="center" p={2}>
                                 <Radio value={colorIndex.toString()} mr={3} colorScheme="yellow"/><Tooltip label="Set as default display for shop page"><Icon as={FaStar} color={variant.isDefaultDisplay ? "brand.accentYellow" : "brand.textMuted"} mr={2}/></Tooltip>
                                 <AccordionButton flex="1"><HStack w="full" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="brand.textMuted"/><Text fontWeight="bold" color="brand.textLight">{variant.colorName}</Text></HStack></AccordionButton><AccordionIcon /><CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
-                              <AccordionPanel bg="brand.secondary" pb={4}>
-                                <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => { const newV = [...productFormData.variants]; newV[colorIndex].podProductId = e.target.value; setProductFormData(p => ({...p, variants: newV})); }} /></FormControl>
-                                <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
-                                <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
-                                    <VStack align="stretch" spacing={2}>{variant.imageSet?.map((img, imgIndex) => (<HStack key={imgIndex}><Radio value={imgIndex.toString()} colorScheme="green"/><Input flex="1" size="sm" placeholder="https://image.url/shirt.png" value={img.url} onChange={(e) => handleImageSetUrlChange(colorIndex, imgIndex, e.target.value)} /><Image src={img.url} alt="Preview" boxSize="32px" objectFit="cover" borderRadius="sm" bg="whiteAlpha.200" fallback={<Icon as={FaImage} color="brand.textMuted" boxSize="32px" p={1}/>}/><ChakraIconButton size="sm" icon={<Icon as={FaTrashAlt}/>} onClick={() => removeImageFromSet(colorIndex, imgIndex)} isDisabled={variant.imageSet.length <= 1} /></HStack>))}</VStack>
-                                </RadioGroup>
-                                <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
-                                <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
-                                <Wrap spacing={4}>
-                                  {variant.sizes?.map((size, sizeIndex) => (
-                                    <WrapItem key={size.size}>
-                                      <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.800' : 'red.800'}>
-                                        <HStack justifyContent="space-between" w="100%">
-                                          <Text fontWeight="bold">{size.size}</Text>
-                                          <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
-                                        </HStack>
-                                        <FormControl isDisabled={!size.inStock}>
-                                          <FormLabel fontSize="xs">SKU</FormLabel>
-                                          <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} />
-                                        </FormControl>
-                                      </VStack>
-                                    </WrapItem>
-                                  ))}
-                                </Wrap>
-                              </AccordionPanel>
+                            <AccordionPanel bg="brand.secondary" pb={4}>
+                              <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => { const newV = [...productFormData.variants]; newV[colorIndex].podProductId = e.target.value; setProductFormData(p => ({...p, variants: newV})); }} /></FormControl>
+                              <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
+                              <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
+                                <VStack align="stretch" spacing={2}>{variant.imageSet?.map((img, imgIndex) => (<HStack key={imgIndex}><Radio value={imgIndex.toString()} colorScheme="green"/><Input flex="1" size="sm" placeholder="https://image.url/shirt.png" value={img.url} onChange={(e) => handleImageSetUrlChange(colorIndex, imgIndex, e.target.value)} /><Image src={img.url} alt="Preview" boxSize="32px" objectFit="cover" borderRadius="sm" bg="whiteAlpha.200" fallback={<Icon as={FaImage} color="brand.textMuted" boxSize="32px" p={1}/>}/><ChakraIconButton size="sm" icon={<Icon as={FaTrashAlt}/>} onClick={() => removeImageFromSet(colorIndex, imgIndex)} isDisabled={variant.imageSet.length <= 1} /></HStack>))}</VStack>
+                              </RadioGroup>
+                              <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
+                              <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
+                              <Wrap spacing={4}>
+                                {variant.sizes?.map((size, sizeIndex) => (
+                                  <WrapItem key={size.size}>
+                                    <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.800' : 'red.800'}>
+                                      <HStack justifyContent="space-between" w="100%">
+                                        <Text fontWeight="bold">{size.size}</Text>
+                                        <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
+                                      </HStack>
+                                      <FormControl isDisabled={!size.inStock}>
+                                        <FormLabel fontSize="xs">SKU</FormLabel>
+                                        <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} />
+                                      </FormControl>
+                                    </VStack>
+                                  </WrapItem>
+                                ))}
+                              </Wrap>
+                            </AccordionPanel>
                             </AccordionItem>
                           </Accordion>
                           : null
