@@ -18,9 +18,10 @@ import formRoutes from './routes/formRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
-import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js';
-// REMOVED: adminProductTypeRoutes is no longer needed
-import adminProductRoutes from './routes/adminProductRoutes.js';
+// REMOVED: adminProductCategoryRoutes is no longer needed
+// import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js'; // THIS LINE IS NOW REMOVED
+// REMOVED: adminProductTypeRoutes is no longer needed (already commented out or removed)
+import adminProductRoutes from './routes/adminProductRoutes.js'; // This now handles all admin product logic
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
 
 const app = express();
@@ -60,11 +61,11 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Rate limiter to protect API routes from spam/abuse
 const limiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 100, 
-	standardHeaders: true,
-	legacyHeaders: false,
-  message: 'Too many requests from this IP, please try again after 15 minutes',
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many requests from this IP, please try again after 15 minutes',
 });
 app.use('/api', limiter);
 
@@ -90,9 +91,10 @@ app.use('/api/storefront', storefrontProductRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
-app.use('/api/admin/product-categories', adminProductCategoryRoutes);
-// REMOVED: The route for product-types is no longer needed
-app.use('/api/admin/products', adminProductRoutes);
+// REMOVED: The route for product-categories is no longer needed
+// app.use('/api/admin/product-categories', adminProductCategoryRoutes); // THIS LINE IS NOW REMOVED
+// REMOVED: The route for product-types is no longer needed (already commented out or removed)
+app.use('/api/admin/products', adminProductRoutes); // This route now handles all product CRUD for admin
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
