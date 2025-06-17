@@ -31,32 +31,20 @@ const InventoryPanel = () => {
   const { token } = useAuth();
   const toast = useToast();
 
-  // --- State for Categories (REMOVED: categories state and related logic are now gone) ---
-  // const [categories, setCategories] = useState([]); // This state is no longer needed
-
-  // --- State for Products ---
-  const [products, setProducts] = useState([]); // FIXED: Initialize as an empty array, not 'true'
+  const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [errorProducts, setErrorProducts] = useState('');
   const [isProductModalLoading, setIsProductModalLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isEditingProduct, setIsEditingProduct] = useState(false);
-  // REMOVED 'category' from initial productFormData state
   const [productFormData, setProductFormData] = useState({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
   const { isOpen: isProductModalOpen, onOpen: onProductModalOpen, onClose: onProductModalClose } = useDisclosure();
   const { isOpen: isDeleteProductModalOpen, onOpen: onDeleteProductModalOpen, onClose: onDeleteProductModalClose } = useDisclosure();
 
-  // --- Fetching Logic ---
-
-  // Removed fetchCategories (for categories table) and fetchAllCategoriesForProductManager (for category dropdown)
-  // These functions are no longer relevant.
-
-  // Fetch Products for Product Management table (no change here, as it doesn't fetch category directly)
   const fetchProducts = useCallback(async () => {
     setLoadingProducts(true); setErrorProducts('');
     try {
-      // The backend /admin/products route now returns products WITHOUT category field.
       const { data } = await client.get('/admin/products', { headers: { Authorization: `Bearer ${token}` } });
       setProducts(data);
     } catch (err) {
@@ -68,21 +56,15 @@ const InventoryPanel = () => {
 
   useEffect(() => {
     if (token) {
-      fetchProducts(); // Initial fetch for product table
-      // REMOVED: fetchAllCategoriesForProductManager(); // No longer needed
+      fetchProducts();
     }
-  }, [token, fetchProducts]); // Removed fetchAllCategoriesForProductManager from dependencies
+  }, [token, fetchProducts]);
 
-  // --- Removed all Category-specific handlers ---
-
-  // --- Handlers for Products ---
   const handleOpenProductModal = async (product = null) => {
     onProductModalOpen(); setIsProductModalLoading(true);
     try {
-      // REMOVED: activeCategories filtering or fetching
       setNewColorData({ colorName: '', colorHex: '', podProductId: '' });
       if (product) {
-        // Fetch full product data (should NOT contain category field anymore from backend)
         const { data: fullProductData } = await client.get(`/admin/products/${product._id}`, { headers: { Authorization: `Bearer ${token}` }});
         setIsEditingProduct(true);
         setSelectedProduct(fullProductData);
@@ -100,7 +82,6 @@ const InventoryPanel = () => {
         });
       } else {
         setIsEditingProduct(false); setSelectedProduct(null);
-        // REMOVED 'category' from initial productFormData state for new product
         setProductFormData({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
       }
     } catch (err) { toast({ title: "Error", description: err.response?.data?.message || "Could not load data for the product form.", status: "error" }); onProductModalClose(); }
@@ -110,6 +91,13 @@ const InventoryPanel = () => {
   const handleProductFormChange = (e) => { const { name, value, type, checked } = e.target; setProductFormData(prev => ({ ...prev, [name]: type === 'checkbox' || type === 'switch' ? checked : value })); };
   const handleBasePriceChange = (valStr, valNum) => { setProductFormData(prev => ({ ...prev, basePrice: valNum || 0 })); };
   const handleNewColorFormChange = (e) => { const { name, value } = e.target; if (name === "colorName") { const sel = CORE_COLORS.find(c => c.name === value); setNewColorData(prev => ({ ...prev, colorName: value, colorHex: sel ? sel.hex : '' })); } else { setNewColorData(prev => ({ ...prev, [name]: value })); } };
+
+  // NEW HANDLER: To update properties of an existing color variant
+  const handleVariantPropertyChange = (colorIndex, field, value) => {
+    const newVariants = [...productFormData.variants];
+    newVariants[colorIndex][field] = value;
+    setProductFormData(prev => ({ ...prev, variants: newVariants }));
+  };
 
   const handleAddColorVariant = () => {
     if (!newColorData.colorName) { toast({ title: "Color Name Required", status: "warning" }); return; }
@@ -134,21 +122,32 @@ const InventoryPanel = () => {
   const handleProductSubmit = async () => {
     if (!productFormData.name.trim()) { toast({ title: "Validation Error", description: "Product Name is required.", status: "error" }); return; }
     for (const variant of productFormData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
-    if (productFormData.variants.length > 0 && !productFormData.variants.some(v => v.isDefaultDisplay)) { productFormData.variants[0].isDefaultDisplay = true; }
-    for (const variant of productFormData.variants) { if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) { if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true; } for (const size of variant.sizes) { if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; } } }
+    if (productFormData.variants.length === 0) {
+        toast({ title: "Validation Error", description: "At least one product variant (color) is required.", status: "error" }); return;
+    }
+    if (!productFormData.variants.some(v => v.isDefaultDisplay)) {
+        productFormData.variants[0].isDefaultDisplay = true;
+    }
+    for (const variant of productFormData.variants) {
+        if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) {
+            if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true;
+        }
+        for (const size of variant.sizes) {
+            if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; }
+        }
+    }
     
     const method = isEditingProduct ? 'put' : 'post';
     const url = isEditingProduct ? `/admin/products/${selectedProduct._id}` : '/admin/products';
-    // REMOVED 'category' from payload before sending to backend
     const payload = { ...productFormData, tags: (productFormData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
-    delete payload.category; // Ensure no category field is sent, even if it was accidentally copied.
+    delete payload.category;
 
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditingProduct ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onProductModalClose(); }
-    catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message, status: "error" }); }
+    catch (err) { toast({ title: `Error Saving Product`, description: err.response?.data?.message || 'An unknown error occurred.', status: "error" }); }
   };
 
   const handleOpenDeleteProductDialog = (product) => { setSelectedProduct(product); onDeleteProductModalOpen(); };
-  const handleDeleteProduct = async () => { if (!selectedProduct) return; try { await client.delete(`/admin/products/${selectedProduct._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Product Deleted", status: "success" }); fetchProducts(); onDeleteProductModalClose(); } catch (err) { toast({ title: "Delete Failed", description: err.response?.data?.message, status: "error" }); onDeleteProductModalClose(); } };
+  const handleDeleteProduct = async () => { if (!selectedProduct) return; try { await client.delete(`/admin/products/${selectedProduct._id}`, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: "Product Deleted", status: "success" }); fetchProducts(); onDeleteProductModalClose(); } catch (err) { toast({ title: "Delete Failed", description: err.response?.data?.message || 'An unknown error occurred.', status: "error" }); onDeleteProductModalClose(); } };
 
 
   return (
@@ -188,10 +187,7 @@ const InventoryPanel = () => {
                   <Tr key={p._id}>
                     <Td fontWeight="medium">{p.name}</Td>
                     <Td>${p.basePrice?.toFixed(2)}</Td>
-                    {/* The variantCount will likely come from a custom aggregation in backend,
-                        or you might need to compute it on the frontend if not fetched.
-                        For now, assuming it's available or can be derived. */}
-                    <Td>{p.variants ? p.variants.length : '-'}</Td> {/* Display actual variant count */}
+                    <Td>{p.variants ? p.variants.length : '-'}</Td>
                     <Td><Tag colorScheme={p.isActive ? 'green' : 'red'}>{p.isActive ? 'Active' : 'Inactive'}</Tag></Td>
                     <Td>
                       <Tooltip label="Edit"><ChakraIconButton icon={<Icon as={FaEdit}/>} size="xs" variant="ghost" colorScheme="brandAccentYellow" onClick={() => handleOpenProductModal(p)}/></Tooltip>
@@ -214,7 +210,6 @@ const InventoryPanel = () => {
           <ModalBody pb={6}>
             {isProductModalLoading ? <VStack justifyContent="center" minH="400px"><Spinner size="xl" /></VStack> : (
             <VStack spacing={6} align="stretch">
-                {/* Applied darkModalInnerSection layerStyle */}
                 <Box layerStyle="darkModalInnerSection" mb={6}>
                     <Heading size="sm" mb={4}>Product Details</Heading>
                     <SimpleGrid columns={{base: 1, md: 2}} spacing={4}>
@@ -237,7 +232,6 @@ const InventoryPanel = () => {
                     <FormControl display="flex" alignItems="center" mt={4}><FormLabel mb="0">Active:</FormLabel><Switch name="isActive" isChecked={productFormData.isActive} onChange={handleProductFormChange}/></FormControl>
                 </Box>
 
-                {/* Applied darkModalInnerSection layerStyle */}
                 <Box layerStyle="darkModalInnerSection">
                     <Heading size="sm" mb={4}>Product Variants</Heading>
                     <RadioGroup onChange={(val) => setDefaultVariant(parseInt(val))} value={productFormData.variants.findIndex(v => v.isDefaultDisplay)?.toString() ?? "-1"}>
@@ -251,7 +245,20 @@ const InventoryPanel = () => {
                                 <AccordionButton flex="1"><HStack w="full" spacing={4}><Box w="24px" h="24px" bg={variant.colorHex} borderRadius="full" border="1px solid" borderColor="brand.textMuted"/><Text fontWeight="bold" color="brand.textLight">{variant.colorName}</Text></HStack></AccordionButton><AccordionIcon /><CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
                             <AccordionPanel bg="brand.secondary" pb={4}>
-                              <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => { const newV = [...productFormData.variants]; newV[colorIndex].podProductId = e.target.value; setProductFormData(p => ({...p, variants: newV})); }} /></FormControl>
+                              {/* NEW: Input for Color Hex */}
+                              <FormControl mb={3}>
+                                <FormLabel fontSize="sm">Color Hex</FormLabel>
+                                <HStack>
+                                  <Input
+                                    size="sm"
+                                    value={variant.colorHex || ''}
+                                    onChange={(e) => handleVariantPropertyChange(colorIndex, 'colorHex', e.target.value)}
+                                    placeholder="#RRGGBB"
+                                  />
+                                  <Box w="24px" h="24px" bg={variant.colorHex} borderRadius="sm" border="1px solid" borderColor="brand.textMuted"/>
+                                </HStack>
+                              </FormControl>
+                              <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => handleVariantPropertyChange(colorIndex, 'podProductId', e.target.value)} /></FormControl>
                               <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
                               <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
                                 <VStack align="stretch" spacing={2}>{variant.imageSet?.map((img, imgIndex) => (<HStack key={imgIndex}><Radio value={imgIndex.toString()} colorScheme="green"/><Input flex="1" size="sm" placeholder="https://image.url/shirt.png" value={img.url} onChange={(e) => handleImageSetUrlChange(colorIndex, imgIndex, e.target.value)} /><Image src={img.url} alt="Preview" boxSize="32px" objectFit="cover" borderRadius="sm" bg="whiteAlpha.200" fallback={<Icon as={FaImage} color="brand.textMuted" boxSize="32px" p={1}/>}/><ChakraIconButton size="sm" icon={<Icon as={FaTrashAlt}/>} onClick={() => removeImageFromSet(colorIndex, imgIndex)} isDisabled={variant.imageSet.length <= 1} /></HStack>))}</VStack>
@@ -281,7 +288,6 @@ const InventoryPanel = () => {
                         ))}
                       </VStack>
                     </RadioGroup>
-                    {/* Applied darkModalInnerSection layerStyle */}
                     <Box layerStyle="darkModalInnerSection" mt={6}>
                         <Heading size="xs" mb={3}>Add New Color Variant</Heading>
                         <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3}>
