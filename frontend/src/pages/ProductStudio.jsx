@@ -20,25 +20,11 @@ const ThemedSelect = (props) => (
         size="lg"
         bg="brand.secondary" // Dark background for select field
         borderColor="whiteAlpha.300"
-        color="brand.textLight" // Default text color in the field
-        _placeholder={{ color: "brand.textMuted" }} // Muted light placeholder
+        // Removed `color` and `_placeholder` here; let index.css handle the !important overrides
+        // _hover and focusBorderColor remain as they define border styles
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
-        sx={{
-            option: { // Style for options within the dropdown
-                bg: 'brand.secondary', // Option background also dark
-                color: 'brand.textLight', // Option text light
-            },
-            // CRITICAL FIX: Ensure the selected value's text is light.
-            // Using !important as a last resort due to potential Chakra/browser specificity conflicts.
-            '.chakra-select__field': {
-                color: 'brand.textLight !important',
-            },
-            // Style for the dropdown arrow
-            '.chakra-select__icon': {
-                color: 'brand.textLight',
-            },
-        }}
+        // Removed sx prop here, as index.css will handle the critical text color override
         {...props}
     />
 );
@@ -49,9 +35,8 @@ const ThemedControlInput = (props) => (
         size="sm"
         bg="brand.secondary"
         borderColor="whiteAlpha.300"
-        color="brand.textLight"
-        _placeholder={{ color: "brand.textMuted" }}
-        _hover={{ borderColor: "whiteAlpha.400" }}
+        // color and _placeholder will be handled by index.css override for .chakra-input__field
+        _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
         {...props}
     />
@@ -80,8 +65,6 @@ export default function ProductStudio() {
     const [textColor, setTextColor] = useState('#FDF6EE'); // Default to brand.textLight
     const [fontSize, setFontSize] = useState(30);
     const [fontFamily, setFontFamily] = useState('Montserrat'); // Default body font
-    // Removed shapeFillColor state as shapes are removed
-    // const [shapeFillColor, setShapeFillColor] = useState('#D16930');
 
     // Derived states based on selections
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -104,29 +87,44 @@ export default function ProductStudio() {
         // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
             // Set canvas dimensions using an appropriate multiplier or fixed size for better quality
-            // For example, 600x600 for display, might be multiplied for print.
+            const canvasWidth = 600; // Define a consistent internal canvas resolution
+            const canvasHeight = 600;
+
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
-                width: 600, // Larger canvas for better working space
-                height: 600, // Maintain aspect ratio
+                width: canvasWidth,
+                height: canvasHeight,
                 backgroundColor: 'rgba(0,0,0,0)', // Transparent canvas background
+                selection: true, // Ensure canvas selection is enabled
             });
 
             // Event listeners for object selection (to track active object for tool controls)
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
+
+            // Add a global keydown listener for delete key
+            const handleKeyDown = (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    // Prevent deleting text inside text input fields
+                    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+                        return;
+                    }
+                    deleteSelectedObject(); // Use the existing delete function
+                }
+            };
+            document.addEventListener('keydown', handleKeyDown);
+
         }
 
         // Cleanup function for Fabric.js
         return () => {
             if (fabricCanvas.current) {
-                // Remove all event listeners first
                 fabricCanvas.current.off('selection:created');
                 fabricCanvas.current.off('selection:updated');
                 fabricCanvas.current.off('selection:cleared');
-                // Dispose the canvas to prevent memory leaks
                 fabricCanvas.current.dispose();
                 fabricCanvas.current = null;
+                document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
             }
         };
     }, []); // Empty dependency array means this runs once on mount
@@ -135,11 +133,9 @@ export default function ProductStudio() {
     // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas || !window.fabric) return; // Ensure Fabric is loaded
+        if (!FCanvas || !window.fabric) return;
 
-        // Function to update background image based on selected mockup type and variant
         const updateCanvasBackground = (fabricInstance) => {
-            // Define fallback logic for image selection
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
             const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_'));
             const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
@@ -150,26 +146,23 @@ export default function ProductStudio() {
                 mockupSrc = teeMockupImage.url;
             } else if (currentMockupType === 'man' && manMockupImage) {
                 mockupSrc = manMockupImage.url;
-            } else if (primaryImageFound) { // Fallback to primary if preferred type not found
+            } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
-            } else if (firstAvailableImage) { // Ultimate fallback
+            } else if (firstAvailableImage) {
                 mockupSrc = firstAvailableImage.url;
             }
 
             if (mockupSrc) {
                 fabricInstance.Image.fromURL(mockupSrc, (img) => {
-                    // FIX: Ensure man_ image maintains aspect ratio and centers
                     FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
                         scaleX: FCanvas.width / img.width,
                         scaleY: FCanvas.height / img.height,
                         crossOrigin: 'anonymous',
                         selectable: false,
                         evented: false,
-                        // --- FIX FOR STRETCHED IMAGE ---
-                        alignX: 'center', // Center horizontally
-                        alignY: 'center', // Center vertically
-                        meetOrSlice: 'meet' // Scale down to fit without stretching
-                        // --- END FIX ---
+                        alignX: 'center',
+                        alignY: 'center',
+                        meetOrSlice: 'meet'
                     });
                 }, { crossOrigin: 'anonymous' });
             } else {
@@ -182,17 +175,15 @@ export default function ProductStudio() {
                 updateCanvasBackground(window.fabric);
 
                 // Handle selected design (add or update)
-                // Remove previous design images to ensure only current selected design is present
                 FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
                 
                 if (selectedDesign?.imageDataUrl) {
-                    // Check if the selected design is already on canvas, add it if not
                     const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
-                    if (!existingDesignObject) { // Only add if not already there
+                    if (!existingDesignObject) {
                         window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                             if (!img) return;
-                            img.id = `design-${selectedDesign._id}`; // Assign an ID for easy identification
-                            img.scaleToWidth(FCanvas.width * 0.33); // Scale relative to new canvas size
+                            img.id = `design-${selectedDesign._id}`;
+                            img.scaleToWidth(FCanvas.width * 0.33);
                             img.set({
                                 top: FCanvas.height * 0.24,
                                 left: (FCanvas.width - img.getScaledWidth()) / 2,
@@ -203,14 +194,13 @@ export default function ProductStudio() {
                             });
                             FCanvas.add(img);
                             FCanvas.renderAll();
-                            FCanvas.setActiveObject(img); // Make the new design active
+                            FCanvas.setActiveObject(img);
                         }, { crossOrigin: 'anonymous' });
                     } else {
-                        FCanvas.setActiveObject(existingDesignObject); // If already on canvas, just make it active
+                        FCanvas.setActiveObject(existingDesignObject);
                         FCanvas.renderAll();
                     }
                 } else {
-                    // If no design is selected, ensure no design image is on canvas
                     FCanvas.renderAll();
                 }
 
@@ -281,11 +271,16 @@ export default function ProductStudio() {
 
     // Function to update properties of the active object (text/shape color/font/etc.)
     const updateActiveObject = useCallback((property, value) => {
-        if (fabricCanvas.current && activeObjectRef.current) {
-            activeObjectRef.current.set(property, value);
-            fabricCanvas.current.renderAll();
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                activeObject.set(property, value);
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
+            }
         }
-    }, []);
+    }, [toast]);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -293,7 +288,7 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
-            left: (fabricCanvas.current.width / 2) - 100, // Center text roughly
+            left: (fabricCanvas.current.width / 2) - 100,
             top: (fabricCanvas.current.height / 2) - 20,
             fill: textColor,
             fontSize: fontSize,
@@ -302,56 +297,53 @@ export default function ProductStudio() {
             cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
         });
         fabricCanvas.current.add(textObject);
-        fabricCanvas.current.setActiveObject(textObject); // Make it active immediately
+        fabricCanvas.current.setActiveObject(textObject);
         fabricCanvas.current.renderAll();
-        setTextInputValue(''); // Clear input after adding
-    }, [textInputValue, textColor, fontSize, fontFamily]);
-
-    // Removed addShapeToCanvas and shapeFillColor state
+        setTextInputValue('');
+    }, [textInputValue, textColor, fontSize, fontFamily, toast]); // Added toast to deps
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
-            // Keep background image, remove all other objects (designs, text, shapes)
-            fabricCanvas.current.getObjects().filter(obj => !obj.isType('Image') || obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => fabricCanvas.current.remove(obj));
+            fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage).forEach(obj => fabricCanvas.current.remove(obj));
             fabricCanvas.current.renderAll();
-            setSelectedDesign(null); // Deselect any chosen design
+            setSelectedDesign(null);
         }
     }, []);
 
     // Function to delete the currently selected Fabric.js object
     const deleteSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject(); // Get the currently active object
+            const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
                 fabricCanvas.current.remove(activeObject);
-                fabricCanvas.current.discardActiveObject(); // Clear selection
+                fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
-                activeObjectRef.current = null; // Clear ref
-                // If the deleted object was the selected AI design, deselect it
+                activeObjectRef.current = null;
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
                     setSelectedDesign(null);
                 }
             } else {
-                toast({ title: "No object selected", description: "Select an object on the canvas to delete it.", status: "info", isClosable: true });
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
             }
         }
     }, [selectedDesign, toast]);
 
     // Function to center the currently selected Fabric.js object
     const centerSelectedObject = useCallback(() => {
-        if (fabricCanvas.current && activeObjectRef.current) {
-            activeObjectRef.current.centerH(); // Center horizontally
-            activeObjectRef.current.centerV(); // Center vertically
-            fabricCanvas.current.renderAll();
-        } else {
-            toast({ title: "No object selected", description: "Select an object on the canvas to center it.", status: "info", isClosable: true });
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                activeObject.centerH();
+                activeObject.centerV();
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
+            }
         }
     }, [toast]);
 
 
     const handleProceedToCheckout = useCallback(() => {
-        // Check if there are ANY objects on the canvas beyond the background
-        // The background image itself is an object, so we filter it out.
         const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type !== 'image' || (obj.id && obj.id.startsWith('design-')));
 
         if (!hasCustomizations) {
@@ -360,59 +352,51 @@ export default function ProductStudio() {
         }
         if (!finalVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
         
-        // --- Generate Final Combined Image (Preview for Checkout/Order) ---
-        // This generates a PNG of the entire canvas (mockup + all objects)
         const finalPreviewImage = fabricCanvas.current.toDataURL({
             format: 'png',
             quality: 1.0,
-            multiplier: 1, // You might increase this multiplier (e.g., 2 or 3) for a higher-res preview image
+            multiplier: 1,
         });
 
-        // --- Generate Print-Ready Design (JUST the design/text/shapes, transparent background) ---
-        // Create a temporary off-screen canvas just for the print-ready image
         const printReadyCanvas = new window.fabric.Canvas(null, {
-            width: 1200, // Example: Target print dimensions (e.g., 300 DPI for a 4x4 inch design area)
+            width: 1200,
             height: 1200,
-            backgroundColor: 'rgba(0,0,0,0)', // Crucial for transparent background
+            backgroundColor: 'rgba(0,0,0,0)',
         });
 
-        // Clone and add only the customizable objects to the print-ready canvas
         fabricCanvas.current.getObjects().filter(obj => 
             obj.type === 'i-text' || obj.id?.startsWith('design-')
-        ).forEach(obj => { // Filter for 'i-text' and 'design-' images only
+        ).forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
-            // Position/scale for print-ready file might differ from display preview.
-            // For simplicity, we'll center and scale it to fit the print canvas if possible.
-            if (clonedObj.scaleToWidth) clonedObj.scaleToWidth(printReadyCanvas.width * 0.8); // Scale to 80% of print canvas
-            // if (clonedObj.scaleToHeight) clonedObj.scaleToHeight(printReadyCanvas.height * 0.8); // Scale to 80% of print canvas
+            if (clonedObj.scaleToWidth) clonedObj.scaleToWidth(printReadyCanvas.width * 0.8);
 
             clonedObj.set({
                 left: (printReadyCanvas.width - clonedObj.getScaledWidth()) / 2,
                 top: (printReadyCanvas.height - clonedObj.getScaledHeight()) / 2,
-                hasControls: false, hasBorders: false, // Don't need controls on print file
+                hasControls: false, hasBorders: false,
             });
             printReadyCanvas.add(clonedObj);
         });
         printReadyCanvas.renderAll();
         const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
-            format: 'png', // PNG for transparency
+            format: 'png',
             quality: 1.0,
-            multiplier: 1, // This multiplier determines DPI. PODs often require 300 DPI.
+            multiplier: 1,
         });
-        printReadyCanvas.dispose(); // Clean up temporary canvas
+        printReadyCanvas.dispose();
 
         const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
         const checkoutItem = {
-            designId: selectedDesign?._2id || 'custom-design-' + Date.now(), // Unique ID for custom work
+            designId: selectedDesign?._id || 'custom-design-' + Date.now(),
             productId: selectedProductId,
             productName: selectedProduct.name,
             variantSku: finalVariant.sku,
             size: finalVariant.size,
             color: finalVariant.colorName,
             prompt: selectedDesign?.prompt || "Customized design",
-            imageDataUrl: finalPreviewImage, // This is the combined preview for display in checkout/order
-            printReadyDataUrl: printReadyDesignDataUrl, // NEW: The high-res, transparent design for POD
-            productImage: primaryImage?.url, // Original product image for context
+            imageDataUrl: finalPreviewImage,
+            printReadyDataUrl: printReadyDesignDataUrl,
+            productImage: primaryImage?.url,
             unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
@@ -423,9 +407,9 @@ export default function ProductStudio() {
     const handleProductChange = (e) => {
         const newProductId = e.target.value;
         setSelectedProductId(newProductId);
-        setSelectedColorName(''); // Reset color and size when product changes
+        setSelectedColorName('');
         setSelectedSize('');
-        clearCanvas(); // Clear canvas when product changes
+        clearCanvas();
 
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
@@ -440,8 +424,7 @@ export default function ProductStudio() {
     const handleColorChange = (e) => {
         const newColor = e.target.value;
         setSelectedColorName(newColor);
-        setSelectedSize(''); // Reset size when color changes
-        // No clearCanvas here, as color change implies working on same product design
+        setSelectedSize('');
 
         const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
         if (newColorVariant?.sizes?.length > 0) {
@@ -613,12 +596,7 @@ export default function ProductStudio() {
                                     value={fontFamily}
                                     onChange={(e) => { setFontFamily(e.target.value); updateActiveObject('fontFamily', e.target.value); }}
                                     size="md"
-                                    sx={{
-                                        option: {
-                                            bg: 'brand.secondary',
-                                            color: 'brand.textLight',
-                                        },
-                                    }}
+                                    // Removed sx prop as theme.js and index.css handle it now
                                 >
                                     <option value="Bungee">Bungee (Heading)</option>
                                     <option value="Montserrat">Montserrat (Body)</option>

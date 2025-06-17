@@ -1,6 +1,8 @@
+/* frontend/src/index.css */
+
 #root {
   /* Removed max-width and margin: auto in previous step */
-  /* REMOVED: padding: 2rem; */ /* <--- REMOVED THIS LINE */
+  /* REMOVED: padding: 2rem; */ /* <--- This line was already removed based on your comment */
   text-align: center; /* Keep if desired, doesn't affect width */
 }
 
@@ -14,7 +16,7 @@
   filter: drop-shadow(0 0 2em #646cffaa);
 }
 .logo.react:hover {
-  filter: drop_shadow(0 0 2em #61dafbaa);
+  filter: drop-shadow(0 0 2em #61dafbaa); /* Corrected typo: drop_shadow to drop-shadow */
 }
 
 @keyframes logo-spin {
@@ -113,3 +115,33 @@
     filter: none !important; /* Disable any brightness filter */
 }
 /* --- END: ABSOLUTE FINAL SOLUTION FOR MY ORDERS ITEM TEXT & FILTER --- */
+
+
+/* --- START: ABSOLUTE FINAL SOLUTION FOR SELECT/INPUT TEXT COLOR IN DARK THEME --- */
+/* This is the aggressive override for ProductStudio dropdown text and input fields */
+/* Targets the visible field of the Select component */
+.chakra-select__field:not([disabled]) {
+  color: var(--chakra-colors-brand-textLight) !important;
+}
+
+/* Targets the individual option elements within the dropdown list */
+.chakra-select__option {
+  background-color: var(--chakra-colors-brand-secondary) !important; /* Background for list options */
+  color: var(--chakra-colors-brand-textLight) !important; /* Text color for list options */
+}
+
+/* Style for the hovered/focused option in the dropdown list */
+.chakra-select__option[data-focus],
+.chakra-select__option[data-selected] {
+  background-color: var(--chakra-colors-brand-primary) !important; /* Darker background on hover/selection */
+  color: var(--chakra-colors-brand-accentYellow) !important; /* Highlight text color on hover/selection */
+}
+
+/* Targets the general Chakra Input fields (used by ThemedControlInput) */
+.chakra-input__field {
+    color: var(--chakra-colors-brand-textLight) !important;
+}
+.chakra-input__field::placeholder {
+    color: var(--chakra-colors-brand-textMuted) !important;
+}
+/* --- END: ABSOLUTE FINAL SOLUTION FOR SELECT/INPUT TEXT COLOR IN DARK THEME --- */
