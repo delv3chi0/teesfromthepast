@@ -4,7 +4,9 @@ import {
     AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink,
     Flex, Tooltip, AspectRatio, Input, InputGroup, InputRightElement, IconButton, RadioGroup, Stack,
     Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverCloseButton, PopoverHeader, PopoverBody,
-    Slider, SliderTrack, SliderFilledTrack, SliderThumb
+    Slider, SliderTrack, SliderFilledTrack, SliderThumb,
+    NumberInput, NumberInputField, NumberInputStepper,
+    NumberIncrementStepper, NumberDecrementStepper
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
