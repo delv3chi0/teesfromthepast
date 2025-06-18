@@ -1,5 +1,3 @@
-// frontend/src/pages/ProductStudio.jsx
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
@@ -55,8 +53,8 @@ export default function ProductStudio() {
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
-    // REMOVED 'currentMockupType' state as 'man_' preview is removed
-    // const [currentMockupType, setCurrentMockupType] = useState('tee');
+    // REMOVED 'man_' mockup option. Default to 'tee'
+    const [currentMockupType, setCurrentMockupType] = useState('tee'); // Only 'tee' is supported now
 
     // States for customization tools (Text only)
     const [textInputValue, setTextInputValue] = useState('');
@@ -78,7 +76,7 @@ export default function ProductStudio() {
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null);
+    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
 
     // Canvas Initialization (runs once on mount)
     useEffect(() => {
@@ -90,17 +88,19 @@ export default function ProductStudio() {
                 width: canvasWidth,
                 height: canvasHeight,
                 backgroundColor: 'rgba(0,0,0,0)',
-                selection: true,
+                selection: true, // Ensure canvas selection is enabled
             });
 
+            // Event listeners for object selection
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
 
+            // Global keydown listener for delete key (uses deleteSelectedObject callback)
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-                        return;
+                        return; // Don't delete if user is typing in an input
                     }
                     deleteSelectedObject();
                 }
@@ -108,6 +108,7 @@ export default function ProductStudio() {
             document.addEventListener('keydown', handleKeyDown);
         }
 
+        // Cleanup function for Fabric.js
         return () => {
             if (fabricCanvas.current) {
                 fabricCanvas.current.off('selection:created');
@@ -115,10 +116,10 @@ export default function ProductStudio() {
                 fabricCanvas.current.off('selection:cleared');
                 fabricCanvas.current.dispose();
                 fabricCanvas.current = null;
-                document.removeEventListener('keydown', handleKeyDown);
+                document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
             }
         };
-    }, [deleteSelectedObject]);
+    }, [deleteSelectedObject]); // Added deleteSelectedObject to dependencies for reliable cleanup
 
 
     // Canvas Content Update (mockup and design)
@@ -127,18 +128,21 @@ export default function ProductStudio() {
         if (!FCanvas || !window.fabric) return;
 
         const updateCanvasBackground = (fabricInstance) => {
-            // REMOVED 'manMockupImage' and 'currentMockupType' logic
+            // Define mockup image sources
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
+            const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_')); // Still defined for completeness, but not used in current logic
             const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
             const firstAvailableImage = finalVariant?.imageSet?.[0];
 
             let mockupSrc = '';
-            // Always prioritize tee_ image, then primary, then first available
-            if (teeMockupImage) {
+            // Only 'tee' mockup type is supported by the toggle. Prioritize tee_ image, then primary, then first available.
+            if (teeMockupImage) { // Always try to use tee_ image first
                 mockupSrc = teeMockupImage.url;
-            } else if (primaryImageFound) {
+            } else if (primaryImageFound) { // Fallback if no tee_ specific image
                 mockupSrc = primaryImageFound.url;
-            } else if (firstAvailableImage) {
+            } else if (manMockupImage) { // Fallback to man_ if tee_ and primary not available
+                mockupSrc = manMockupImage.url;
+            } else if (firstAvailableImage) { // Ultimate fallback
                 mockupSrc = firstAvailableImage.url;
             }
 
@@ -164,6 +168,7 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
+                // Add or update selected design
                 FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
                 
                 if (selectedDesign?.imageDataUrl) {
@@ -202,7 +207,7 @@ export default function ProductStudio() {
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, selectedDesign]); // Removed currentMockupType from dependencies
+    }, [finalVariant, selectedDesign]); // Removed currentMockupType from dependencies because toggle logic is gone from display
 
 
     // Fetch products and initialize selections from URL params
@@ -266,8 +271,7 @@ export default function ProductStudio() {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
-                // Ensure text-specific properties are only applied to text objects
-                if (activeObject.type === 'i-text' || activeObject.type === 'text') { // 'text' for non-editable text (if any)
+                if (activeObject.type === 'i-text' || activeObject.type === 'text') {
                      activeObject.set(property, value);
                      fabricCanvas.current.renderAll();
                 } else {
@@ -302,11 +306,10 @@ export default function ProductStudio() {
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
-            // Remove all objects that are NOT the background image
             fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage).forEach(obj => fabricCanvas.current.remove(obj));
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
-            activeObjectRef.current = null; // Clear active object ref
+            activeObjectRef.current = null;
         }
     }, []);
 
@@ -601,8 +604,7 @@ export default function ProductStudio() {
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
                                     <Button size="sm" colorScheme={currentMockupType === 'tee' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('tee')}>Blank Tee</Button>
-                                    {/* Removed 'On Model' button */}
-                                    {/* <Button size="sm" colorScheme={currentMockupType === 'man' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('man')} isDisabled={!finalVariant || !finalVariant.imageSet?.some(img => img.url.includes('man_'))}>On Model</Button> */}
+                                    {/* Removed 'On Model' button, as man_ is fully removed from logic */}
                                 </Stack>
                             </RadioGroup>
 
