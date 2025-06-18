@@ -119,34 +119,34 @@ export default function ProductStudio() {
     }, [deleteSelectedObject]);
 
 
-    // Canvas Content Update (mockup and design) - RESTRUCTURED
-    // This effect now depends on finalVariant and selectedDesign.
-    // It will trigger updates when these critical pieces of data change.
+    // Canvas Content Update (mockup and design) - RESTRUCTURED FOR RELIABILITY
+    // This effect now directly handles setting background and design
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas || !window.fabric) return; // Ensure Fabric is loaded
+        if (!FCanvas || !window.fabric) return;
 
-        // Determine the mockup source (simplified as man_ is removed from toggle)
-        const getMockupSrc = () => {
-            const imageSet = finalVariant?.imageSet;
-            const teeMockupImage = imageSet ? imageSet.find(img => img.url.includes('tee_') && !img.url.includes('man_')) : null;
-            const primaryImageFound = imageSet ? imageSet.find(img => img.isPrimary === true) : null;
-            const manMockupImage = imageSet ? imageSet.find(img => img.url.includes('man_')) : null; // Keep for ultimate fallback
-            const firstAvailableImage = imageSet ? imageSet[0] : null;
+        // --- Start Mockup Image Selection Logic ---
+        // These variables are now declared directly in this effect's scope.
+        // Their initialization is always explicit.
+        let mockupSrc = '';
+        const imageSet = finalVariant?.imageSet; // Get imageSet once to avoid repeated optional chaining
 
-            if (teeMockupImage) {
-                return teeMockupImage.url;
-            } else if (primaryImageFound) {
-                return primaryImageFound.url;
-            } else if (manMockupImage) { // Fallback if no tee_ and primary
-                return manMockupImage.url;
-            } else if (firstAvailableImage) { // Ultimate fallback
-                return firstAvailableImage.url;
-            }
-            return null; // No suitable mockup found
-        };
+        const teeMockupImage = imageSet ? imageSet.find(img => img.url.includes('tee_') && !img.url.includes('man_')) : null;
+        const primaryImageFound = imageSet ? imageSet.find(img => img.isPrimary === true) : null;
+        const manMockupImage = imageSet ? imageSet.find(img => img.url.includes('man_')) : null;
+        const firstAvailableImage = imageSet ? imageSet[0] : null;
 
-        const mockupSrc = getMockupSrc();
+        // Prioritize: tee_ -> primary -> man_ (for fallback if re-enabled) -> first available
+        if (teeMockupImage) {
+            mockupSrc = teeMockupImage.url;
+        } else if (primaryImageFound) {
+            mockupSrc = primaryImageFound.url;
+        } else if (manMockupImage) { // Fallback to man_ if tee_ and primary not available
+            mockupSrc = manMockupImage.url;
+        } else if (firstAvailableImage) {
+            mockupSrc = firstAvailableImage.url;
+        }
+        // --- End Mockup Image Selection Logic ---
 
         // Set Background Image
         if (mockupSrc) {
@@ -167,7 +167,6 @@ export default function ProductStudio() {
         }
 
         // Handle selected design (add or update)
-        // Remove previous design images to ensure only current selected design is present
         FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
         
         if (selectedDesign?.imageDataUrl) {
@@ -187,20 +186,21 @@ export default function ProductStudio() {
                         selectable: true,
                     });
                     FCanvas.add(img);
-                    img.sendToBack(); // Ensure design image is behind text objects
+                    img.sendToBack();
                     FCanvas.renderAll();
                     FCanvas.setActiveObject(img);
                 }, { crossOrigin: 'anonymous' });
             } else {
                 FCanvas.setActiveObject(existingDesignObject);
-                existingDesignObject.sendToBack(); // Ensure it's sent to back if already there
+                existingDesignObject.sendToBack();
                 FCanvas.renderAll();
             }
         } else {
             FCanvas.renderAll();
         }
 
-    }, [finalVariant, selectedDesign]); // Removed currentMockupType from dependencies, as it's no longer toggled
+    }, [finalVariant, selectedDesign]); // currentMockupType dependency removed as it's not used in this fixed logic
+
 
     // Fetch products and initialize selections from URL params
     useEffect(() => {
