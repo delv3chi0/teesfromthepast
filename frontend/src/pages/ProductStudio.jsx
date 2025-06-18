@@ -440,7 +440,7 @@ export default function ProductStudio() {
                 <VStack spacing={6} align="stretch">
                     <Heading as="h2" size="xl" color="brand.textLight"><Icon as={FaPalette} mr={3} verticalAlign="middle"/>2. Choose Your Saved Design</Heading>
                     {loadingDesigns ? <Spinner size="xl" color="brand.accentYellow"/> : !designs.length ? (
-                        <Text color="brand.textLight" fontSize="lg">You have no saved designs. <ChakraLink as={RouterLink} to="/generate" color="brand.accentYellow" fontWeight="bold">Generate one now!</ChraLink></Text>
+                        <Text color="brand.textLight" fontSize="lg">You have no saved designs. <ChakraLink as={RouterLink} to="/generate" color="brand.accentYellow" fontWeight="bold">Generate one now!</ChrakraLink></Text>
                     ) : (
                         <SimpleGrid columns={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing={4}>
                             {designs.map(design => (
