@@ -55,13 +55,11 @@ export default function ProductStudio() {
     const [selectedDesign, setSelectedDesign] = useState(null);
     const [currentMockupType, setCurrentMockupType] = useState('tee'); // Only 'tee' is supported now
 
-    // States for customization tools (Text only)
     const [textInputValue, setTextInputValue] = useState('');
     const [textColor, setTextColor] = useState('#FDF6EE');
     const [fontSize, setFontSize] = useState(30);
     const [fontFamily, setFontFamily] = useState('Montserrat');
 
-    // Derived states based on selections
     const selectedProduct = products.find(p => p._id === selectedProductId);
     const uniqueColorVariants = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
     const selectedColorVariant = selectedProduct?.variants.find(v => v.colorName === selectedColorName);
@@ -72,7 +70,6 @@ export default function ProductStudio() {
         ? { ...selectedColorVariant, ...selectedSizeVariant }
         : null;
 
-    // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
     const activeObjectRef = useRef(null);
@@ -87,7 +84,7 @@ export default function ProductStudio() {
                 width: canvasWidth,
                 height: canvasHeight,
                 backgroundColor: 'rgba(0,0,0,0)',
-                selection: true, // Ensure canvas selection is enabled
+                selection: true,
             });
 
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
@@ -123,29 +120,28 @@ export default function ProductStudio() {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas || !window.fabric) return;
 
+        // FIX FOR 'ReferenceError: Cannot access 'variable' before initialization'
+        // This structure ensures all variables are defined and assigned before any access.
         const updateCanvasBackground = (fabricInstance) => {
-            const imageSet = finalVariant?.imageSet; // Get imageSet once to avoid repeated optional chaining
-
-            // FIX for ReferenceError: Explicitly assign to null if not found
-            // This ensures the variables are always initialized before being accessed.
+            let mockupSrc = '';
+            // Get all possible image sources with explicit null fallbacks
+            const imageSet = finalVariant?.imageSet;
             const teeMockupImage = imageSet ? imageSet.find(img => img.url.includes('tee_') && !img.url.includes('man_')) : null;
-            const manMockupImage = imageSet ? imageSet.find(img => img.url.includes('man_')) : null; // Kept for robustness, but not used in final logic
             const primaryImageFound = imageSet ? imageSet.find(img => img.isPrimary === true) : null;
+            const manMockupImage = imageSet ? imageSet.find(img => img.url.includes('man_')) : null; // Still grab it, for fallback clarity
             const firstAvailableImage = imageSet ? imageSet[0] : null;
 
-            let mockupSrc = '';
-            
-            // Prioritize 'tee_' image if available
-            if (teeMockupImage && currentMockupType === 'tee') { // Use currentMockupType if you decide to re-add toggle
+            // Prioritize: tee_ -> primary -> man_ (for fallback if re-enabled) -> first available
+            if (teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
-            } else if (primaryImageFound) { // Fallback to primary if tee_ not available or preferred
+            } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
-            } else if (manMockupImage) { // Fallback to man_ if tee_ and primary not available
+            } else if (manMockupImage) { // This branch is only a fallback now, not part of toggle
                 mockupSrc = manMockupImage.url;
-            } else if (firstAvailableImage) { // Ultimate fallback
+            } else if (firstAvailableImage) {
                 mockupSrc = firstAvailableImage.url;
             }
-
+            
             if (mockupSrc) {
                 fabricInstance.Image.fromURL(mockupSrc, (img) => {
                     FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
@@ -156,7 +152,7 @@ export default function ProductStudio() {
                         evented: false,
                         alignX: 'center',
                         alignY: 'center',
-                        meetOrSlice: 'meet' // Ensure aspect ratio is maintained
+                        meetOrSlice: 'meet'
                     });
                 }, { crossOrigin: 'anonymous' });
             } else {
@@ -187,13 +183,13 @@ export default function ProductStudio() {
                                 selectable: true,
                             });
                             FCanvas.add(img);
-                            img.sendToBack(); // Ensure design image is behind text objects
+                            img.sendToBack();
                             FCanvas.renderAll();
                             FCanvas.setActiveObject(img);
                         }, { crossOrigin: 'anonymous' });
                     } else {
                         FCanvas.setActiveObject(existingDesignObject);
-                        existingDesignObject.sendToBack(); // Ensure it's sent to back if already there
+                        existingDesignObject.sendToBack();
                         FCanvas.renderAll();
                     }
                 } else {
@@ -206,7 +202,7 @@ export default function ProductStudio() {
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, selectedDesign, currentMockupType]); // Added currentMockupType to dependencies
+    }, [finalVariant, selectedDesign]);
 
 
     // Fetch products and initialize selections from URL params
@@ -371,7 +367,6 @@ export default function ProductStudio() {
     const toggleObjectSelection = useCallback((direction) => {
         if (!fabricCanvas.current) return;
 
-        // Filter out background image and non-selectable objects
         const objects = fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage && obj.selectable);
         if (objects.length === 0) {
             toast({ title: "No selectable objects", description: "No designs or text elements to toggle.", status: "info", isClosable: true });
@@ -602,7 +597,7 @@ export default function ProductStudio() {
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
                                     <Button size="sm" colorScheme={currentMockupType === 'tee' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('tee')}>Blank Tee</Button>
-                                    {/* Removed 'On Model' button from UI as man_ is fully removed from current logic */}
+                                    {/* Removed 'On Model' button */}
                                 </Stack>
                             </RadioGroup>
 
