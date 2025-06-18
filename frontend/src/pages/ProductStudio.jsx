@@ -53,8 +53,7 @@ export default function ProductStudio() {
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
-    // REMOVED 'man_' mockup option from state. Only 'tee' is supported now.
-    const [currentMockupType, setCurrentMockupType] = useState('tee');
+    const [currentMockupType, setCurrentMockupType] = useState('tee'); // Only 'tee' is supported now
 
     // States for customization tools (Text only)
     const [textInputValue, setTextInputValue] = useState('');
@@ -125,31 +124,26 @@ export default function ProductStudio() {
         if (!FCanvas || !window.fabric) return;
 
         const updateCanvasBackground = (fabricInstance) => {
-            // FIX FOR 'xe' / 'ie' error: Consolidate mockupSrc determination for explicit flow
+            const imageSet = finalVariant?.imageSet; // Get imageSet once to avoid repeated optional chaining
+
+            // FIX for ReferenceError: Explicitly assign to null if not found
+            // This ensures the variables are always initialized before being accessed.
+            const teeMockupImage = imageSet ? imageSet.find(img => img.url.includes('tee_') && !img.url.includes('man_')) : null;
+            const manMockupImage = imageSet ? imageSet.find(img => img.url.includes('man_')) : null; // Kept for robustness, but not used in final logic
+            const primaryImageFound = imageSet ? imageSet.find(img => img.isPrimary === true) : null;
+            const firstAvailableImage = imageSet ? imageSet[0] : null;
+
             let mockupSrc = '';
             
             // Prioritize 'tee_' image if available
-            const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
-            if (teeMockupImage) {
+            if (teeMockupImage && currentMockupType === 'tee') { // Use currentMockupType if you decide to re-add toggle
                 mockupSrc = teeMockupImage.url;
-            } else {
-                // Fallback to primary image
-                const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
-                if (primaryImageFound) {
-                    mockupSrc = primaryImageFound.url;
-                } else {
-                    // Fallback to man_ image if tee_ and primary not available
-                    const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_'));
-                    if (manMockupImage) {
-                        mockupSrc = manMockupImage.url;
-                    } else {
-                        // Ultimate fallback to the very first image in the set
-                        const firstAvailableImage = finalVariant?.imageSet?.[0];
-                        if (firstAvailableImage) {
-                            mockupSrc = firstAvailableImage.url;
-                        }
-                    }
-                }
+            } else if (primaryImageFound) { // Fallback to primary if tee_ not available or preferred
+                mockupSrc = primaryImageFound.url;
+            } else if (manMockupImage) { // Fallback to man_ if tee_ and primary not available
+                mockupSrc = manMockupImage.url;
+            } else if (firstAvailableImage) { // Ultimate fallback
+                mockupSrc = firstAvailableImage.url;
             }
 
             if (mockupSrc) {
@@ -212,7 +206,7 @@ export default function ProductStudio() {
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, selectedDesign]); // Removed currentMockupType from dependencies because toggle logic is gone from display
+    }, [finalVariant, selectedDesign, currentMockupType]); // Added currentMockupType to dependencies
 
 
     // Fetch products and initialize selections from URL params
@@ -346,7 +340,6 @@ export default function ProductStudio() {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
                 activeObject.centerH(); // Center horizontally
-                //activeObject.centerV(); // Removed vertical centering
                 fabricCanvas.current.renderAll();
             } else {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to center it horizontally.", status: "info", isClosable: true });
@@ -386,7 +379,7 @@ export default function ProductStudio() {
         }
 
         const activeObject = fabricCanvas.current.getActiveObject();
-        let currentIndex = activeObject ? objects.indexOf(activeObject) : -1; // Find current index
+        let currentIndex = activeObject ? objects.indexOf(activeObject) : -1;
         let newIndex;
 
         if (direction === 'next') {
@@ -605,11 +598,11 @@ export default function ProductStudio() {
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                         {/* Left Column: Canvas Preview */}
                         <VStack spacing={4} align="stretch">
-                            {/* Mockup Toggle (man_ removed) */}
+                            {/* Mockup Toggle (man_ removed from logic) */}
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
                                     <Button size="sm" colorScheme={currentMockupType === 'tee' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('tee')}>Blank Tee</Button>
-                                    {/* Removed 'On Model' button */}
+                                    {/* Removed 'On Model' button from UI as man_ is fully removed from current logic */}
                                 </Stack>
                             </RadioGroup>
 
