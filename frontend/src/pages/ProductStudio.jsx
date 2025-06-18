@@ -1,3 +1,5 @@
+// frontend/src/pages/ProductStudio.jsx
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
@@ -11,8 +13,7 @@ import {
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-// Added icons for new tools and controls
-import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush, FaArrowsAltH, FaArrowsAltV, FaArrowUp, FaArrowDown, FaArrowLeft, FaArrowRight, FaLayerGroup, FaPlusSquare, FaMinusSquare } from 'react-icons/fa'; // FaArrowsAltH/V for center
+import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush, FaArrowsAltH, FaArrowsAltV, FaArrowUp, FaArrowDown, FaArrowLeft, FaArrowRight, FaLayerGroup, FaPlusSquare, FaMinusSquare } from 'react-icons/fa';
 
 // Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
@@ -22,7 +23,6 @@ const ThemedSelect = (props) => (
         borderColor="whiteAlpha.300"
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
-        // Text color handled by index.css
         {...props}
     />
 );
@@ -35,7 +35,6 @@ const ThemedControlInput = (props) => (
         borderColor="whiteAlpha.300"
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
-        // Text color handled by index.css
         {...props}
     />
 );
@@ -56,8 +55,8 @@ export default function ProductStudio() {
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
-    // REMOVED 'man_' mockup option. Default to 'tee'
-    const [currentMockupType, setCurrentMockupType] = useState('tee'); // Only 'tee' is supported now
+    // REMOVED 'currentMockupType' state as 'man_' preview is removed
+    // const [currentMockupType, setCurrentMockupType] = useState('tee');
 
     // States for customization tools (Text only)
     const [textInputValue, setTextInputValue] = useState('');
@@ -79,7 +78,7 @@ export default function ProductStudio() {
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
+    const activeObjectRef = useRef(null);
 
     // Canvas Initialization (runs once on mount)
     useEffect(() => {
@@ -91,19 +90,17 @@ export default function ProductStudio() {
                 width: canvasWidth,
                 height: canvasHeight,
                 backgroundColor: 'rgba(0,0,0,0)',
-                selection: true, // Ensure canvas selection is enabled
+                selection: true,
             });
 
-            // Event listeners for object selection
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
 
-            // Global keydown listener for delete key (uses deleteSelectedObject callback)
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-                        return; // Don't delete if user is typing in an input
+                        return;
                     }
                     deleteSelectedObject();
                 }
@@ -111,7 +108,6 @@ export default function ProductStudio() {
             document.addEventListener('keydown', handleKeyDown);
         }
 
-        // Cleanup function for Fabric.js
         return () => {
             if (fabricCanvas.current) {
                 fabricCanvas.current.off('selection:created');
@@ -119,10 +115,10 @@ export default function ProductStudio() {
                 fabricCanvas.current.off('selection:cleared');
                 fabricCanvas.current.dispose();
                 fabricCanvas.current = null;
-                document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
+                document.removeEventListener('keydown', handleKeyDown);
             }
         };
-    }, [deleteSelectedObject]); // Added deleteSelectedObject to dependencies for reliable cleanup
+    }, [deleteSelectedObject]);
 
 
     // Canvas Content Update (mockup and design)
@@ -131,17 +127,18 @@ export default function ProductStudio() {
         if (!FCanvas || !window.fabric) return;
 
         const updateCanvasBackground = (fabricInstance) => {
+            // REMOVED 'manMockupImage' and 'currentMockupType' logic
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
             const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
             const firstAvailableImage = finalVariant?.imageSet?.[0];
 
             let mockupSrc = '';
-            // Only 'tee' mockup type is supported
+            // Always prioritize tee_ image, then primary, then first available
             if (teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
-            } else if (primaryImageFound) { // Fallback if no tee_ specific image
+            } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
-            } else if (firstAvailableImage) { // Ultimate fallback
+            } else if (firstAvailableImage) {
                 mockupSrc = firstAvailableImage.url;
             }
 
@@ -167,7 +164,6 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                // Add or update selected design
                 FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
                 
                 if (selectedDesign?.imageDataUrl) {
@@ -206,7 +202,7 @@ export default function ProductStudio() {
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, currentMockupType, selectedDesign]);
+    }, [finalVariant, selectedDesign]); // Removed currentMockupType from dependencies
 
 
     // Fetch products and initialize selections from URL params
@@ -271,7 +267,7 @@ export default function ProductStudio() {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
                 // Ensure text-specific properties are only applied to text objects
-                if (activeObject.type === 'i-text' || activeObject.type === 'text') {
+                if (activeObject.type === 'i-text' || activeObject.type === 'text') { // 'text' for non-editable text (if any)
                      activeObject.set(property, value);
                      fabricCanvas.current.renderAll();
                 } else {
@@ -306,10 +302,11 @@ export default function ProductStudio() {
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
+            // Remove all objects that are NOT the background image
             fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage).forEach(obj => fabricCanvas.current.remove(obj));
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
-            activeObjectRef.current = null;
+            activeObjectRef.current = null; // Clear active object ref
         }
     }, []);
 
@@ -341,6 +338,7 @@ export default function ProductStudio() {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
                 activeObject.centerH(); // Center horizontally
+                //activeObject.centerV(); // Removed vertical centering
                 fabricCanvas.current.renderAll();
             } else {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to center it horizontally.", status: "info", isClosable: true });
@@ -372,6 +370,7 @@ export default function ProductStudio() {
     const toggleObjectSelection = useCallback((direction) => {
         if (!fabricCanvas.current) return;
 
+        // Filter out background image and non-selectable objects
         const objects = fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage && obj.selectable);
         if (objects.length === 0) {
             toast({ title: "No selectable objects", description: "No designs or text elements to toggle.", status: "info", isClosable: true });
@@ -379,13 +378,13 @@ export default function ProductStudio() {
         }
 
         const activeObject = fabricCanvas.current.getActiveObject();
-        let currentIndex = activeObject ? objects.indexOf(activeObject) : -1;
+        let currentIndex = activeObject ? objects.indexOf(activeObject) : -1; // Find current index
         let newIndex;
 
         if (direction === 'next') {
             newIndex = (currentIndex + 1) % objects.length;
         } else if (direction === 'prev') {
-            newIndex = (currentIndex - 1 + objects.length) % objects.length;
+            newIndex = (currentIndex - 1 + objects.length) % objects.length; // Ensure positive index
         } else {
             newIndex = 0; // Default to first if no active or invalid direction
         }
