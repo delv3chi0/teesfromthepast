@@ -2,7 +2,7 @@
 
 #root {
   /* Removed max-width and margin: auto in previous step */
-  /* REMOVED: padding: 2rem; */ /* <--- This line was already removed based on your comment */
+  /* REMOVED: padding: 2rem; */
   text-align: center; /* Keep if desired, doesn't affect width */
 }
 
@@ -119,22 +119,30 @@
 
 /* --- START: ABSOLUTE FINAL SOLUTION FOR SELECT/INPUT TEXT COLOR IN DARK THEME --- */
 /* This is the aggressive override for ProductStudio dropdown text and input fields */
-/* Targets the visible field of the Select component */
+
+/* Target the native <select> element itself to force displayed text color */
+select.chakra-select {
+    color: var(--chakra-colors-brand-textLight) !important;
+    background-color: var(--chakra-colors-brand-secondary) !important; /* Also force background */
+}
+
+/* Target the visible field of the Select component (Chakra's internal wrapper) */
 .chakra-select__field:not([disabled]) {
-  color: var(--chakra-colors-brand-textLight) !important;
+    color: var(--chakra-colors-brand-textLight) !important;
+    background-color: var(--chakra-colors-brand-secondary) !important;
 }
 
 /* Targets the individual option elements within the dropdown list */
 .chakra-select__option {
-  background-color: var(--chakra-colors-brand-secondary) !important; /* Background for list options */
-  color: var(--chakra-colors-brand-textLight) !important; /* Text color for list options */
+    background-color: var(--chakra-colors-brand-secondary) !important; /* Background for list options */
+    color: var(--chakra-colors-brand-textLight) !important; /* Text color for list options */
 }
 
 /* Style for the hovered/focused option in the dropdown list */
 .chakra-select__option[data-focus],
 .chakra-select__option[data-selected] {
-  background-color: var(--chakra-colors-brand-primary) !important; /* Darker background on hover/selection */
-  color: var(--chakra-colors-brand-accentYellow) !important; /* Highlight text color on hover/selection */
+    background-color: var(--chakra-colors-brand-primary) !important; /* Darker background on hover/selection */
+    color: var(--chakra-colors-brand-accentYellow) !important; /* Highlight text color on hover/selection */
 }
 
 /* Targets the general Chakra Input fields (used by ThemedControlInput) */
