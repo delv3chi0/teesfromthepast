@@ -6,38 +6,36 @@ import {
     Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverCloseButton, PopoverHeader, PopoverBody,
     Slider, SliderTrack, SliderFilledTrack, SliderThumb,
     NumberInput, NumberInputField, NumberInputStepper,
-    NumberIncrementStepper, NumberDecrementStepper, HStack // Added HStack, NumberInputSteppers
+    NumberIncrementStepper, NumberDecrementStepper, HStack
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 // Added icons for new tools and controls
-import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush, FaArrowsAltH, FaArrowsAltV } from 'react-icons/fa'; // FaArrowsAltH/V for center
+import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush, FaArrowsAltH, FaArrowsAltV, FaArrowUp, FaArrowDown, FaArrowLeft, FaArrowRight, FaLayerGroup, FaPlusSquare, FaMinusSquare } from 'react-icons/fa'; // FaArrowsAltH/V for center
 
 // Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
     <Select
         size="lg"
-        bg="brand.secondary" // Dark background for select field
+        bg="brand.secondary"
         borderColor="whiteAlpha.300"
-        // Removed `color` and `_placeholder` here; let index.css handle the !important overrides
-        // _hover and focusBorderColor remain as they define border styles
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
-        // Removed sx prop here, as index.css will handle the critical text color override
+        // Text color handled by index.css
         {...props}
     />
 );
 
-// New ThemedInput component for customization controls (for text input, color pickers etc.)
+// New ThemedInput component for customization controls
 const ThemedControlInput = (props) => (
     <Input
         size="sm"
         bg="brand.secondary"
         borderColor="whiteAlpha.300"
-        // color and _placeholder will be handled by index.css override for .chakra-input__field
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
+        // Text color handled by index.css
         {...props}
     />
 );
@@ -58,13 +56,14 @@ export default function ProductStudio() {
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
-    const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
+    // REMOVED 'man_' mockup option. Default to 'tee'
+    const [currentMockupType, setCurrentMockupType] = useState('tee'); // Only 'tee' is supported now
 
-    // New states for customization tools (Text only, Shapes removed)
+    // States for customization tools (Text only)
     const [textInputValue, setTextInputValue] = useState('');
-    const [textColor, setTextColor] = useState('#FDF6EE'); // Default to brand.textLight
+    const [textColor, setTextColor] = useState('#FDF6EE');
     const [fontSize, setFontSize] = useState(30);
-    const [fontFamily, setFontFamily] = useState('Montserrat'); // Default body font
+    const [fontFamily, setFontFamily] = useState('Montserrat');
 
     // Derived states based on selections
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -84,36 +83,32 @@ export default function ProductStudio() {
 
     // Canvas Initialization (runs once on mount)
     useEffect(() => {
-        // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
-            // Set canvas dimensions using an appropriate multiplier or fixed size for better quality
-            const canvasWidth = 600; // Define a consistent internal canvas resolution
+            const canvasWidth = 600;
             const canvasHeight = 600;
 
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
                 width: canvasWidth,
                 height: canvasHeight,
-                backgroundColor: 'rgba(0,0,0,0)', // Transparent canvas background
+                backgroundColor: 'rgba(0,0,0,0)',
                 selection: true, // Ensure canvas selection is enabled
             });
 
-            // Event listeners for object selection (to track active object for tool controls)
+            // Event listeners for object selection
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
 
-            // Add a global keydown listener for delete key
+            // Global keydown listener for delete key (uses deleteSelectedObject callback)
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
-                    // Prevent deleting text inside text input fields
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-                        return;
+                        return; // Don't delete if user is typing in an input
                     }
-                    deleteSelectedObject(); // Use the existing delete function
+                    deleteSelectedObject();
                 }
             };
             document.addEventListener('keydown', handleKeyDown);
-
         }
 
         // Cleanup function for Fabric.js
@@ -127,28 +122,26 @@ export default function ProductStudio() {
                 document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
             }
         };
-    }, []); // Empty dependency array means this runs once on mount
+    }, [deleteSelectedObject]); // Added deleteSelectedObject to dependencies for reliable cleanup
 
 
-    // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
+    // Canvas Content Update (mockup and design)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas || !window.fabric) return;
 
         const updateCanvasBackground = (fabricInstance) => {
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
-            const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_'));
             const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
             const firstAvailableImage = finalVariant?.imageSet?.[0];
 
             let mockupSrc = '';
-            if (currentMockupType === 'tee' && teeMockupImage) {
+            // Only 'tee' mockup type is supported
+            if (teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
-            } else if (currentMockupType === 'man' && manMockupImage) {
-                mockupSrc = manMockupImage.url;
-            } else if (primaryImageFound) {
+            } else if (primaryImageFound) { // Fallback if no tee_ specific image
                 mockupSrc = primaryImageFound.url;
-            } else if (firstAvailableImage) {
+            } else if (firstAvailableImage) { // Ultimate fallback
                 mockupSrc = firstAvailableImage.url;
             }
 
@@ -162,7 +155,7 @@ export default function ProductStudio() {
                         evented: false,
                         alignX: 'center',
                         alignY: 'center',
-                        meetOrSlice: 'meet'
+                        meetOrSlice: 'meet' // Ensure aspect ratio is maintained
                     });
                 }, { crossOrigin: 'anonymous' });
             } else {
@@ -174,7 +167,7 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                // Handle selected design (add or update)
+                // Add or update selected design
                 FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
                 
                 if (selectedDesign?.imageDataUrl) {
@@ -191,13 +184,16 @@ export default function ProductStudio() {
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
+                                selectable: true,
                             });
                             FCanvas.add(img);
+                            img.sendToBack(); // Ensure design image is behind text objects
                             FCanvas.renderAll();
                             FCanvas.setActiveObject(img);
                         }, { crossOrigin: 'anonymous' });
                     } else {
                         FCanvas.setActiveObject(existingDesignObject);
+                        existingDesignObject.sendToBack(); // Ensure it's sent to back if already there
                         FCanvas.renderAll();
                     }
                 } else {
@@ -269,13 +265,18 @@ export default function ProductStudio() {
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
 
-    // Function to update properties of the active object (text/shape color/font/etc.)
+    // Function to update properties of the active object (text color/font/size)
     const updateActiveObject = useCallback((property, value) => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
-                activeObject.set(property, value);
-                fabricCanvas.current.renderAll();
+                // Ensure text-specific properties are only applied to text objects
+                if (activeObject.type === 'i-text' || activeObject.type === 'text') {
+                     activeObject.set(property, value);
+                     fabricCanvas.current.renderAll();
+                } else {
+                    toast({ title: "Property not applicable", description: "Select a text object to update its font or size.", status: "info", isClosable: true });
+                }
             } else {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
             }
@@ -288,25 +289,27 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
-            left: (fabricCanvas.current.width / 2) - 100,
-            top: (fabricCanvas.current.height / 2) - 20,
+            left: (fabricCanvas.current.width / 2) - (textInputValue.length * (fontSize / 4)),
+            top: (fabricCanvas.current.height / 2) + 50, // Default text placement below image center
             fill: textColor,
             fontSize: fontSize,
             fontFamily: fontFamily,
             hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
             cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
+            selectable: true,
         });
         fabricCanvas.current.add(textObject);
         fabricCanvas.current.setActiveObject(textObject);
         fabricCanvas.current.renderAll();
         setTextInputValue('');
-    }, [textInputValue, textColor, fontSize, fontFamily, toast]); // Added toast to deps
+    }, [textInputValue, textColor, fontSize, fontFamily, toast]);
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
             fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage).forEach(obj => fabricCanvas.current.remove(obj));
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
+            activeObjectRef.current = null;
         }
     }, []);
 
@@ -315,6 +318,10 @@ export default function ProductStudio() {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
+                if (activeObject === fabricCanvas.current.backgroundImage) {
+                    toast({ title: "Cannot delete background", description: "The product image cannot be deleted.", status: "info", isClosable: true });
+                    return;
+                }
                 fabricCanvas.current.remove(activeObject);
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
@@ -328,16 +335,87 @@ export default function ProductStudio() {
         }
     }, [selectedDesign, toast]);
 
-    // Function to center the currently selected Fabric.js object
-    const centerSelectedObject = useCallback(() => {
+    // Function to center the currently selected Fabric.js object (only horizontally)
+    const centerObjectHorizontally = useCallback(() => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
-                activeObject.centerH();
-                activeObject.centerV();
+                activeObject.centerH(); // Center horizontally
                 fabricCanvas.current.renderAll();
             } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to center it horizontally.", status: "info", isClosable: true });
+            }
+        }
+    }, [toast]);
+
+    // Function to move selected object by a small amount
+    const nudgeObject = useCallback((direction, amount = 5) => {
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                switch (direction) {
+                    case 'up': activeObject.set({ top: activeObject.top - amount }); break;
+                    case 'down': activeObject.set({ top: activeObject.top + amount }); break;
+                    case 'left': activeObject.set({ left: activeObject.left - amount }); break;
+                    case 'right': activeObject.set({ left: activeObject.left + amount }); break;
+                    default: break;
+                }
+                activeObject.setCoords(); // Update object's coordinates after moving
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design to move it.", status: "info", isClosable: true });
+            }
+        }
+    }, [toast]);
+
+    // Function to toggle between objects (next/previous in z-order)
+    const toggleObjectSelection = useCallback((direction) => {
+        if (!fabricCanvas.current) return;
+
+        const objects = fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage && obj.selectable);
+        if (objects.length === 0) {
+            toast({ title: "No selectable objects", description: "No designs or text elements to toggle.", status: "info", isClosable: true });
+            return;
+        }
+
+        const activeObject = fabricCanvas.current.getActiveObject();
+        let currentIndex = activeObject ? objects.indexOf(activeObject) : -1;
+        let newIndex;
+
+        if (direction === 'next') {
+            newIndex = (currentIndex + 1) % objects.length;
+        } else if (direction === 'prev') {
+            newIndex = (currentIndex - 1 + objects.length) % objects.length;
+        } else {
+            newIndex = 0; // Default to first if no active or invalid direction
+        }
+
+        fabricCanvas.current.setActiveObject(objects[newIndex]);
+        fabricCanvas.current.renderAll();
+    }, [toast]);
+
+    // Function to change object layer (bring to front or send to back)
+    const changeObjectLayer = useCallback((layerAction) => {
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                if (activeObject === fabricCanvas.current.backgroundImage) {
+                    toast({ title: "Cannot change layer", description: "The product image layer cannot be modified.", status: "info", isClosable: true });
+                    return;
+                }
+
+                if (layerAction === 'bringToFront') {
+                    activeObject.bringToFront();
+                } else if (layerAction === 'sendToBack') {
+                    activeObject.sendToBack();
+                    // After sending to back, ensure it's still above the background image
+                    if (fabricCanvas.current.getObjects()[0] === activeObject) {
+                        activeObject.bringForward();
+                    }
+                }
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select an object to change its layer.", status: "info", isClosable: true });
             }
         }
     }, [toast]);
@@ -409,7 +487,7 @@ export default function ProductStudio() {
         setSelectedProductId(newProductId);
         setSelectedColorName('');
         setSelectedSize('');
-        clearCanvas();
+        clearCanvas(); // Clear canvas when product changes
 
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
@@ -520,11 +598,12 @@ export default function ProductStudio() {
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                         {/* Left Column: Canvas Preview */}
                         <VStack spacing={4} align="stretch">
-                            {/* Mockup Toggle */}
+                            {/* Mockup Toggle (man_ removed) */}
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
                                     <Button size="sm" colorScheme={currentMockupType === 'tee' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('tee')}>Blank Tee</Button>
-                                    <Button size="sm" colorScheme={currentMockupType === 'man' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('man')} isDisabled={!finalVariant || !finalVariant.imageSet?.some(img => img.url.includes('man_'))}>On Model</Button>
+                                    {/* Removed 'On Model' button */}
+                                    {/* <Button size="sm" colorScheme={currentMockupType === 'man' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('man')} isDisabled={!finalVariant || !finalVariant.imageSet?.some(img => img.url.includes('man_'))}>On Model</Button> */}
                                 </Stack>
                             </RadioGroup>
 
@@ -545,10 +624,26 @@ export default function ProductStudio() {
                                 <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
                             </Box>
                             
-                            <Button onClick={clearCanvas} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Clear All Customizations</Button>
-                            <Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Delete Selected Object</Button> {/* Delete selected object */}
-                            <Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="gray" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Center Selected</Button> {/* NEW: Center selected object */}
-
+                            {/* Canvas Control Buttons */}
+                            <HStack justifyContent="center" spacing={2} maxW="full" flexWrap="wrap">
+                                <Button onClick={clearCanvas} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Clear All</Button>
+                                <Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Delete Selected</Button>
+                            </HStack>
+                            <HStack justifyContent="center" spacing={2} maxW="full" flexWrap="wrap">
+                                {/* Center & Nudge Buttons */}
+                                <Button onClick={centerObjectHorizontally} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Center Horizontally</Button>
+                                <Button onClick={() => nudgeObject('up')} leftIcon={<Icon as={FaArrowUp} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Nudge Up</Button>
+                                <Button onClick={() => nudgeObject('down')} leftIcon={<Icon as={FaArrowDown} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Nudge Down</Button>
+                                <Button onClick={() => nudgeObject('left')} leftIcon={<Icon as={FaArrowLeft} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Nudge Left</Button>
+                                <Button onClick={() => nudgeObject('right')} leftIcon={<Icon as={FaArrowRight} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Nudge Right</Button>
+                            </HStack>
+                            {/* Object Layering & Toggle Buttons */}
+                            <HStack justifyContent="center" spacing={2} maxW="full" flexWrap="wrap">
+                                <Button onClick={() => changeObjectLayer('bringToFront')} leftIcon={<Icon as={FaLayerGroup} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Bring Front</Button>
+                                <Button onClick={() => changeObjectLayer('sendToBack')} leftIcon={<Icon as={FaLayerGroup} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Send Back</Button>
+                                <Button onClick={() => toggleObjectSelection('next')} leftIcon={<Icon as={FaMousePointer} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Select Next</Button>
+                                <Button onClick={() => toggleObjectSelection('prev')} leftIcon={<Icon as={FaMousePointer} />} colorScheme="gray" variant="outline" size="sm" isDisabled={!isCustomizeEnabled}>Select Prev</Button>
+                            </HStack>
                         </VStack>
 
                         {/* Right Column: Customization Tools */}
@@ -596,7 +691,6 @@ export default function ProductStudio() {
                                     value={fontFamily}
                                     onChange={(e) => { setFontFamily(e.target.value); updateActiveObject('fontFamily', e.target.value); }}
                                     size="md"
-                                    // Removed sx prop as theme.js and index.css handle it now
                                 >
                                     <option value="Bungee">Bungee (Heading)</option>
                                     <option value="Montserrat">Montserrat (Body)</option>
@@ -607,34 +701,6 @@ export default function ProductStudio() {
                                 </ThemedSelect>
                             </FormControl>
                             <Button onClick={addTextToCanvas} leftIcon={<Icon as={FaFont} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!textInputValue.trim() || !isCustomizeEnabled}>Add Text</Button>
-
-                            {/* Removed Add Shapes section */}
-                            {/* <Divider my={4} borderColor="whiteAlpha.300" />
-                            <Heading size="md" mb={2} color="brand.textLight">Add Shapes</Heading>
-                            <SimpleGrid columns={2} spacing={3}>
-                                <FormControl isDisabled={!isCustomizeEnabled}>
-                                    <FormLabel fontSize="sm" color="brand.textLight">Fill Color</FormLabel>
-                                    <InputGroup>
-                                        <ThemedControlInput
-                                            type="color"
-                                            value={shapeFillColor}
-                                            onChange={(e) => { setShapeFillColor(e.target.value); updateActiveObject('fill', e.target.value); }}
-                                            w="full"
-                                            p={0}
-                                            height="38px"
-                                        />
-                                        <InputRightElement width="3.5rem" pointerEvents="none">
-                                            <Icon as={FaEyeDropper} color="brand.textMuted"/>
-                                        </InputRightElement>
-                                    </InputGroup>
-                                </FormControl>
-                                <Box> {} </Box>
-                            </SimpleGrid>
-                            <HStack>
-                                <Button onClick={() => addShapeToCanvas('rect')} leftIcon={<Icon as={FaSquare} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!isCustomizeEnabled}>Add Rectangle</Button>
-                                <Button onClick={() => addShapeToCanvas('circle')} leftIcon={<Icon as={FaCircle} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!isCustomizeEnabled}>Add Circle</Button>
-                            </HStack> */}
-
                         </VStack>
                     </SimpleGrid>
 
