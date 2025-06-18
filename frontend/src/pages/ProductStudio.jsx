@@ -53,8 +53,8 @@ export default function ProductStudio() {
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
-    // REMOVED 'man_' mockup option. Default to 'tee'
-    const [currentMockupType, setCurrentMockupType] = useState('tee'); // Only 'tee' is supported now
+    // REMOVED 'man_' mockup option from state. Only 'tee' is supported now.
+    const [currentMockupType, setCurrentMockupType] = useState('tee');
 
     // States for customization tools (Text only)
     const [textInputValue, setTextInputValue] = useState('');
@@ -76,7 +76,7 @@ export default function ProductStudio() {
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
+    const activeObjectRef = useRef(null);
 
     // Canvas Initialization (runs once on mount)
     useEffect(() => {
@@ -91,16 +91,14 @@ export default function ProductStudio() {
                 selection: true, // Ensure canvas selection is enabled
             });
 
-            // Event listeners for object selection
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
 
-            // Global keydown listener for delete key (uses deleteSelectedObject callback)
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
-                        return; // Don't delete if user is typing in an input
+                        return;
                     }
                     deleteSelectedObject();
                 }
@@ -108,7 +106,6 @@ export default function ProductStudio() {
             document.addEventListener('keydown', handleKeyDown);
         }
 
-        // Cleanup function for Fabric.js
         return () => {
             if (fabricCanvas.current) {
                 fabricCanvas.current.off('selection:created');
@@ -116,10 +113,10 @@ export default function ProductStudio() {
                 fabricCanvas.current.off('selection:cleared');
                 fabricCanvas.current.dispose();
                 fabricCanvas.current = null;
-                document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
+                document.removeEventListener('keydown', handleKeyDown);
             }
         };
-    }, [deleteSelectedObject]); // Added deleteSelectedObject to dependencies for reliable cleanup
+    }, [deleteSelectedObject]);
 
 
     // Canvas Content Update (mockup and design)
@@ -128,22 +125,31 @@ export default function ProductStudio() {
         if (!FCanvas || !window.fabric) return;
 
         const updateCanvasBackground = (fabricInstance) => {
-            // Define mockup image sources
-            const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
-            const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_')); // Still defined for completeness, but not used in current logic
-            const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
-            const firstAvailableImage = finalVariant?.imageSet?.[0];
-
+            // FIX FOR 'xe' / 'ie' error: Consolidate mockupSrc determination for explicit flow
             let mockupSrc = '';
-            // Only 'tee' mockup type is supported by the toggle. Prioritize tee_ image, then primary, then first available.
-            if (teeMockupImage) { // Always try to use tee_ image first
+            
+            // Prioritize 'tee_' image if available
+            const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
+            if (teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
-            } else if (primaryImageFound) { // Fallback if no tee_ specific image
-                mockupSrc = primaryImageFound.url;
-            } else if (manMockupImage) { // Fallback to man_ if tee_ and primary not available
-                mockupSrc = manMockupImage.url;
-            } else if (firstAvailableImage) { // Ultimate fallback
-                mockupSrc = firstAvailableImage.url;
+            } else {
+                // Fallback to primary image
+                const primaryImageFound = finalVariant?.imageSet?.find(img => img.isPrimary === true);
+                if (primaryImageFound) {
+                    mockupSrc = primaryImageFound.url;
+                } else {
+                    // Fallback to man_ image if tee_ and primary not available
+                    const manMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('man_'));
+                    if (manMockupImage) {
+                        mockupSrc = manMockupImage.url;
+                    } else {
+                        // Ultimate fallback to the very first image in the set
+                        const firstAvailableImage = finalVariant?.imageSet?.[0];
+                        if (firstAvailableImage) {
+                            mockupSrc = firstAvailableImage.url;
+                        }
+                    }
+                }
             }
 
             if (mockupSrc) {
@@ -168,7 +174,6 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                // Add or update selected design
                 FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
                 
                 if (selectedDesign?.imageDataUrl) {
@@ -604,7 +609,7 @@ export default function ProductStudio() {
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
                                     <Button size="sm" colorScheme={currentMockupType === 'tee' ? 'brandAccentYellow' : 'gray'} onClick={() => setCurrentMockupType('tee')}>Blank Tee</Button>
-                                    {/* Removed 'On Model' button, as man_ is fully removed from logic */}
+                                    {/* Removed 'On Model' button */}
                                 </Stack>
                             </RadioGroup>
 
