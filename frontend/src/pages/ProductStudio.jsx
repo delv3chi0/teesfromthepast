@@ -6,13 +6,13 @@ import {
     Popover, PopoverTrigger, PopoverContent, PopoverArrow, PopoverCloseButton, PopoverHeader, PopoverBody,
     Slider, SliderTrack, SliderFilledTrack, SliderThumb,
     NumberInput, NumberInputField, NumberInputStepper,
-    NumberIncrementStepper, NumberDecrementStepper, HStack // Added HStack, NumberInputSteppers
+    NumberIncrementStepper, NumberDecrementStepper, HStack
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 // Added icons for new tools and controls
-import { FaShoppingCart, FaTshirt, FaPalette, FaRulerVertical, FaBold, FaItalic, FaUnderline, FaAlignLeft, FaAlignCenter, FaAlignRight, FaFont, FaSquare, FaCircle, FaTrash, FaMousePointer, FaEyeDropper, FaPaintBrush, FaArrowsAltH, FaArrowsAltV } from 'react-icons/fa'; // FaArrowsAltH/V for center
+import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa'; // Removed unused icons
 
 // Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
@@ -20,11 +20,8 @@ const ThemedSelect = (props) => (
         size="lg"
         bg="brand.secondary" // Dark background for select field
         borderColor="whiteAlpha.300"
-        // Removed `color` and `_placeholder` here; let index.css handle the !important overrides
-        // _hover and focusBorderColor remain as they define border styles
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
-        // Removed sx prop here, as index.css will handle the critical text color override
         {...props}
     />
 );
@@ -35,13 +32,11 @@ const ThemedControlInput = (props) => (
         size="sm"
         bg="brand.secondary"
         borderColor="whiteAlpha.300"
-        // color and _placeholder will be handled by index.css override for .chakra-input__field
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
         {...props}
     />
 );
-
 
 export default function ProductStudio() {
     const { user } = useAuth();
@@ -60,7 +55,7 @@ export default function ProductStudio() {
     const [selectedDesign, setSelectedDesign] = useState(null);
     const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
 
-    // New states for customization tools (Text only, Shapes removed)
+    // States for customization tools
     const [textInputValue, setTextInputValue] = useState('');
     const [textColor, setTextColor] = useState('#FDF6EE'); // Default to brand.textLight
     const [fontSize, setFontSize] = useState(30);
@@ -87,7 +82,7 @@ export default function ProductStudio() {
         // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
             // Set canvas dimensions using an appropriate multiplier or fixed size for better quality
-            const canvasWidth = 600; // Define a consistent internal canvas resolution
+            const canvasWidth = 600; // Define a consistent internal canvas resolution for preview
             const canvasHeight = 600;
 
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
@@ -127,8 +122,7 @@ export default function ProductStudio() {
                 document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
             }
         };
-    }, []); // Empty dependency array means this runs once on mount
-
+    }, [deleteSelectedObject]); // Added deleteSelectedObject to dependencies for strict `useCallback` linting, though it might not strictly be needed if Fabric.js setup is truly once-per-mount.
 
     // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
@@ -154,6 +148,7 @@ export default function ProductStudio() {
 
             if (mockupSrc) {
                 fabricInstance.Image.fromURL(mockupSrc, (img) => {
+                    if (!img) return;
                     FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
                         scaleX: FCanvas.width / img.width,
                         scaleY: FCanvas.height / img.height,
@@ -169,34 +164,38 @@ export default function ProductStudio() {
                 FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
             }
         };
-        
+
         const pollForFabricAndSetupContent = () => {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                // Handle selected design (add or update)
-                FCanvas.getObjects('image').filter(obj => obj.id?.startsWith('design-') || (obj.src && obj.src.startsWith('data:image'))).forEach(obj => FCanvas.remove(obj));
-                
+                // Remove previous design image if any, but preserve other objects like text
+                FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-')).forEach(obj => FCanvas.remove(obj));
+
                 if (selectedDesign?.imageDataUrl) {
+                    // Check if the design is already on the canvas (unlikely with the filter above, but good for robustness)
                     const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
                     if (!existingDesignObject) {
                         window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                             if (!img) return;
-                            img.id = `design-${selectedDesign._id}`;
-                            img.scaleToWidth(FCanvas.width * 0.33);
+                            img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
+                            img.scaleToWidth(FCanvas.width * 0.33); // Initial scale
                             img.set({
                                 top: FCanvas.height * 0.24,
                                 left: (FCanvas.width - img.getScaledWidth()) / 2,
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
+                                // Allow full movement and scaling
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
+                            img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
-                            FCanvas.setActiveObject(img);
+                            FCanvas.setActiveObject(img); // Make it the active object
                         }, { crossOrigin: 'anonymous' });
                     } else {
+                        // If for some reason it already exists, just make it active
                         FCanvas.setActiveObject(existingDesignObject);
                         FCanvas.renderAll();
                     }
@@ -266,6 +265,35 @@ export default function ProductStudio() {
         }
     }, [user, location, navigate]);
 
+    // NEW: Effect to synchronize text tool inputs with active Fabric.js object
+    useEffect(() => {
+        const FCanvas = fabricCanvas.current;
+        if (!FCanvas) return;
+
+        const onSelectionChange = () => {
+            const activeObject = FCanvas.getActiveObject();
+            if (activeObject && activeObject.type === 'i-text') {
+                // Update state variables to reflect the active text object's properties
+                setTextColor(activeObject.fill || '#FDF6EE'); // Fallback default
+                setFontSize(activeObject.fontSize || 30); // Fallback default
+                setFontFamily(activeObject.fontFamily || 'Montserrat'); // Fallback default
+            } else {
+                // Optionally reset or disable text tool controls if no text object is selected
+                // For now, keep last set values, or you can reset them if preferred
+            }
+        };
+
+        FCanvas.on('selection:created', onSelectionChange);
+        FCanvas.on('selection:updated', onSelectionChange);
+        FCanvas.on('selection:cleared', onSelectionChange);
+
+        return () => {
+            FCanvas.off('selection:created', onSelectionChange);
+            FCanvas.off('selection:updated', onSelectionChange);
+            FCanvas.off('selection:cleared', onSelectionChange);
+        };
+    }, []); // Empty dependency array as FCanvas ref is stable and event listeners are cleaned up
+
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
 
@@ -274,13 +302,29 @@ export default function ProductStudio() {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
-                activeObject.set(property, value);
+                // Specific logic for IText objects
+                if (activeObject.type === 'i-text') {
+                    if (property === 'fill') {
+                        activeObject.set('fill', value);
+                        setTextColor(value); // Keep UI state in sync
+                    } else if (property === 'fontSize') {
+                        activeObject.set('fontSize', value);
+                        setFontSize(value); // Keep UI state in sync
+                    } else if (property === 'fontFamily') {
+                        activeObject.set('fontFamily', value);
+                        setFontFamily(value); // Keep UI state in sync
+                    }
+                } else {
+                    // For other object types (like images from designs)
+                    activeObject.set(property, value);
+                }
                 fabricCanvas.current.renderAll();
             } else {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
             }
         }
     }, [toast]);
+
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -300,13 +344,13 @@ export default function ProductStudio() {
         fabricCanvas.current.setActiveObject(textObject);
         fabricCanvas.current.renderAll();
         setTextInputValue('');
-    }, [textInputValue, textColor, fontSize, fontFamily, toast]); // Added toast to deps
+    }, [textInputValue, textColor, fontSize, fontFamily, toast]);
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
             fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage).forEach(obj => fabricCanvas.current.remove(obj));
             fabricCanvas.current.renderAll();
-            setSelectedDesign(null);
+            setSelectedDesign(null); // Clear selected design from state as well
         }
     }, []);
 
@@ -319,6 +363,7 @@ export default function ProductStudio() {
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
                 activeObjectRef.current = null;
+                // If the deleted object was the selected design, clear that state
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
                     setSelectedDesign(null);
                 }
@@ -326,7 +371,7 @@ export default function ProductStudio() {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
             }
         }
-    }, [selectedDesign, toast]);
+    }, [selectedDesign, toast]); // Added selectedDesign to deps
 
     // Function to center the currently selected Fabric.js object
     const centerSelectedObject = useCallback(() => {
@@ -343,48 +388,100 @@ export default function ProductStudio() {
     }, [toast]);
 
 
-    const handleProceedToCheckout = useCallback(() => {
-        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type !== 'image' || (obj.id && obj.id.startsWith('design-')));
+    const handleProceedToCheckout = useCallback(async () => { // Made async for API call
+        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
 
         if (!hasCustomizations) {
             toast({ title: "No customizations", description: "Please select a design or add custom elements.", status: "warning", isClosable: true });
             return;
         }
         if (!finalVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
-        
+
+        // 1. Generate low-res preview image (for display in cart/order history)
         const finalPreviewImage = fabricCanvas.current.toDataURL({
             format: 'png',
             quality: 1.0,
-            multiplier: 1,
+            multiplier: 1, // At 600x600 resolution
         });
+
+        // 2. Generate high-res print-ready image (for Printful)
+        // Target: 15x18 inches at 300 DPI = 4500x5400 pixels
+        const PRINT_READY_WIDTH = 4500;
+        const PRINT_READY_HEIGHT = 5400;
 
         const printReadyCanvas = new window.fabric.Canvas(null, {
-            width: 1200,
-            height: 1200,
-            backgroundColor: 'rgba(0,0,0,0)',
+            width: PRINT_READY_WIDTH,
+            height: PRINT_READY_HEIGHT,
+            backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
-        fabricCanvas.current.getObjects().filter(obj => 
-            obj.type === 'i-text' || obj.id?.startsWith('design-')
+        // Clone and scale objects from current canvas to the high-res canvas
+        const previewCanvasWidth = fabricCanvas.current.width;
+        const previewCanvasHeight = fabricCanvas.current.height;
+
+        fabricCanvas.current.getObjects().filter(obj =>
+            obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
         ).forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
-            if (clonedObj.scaleToWidth) clonedObj.scaleToWidth(printReadyCanvas.width * 0.8);
+
+            // Calculate scaling factors for position and size
+            const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
+            const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
 
             clonedObj.set({
-                left: (printReadyCanvas.width - clonedObj.getScaledWidth()) / 2,
-                top: (printReadyCanvas.height - clonedObj.getScaledHeight()) / 2,
-                hasControls: false, hasBorders: false,
+                left: obj.left * scaleFactorX,
+                top: obj.top * scaleFactorY,
+                scaleX: obj.scaleX * scaleFactorX,
+                scaleY: obj.scaleY * scaleFactorY,
+                hasControls: false, hasBorders: false, // No controls on print file
             });
+
+            if (clonedObj.type === 'i-text') {
+                clonedObj.set({
+                    fontSize: obj.fontSize * Math.min(scaleFactorX, scaleFactorY) // Scale font size
+                });
+            }
             printReadyCanvas.add(clonedObj);
         });
         printReadyCanvas.renderAll();
         const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
             format: 'png',
-            quality: 1.0,
-            multiplier: 1,
+            quality: 1.0, // High quality for print
+            multiplier: 1, // Already at target resolution, no further scaling
         });
-        printReadyCanvas.dispose();
+        printReadyCanvas.dispose(); // Clean up the temporary canvas
 
+        // 3. Upload print-ready image to Cloudinary via backend
+        let cloudinaryPublicUrl = '';
+        try {
+            toast({
+                title: "Uploading design...",
+                description: "Preparing your custom design for print. This may take a moment.",
+                status: "info",
+                duration: null, // Keep open until resolved
+                isClosable: false,
+                position: "top",
+            });
+            const uploadResponse = await client.post('/upload-print-file', {
+                imageData: printReadyDesignDataUrl,
+                designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
+            });
+            cloudinaryPublicUrl = uploadResponse.data.publicUrl;
+            toast.closeAll(); // Close previous toast
+            toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
+        } catch (error) {
+            console.error("Error uploading print file to Cloudinary:", error);
+            toast.closeAll(); // Close previous toast
+            toast({
+                title: "Upload Failed",
+                description: "Could not upload your design for printing. Please try again.",
+                status: "error",
+                isClosable: true,
+            });
+            return; // Stop checkout process if upload fails
+        }
+
+        // 4. Prepare checkout item with the Cloudinary URL
         const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
         const checkoutItem = {
             designId: selectedDesign?._id || 'custom-design-' + Date.now(),
@@ -394,15 +491,15 @@ export default function ProductStudio() {
             size: finalVariant.size,
             color: finalVariant.colorName,
             prompt: selectedDesign?.prompt || "Customized design",
-            imageDataUrl: finalPreviewImage,
-            printReadyDataUrl: printReadyDesignDataUrl,
+            imageDataUrl: finalPreviewImage, // Low-res preview
+            printReadyDataUrl: cloudinaryPublicUrl, // HIGH-RES CLOUDINARY URL
             productImage: primaryImage?.url,
             unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
         navigate('/checkout');
     }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast]);
-    
+
     // Handlers for dropdowns
     const handleProductChange = (e) => {
         const newProductId = e.target.value;
@@ -437,42 +534,42 @@ export default function ProductStudio() {
     return (
         <VStack spacing={8} align="stretch" px={{ base: 4, md: 8 }} py={8}>
             <Heading as="h1" size="2xl" color="brand.textLight" textAlign="center" mb={6}>Customize Your Apparel</Heading>
-            
+
             {/* 1. Choose Your Apparel Section */}
-            <Box bg="brand.paper" p={{base: 5, md: 8}} borderRadius="xl">
+            <Box bg="brand.paper" p={{ base: 5, md: 8 }} borderRadius="xl">
                 <VStack spacing={6} align="stretch">
-                    <Heading as="h2" size="xl" color="brand.textLight"><Icon as={FaTshirt} mr={3} verticalAlign="middle"/>1. Choose Your Apparel</Heading>
+                    <Heading as="h2" size="xl" color="brand.textLight"><Icon as={FaTshirt} mr={3} verticalAlign="middle" />1. Choose Your Apparel</Heading>
                     {loading ? <Spinner size="xl" color="brand.accentYellow" /> :
-                    <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
-                        <FormControl><FormLabel color="brand.textLight">Product</FormLabel>
-                            <ThemedSelect value={selectedProductId} onChange={handleProductChange} placeholder="Select Product">
-                                {products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                            </ThemedSelect>
-                        </FormControl>
-                        <FormControl><FormLabel color="brand.textLight">Color</FormLabel>
-                            <ThemedSelect value={selectedColorName} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>
-                                {uniqueColorVariants.map(c => (
-                                    <option key={c.colorName} value={c.colorName}>
-                                        {c.colorName}
-                                    </option>
-                                ))}
-                            </ThemedSelect>
-                        </FormControl>
-                        <FormControl><FormLabel color="brand.textLight">Size</FormLabel>
-                            <ThemedSelect value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} placeholder="Select Size" isDisabled={!selectedColorName}>
-                                {availableSizes.map(s => <option key={s.size} value={s.size}>{s.size}</option>)}
-                            </ThemedSelect>
-                        </FormControl>
-                    </SimpleGrid>
+                        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
+                            <FormControl><FormLabel color="brand.textLight">Product</FormLabel>
+                                <ThemedSelect value={selectedProductId} onChange={handleProductChange} placeholder="Select Product">
+                                    {products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                </ThemedSelect>
+                            </FormControl>
+                            <FormControl><FormLabel color="brand.textLight">Color</FormLabel>
+                                <ThemedSelect value={selectedColorName} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>
+                                    {uniqueColorVariants.map(c => (
+                                        <option key={c.colorName} value={c.colorName}>
+                                            {c.colorName}
+                                        </option>
+                                    ))}
+                                </ThemedSelect>
+                            </FormControl>
+                            <FormControl><FormLabel color="brand.textLight">Size</FormLabel>
+                                <ThemedSelect value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} placeholder="Select Size" isDisabled={!selectedColorName}>
+                                    {availableSizes.map(s => <option key={s.size} value={s.size}>{s.size}</option>)}
+                                </ThemedSelect>
+                            </FormControl>
+                        </SimpleGrid>
                     }
                 </VStack>
             </Box>
 
             {/* 2. Choose Your Saved Design Section */}
-            <Box bg="brand.paper" p={{base: 5, md: 8}} borderRadius="xl">
+            <Box bg="brand.paper" p={{ base: 5, md: 8 }} borderRadius="xl">
                 <VStack spacing={6} align="stretch">
-                    <Heading as="h2" size="xl" color="brand.textLight"><Icon as={FaPalette} mr={3} verticalAlign="middle"/>2. Choose Your Saved Design</Heading>
-                    {loadingDesigns ? <Spinner size="xl" color="brand.accentYellow"/> : !designs.length ? (
+                    <Heading as="h2" size="xl" color="brand.textLight"><Icon as={FaPalette} mr={3} verticalAlign="middle" />2. Choose Your Saved Design</Heading>
+                    {loadingDesigns ? <Spinner size="xl" color="brand.accentYellow" /> : !designs.length ? (
                         <Text color="brand.textLight" fontSize="lg">You have no saved designs. <ChakraLink as={RouterLink} to="/generate" color="brand.accentYellow" fontWeight="bold">Generate one now!</ChakraLink></Text>
                     ) : (
                         <SimpleGrid columns={{ base: 2, sm: 3, md: 4, lg: 5 }} spacing={4}>
@@ -499,12 +596,12 @@ export default function ProductStudio() {
                     )}
                 </VStack>
             </Box>
-            
+
             {/* 3. Customize & Preview Section */}
-            <Box bg="brand.paper" p={{base: 5, md: 8}} borderRadius="xl">
+            <Box bg="brand.paper" p={{ base: 5, md: 8 }} borderRadius="xl">
                 <VStack spacing={6} align="stretch">
-                    <Heading as="h2" size="xl" color="brand.textLight" textAlign="center"><Icon as={FaPaintBrush} mr={3} verticalAlign="middle"/>3. Customize & Preview</Heading>
-                    
+                    <Heading as="h2" size="xl" color="brand.textLight" textAlign="center"><Icon as={FaPaintBrush} mr={3} verticalAlign="middle" />3. Customize & Preview</Heading>
+
                     {/* Conditional Instructions */}
                     {!isCustomizeEnabled ? (
                         <Alert status="info" borderRadius="md" maxW="lg" mx="auto" bg="blue.900" borderWidth="1px" borderColor="blue.500">
@@ -544,10 +641,10 @@ export default function ProductStudio() {
                                 {/* The canvas element will inherit 100% width/height from its parent Box */}
                                 <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
                             </Box>
-                            
+
                             <Button onClick={clearCanvas} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Clear All Customizations</Button>
-                            <Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Delete Selected Object</Button> {/* Delete selected object */}
-                            <Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="gray" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Center Selected</Button> {/* NEW: Center selected object */}
+                            <Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Delete Selected Object</Button>
+                            <Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="gray" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Center Selected</Button>
 
                         </VStack>
 
@@ -575,7 +672,7 @@ export default function ProductStudio() {
                                             height="38px"
                                         />
                                         <InputRightElement width="3.5rem" pointerEvents="none">
-                                            <Icon as={FaEyeDropper} color="brand.textMuted"/>
+                                            <Icon as={FaEyeDropper} color="brand.textMuted" />
                                         </InputRightElement>
                                     </InputGroup>
                                 </FormControl>
@@ -596,7 +693,6 @@ export default function ProductStudio() {
                                     value={fontFamily}
                                     onChange={(e) => { setFontFamily(e.target.value); updateActiveObject('fontFamily', e.target.value); }}
                                     size="md"
-                                    // Removed sx prop as theme.js and index.css handle it now
                                 >
                                     <option value="Bungee">Bungee (Heading)</option>
                                     <option value="Montserrat">Montserrat (Body)</option>
@@ -608,37 +704,10 @@ export default function ProductStudio() {
                             </FormControl>
                             <Button onClick={addTextToCanvas} leftIcon={<Icon as={FaFont} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!textInputValue.trim() || !isCustomizeEnabled}>Add Text</Button>
 
-                            {/* Removed Add Shapes section */}
-                            {/* <Divider my={4} borderColor="whiteAlpha.300" />
-                            <Heading size="md" mb={2} color="brand.textLight">Add Shapes</Heading>
-                            <SimpleGrid columns={2} spacing={3}>
-                                <FormControl isDisabled={!isCustomizeEnabled}>
-                                    <FormLabel fontSize="sm" color="brand.textLight">Fill Color</FormLabel>
-                                    <InputGroup>
-                                        <ThemedControlInput
-                                            type="color"
-                                            value={shapeFillColor}
-                                            onChange={(e) => { setShapeFillColor(e.target.value); updateActiveObject('fill', e.target.value); }}
-                                            w="full"
-                                            p={0}
-                                            height="38px"
-                                        />
-                                        <InputRightElement width="3.5rem" pointerEvents="none">
-                                            <Icon as={FaEyeDropper} color="brand.textMuted"/>
-                                        </InputRightElement>
-                                    </InputGroup>
-                                </FormControl>
-                                <Box> {} </Box>
-                            </SimpleGrid>
-                            <HStack>
-                                <Button onClick={() => addShapeToCanvas('rect')} leftIcon={<Icon as={FaSquare} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!isCustomizeEnabled}>Add Rectangle</Button>
-                                <Button onClick={() => addShapeToCanvas('circle')} leftIcon={<Icon as={FaCircle} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!isCustomizeEnabled}>Add Circle</Button>
-                            </HStack> */}
-
                         </VStack>
                     </SimpleGrid>
 
-                    <Divider my={6} borderColor="whiteAlpha.300"/>
+                    <Divider my={6} borderColor="whiteAlpha.300" />
 
                     {/* Final Preview & Checkout */}
                     <VStack spacing={4} mt={4}>
@@ -654,7 +723,7 @@ export default function ProductStudio() {
                                 : "$0.00"
                             }
                         </Text>
-                        <Button colorScheme="brandAccentOrange" size="lg" onClick={handleProceedToCheckout} leftIcon={<Icon as={FaShoppingCart} />} isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 1 && !selectedDesign)} width="full" maxW="md">Proceed to Checkout</Button>
+                        <Button colorScheme="brandAccentOrange" size="lg" onClick={handleProceedToCheckout} leftIcon={<Icon as={FaShoppingCart} />} isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)} width="full" maxW="md">Proceed to Checkout</Button>
                     </VStack>
                 </VStack>
             </Box>
