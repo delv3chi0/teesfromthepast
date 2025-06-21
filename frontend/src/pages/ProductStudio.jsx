@@ -169,7 +169,6 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        // --- FINALIZED LOGIC: Allow checkout if a product is selected AND there is at least one custom object (design OR text) ---
         // Get all objects currently on the canvas, excluding the background image
         const currentCustomObjects = fabricCanvas.current.getObjects();
 
@@ -203,43 +202,34 @@ export default function ProductStudio() {
         const previewCanvasHeight = fabricCanvas.current.height;
 
         // Loop through all *customizable* objects (designs and text) on the preview canvas
-        currentCustomObjects.forEach(obj => { // Use the 'currentCustomObjects' directly
+        currentCustomObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate scaling factors for position and size
+            // Calculate scaling factors based on canvas size ratio
             const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
             const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-            // Use Math.min to ensure the design fits within the print area without distortion if canvas aspect ratios differ greatly.
-            // If the print area is significantly different aspect ratio than canvas, you might need more complex fit logic.
-            const overallScaleFactor = Math.min(scaleFactorX, scaleFactorY);
+            const overallResolutionScale = Math.min(scaleFactorX, scaleFactorY); // Use min to avoid distortion if aspect ratios differ
 
-            // Apply global scaling
+            // Apply global scaling to the object's dimensions
             clonedObj.set({
-                scaleX: obj.scaleX * overallScaleFactor,
-                scaleY: obj.scaleY * overallScaleFactor,
+                scaleX: obj.scaleX * overallResolutionScale,
+                scaleY: obj.scaleY * overallResolutionScale,
                 hasControls: false, hasBorders: false, // No controls on print file
             });
 
-            // --- CRITICAL FIX: Recalculate position based on new scaled dimensions and original relative center ---
-            // obj.left and obj.top are relative to the top-left of the preview canvas.
-            // When scaling, the object's origin (top-left by default, or center if originX/Y='center') also scales.
-            // The goal is to maintain the *relative position* of the object on the print-ready canvas.
+            // --- CRITICAL FIX: Recalculate position based on NEW SCALED DIMENSIONS and original relative center ---
+            // 1. Get original object's center point on the PREVIEW canvas
+            const originalCenter = obj.getCenterPoint();
 
-            // Get original object's center on the PREVIEW canvas
-            // Use obj.getCenterPoint() if it's reliable for all types, or calculate manually
-            const originalCenterX = obj.left + obj.getScaledWidth() / 2;
-            const originalCenterY = obj.top + obj.getScaledHeight() / 2;
+            // 2. Calculate relative center position (0-1 range) on the PREVIEW canvas
+            const relativeCenterX = originalCenter.x / previewCanvasWidth;
+            const relativeCenterY = originalCenter.y / previewCanvasHeight;
 
-            // Calculate relative center position (0-1 range) on the PREVIEW canvas
-            const relativeCenterX = originalCenterX / previewCanvasWidth;
-            const relativeCenterY = originalCenterY / previewCanvasHeight;
-
-            // Calculate target center position on the PRINT_READY canvas
+            // 3. Calculate target center position on the PRINT_READY canvas
             const targetCenterX = relativeCenterX * PRINT_READY_WIDTH;
             const targetCenterY = relativeCenterY * PRINT_READY_HEIGHT;
             
-            // Set the origin to center *before* setting left/top for easier positioning
-            // This is crucial if objects don't have originX/Y set to 'center' on the preview canvas
+            // 4. Set the origin to center *before* setting left/top for accurate positioning based on center points
             clonedObj.set({
                 originX: 'center',
                 originY: 'center',
@@ -247,12 +237,18 @@ export default function ProductStudio() {
                 top: targetCenterY,
             });
 
-
             if (clonedObj.type === 'i-text') {
-                // Ensure the font size scales proportionally with the object's overall scaling.
-                // This typically means scaling fontSize directly by overallScaleFactor.
+                // For text, apply the overall resolution scale directly to the fontSize
+                // This typically results in correct proportional sizing without distortion.
                 clonedObj.set({
-                    fontSize: obj.fontSize * overallScaleFactor
+                    fontSize: obj.fontSize * overallResolutionScale
+                });
+                // Ensure scaleX and scaleY are reset to 1 for text objects after fontSize is set,
+                // as fontSize * scaleX * scaleY is what determines the final rendered size.
+                // If they are already scaled, compounding them causes huge text.
+                clonedObj.set({
+                    scaleX: 1,
+                    scaleY: 1
                 });
             }
             printReadyCanvas.add(clonedObj);
@@ -677,7 +673,7 @@ export default function ProductStudio() {
                         </VStack>
 
                         {/* Right Column: Customization Tools */}
-                        <VStack spacing={4} align="stretch" bg="brand.secondary" p={6} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
+                        <VStack spacing={4} align="stretch" bg="brand.secondary" p={6} borderRadius="md" borderWidth="19x" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
                             <Heading size="md" mb={2} color="brand.textLight">Add Text</Heading>
                             <FormControl isDisabled={!isCustomizeEnabled}>
                                 <FormLabel fontSize="sm" color="brand.textLight">Text Content</FormLabel>
@@ -757,7 +753,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)}
+                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)} // This should now correctly enable if ANY custom object exists
                             width="full"
                             maxW="md"
                         >
