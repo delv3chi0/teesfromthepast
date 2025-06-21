@@ -169,17 +169,21 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        // Get all objects currently on the canvas, excluding the background image
-        const currentCustomObjects = fabricCanvas.current.getObjects();
+        // --- FINALIZED LOGIC FOR `hasCustomizations`: Check for selectedDesign OR any text/design object on canvas ---
+        const hasSelectedDesign = selectedDesign !== null;
+        const hasAddedTextOrImageOnCanvas = fabricCanvas.current.getObjects().some(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
 
-        if (currentCustomObjects.length === 0) { // If there are NO custom objects at all
-            toast({ title: "No customizations", description: "Please select a design or add custom elements before proceeding.", status: "warning", isClosable: true });
+        // If no primary product variant is selected, OR there's neither a selected AI design NOR any added text/design on the canvas
+        if (!finalVariant || (!hasSelectedDesign && !hasAddedTextOrImageOnCanvas)) {
+            toast({
+                title: "Incomplete Customization",
+                description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
+                status: "warning",
+                isClosable: true
+            });
             return;
         }
-        if (!finalVariant) {
-            toast({ title: "Product not selected", description: "Please select a Product, Color, and Size.", status: "warning", isClosable: true });
-            return;
-        }
+
 
         // 1. Generate low-res preview image (for display in cart/order history)
         const finalPreviewImage = fabricCanvas.current.toDataURL({
@@ -202,7 +206,11 @@ export default function ProductStudio() {
         const previewCanvasHeight = fabricCanvas.current.height;
 
         // Loop through all *customizable* objects (designs and text) on the preview canvas
-        currentCustomObjects.forEach(obj => {
+        const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
+            obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
+        );
+
+        customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
             // Calculate scaling factors based on canvas size ratio
@@ -239,13 +247,11 @@ export default function ProductStudio() {
 
             if (clonedObj.type === 'i-text') {
                 // For text, apply the overall resolution scale directly to the fontSize
-                // This typically results in correct proportional sizing without distortion.
                 clonedObj.set({
                     fontSize: obj.fontSize * overallResolutionScale
                 });
-                // Ensure scaleX and scaleY are reset to 1 for text objects after fontSize is set,
-                // as fontSize * scaleX * scaleY is what determines the final rendered size.
-                // If they are already scaled, compounding them causes huge text.
+                // Ensure scaleX and scaleY are reset to 1 for text objects AFTER fontSize is set,
+                // to prevent compounding scales that lead to huge text.
                 clonedObj.set({
                     scaleX: 1,
                     scaleY: 1
@@ -673,7 +679,7 @@ export default function ProductStudio() {
                         </VStack>
 
                         {/* Right Column: Customization Tools */}
-                        <VStack spacing={4} align="stretch" bg="brand.secondary" p={6} borderRadius="md" borderWidth="19x" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
+                        <VStack spacing={4} align="stretch" bg="brand.secondary" p={6} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
                             <Heading size="md" mb={2} color="brand.textLight">Add Text</Heading>
                             <FormControl isDisabled={!isCustomizeEnabled}>
                                 <FormLabel fontSize="sm" color="brand.textLight">Text Content</FormLabel>
@@ -747,13 +753,13 @@ export default function ProductStudio() {
                                 : "$0.00"
                             }
                         </Text>
-                        {/* Final checkout button logic: enabled if finalVariant is selected AND there's at least one custom object (image or text) */}
+                        {/* FINALIZED Checkout button logic: enabled if finalVariant is selected AND (an AI design is selected OR any text/design object is manually added to canvas) */}
                         <Button
                             colorScheme="brandAccentOrange"
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)} // This should now correctly enable if ANY custom object exists
+                            isDisabled={!finalVariant || (!selectedDesign && fabricCanvas.current && fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))).length === 0)}
                             width="full"
                             maxW="md"
                         >
