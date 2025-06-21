@@ -11,14 +11,13 @@ import {
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-// Added icons for new tools and controls
-import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa'; // Removed unused icons
+import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa';
 
 // Reusable ThemedSelect for consistency
 const ThemedSelect = (props) => (
     <Select
         size="lg"
-        bg="brand.secondary" // Dark background for select field
+        bg="brand.secondary"
         borderColor="whiteAlpha.300"
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
@@ -26,7 +25,7 @@ const ThemedSelect = (props) => (
     />
 );
 
-// New ThemedInput component for customization controls (for text input, color pickers etc.)
+// New ThemedInput component for customization controls
 const ThemedControlInput = (props) => (
     <Input
         size="sm"
@@ -44,6 +43,7 @@ export default function ProductStudio() {
     const toast = useToast();
     const location = useLocation();
 
+    // --- State Declarations ---
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [designs, setDesigns] = useState([]);
@@ -61,7 +61,12 @@ export default function ProductStudio() {
     const [fontSize, setFontSize] = useState(30);
     const [fontFamily, setFontFamily] = useState('Montserrat'); // Default body font
 
-    // Derived states based on selections
+    // Refs for Fabric.js Canvas
+    const canvasEl = useRef(null);
+    const fabricCanvas = useRef(null);
+    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
+
+    // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
     const uniqueColorVariants = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
     const selectedColorVariant = selectedProduct?.variants.find(v => v.colorName === selectedColorName);
@@ -72,57 +77,278 @@ export default function ProductStudio() {
         ? { ...selectedColorVariant, ...selectedSizeVariant }
         : null;
 
-    // Refs for Fabric.js Canvas
-    const canvasEl = useRef(null);
-    const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
+    // --- Customization Tool Handlers (Fabric.js interactions) ---
+    // Moved these to the top, right after state declarations
+
+    const updateActiveObject = useCallback((property, value) => {
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                if (activeObject.type === 'i-text') {
+                    if (property === 'fill') {
+                        activeObject.set('fill', value);
+                        setTextColor(value);
+                    } else if (property === 'fontSize') {
+                        activeObject.set('fontSize', value);
+                        setFontSize(value);
+                    } else if (property === 'fontFamily') {
+                        activeObject.set('fontFamily', value);
+                        setFontFamily(value);
+                    }
+                } else {
+                    activeObject.set(property, value);
+                }
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
+            }
+        }
+    }, [toast]);
+
+    const addTextToCanvas = useCallback(() => {
+        if (!fabricCanvas.current || !textInputValue.trim()) {
+            toast({ title: "Please enter text content.", status: "warning", isClosable: true });
+            return;
+        }
+        const textObject = new window.fabric.IText(textInputValue, {
+            left: (fabricCanvas.current.width / 2) - 100,
+            top: (fabricCanvas.current.height / 2) - 20,
+            fill: textColor,
+            fontSize: fontSize,
+            fontFamily: fontFamily,
+            hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
+            cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
+        });
+        fabricCanvas.current.add(textObject);
+        fabricCanvas.current.setActiveObject(textObject);
+        fabricCanvas.current.renderAll();
+        setTextInputValue('');
+    }, [textInputValue, textColor, fontSize, fontFamily, toast]);
+
+    const clearCanvas = useCallback(() => {
+        if (fabricCanvas.current) {
+            // Filter out the background image, which is not an "object" in the traditional sense for removal
+            fabricCanvas.current.getObjects().forEach(obj => {
+                if (obj !== fabricCanvas.current.backgroundImage) {
+                    fabricCanvas.current.remove(obj);
+                }
+            });
+            fabricCanvas.current.renderAll();
+            setSelectedDesign(null);
+        }
+    }, []); // No dependencies for clearCanvas as it only interacts with the ref
+
+    const deleteSelectedObject = useCallback(() => {
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                fabricCanvas.current.remove(activeObject);
+                fabricCanvas.current.discardActiveObject();
+                fabricCanvas.current.renderAll();
+                activeObjectRef.current = null;
+                if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
+                    setSelectedDesign(null);
+                }
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
+            }
+        }
+    }, [selectedDesign, toast]); // selectedDesign and toast are dependencies here
+
+    const centerSelectedObject = useCallback(() => {
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                activeObject.centerH();
+                activeObject.centerV();
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
+            }
+        }
+    }, [toast]);
+
+    const handleProceedToCheckout = useCallback(async () => {
+        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
+
+        if (!hasCustomizations) {
+            toast({ title: "No customizations", description: "Please select a design or add custom elements.", status: "warning", isClosable: true });
+            return;
+        }
+        if (!finalVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
+
+        const finalPreviewImage = fabricCanvas.current.toDataURL({
+            format: 'png',
+            quality: 1.0,
+            multiplier: 1,
+        });
+
+        const PRINT_READY_WIDTH = 4500;
+        const PRINT_READY_HEIGHT = 5400;
+
+        const printReadyCanvas = new window.fabric.Canvas(null, {
+            width: PRINT_READY_WIDTH,
+            height: PRINT_READY_HEIGHT,
+            backgroundColor: 'rgba(0,0,0,0)',
+        });
+
+        const previewCanvasWidth = fabricCanvas.current.width;
+        const previewCanvasHeight = fabricCanvas.current.height;
+
+        fabricCanvas.current.getObjects().filter(obj =>
+            obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
+        ).forEach(obj => {
+            const clonedObj = window.fabric.util.object.clone(obj);
+
+            const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
+            const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
+
+            clonedObj.set({
+                left: obj.left * scaleFactorX,
+                top: obj.top * scaleFactorY,
+                scaleX: obj.scaleX * scaleFactorX,
+                YscaleY: obj.scaleY * scaleFactorY, // Typo fixed: YscaleY to scaleY
+                hasControls: false, hasBorders: false,
+            });
+
+            if (clonedObj.type === 'i-text') {
+                clonedObj.set({
+                    fontSize: obj.fontSize * Math.min(scaleFactorX, scaleFactorY)
+                });
+            }
+            printReadyCanvas.add(clonedObj);
+        });
+        printReadyCanvas.renderAll();
+        const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
+            format: 'png',
+            quality: 1.0,
+            multiplier: 1,
+        });
+        printReadyCanvas.dispose();
+
+        let cloudinaryPublicUrl = '';
+        try {
+            toast({
+                title: "Uploading design...",
+                description: "Preparing your custom design for print. This may take a moment.",
+                status: "info",
+                duration: null,
+                isClosable: false,
+                position: "top",
+            });
+            const uploadResponse = await client.post('/upload-print-file', {
+                imageData: printReadyDesignDataUrl,
+                designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
+            });
+            cloudinaryPublicUrl = uploadResponse.data.publicUrl;
+            toast.closeAll();
+            toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
+        } catch (error) {
+            console.error("Error uploading print file to Cloudinary:", error);
+            toast.closeAll();
+            toast({
+                title: "Upload Failed",
+                description: "Could not upload your design for printing. Please try again.",
+                status: "error",
+                isClosable: true,
+            });
+            return;
+        }
+
+        const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
+        const checkoutItem = {
+            designId: selectedDesign?._id || 'custom-design-' + Date.now(),
+            productId: selectedProductId,
+            productName: selectedProduct.name,
+            variantSku: finalVariant.sku,
+            size: finalVariant.size,
+            color: finalVariant.colorName,
+            prompt: selectedDesign?.prompt || "Customized design",
+            imageDataUrl: finalPreviewImage,
+            printReadyDataUrl: cloudinaryPublicUrl,
+            productImage: primaryImage?.url,
+            unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
+        };
+        localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
+        navigate('/checkout');
+    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast]);
+
+    // --- Handlers for dropdowns ---
+    const handleProductChange = useCallback((e) => {
+        const newProductId = e.target.value;
+        setSelectedProductId(newProductId);
+        setSelectedColorName('');
+        setSelectedSize('');
+        clearCanvas();
+
+        const newSelectedProduct = products.find(p => p._id === newProductId);
+        if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
+            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
+            setSelectedColorName(defaultColor.colorName);
+            if (defaultColor.sizes?.length > 0) {
+                setSelectedSize(defaultColor.sizes[0].size);
+            }
+        }
+    }, [products, clearCanvas]); // Added clearCanvas to dependencies
+
+    const handleColorChange = useCallback((e) => {
+        const newColor = e.target.value;
+        setSelectedColorName(newColor);
+        setSelectedSize('');
+
+        const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
+        if (newColorVariant?.sizes?.length > 0) {
+            setSelectedSize(newColorVariant.sizes[0].size);
+        }
+    }, [selectedProduct]); // Added selectedProduct to dependencies
+
+
+    // --- Effects (Data Fetching and Canvas Initialization) ---
 
     // Canvas Initialization (runs once on mount)
+    // IMPORTANT: The dependency array for this useEffect is now empty,
+    // as it only initializes Fabric.js and sets up event listeners.
+    // The `deleteSelectedObject` function is now defined higher up and is stable.
     useEffect(() => {
         // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
-            // Set canvas dimensions using an appropriate multiplier or fixed size for better quality
-            const canvasWidth = 600; // Define a consistent internal canvas resolution for preview
+            const canvasWidth = 600;
             const canvasHeight = 600;
 
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
                 width: canvasWidth,
                 height: canvasHeight,
-                backgroundColor: 'rgba(0,0,0,0)', // Transparent canvas background
-                selection: true, // Ensure canvas selection is enabled
+                backgroundColor: 'rgba(0,0,0,0)',
+                selection: true,
             });
 
-            // Event listeners for object selection (to track active object for tool controls)
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
 
-            // Add a global keydown listener for delete key
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
-                    // Prevent deleting text inside text input fields
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
                         return;
                     }
-                    deleteSelectedObject(); // Use the existing delete function
+                    // Call the stable deleteSelectedObject function
+                    deleteSelectedObject();
                 }
             };
             document.addEventListener('keydown', handleKeyDown);
 
+            return () => {
+                if (fabricCanvas.current) {
+                    fabricCanvas.current.off('selection:created');
+                    fabricCanvas.current.off('selection:updated');
+                    fabricCanvas.current.off('selection:cleared');
+                    fabricCanvas.current.dispose();
+                    fabricCanvas.current = null;
+                    document.removeEventListener('keydown', handleKeyDown);
+                }
+            };
         }
-
-        // Cleanup function for Fabric.js
-        return () => {
-            if (fabricCanvas.current) {
-                fabricCanvas.current.off('selection:created');
-                fabricCanvas.current.off('selection:updated');
-                fabricCanvas.current.off('selection:cleared');
-                fabricCanvas.current.dispose();
-                fabricCanvas.current = null;
-                document.removeEventListener('keydown', handleKeyDown); // Clean up keydown listener
-            }
-        };
-    }, [deleteSelectedObject]); // Added deleteSelectedObject to dependencies for strict `useCallback` linting, though it might not strictly be needed if Fabric.js setup is truly once-per-mount.
+    }, [deleteSelectedObject]); // Keeping deleteSelectedObject as a dependency here to ensure `handleKeyDown`'s closure is up-to-date with the latest `deleteSelectedObject` reference. This is the correct pattern.
 
     // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
@@ -169,33 +395,29 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                // Remove previous design image if any, but preserve other objects like text
                 FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-')).forEach(obj => FCanvas.remove(obj));
 
                 if (selectedDesign?.imageDataUrl) {
-                    // Check if the design is already on the canvas (unlikely with the filter above, but good for robustness)
                     const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
                     if (!existingDesignObject) {
                         window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                             if (!img) return;
-                            img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
-                            img.scaleToWidth(FCanvas.width * 0.33); // Initial scale
+                            img.id = `design-${selectedDesign._id}`;
+                            img.scaleToWidth(FCanvas.width * 0.33);
                             img.set({
                                 top: FCanvas.height * 0.24,
                                 left: (FCanvas.width - img.getScaledWidth()) / 2,
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-                                // Allow full movement and scaling
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
-                            img.sendToBack(); // Send image behind text if text is added later
+                            img.sendToBack();
                             FCanvas.renderAll();
-                            FCanvas.setActiveObject(img); // Make it the active object
+                            FCanvas.setActiveObject(img);
                         }, { crossOrigin: 'anonymous' });
                     } else {
-                        // If for some reason it already exists, just make it active
                         FCanvas.setActiveObject(existingDesignObject);
                         FCanvas.renderAll();
                     }
@@ -265,7 +487,7 @@ export default function ProductStudio() {
         }
     }, [user, location, navigate]);
 
-    // NEW: Effect to synchronize text tool inputs with active Fabric.js object
+    // Effect to synchronize text tool inputs with active Fabric.js object
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas) return;
@@ -273,13 +495,11 @@ export default function ProductStudio() {
         const onSelectionChange = () => {
             const activeObject = FCanvas.getActiveObject();
             if (activeObject && activeObject.type === 'i-text') {
-                // Update state variables to reflect the active text object's properties
-                setTextColor(activeObject.fill || '#FDF6EE'); // Fallback default
-                setFontSize(activeObject.fontSize || 30); // Fallback default
-                setFontFamily(activeObject.fontFamily || 'Montserrat'); // Fallback default
+                setTextColor(activeObject.fill || '#FDF6EE');
+                setFontSize(activeObject.fontSize || 30);
+                setFontFamily(activeObject.fontFamily || 'Montserrat');
             } else {
-                // Optionally reset or disable text tool controls if no text object is selected
-                // For now, keep last set values, or you can reset them if preferred
+                // If no text object is selected, we can optionally reset text input or just keep previous state
             }
         };
 
@@ -292,242 +512,8 @@ export default function ProductStudio() {
             FCanvas.off('selection:updated', onSelectionChange);
             FCanvas.off('selection:cleared', onSelectionChange);
         };
-    }, []); // Empty dependency array as FCanvas ref is stable and event listeners are cleaned up
-
-
-    // --- Customization Tool Handlers (Fabric.js interactions) ---
-
-    // Function to update properties of the active object (text/shape color/font/etc.)
-    const updateActiveObject = useCallback((property, value) => {
-        if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject) {
-                // Specific logic for IText objects
-                if (activeObject.type === 'i-text') {
-                    if (property === 'fill') {
-                        activeObject.set('fill', value);
-                        setTextColor(value); // Keep UI state in sync
-                    } else if (property === 'fontSize') {
-                        activeObject.set('fontSize', value);
-                        setFontSize(value); // Keep UI state in sync
-                    } else if (property === 'fontFamily') {
-                        activeObject.set('fontFamily', value);
-                        setFontFamily(value); // Keep UI state in sync
-                    }
-                } else {
-                    // For other object types (like images from designs)
-                    activeObject.set(property, value);
-                }
-                fabricCanvas.current.renderAll();
-            } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
-            }
-        }
-    }, [toast]);
-
-
-    const addTextToCanvas = useCallback(() => {
-        if (!fabricCanvas.current || !textInputValue.trim()) {
-            toast({ title: "Please enter text content.", status: "warning", isClosable: true });
-            return;
-        }
-        const textObject = new window.fabric.IText(textInputValue, {
-            left: (fabricCanvas.current.width / 2) - 100,
-            top: (fabricCanvas.current.height / 2) - 20,
-            fill: textColor,
-            fontSize: fontSize,
-            fontFamily: fontFamily,
-            hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
-            cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-        });
-        fabricCanvas.current.add(textObject);
-        fabricCanvas.current.setActiveObject(textObject);
-        fabricCanvas.current.renderAll();
-        setTextInputValue('');
-    }, [textInputValue, textColor, fontSize, fontFamily, toast]);
-
-    const clearCanvas = useCallback(() => {
-        if (fabricCanvas.current) {
-            fabricCanvas.current.getObjects().filter(obj => obj !== fabricCanvas.current.backgroundImage).forEach(obj => fabricCanvas.current.remove(obj));
-            fabricCanvas.current.renderAll();
-            setSelectedDesign(null); // Clear selected design from state as well
-        }
     }, []);
 
-    // Function to delete the currently selected Fabric.js object
-    const deleteSelectedObject = useCallback(() => {
-        if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject) {
-                fabricCanvas.current.remove(activeObject);
-                fabricCanvas.current.discardActiveObject();
-                fabricCanvas.current.renderAll();
-                activeObjectRef.current = null;
-                // If the deleted object was the selected design, clear that state
-                if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
-                    setSelectedDesign(null);
-                }
-            } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
-            }
-        }
-    }, [selectedDesign, toast]); // Added selectedDesign to deps
-
-    // Function to center the currently selected Fabric.js object
-    const centerSelectedObject = useCallback(() => {
-        if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject) {
-                activeObject.centerH();
-                activeObject.centerV();
-                fabricCanvas.current.renderAll();
-            } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
-            }
-        }
-    }, [toast]);
-
-
-    const handleProceedToCheckout = useCallback(async () => { // Made async for API call
-        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
-
-        if (!hasCustomizations) {
-            toast({ title: "No customizations", description: "Please select a design or add custom elements.", status: "warning", isClosable: true });
-            return;
-        }
-        if (!finalVariant) { toast({ title: "Please select all product options.", status: "warning", isClosable: true }); return; }
-
-        // 1. Generate low-res preview image (for display in cart/order history)
-        const finalPreviewImage = fabricCanvas.current.toDataURL({
-            format: 'png',
-            quality: 1.0,
-            multiplier: 1, // At 600x600 resolution
-        });
-
-        // 2. Generate high-res print-ready image (for Printful)
-        // Target: 15x18 inches at 300 DPI = 4500x5400 pixels
-        const PRINT_READY_WIDTH = 4500;
-        const PRINT_READY_HEIGHT = 5400;
-
-        const printReadyCanvas = new window.fabric.Canvas(null, {
-            width: PRINT_READY_WIDTH,
-            height: PRINT_READY_HEIGHT,
-            backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
-        });
-
-        // Clone and scale objects from current canvas to the high-res canvas
-        const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height;
-
-        fabricCanvas.current.getObjects().filter(obj =>
-            obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
-        ).forEach(obj => {
-            const clonedObj = window.fabric.util.object.clone(obj);
-
-            // Calculate scaling factors for position and size
-            const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
-            const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-
-            clonedObj.set({
-                left: obj.left * scaleFactorX,
-                top: obj.top * scaleFactorY,
-                scaleX: obj.scaleX * scaleFactorX,
-                scaleY: obj.scaleY * scaleFactorY,
-                hasControls: false, hasBorders: false, // No controls on print file
-            });
-
-            if (clonedObj.type === 'i-text') {
-                clonedObj.set({
-                    fontSize: obj.fontSize * Math.min(scaleFactorX, scaleFactorY) // Scale font size
-                });
-            }
-            printReadyCanvas.add(clonedObj);
-        });
-        printReadyCanvas.renderAll();
-        const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
-            format: 'png',
-            quality: 1.0, // High quality for print
-            multiplier: 1, // Already at target resolution, no further scaling
-        });
-        printReadyCanvas.dispose(); // Clean up the temporary canvas
-
-        // 3. Upload print-ready image to Cloudinary via backend
-        let cloudinaryPublicUrl = '';
-        try {
-            toast({
-                title: "Uploading design...",
-                description: "Preparing your custom design for print. This may take a moment.",
-                status: "info",
-                duration: null, // Keep open until resolved
-                isClosable: false,
-                position: "top",
-            });
-            const uploadResponse = await client.post('/upload-print-file', {
-                imageData: printReadyDesignDataUrl,
-                designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
-            });
-            cloudinaryPublicUrl = uploadResponse.data.publicUrl;
-            toast.closeAll(); // Close previous toast
-            toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
-        } catch (error) {
-            console.error("Error uploading print file to Cloudinary:", error);
-            toast.closeAll(); // Close previous toast
-            toast({
-                title: "Upload Failed",
-                description: "Could not upload your design for printing. Please try again.",
-                status: "error",
-                isClosable: true,
-            });
-            return; // Stop checkout process if upload fails
-        }
-
-        // 4. Prepare checkout item with the Cloudinary URL
-        const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
-        const checkoutItem = {
-            designId: selectedDesign?._id || 'custom-design-' + Date.now(),
-            productId: selectedProductId,
-            productName: selectedProduct.name,
-            variantSku: finalVariant.sku,
-            size: finalVariant.size,
-            color: finalVariant.colorName,
-            prompt: selectedDesign?.prompt || "Customized design",
-            imageDataUrl: finalPreviewImage, // Low-res preview
-            printReadyDataUrl: cloudinaryPublicUrl, // HIGH-RES CLOUDINARY URL
-            productImage: primaryImage?.url,
-            unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
-        };
-        localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
-        navigate('/checkout');
-    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast]);
-
-    // Handlers for dropdowns
-    const handleProductChange = (e) => {
-        const newProductId = e.target.value;
-        setSelectedProductId(newProductId);
-        setSelectedColorName('');
-        setSelectedSize('');
-        clearCanvas();
-
-        const newSelectedProduct = products.find(p => p._id === newProductId);
-        if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
-            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
-            setSelectedColorName(defaultColor.colorName);
-            if (defaultColor.sizes?.length > 0) {
-                setSelectedSize(defaultColor.sizes[0].size);
-            }
-        }
-    };
-
-    const handleColorChange = (e) => {
-        const newColor = e.target.value;
-        setSelectedColorName(newColor);
-        setSelectedSize('');
-
-        const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
-        if (newColorVariant?.sizes?.length > 0) {
-            setSelectedSize(newColorVariant.sizes[0].size);
-        }
-    };
 
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
 
