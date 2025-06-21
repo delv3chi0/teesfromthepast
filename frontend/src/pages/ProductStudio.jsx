@@ -78,8 +78,6 @@ export default function ProductStudio() {
         : null;
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
-    // Moved these to the top, right after state declarations
-
     const updateActiveObject = useCallback((property, value) => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
@@ -111,8 +109,11 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
-            left: (fabricCanvas.current.width / 2) - 100,
-            top: (fabricCanvas.current.height / 2) - 20,
+            // Initial positioning can be centered for new text, then user can drag
+            left: (fabricCanvas.current.width / 2),
+            top: (fabricCanvas.current.height / 2),
+            originX: 'center', // Set origin to center for easier positioning
+            originY: 'center',
             fill: textColor,
             fontSize: fontSize,
             fontFamily: fontFamily,
@@ -127,7 +128,6 @@ export default function ProductStudio() {
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
-            // Filter out the background image, which is not an "object" in the traditional sense for removal
             fabricCanvas.current.getObjects().forEach(obj => {
                 if (obj !== fabricCanvas.current.backgroundImage) {
                     fabricCanvas.current.remove(obj);
@@ -136,7 +136,7 @@ export default function ProductStudio() {
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
         }
-    }, []); // No dependencies for clearCanvas as it only interacts with the ref
+    }, []);
 
     const deleteSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
@@ -153,7 +153,7 @@ export default function ProductStudio() {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
             }
         }
-    }, [selectedDesign, toast]); // selectedDesign and toast are dependencies here
+    }, [selectedDesign, toast]);
 
     const centerSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
@@ -169,11 +169,11 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        // --- UPDATED LOGIC: Allow checkout if ANY custom object (design OR text) exists ---
-        // This checks if there are any objects on the canvas *other than the background image*.
-        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().length > 0;
+        // --- FINALIZED LOGIC: Allow checkout if a product is selected AND there is at least one custom object (design OR text) ---
+        // Get all objects currently on the canvas, excluding the background image
+        const currentCustomObjects = fabricCanvas.current.getObjects();
 
-        if (!hasCustomizations) {
+        if (currentCustomObjects.length === 0) { // If there are NO custom objects at all
             toast({ title: "No customizations", description: "Please select a design or add custom elements before proceeding.", status: "warning", isClosable: true });
             return;
         }
@@ -190,7 +190,6 @@ export default function ProductStudio() {
         });
 
         // 2. Generate high-res print-ready image (for Printful)
-        // Target: 15x18 inches at 300 DPI = 4500x5400 pixels
         const PRINT_READY_WIDTH = 4500;
         const PRINT_READY_HEIGHT = 5400;
 
@@ -204,38 +203,54 @@ export default function ProductStudio() {
         const previewCanvasHeight = fabricCanvas.current.height;
 
         // Loop through all *customizable* objects (designs and text) on the preview canvas
-        const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
-            obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
-        );
-
-        customizableObjects.forEach(obj => {
+        currentCustomObjects.forEach(obj => { // Use the 'currentCustomObjects' directly
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate current center and dimensions on the PREVIEW canvas
-            const objCenterX = obj.left + obj.getScaledWidth() / 2;
-            const objCenterY = obj.top + obj.getScaledHeight() / 2;
-
-            // Calculate relative center position (0-1 range) on the PREVIEW canvas
-            const relativeCenterX = objCenterX / previewCanvasWidth;
-            const relativeCenterY = objCenterY / previewCanvasHeight;
-
-            // Calculate new scale for the high-res canvas
+            // Calculate scaling factors for position and size
             const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
             const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallScaleFactor = Math.min(scaleFactorX, scaleFactorY); // Use min to ensure it fits, or you can use average if stretching is okay. Min is safer for designs.
+            // Use Math.min to ensure the design fits within the print area without distortion if canvas aspect ratios differ greatly.
+            // If the print area is significantly different aspect ratio than canvas, you might need more complex fit logic.
+            const overallScaleFactor = Math.min(scaleFactorX, scaleFactorY);
 
+            // Apply global scaling
             clonedObj.set({
                 scaleX: obj.scaleX * overallScaleFactor,
                 scaleY: obj.scaleY * overallScaleFactor,
-                // FIX: Define targetX/Y before using them in clonedObj.set
-                left: relativeCenterX * PRINT_READY_WIDTH - (clonedObj.getScaledWidth() * overallScaleFactor / 2), // Re-calculate left/top based on new scale and target center
-                top: relativeCenterY * PRINT_READY_HEIGHT - (clonedObj.getScaledHeight() * overallScaleFactor / 2),
                 hasControls: false, hasBorders: false, // No controls on print file
             });
 
+            // --- CRITICAL FIX: Recalculate position based on new scaled dimensions and original relative center ---
+            // obj.left and obj.top are relative to the top-left of the preview canvas.
+            // When scaling, the object's origin (top-left by default, or center if originX/Y='center') also scales.
+            // The goal is to maintain the *relative position* of the object on the print-ready canvas.
+
+            // Get original object's center on the PREVIEW canvas
+            // Use obj.getCenterPoint() if it's reliable for all types, or calculate manually
+            const originalCenterX = obj.left + obj.getScaledWidth() / 2;
+            const originalCenterY = obj.top + obj.getScaledHeight() / 2;
+
+            // Calculate relative center position (0-1 range) on the PREVIEW canvas
+            const relativeCenterX = originalCenterX / previewCanvasWidth;
+            const relativeCenterY = originalCenterY / previewCanvasHeight;
+
+            // Calculate target center position on the PRINT_READY canvas
+            const targetCenterX = relativeCenterX * PRINT_READY_WIDTH;
+            const targetCenterY = relativeCenterY * PRINT_READY_HEIGHT;
+            
+            // Set the origin to center *before* setting left/top for easier positioning
+            // This is crucial if objects don't have originX/Y set to 'center' on the preview canvas
+            clonedObj.set({
+                originX: 'center',
+                originY: 'center',
+                left: targetCenterX,
+                top: targetCenterY,
+            });
+
+
             if (clonedObj.type === 'i-text') {
-                // --- UPDATED TEXT SCALING LOGIC (Corrected for proportionality) ---
-                // Scale font size proportionally using the overallScaleFactor
+                // Ensure the font size scales proportionally with the object's overall scaling.
+                // This typically means scaling fontSize directly by overallScaleFactor.
                 clonedObj.set({
                     fontSize: obj.fontSize * overallScaleFactor
                 });
@@ -309,11 +324,9 @@ export default function ProductStudio() {
 
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
-            // FIX: Removed extra dot before [0]
             const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
             setSelectedColorName(defaultColor.colorName);
             if (defaultColor.sizes?.length > 0) {
-                // FIX: Removed extra dot before [0]
                 setSelectedSize(defaultColor.sizes[0].size);
             }
         }
@@ -326,7 +339,6 @@ export default function ProductStudio() {
 
         const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
         if (newColorVariant?.sizes?.length > 0) {
-            // FIX: Removed extra dot before [0]
             setSelectedSize(newColorVariant.sizes[0].size);
         }
     }, [selectedProduct]); // Dependencies
@@ -489,15 +501,12 @@ export default function ProductStudio() {
                         if (initialColorVariant && size) {
                             setSelectedSize(size);
                         } else if (initialColorVariant?.sizes?.length > 0) {
-                            // FIX: Removed extra dot before [0]
                             setSelectedSize(initialColorVariant.sizes[0].size);
                         }
                     } else if (initialProduct?.variants?.length > 0) {
-                        // FIX: Removed extra dot before [0]
                         const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
                         setSelectedColorName(defaultColor.colorName);
                         if (defaultColor.sizes?.length > 0) {
-                            // FIX: Removed extra dot before [0]
                             setSelectedSize(defaultColor.sizes[0].size);
                         }
                     }
@@ -742,13 +751,13 @@ export default function ProductStudio() {
                                 : "$0.00"
                             }
                         </Text>
-                        {/* UPDATED: Checkout button is now enabled if any customizations (design or text) are present */}
+                        {/* Final checkout button logic: enabled if finalVariant is selected AND there's at least one custom object (image or text) */}
                         <Button
                             colorScheme="brandAccentOrange"
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)} // Checks if ANY objects exist (excluding background image)
+                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)}
                             width="full"
                             maxW="md"
                         >
