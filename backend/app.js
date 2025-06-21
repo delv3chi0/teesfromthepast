@@ -18,9 +18,6 @@ import formRoutes from './routes/formRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
-// REMOVED: adminProductCategoryRoutes is no longer needed
-// import adminProductCategoryRoutes from './routes/adminProductCategoryRoutes.js'; // THIS LINE IS NOW REMOVED
-// REMOVED: adminProductTypeRoutes is no longer needed (already commented out or removed)
 import adminProductRoutes from './routes/adminProductRoutes.js'; // This now handles all admin product logic
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
 
@@ -92,6 +89,9 @@ app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
 app.use('/api/admin/', adminProductRoutes); // This route now handles all product CRUD for admin
+
+import uploadRoutes from './routes/uploadRoutes.js'; // Make sure this import is present
+app.use('/api', uploadRoutes); // Mount the new upload routes under /api
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
