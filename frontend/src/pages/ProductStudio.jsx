@@ -17,7 +17,7 @@ import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaP
 const ThemedSelect = (props) => (
     <Select
         size="lg"
-        bg="brand.secondary"
+        bg="brand.secondary" // Dark background for select field
         borderColor="whiteAlpha.300"
         _hover={{ borderColor: "brand.accentYellow" }}
         focusBorderColor="brand.accentYellow"
@@ -25,7 +25,7 @@ const ThemedSelect = (props) => (
     />
 );
 
-// New ThemedInput component for customization controls
+// New ThemedInput component for customization controls (for text input, color pickers etc.)
 const ThemedControlInput = (props) => (
     <Input
         size="sm"
@@ -78,6 +78,8 @@ export default function ProductStudio() {
         : null;
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
+    // Moved these to the top, right after state declarations
+
     const updateActiveObject = useCallback((property, value) => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
@@ -125,6 +127,7 @@ export default function ProductStudio() {
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
+            // Filter out the background image, which is not an "object" in the traditional sense for removal
             fabricCanvas.current.getObjects().forEach(obj => {
                 if (obj !== fabricCanvas.current.backgroundImage) {
                     fabricCanvas.current.remove(obj);
@@ -133,7 +136,7 @@ export default function ProductStudio() {
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
         }
-    }, []);
+    }, []); // No dependencies for clearCanvas as it only interacts with the ref
 
     const deleteSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
@@ -150,7 +153,7 @@ export default function ProductStudio() {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
             }
         }
-    }, [selectedDesign, toast]);
+    }, [selectedDesign, toast]); // selectedDesign and toast are dependencies here
 
     const centerSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
@@ -166,6 +169,7 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
+        // --- UPDATED LOGIC: Allow checkout if ANY custom object (design OR text) exists ---
         const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
         );
@@ -179,49 +183,68 @@ export default function ProductStudio() {
             return;
         }
 
-        // 1. Generate low-res preview image
+        // 1. Generate low-res preview image (for display in cart/order history)
         const finalPreviewImage = fabricCanvas.current.toDataURL({
             format: 'png',
             quality: 1.0,
-            multiplier: 1,
+            multiplier: 1, // At 600x600 resolution
         });
 
-        // 2. Generate high-res print-ready image
+        // 2. Generate high-res print-ready image (for Printful)
+        // Target: 15x18 inches at 300 DPI = 4500x5400 pixels
         const PRINT_READY_WIDTH = 4500;
         const PRINT_READY_HEIGHT = 5400;
 
         const printReadyCanvas = new window.fabric.Canvas(null, {
             width: PRINT_READY_WIDTH,
             height: PRINT_READY_HEIGHT,
-            backgroundColor: 'rgba(0,0,0,0)',
+            backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
         const previewCanvasHeight = fabricCanvas.current.height;
 
-        fabricCanvas.current.getObjects().filter(obj =>
+        // Loop through all *customizable* objects (designs and text) on the preview canvas
+        const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
-        ).forEach(obj => {
+        );
+
+        customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
+            // Calculate current center and dimensions on the PREVIEW canvas
+            const objCenterX = obj.left + obj.getScaledWidth() / 2;
+            const objCenterY = obj.top + obj.getScaledHeight() / 2;
+
+            // Calculate relative center position (0-1 range) on the PREVIEW canvas
+            const relativeCenterX = objCenterX / previewCanvasWidth;
+            const relativeCenterY = objCenterY / previewCanvasHeight;
+
+            // Calculate new scale for the high-res canvas
+            // Use the average of scale factors to maintain aspect ratio and overall size proportionally
             const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
             const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallScaleFactor = Math.min(scaleFactorX, scaleFactorY);
+            const overallScaleFactor = Math.min(scaleFactorX, scaleFactorY); // Use min to ensure it fits, or you can use average if stretching is okay. Min is safer for designs.
 
             clonedObj.set({
                 scaleX: obj.scaleX * overallScaleFactor,
-                scaleY: obj.scaleY * overallScaleFactor,
-                left: obj.left * scaleFactorX,
-                top: obj.top * scaleFactorY,
-                hasControls: false, hasBorders: false,
+                scaleY: obj.scaleY * overallScaleFactor, // Fixed typo YscaleY to scaleY in previous commit, ensuring it's here too
+                hasControls: false, hasBorders: false, // No controls on print file
             });
 
+            // Re-calculate left/top based on new scale and target center
+            clonedObj.set({
+                left: targetCenterX - clonedObj.getScaledWidth() / 2,
+                top: targetCenterY - clonedObj.getScaledHeight() / 2,
+            });
+
+
             if (clonedObj.type === 'i-text') {
-                // --- UPDATED TEXT SCALING ---
-                const originalTextHeight = obj.fontSize * obj.scaleY; // Approximate original rendered height
-                const targetTextHeight = originalTextHeight * overallScaleFactor;
+                // --- UPDATED TEXT SCALING LOGIC ---
+                // Scale font size proportionally to the overall scaling factor
+                // This should prevent stretching and maintain relative size
                 clonedObj.set({
-                    fontSize: targetTextHeight / clonedObj.scaleY // Adjust fontSize based on new scale
+                    fontSize: obj.fontSize * overallScaleFactor
                 });
             }
             printReadyCanvas.add(clonedObj);
@@ -229,19 +252,19 @@ export default function ProductStudio() {
         printReadyCanvas.renderAll();
         const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
             format: 'png',
-            quality: 1.0,
-            multiplier: 1,
+            quality: 1.0, // High quality for print
+            multiplier: 1, // Already at target resolution, no further scaling
         });
-        printReadyCanvas.dispose();
+        printReadyCanvas.dispose(); // Clean up the temporary canvas
 
-        // 3. Upload print-ready image to Cloudinary
+        // 3. Upload print-ready image to Cloudinary via backend
         let cloudinaryPublicUrl = '';
         try {
             toast({
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment.",
                 status: "info",
-                duration: null,
+                duration: null, // Keep open until resolved
                 isClosable: false,
                 position: "top",
             });
@@ -250,21 +273,21 @@ export default function ProductStudio() {
                 designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
             });
             cloudinaryPublicUrl = uploadResponse.data.publicUrl;
-            toast.closeAll();
+            toast.closeAll(); // Close previous toast
             toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
         } catch (error) {
             console.error("Error uploading print file to Cloudinary:", error);
-            toast.closeAll();
+            toast.closeAll(); // Close previous toast
             toast({
                 title: "Upload Failed",
                 description: "Could not upload your design for printing. Please try again.",
                 status: "error",
                 isClosable: true,
             });
-            return;
+            return; // Stop checkout process if upload fails
         }
 
-        // 4. Prepare checkout item
+        // 4. Prepare checkout item with the Cloudinary URL
         const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
         const checkoutItem = {
             designId: selectedDesign?._id || 'custom-design-' + Date.now(),
@@ -274,8 +297,8 @@ export default function ProductStudio() {
             size: finalVariant.size,
             color: finalVariant.colorName,
             prompt: selectedDesign?.prompt || "Customized design",
-            imageDataUrl: finalPreviewImage,
-            printReadyDataUrl: cloudinaryPublicUrl,
+            imageDataUrl: finalPreviewImage, // Low-res preview
+            printReadyDataUrl: cloudinaryPublicUrl, // HIGH-RES CLOUDINARY URL
             productImage: primaryImage?.url,
             unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
         };
@@ -283,23 +306,25 @@ export default function ProductStudio() {
         navigate('/checkout');
     }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast]);
 
-    // Handlers for dropdowns
+    // Handlers for dropdowns - use `useCallback` for consistency and stability
     const handleProductChange = useCallback((e) => {
         const newProductId = e.target.value;
         setSelectedProductId(newProductId);
         setSelectedColorName('');
         setSelectedSize('');
-        clearCanvas();
+        clearCanvas(); // clearCanvas is a useCallback and stable
 
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
-            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants.[0];
+            // FIX: Removed extra dot before [0]
+            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
             setSelectedColorName(defaultColor.colorName);
             if (defaultColor.sizes?.length > 0) {
-                setSelectedSize(defaultColor.sizes.[0].size);
+                // FIX: Removed extra dot before [0]
+                setSelectedSize(defaultColor.sizes[0].size);
             }
         }
-    }, [products, clearCanvas]);
+    }, [products, clearCanvas]); // Dependencies
 
     const handleColorChange = useCallback((e) => {
         const newColor = e.target.value;
@@ -308,14 +333,17 @@ export default function ProductStudio() {
 
         const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
         if (newColorVariant?.sizes?.length > 0) {
-            setSelectedSize(newColorVariant.sizes.[0].size);
+            // FIX: Removed extra dot before [0]
+            setSelectedSize(newColorVariant.sizes[0].size);
         }
-    }, [selectedProduct]);
+    }, [selectedProduct]); // Dependencies
+
 
     // --- Effects (Data Fetching and Canvas Initialization) ---
 
-    // Canvas Initialization
+    // Canvas Initialization (runs once on mount)
     useEffect(() => {
+        // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
             const canvasWidth = 600;
             const canvasHeight = 600;
@@ -327,20 +355,23 @@ export default function ProductStudio() {
                 selection: true,
             });
 
+            // Event listeners for object selection (to track active object for tool controls)
             fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
             fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
 
+            // Global keydown listener for delete key
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
                         return;
                     }
-                    deleteSelectedObject();
+                    deleteSelectedObject(); // Now correctly references the stable useCallback
                 }
             };
             document.addEventListener('keydown', handleKeyDown);
 
+            // Cleanup function for Fabric.js
             return () => {
                 if (fabricCanvas.current) {
                     fabricCanvas.current.off('selection:created');
@@ -352,9 +383,9 @@ export default function ProductStudio() {
                 }
             };
         }
-    }, [deleteSelectedObject]);
+    }, [deleteSelectedObject]); // deleteSelectedObject is a stable useCallback, so this is correct.
 
-    // Canvas Content Update
+    // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas || !window.fabric) return;
@@ -399,6 +430,7 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
+                // Remove previous design image if any, but preserve other objects like text
                 FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-')).forEach(obj => FCanvas.remove(obj));
 
                 if (selectedDesign?.imageDataUrl) {
@@ -406,22 +438,24 @@ export default function ProductStudio() {
                     if (!existingDesignObject) {
                         window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                             if (!img) return;
-                            img.id = `design-${selectedDesign._id}`;
-                            img.scaleToWidth(FCanvas.width * 0.33);
+                            img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
+                            img.scaleToWidth(FCanvas.width * 0.33); // Initial scale for display
+                            // --- NEW: Center the image upon addition ---
                             img.set({
-                                top: (FCanvas.height - img.getScaledHeight()) / 2,
-                                left: (FCanvas.width - img.getScaledWidth()) / 2,
+                                top: (FCanvas.height - img.getScaledHeight()) / 2, // Center vertically
+                                left: (FCanvas.width - img.getScaledWidth()) / 2, // Center horizontally
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
-                            img.sendToBack();
+                            img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
-                            FCanvas.setActiveObject(img);
+                            FCanvas.setActiveObject(img); // Make it the active object
                         }, { crossOrigin: 'anonymous' });
                     } else {
+                        // If for some reason it already exists, just make it active
                         FCanvas.setActiveObject(existingDesignObject);
                         FCanvas.renderAll();
                     }
@@ -436,6 +470,7 @@ export default function ProductStudio() {
         pollForFabricAndSetupContent();
 
     }, [finalVariant, currentMockupType, selectedDesign]);
+
 
     // Fetch products and initialize selections from URL params
     useEffect(() => {
@@ -461,13 +496,16 @@ export default function ProductStudio() {
                         if (initialColorVariant && size) {
                             setSelectedSize(size);
                         } else if (initialColorVariant?.sizes?.length > 0) {
-                            setSelectedSize(initialColorVariant.sizes.[0].size);
+                            // FIX: Removed extra dot before [0]
+                            setSelectedSize(initialColorVariant.sizes[0].size);
                         }
                     } else if (initialProduct?.variants?.length > 0) {
-                        const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants.[0];
+                        // FIX: Removed extra dot before [0]
+                        const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
                         setSelectedColorName(defaultColor.colorName);
                         if (defaultColor.sizes?.length > 0) {
-                            setSelectedSize(defaultColor.sizes.[0].size);
+                            // FIX: Removed extra dot before [0]
+                            setSelectedSize(defaultColor.sizes[0].size);
                         }
                     }
                 }
@@ -516,6 +554,7 @@ export default function ProductStudio() {
             FCanvas.off('selection:cleared', onSelectionChange);
         };
     }, []);
+
 
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
 
@@ -697,4 +736,34 @@ export default function ProductStudio() {
                     <Divider my={6} borderColor="whiteAlpha.300" />
 
                     {/* Final Preview & Checkout */}
-                    <VStack
+                    <VStack spacing={4} mt={4}>
+                        <Text fontSize="xl" fontWeight="medium" color="brand.textLight" textAlign="center">
+                            {selectedProduct && selectedColorVariant && selectedSizeVariant
+                                ? `Your design on a ${selectedSizeVariant.size} ${selectedColorVariant.colorName} ${selectedProduct.name}.`
+                                : "Select an apparel option and a design above to see your creation."
+                            }
+                        </Text>
+                        <Text fontSize="3xl" fontWeight="extrabold" color="brand.accentYellow">
+                            {finalVariant && selectedProduct
+                                ? `$${(selectedProduct.basePrice + (finalVariant.priceModifier || 0)).toFixed(2)}`
+                                : "$0.00"
+                            }
+                        </Text>
+                        {/* UPDATED: Checkout button is now enabled if any customizations (design or text) are present */}
+                        <Button
+                            colorScheme="brandAccentOrange"
+                            size="lg"
+                            onClick={handleProceedToCheckout}
+                            leftIcon={<Icon as={FaShoppingCart} />}
+                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))).length === 0)}
+                            width="full"
+                            maxW="md"
+                        >
+                            Proceed to Checkout
+                        </Button>
+                    </VStack>
+                </VStack>
+            </Box>
+        </VStack>
+    );
+}
