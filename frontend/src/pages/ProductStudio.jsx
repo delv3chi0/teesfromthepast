@@ -170,9 +170,8 @@ export default function ProductStudio() {
 
     const handleProceedToCheckout = useCallback(async () => {
         // --- UPDATED LOGIC: Allow checkout if ANY custom object (design OR text) exists ---
-        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().some(obj =>
-            obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
-        );
+        // This checks if there are any objects on the canvas *other than the background image*.
+        const hasCustomizations = fabricCanvas.current && fabricCanvas.current.getObjects().length > 0;
 
         if (!hasCustomizations) {
             toast({ title: "No customizations", description: "Please select a design or add custom elements before proceeding.", status: "warning", isClosable: true });
@@ -221,28 +220,22 @@ export default function ProductStudio() {
             const relativeCenterY = objCenterY / previewCanvasHeight;
 
             // Calculate new scale for the high-res canvas
-            // Use the average of scale factors to maintain aspect ratio and overall size proportionally
             const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
             const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
             const overallScaleFactor = Math.min(scaleFactorX, scaleFactorY); // Use min to ensure it fits, or you can use average if stretching is okay. Min is safer for designs.
 
             clonedObj.set({
                 scaleX: obj.scaleX * overallScaleFactor,
-                scaleY: obj.scaleY * overallScaleFactor, // Fixed typo YscaleY to scaleY in previous commit, ensuring it's here too
+                scaleY: obj.scaleY * overallScaleFactor,
+                // FIX: Define targetX/Y before using them in clonedObj.set
+                left: relativeCenterX * PRINT_READY_WIDTH - (clonedObj.getScaledWidth() * overallScaleFactor / 2), // Re-calculate left/top based on new scale and target center
+                top: relativeCenterY * PRINT_READY_HEIGHT - (clonedObj.getScaledHeight() * overallScaleFactor / 2),
                 hasControls: false, hasBorders: false, // No controls on print file
             });
 
-            // Re-calculate left/top based on new scale and target center
-            clonedObj.set({
-                left: targetCenterX - clonedObj.getScaledWidth() / 2,
-                top: targetCenterY - clonedObj.getScaledHeight() / 2,
-            });
-
-
             if (clonedObj.type === 'i-text') {
-                // --- UPDATED TEXT SCALING LOGIC ---
-                // Scale font size proportionally to the overall scaling factor
-                // This should prevent stretching and maintain relative size
+                // --- UPDATED TEXT SCALING LOGIC (Corrected for proportionality) ---
+                // Scale font size proportionally using the overallScaleFactor
                 clonedObj.set({
                     fontSize: obj.fontSize * overallScaleFactor
                 });
@@ -755,7 +748,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))).length === 0)}
+                            isDisabled={!finalVariant || (fabricCanvas.current && fabricCanvas.current.getObjects().length === 0)} // Checks if ANY objects exist (excluding background image)
                             width="full"
                             maxW="md"
                         >
