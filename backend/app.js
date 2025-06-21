@@ -18,8 +18,9 @@ import formRoutes from './routes/formRoutes.js';
 import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
-import adminProductRoutes from './routes/adminProductRoutes.js'; // This now handles all admin product logic
+import adminProductRoutes from './routes/adminProductRoutes.js';
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js'; // NEW IMPORT FOR CLOUDINARY UPLOADS
 
 const app = express();
 
@@ -89,9 +90,7 @@ app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
 app.use('/api/admin/', adminProductRoutes); // This route now handles all product CRUD for admin
-
-import uploadRoutes from './routes/uploadRoutes.js'; // Make sure this import is present
-app.use('/api', uploadRoutes); // Mount the new upload routes under /api
+app.use('/api', uploadRoutes); // NEW: Mount the upload routes for Cloudinary
 
 // --- Global Error Handler ---
 app.use((err, req, res, next) => {
