@@ -225,17 +225,15 @@ export default function ProductStudio() {
         }
 
         // --- Calculate bounding box of all customizable objects on PREVIEW canvas using a temporary group ---
-        // This is the most reliable way to get combined bounds of multiple, potentially transformed objects.
-        const tempGroup = new window.fabric.Group(customizableObjects, {
-            canvas: fabricCanvas.current // Important for correct bounds calculation, but not added to canvas itself
+        const previewDesignGroup = new window.fabric.Group(customizableObjects, {
+            // Do NOT add to canvas here, just use for calculation
         });
-        // Call setCoords on the group to ensure its bounding box is up-to-date
-        tempGroup.setCoords(); 
-        const contentBounds = tempGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
-
-        // Important: Dispose the temporary group immediately after getting bounds to prevent memory leaks
-        // and ensure original objects are not implicitly removed from the main canvas.
-        tempGroup.destroy(); 
+        previewDesignGroup.setCoords(); // Ensure current transform is applied to coordinates
+        const contentBounds = previewDesignGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
+        
+        // Destroy the temporary group immediately after getting bounds to prevent memory leaks
+        // and ensure original objects are not implicitly affected.
+        previewDesignGroup.destroy(); 
         
         console.log("DEBUG: Content Bounds (Preview Canvas):", contentBounds);
 
@@ -249,7 +247,7 @@ export default function ProductStudio() {
         // --- Calculate optimal scaling and positioning for the combined content ---
         const scaleToFitX = PRINT_READY_WIDTH / contentBounds.width;
         const scaleToFitY = PRINT_READY_HEIGHT / contentBounds.height;
-        const contentScale = Math.min(scaleToFitX, scaleToFitY); // Choose the smaller scale to fit entirely without overflow
+        const contentScale = Math.min(scaleToFitX, scaleToFitY); // Choose the smaller scale to fit entirely without distortion
 
         console.log("DEBUG: Calculated Content Scale:", contentScale);
 
@@ -268,12 +266,12 @@ export default function ProductStudio() {
             const clonedObj = window.fabric.util.object.clone(obj);
 
             // Calculate object's position relative to the content's bounding box top-left on preview.
-            // This ensures relative spacing is maintained.
-            const relativeLeftInContent = obj.left - contentBounds.left;
-            const relativeTopInContent = obj.top - contentBounds.top;
+            // Then scale it, and add the overall centering offset.
+            // FIX: Declare relativeXInContent and relativeYInContent
+            const relativeXInContent = obj.left - contentBounds.left;
+            const relativeYInContent = obj.top - contentBounds.top;
 
-            // Apply contentScale to these relative positions, then add the overall centering offset.
-            const newLeft = (relativeLeftInContent * contentScale) + offsetX_center;
+            const newLeft = (relativeXInContent * contentScale) + offsetX_center;
             const newTop = (relativeYInContent * contentScale) + offsetY_center;
             
             clonedObj.set({
@@ -281,7 +279,7 @@ export default function ProductStudio() {
                 angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
-                // IMPORTANT: Use 'left', 'top' origin for consistent positioning based on calculated newLeft/newTop
+                // IMPORTANT: Set origin back to 'left', 'top' for consistent positioning via `newLeft`/`newTop`
                 originX: 'left', 
                 originY: 'top',
             });
@@ -295,7 +293,6 @@ export default function ProductStudio() {
             } else { // For image objects
                 clonedObj.set({
                     // For images, we scale their *actual rendered dimensions on preview* by the contentScale
-                    // This correctly accounts for any user-applied scaling (obj.scaleX/Y) on the preview.
                     width: obj.getScaledWidth() * contentScale, 
                     height: obj.getScaledHeight() * contentScale,
                     left: newLeft,
@@ -316,7 +313,6 @@ export default function ProductStudio() {
             });
         });
 
-        // Verify objects are on the printReadyCanvas
         console.log("DEBUG: Print Ready Canvas Objects Length (after add):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
             console.error("DEBUG: printReadyCanvas is empty after adding objects - this will result in a blank image.");
@@ -324,14 +320,13 @@ export default function ProductStudio() {
             return;
         }
 
-        // Final render of the printReadyCanvas to generate data URL
         printReadyCanvas.renderAll();
         const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
             format: 'png',
             quality: 1.0,
             multiplier: 1,
         });
-        printReadyCanvas.dispose(); // Clean up the temporary canvas
+        printReadyCanvas.dispose();
 
         console.log("DEBUG: Print Ready Data URL (first 100 chars):", printReadyDesignDataUrl.substring(0, 100));
         console.log("DEBUG: Print Ready Data URL length:", printReadyDesignDataUrl.length);
@@ -344,7 +339,7 @@ export default function ProductStudio() {
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
-                duration: null, // Keep open until resolved
+                duration: null,
                 isClosable: false,
                 position: "top",
             });
@@ -364,7 +359,7 @@ export default function ProductStudio() {
                 status: "error",
                 isClosable: true,
             });
-            return; // Stop checkout process if upload fails
+            return;
         }
 
         // 4. Prepare checkout item with the Cloudinary URL
