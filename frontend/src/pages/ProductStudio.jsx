@@ -77,11 +77,7 @@ export default function ProductStudio() {
         ? { ...selectedColorVariant, ...selectedSizeVariant }
         : null;
     
-    // --- CRITICAL FIX: Move these variables to the component body for correct scope ---
-    // These need to be reactive or derived from reactive states.
     const hasSelectedDesign = selectedDesign !== null;
-    // We need a way to check if there are *any* user-added objects on the canvas
-    // We can use a state for this or derive it dynamically. Let's make it reactive to Fabric.js changes.
     const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
 
     // Effect to update hasCanvasObjects state whenever canvas objects change
@@ -90,17 +86,14 @@ export default function ProductStudio() {
         if (!FCanvas) return;
 
         const updateHasCanvasObjects = () => {
-            // Filter to ensure we only count user-added designs (not background) or text
             const userAddedObjects = FCanvas.getObjects().filter(obj => 
                 obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
             );
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
-        // Listen for object additions, removals, modifications
         FCanvas.on('object:added', updateHasCanvasObjects);
         FCanvas.on('object:removed', updateHasCanvasObjects);
-        // Also call once initially in case objects are loaded from selectedDesign
         updateHasCanvasObjects(); 
 
         return () => {
@@ -187,13 +180,11 @@ export default function ProductStudio() {
         }
     }, [selectedDesign, toast]);
 
-    // --- MODIFIED: Center only horizontally ---
     const centerSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
                 activeObject.centerH(); // Only center horizontally
-                // activeObject.centerV(); // Removed vertical centering
                 fabricCanvas.current.renderAll();
             } else {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
@@ -202,9 +193,7 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        // hasSelectedDesign and hasCanvasObjects are now defined in the component's main body
-        // and are reactive states/derived values.
-        if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) { // Use the states directly here
+        if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) {
             toast({
                 title: "Incomplete Customization",
                 description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
@@ -241,15 +230,16 @@ export default function ProductStudio() {
         customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate scaling factors based on canvas size ratio
-            const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
-            const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallResolutionScale = Math.min(scaleFactorX, scaleFactorY); // Use min to avoid distortion if aspect ratios differ
-
-            // Get original object's center point and dimensions on the PREVIEW canvas
+            // Get original object's properties on the PREVIEW canvas
             const originalCenter = obj.getCenterPoint();
             const originalScaledWidth = obj.getScaledWidth();
             const originalScaledHeight = obj.getScaledHeight();
+            const originalAngle = obj.angle; // Preserve rotation
+
+            // Calculate overall scaling factor from preview canvas to print-ready canvas
+            const scaleFactorCanvasWidth = PRINT_READY_WIDTH / previewCanvasWidth;
+            const scaleFactorCanvasHeight = PRINT_READY_HEIGHT / previewCanvasHeight;
+            const overallResolutionScale = Math.min(scaleFactorCanvasWidth, scaleFactorCanvasHeight); // Use min to avoid distortion if aspect ratios differ
 
             // Calculate the relative center position (0-1 range) from the PREVIEW canvas
             const relativeCenterX = originalCenter.x / previewCanvasWidth;
@@ -260,16 +250,18 @@ export default function ProductStudio() {
             const targetCenterY = relativeCenterY * PRINT_READY_HEIGHT;
             
             // Set scale to 1 on cloned object, and set width/height or fontSize directly
+            // This ensures we don't compound scales and rely on absolute pixel values
             clonedObj.set({
                 hasControls: false, hasBorders: false, // No controls on print file
                 originX: 'center', // Crucial for positioning by center
                 originY: 'center',
+                angle: originalAngle // Preserve rotation
             });
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
                     fontSize: obj.fontSize * overallResolutionScale, // Scale font size directly
-                    scaleX: 1, // Ensure scale is 1 to avoid compounding with fontSize
+                    scaleX: 1, // Reset scale to 1 to prevent compounding
                     scaleY: 1,
                     left: targetCenterX, // Position using calculated center
                     top: targetCenterY,
@@ -278,7 +270,7 @@ export default function ProductStudio() {
                 clonedObj.set({
                     width: originalScaledWidth * overallResolutionScale,
                     height: originalScaledHeight * overallResolutionScale,
-                    scaleX: 1, // Ensure scale is 1
+                    scaleX: 1, // Reset scale to 1
                     scaleY: 1,
                     left: targetCenterX, // Position using calculated center
                     top: targetCenterY,
@@ -789,7 +781,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)}
+                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)} // Fixed logic here
                             width="full"
                             maxW="md"
                         >
@@ -801,4 +793,3 @@ export default function ProductStudio() {
         </VStack>
     );
 }
-
