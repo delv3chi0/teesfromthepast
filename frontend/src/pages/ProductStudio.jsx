@@ -10,7 +10,7 @@ import {
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
-import { useAuth } from '../context/AuthProvider/AuthProvider'; // Ensure correct import path for AuthProvider
+import { useAuth } from '../context/AuthProvider'; // CORRECTED IMPORT PATH
 import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa';
 
 // Reusable ThemedSelect for consistency
@@ -460,7 +460,7 @@ export default function ProductStudio() {
         }
     }, [deleteSelectedObject]); // Only re-run if deleteSelectedObject callback itself changes (which it shouldn't)
 
-    // Canvas Content Update: handles background image and adding selected design
+    // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas) return; // Canvas not initialized yet
@@ -530,7 +530,7 @@ export default function ProductStudio() {
                             img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
                             FCanvas.setActiveObject(img); // Make it the active object
-                            activeObjectRef.current = img; // Update the ref immediately
+                            activeObjectRef.current = img; // Update the ref immediately after setting active
                         }, { crossOrigin: 'anonymous' });
                     } else {
                         FCanvas.setActiveObject(existingDesignObject);
