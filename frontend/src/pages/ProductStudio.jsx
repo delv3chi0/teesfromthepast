@@ -64,8 +64,7 @@ export default function ProductStudio() {
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    // Removed activeObjectRef.current for direct Fabric.js active object interaction
-    // const activeObjectRef = useRef(null);
+    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
 
     // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -93,13 +92,12 @@ export default function ProductStudio() {
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
-        // Listen for object additions, removals, modifications, and selection changes
         FCanvas.on('object:added', updateHasCanvasObjects);
         FCanvas.on('object:removed', updateHasCanvasObjects);
-        FCanvas.on('selection:created', updateHasCanvasObjects); // Important for initial selection check
-        FCanvas.on('selection:cleared', updateHasCanvasObjects); // Important for when selection is cleared
+        FCanvas.on('selection:created', updateHasCanvasObjects); 
+        FCanvas.on('selection:cleared', updateHasCanvasObjects); 
         
-        updateHasCanvasObjects(); // Initial check on mount/re-render
+        updateHasCanvasObjects(); 
 
         return () => {
             FCanvas.off('object:added', updateHasCanvasObjects);
@@ -107,25 +105,34 @@ export default function ProductStudio() {
             FCanvas.off('selection:created', updateHasCanvasObjects);
             FCanvas.off('selection:cleared', updateHasCanvasObjects);
         };
-    }, [selectedDesign]); // Trigger this effect when selectedDesign changes as well
+    }, [selectedDesign]);
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
-
-    // Modified: This now takes the property and value,
-    // and explicitly gets the active object from Fabric.js
-    const updateActiveObjectProperty = useCallback((property, value) => {
-        const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return;
-
-        const activeObject = FCanvas.getActiveObject();
-        if (activeObject && activeObject.type === 'i-text') { // Only apply to text objects
-            activeObject.set(property, value);
-            FCanvas.renderAll();
+    const updateActiveObject = useCallback((property, value) => {
+        if (fabricCanvas.current) {
+            const activeObject = fabricCanvas.current.getActiveObject();
+            if (activeObject) {
+                if (activeObject.type === 'i-text') {
+                    if (property === 'fill') {
+                        activeObject.set('fill', value);
+                        setTextColor(value);
+                    } else if (property === 'fontSize') {
+                        activeObject.set('fontSize', value);
+                        setFontSize(value);
+                    } else if (property === 'fontFamily') {
+                        activeObject.set('fontFamily', value);
+                        setFontFamily(value);
+                    }
+                } else {
+                    activeObject.set(property, value);
+                }
+                fabricCanvas.current.renderAll();
+            } else {
+                toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
+            }
         }
-        // No toast here; the UI state updates will trigger re-render of controls
-        // and if no object is selected, controls will simply show default/last values.
-    }, []);
+    }, [toast]);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -168,7 +175,6 @@ export default function ProductStudio() {
                 fabricCanvas.current.remove(activeObject);
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
-                // No longer using activeObjectRef.current
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
                     setSelectedDesign(null);
                 }
@@ -191,7 +197,7 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) { // Use the states directly here
+        if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) {
             toast({
                 title: "Incomplete Customization",
                 description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
@@ -261,9 +267,8 @@ export default function ProductStudio() {
                     fontSize: obj.fontSize * overallResolutionScale, // Scale font size directly
                     scaleX: 1, // Reset scale to 1 to prevent compounding
                     scaleY: 1,
-                    // Reposition using the new center, then offset by origin
-                    left: targetCenterX - (clonedObj.getScaledWidth() / 2),
-                    top: targetCenterY - (clonedObj.getScaledHeight() / 2),
+                    left: targetCenterX, // Position using calculated center
+                    top: targetCenterY,
                 });
             } else { // For image objects (like selected designs)
                 clonedObj.set({
@@ -271,9 +276,8 @@ export default function ProductStudio() {
                     height: originalScaledHeight * overallResolutionScale,
                     scaleX: 1, // Reset scale to 1
                     scaleY: 1,
-                    // Reposition using the new center, then offset by origin
-                    left: targetCenterX - (clonedObj.getScaledWidth() / 2),
-                    top: targetCenterY - (clonedObj.getScaledHeight() / 2),
+                    left: targetCenterX, // Position using calculated center
+                    top: targetCenterY,
                 });
             }
             printReadyCanvas.add(clonedObj);
@@ -427,7 +431,8 @@ export default function ProductStudio() {
             if (currentMockupType === 'tee' && teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
             } else if (currentMockupType === 'man' && manMockupImage) {
-                mock-upSrc = manMockupImage.url;
+                // FIX: Corrected typo 'mock-upSrc' to 'mockupSrc'
+                mockupSrc = manMockupImage.url;
             } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
             } else if (firstAvailableImage) {
