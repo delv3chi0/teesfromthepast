@@ -224,15 +224,16 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- Calculate bounding box of all customizable objects on PREVIEW canvas using a temporary group ---
+        // --- Calculate bounding box of all customizable objects on PREVIEW canvas ---
+        // This is crucial for scaling the entire design as a unit.
+        // Use a temporary group to get accurate combined bounds, then destroy it.
         const previewDesignGroup = new window.fabric.Group(customizableObjects, {
-            // Do NOT add to canvas here, just use for calculation.
-            // Fabric.js groups created this way calculate bounds correctly from the source objects' positions.
+            // Options for the group, typically not added to main canvas
         });
         previewDesignGroup.setCoords(); // Ensure current transform is applied to coordinates
-        const contentBounds = previewDesignGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
-        
-        // Destroy the temporary group immediately after getting bounds to prevent memory leaks
+        const contentBounds = previewDesignGroup.getBoundingRect(true); // Get bounds including transforms
+
+        // Destroy the temporary group immediately after getting bounds
         previewDesignGroup.destroy(); 
         
         console.log("DEBUG: Content Bounds (Preview Canvas):", contentBounds);
@@ -244,63 +245,61 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- Calculate optimal scaling and positioning for the combined content ---
-        // This scale factor ensures the entire composite design fits within the print canvas without distortion.
+        // --- Calculate optimal scaling factor for the entire composite design ---
         const scaleToFitX = PRINT_READY_WIDTH / contentBounds.width;
         const scaleToFitY = PRINT_READY_HEIGHT / contentBounds.height;
-        const contentScale = Math.min(scaleToFitX, scaleToFitY); 
+        const compositeDesignScale = Math.min(scaleToFitX, scaleToFitY); // Scale to fit entirely without distortion
 
-        console.log("DEBUG: Calculated Content Scale:", contentScale);
+        console.log("DEBUG: Calculated Composite Design Scale:", compositeDesignScale);
 
-        // Calculate the total scaled width/height of the content on print canvas
-        const scaledContentWidth = contentBounds.width * contentScale;
-        const scaledContentHeight = contentBounds.height * contentScale;
+        // Calculate the effective scaled width and height of the composite design on the print canvas
+        const scaledCompositeWidth = contentBounds.width * compositeDesignScale;
+        const scaledCompositeHeight = contentBounds.height * compositeDesignScale;
 
-        // Calculate offsets to center the scaled content within the printReadyCanvas
-        const offsetX_center = (PRINT_READY_WIDTH - scaledContentWidth) / 2;
-        const offsetY_center = (PRINT_READY_HEIGHT - scaledContentHeight) / 2;
+        // Calculate the offsets needed to center this scaled composite design within the printReadyCanvas
+        const offsetX_final = (PRINT_READY_WIDTH - scaledCompositeWidth) / 2;
+        const offsetY_final = (PRINT_READY_HEIGHT - scaledCompositeHeight) / 2;
         
-        console.log("DEBUG: Centering Offsets (Print Canvas):", { offsetX_center, offsetY_center });
+        console.log("DEBUG: Final Centering Offsets (Print Canvas):", { offsetX_final, offsetY_final });
 
         // --- Process each customizable object for the print-ready canvas ---
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get original object's top-left corner (independent of its originX/Y) on the PREVIEW canvas.
-            // This is crucial for correctly positioning it relative to the overall design's bounding box.
+            // Get object's top-left position on the PREVIEW canvas (relative to its own properties/transforms)
             const objRectPreview = obj.getBoundingRect(true); 
 
-            // Calculate object's position relative to the content's bounding box top-left on preview.
-            // Then scale this relative position, and add the overall centering offset.
-            const relativeXInContent = objRectPreview.left - contentBounds.left;
-            const relativeYInContent = objRectPreview.top - contentBounds.top;
+            // Calculate object's position relative to the *top-left of the original composite design's bounding box*
+            const relativeXInComposite = objRectPreview.left - contentBounds.left;
+            const relativeYInComposite = objRectPreview.top - contentBounds.top;
 
-            const newLeft = (relativeXInContent * contentScale) + offsetX_center;
-            const newTop = (relativeYInContent * contentScale) + offsetY_center;
+            // Calculate its new top-left position on the print canvas:
+            // Scaled relative position within composite + final centering offset
+            const newLeft = (relativeXInComposite * compositeDesignScale) + offsetX_final;
+            const newTop = (relativeYInComposite * compositeDesignScale) + offsetY_final;
             
             clonedObj.set({
                 hasControls: false, hasBorders: false,
                 angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
-                // IMPORTANT: Use 'left', 'top' origin for consistent positioning via `newLeft`/`newTop`.
-                // If original object had 'center' origin, its `obj.left`/`obj.top` refer to its center.
-                // `obj.getBoundingRect(true)` gives top-left regardless of origin, which is consistent.
+                // Set origin to 'left', 'top' for consistent positioning via `newLeft`/`newTop`
                 originX: 'left', 
                 originY: 'top',
             });
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    fontSize: obj.fontSize * contentScale,
+                    fontSize: obj.fontSize * compositeDesignScale,
                     left: newLeft,
                     top: newTop,
                 });
-            } else { // For image objects (like selected designs)
+            } else { // For image objects
                 clonedObj.set({
-                    // Scale its *current rendered dimensions* (getScaledWidth/Height) by the contentScale.
-                    width: obj.getScaledWidth() * contentScale, 
-                    height: obj.getScaledHeight() * contentScale,
+                    // Scale its *current rendered dimensions on preview* by the compositeDesignScale.
+                    // This correctly accounts for any user-applied scaling (obj.scaleX/Y) on the preview.
+                    width: obj.getScaledWidth() * compositeDesignScale, 
+                    height: obj.getScaledHeight() * compositeDesignScale,
                     left: newLeft,
                     top: newTop,
                 });
@@ -310,7 +309,7 @@ export default function ProductStudio() {
                 type: clonedObj.type, 
                 original_left_top_preview: { x: obj.left, y: obj.top },
                 objRectPreview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
-                relative_in_content: { x: relativeXInContent, y: relativeYInContent },
+                relative_in_composite: { x: relativeXInComposite, y: relativeYInComposite },
                 new_left_top_print: { x: newLeft, y: newTop },
                 width: clonedObj.width, 
                 height: clonedObj.height, 
@@ -367,7 +366,7 @@ export default function ProductStudio() {
                 status: "error",
                 isClosable: true,
             });
-            return; // Stop checkout process if upload fails
+            return;
         }
 
         // 4. Prepare checkout item with the Cloudinary URL
@@ -438,27 +437,21 @@ export default function ProductStudio() {
             const FCanvas = fabricCanvas.current;
 
             // --- IMPORTANT: Fabric.js Event Listeners for UI Sync & Active Object ---
-            // These listeners keep `activeFabricObject` state and the UI control states updated
             const handleSelectionChange = (e) => {
                 const target = e.target;
-                // Update React states for text controls to reflect the selected object's properties
                 if (target && target.type === 'i-text') {
                     setTextColor(target.fill || '#FDF6EE');
                     setFontSize(target.fontSize || 30);
                     setFontFamily(target.fontFamily || 'Montserrat');
                 } else {
-                    // If a non-text object is selected or nothing is selected, controls will show default/last values.
-                    // You could reset them here if desired.
+                    // Reset text controls or display defaults when a non-text object is selected or no object is selected
                 }
-                // Update hasCanvasObjects state whenever selection changes (good for checkout button)
                 const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
                 setHasCanvasObjects(userAddedObjects.length > 0);
             };
 
-            // Event listener for when objects are modified (e.g., dragged, scaled manually)
             const handleObjectModified = () => {
-                // Ensure UI controls reflect changes if the modified object is text
-                const activeObject = FCanvas.getActiveObject(); // Re-get active object just in case
+                const activeObject = FCanvas.getActiveObject();
                 if (activeObject && activeObject.type === 'i-text') {
                     setTextColor(activeObject.fill || '#FDF6EE');
                     setFontSize(activeObject.fontSize || 30);
@@ -481,9 +474,8 @@ export default function ProductStudio() {
             FCanvas.on('selection:cleared', handleSelectionChange);
             FCanvas.on('object:added', handleObjectAdded);
             FCanvas.on('object:removed', handleObjectRemoved);
-            FCanvas.on('object:modified', handleObjectModified); // Important for reflecting manual changes
+            FCanvas.on('object:modified', handleObjectModified);
 
-            // Global keydown listener for delete key
             const handleKeyDown = (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
@@ -494,7 +486,6 @@ export default function ProductStudio() {
             };
             document.addEventListener('keydown', handleKeyDown);
 
-            // Cleanup function
             return () => {
                 if (fabricCanvas.current) {
                     FCanvas.off('selection:created', handleSelectionChange);
@@ -511,10 +502,9 @@ export default function ProductStudio() {
         }
     }, [deleteSelectedObject]);
 
-    // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return; // Canvas not initialized yet
+        if (!FCanvas) return;
 
         const updateCanvasBackground = (fabricInstance) => {
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
@@ -526,7 +516,7 @@ export default function ProductStudio() {
             if (currentMockupType === 'tee' && teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
             } else if (currentMockupType === 'man' && manMockupImage) {
-                mockupSrc = manMockupImage.url; 
+                mockupSrc = manMockupImage.url;
             } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
             } else if (firstAvailableImage) {
@@ -553,11 +543,9 @@ export default function ProductStudio() {
         };
 
         const pollForFabricAndSetupContent = () => {
-            if (window.fabric) { // Ensure Fabric.js is loaded
+            if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                // Remove previous design image if any, but preserve other objects like text
-                // Filter out current selectedDesign from removal if it's the one being kept/updated
                 FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-') && obj.id !== `design-${selectedDesign?._id}`).forEach(obj => FCanvas.remove(obj));
 
                 if (selectedDesign?.imageDataUrl) {
@@ -565,11 +553,11 @@ export default function ProductStudio() {
                     if (!existingDesignObject) {
                         window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                             if (!img) return;
-                            img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
-                            img.scaleToWidth(FCanvas.width * 0.33); // Initial scale for display
+                            img.id = `design-${selectedDesign._id}`;
+                            img.scaleToWidth(FCanvas.width * 0.33);
                             img.set({
                                 left: (FCanvas.width / 2),
-                                top: (FCanvas.height * 0.375), // 37.5% down from top for center of image
+                                top: (FCanvas.height * 0.375),
                                 originX: 'center',
                                 originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
@@ -578,11 +566,10 @@ export default function ProductStudio() {
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
-                            img.sendToBack(); // Send image behind text if text is added later
+                            img.sendToBack();
                             FCanvas.renderAll();
                         }, { crossOrigin: 'anonymous' });
                     } else {
-                        // If object already exists, we are not setting it active here.
                         FCanvas.renderAll();
                     }
                 } else {
@@ -590,15 +577,14 @@ export default function ProductStudio() {
                 }
 
             } else {
-                setTimeout(pollForFabricAndSetupContent, 100); // Polling for window.fabric
+                setTimeout(pollForFabricAndSetupContent, 100);
             }
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, currentMockupType, selectedDesign]); // Reruns when product/mockup/selected design changes
+    }, [finalVariant, currentMockupType, selectedDesign]);
 
 
-    // Fetch products and initialize selections from URL params
     useEffect(() => {
         setLoading(true);
         client.get('/storefront/products')
@@ -640,7 +626,6 @@ export default function ProductStudio() {
             .finally(() => setLoading(false));
     }, [location.search, toast]);
 
-    // Fetch user designs
     useEffect(() => {
         if (user) {
             setLoadingDesigns(true);
