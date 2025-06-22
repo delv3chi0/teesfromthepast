@@ -61,10 +61,11 @@ export default function ProductStudio() {
     const [fontSize, setFontSize] = useState(30); // Default, or actual active text size
     const [fontFamily, setFontFamily] = useState('Montserrat'); // Default, or actual active text font
 
-    // Refs for Fabric.js Canvas and the active object
+    // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null); // CRITICAL: This ref will hold the actual active Fabric.js object instance
+    // NEW STATE: Holds the currently active Fabric.js object for reactive updates
+    const [activeFabricObject, setActiveFabricObject] = useState(null); 
 
     // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -85,46 +86,34 @@ export default function ProductStudio() {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas) return;
 
-        const updateHasCanvasObjects = () => {
+        const updateHasCanvasObjectsState = () => {
             const userAddedObjects = FCanvas.getObjects().filter(obj => 
                 obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
             );
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
-        // These listeners are outside the main canvas init useEffect to ensure they always reflect the current state
-        // of objects on the canvas, which impacts the checkout button.
-        FCanvas.on('object:added', updateHasCanvasObjects);
-        FCanvas.on('object:removed', updateHasCanvasObjects);
-        FCanvas.on('selection:created', updateHasCanvasObjects); 
-        FCanvas.on('selection:cleared', updateHasCanvasObjects); 
+        // Listeners for overall canvas object changes affecting checkout button enablement
+        FCanvas.on('object:added', updateHasCanvasObjectsState);
+        FCanvas.on('object:removed', updateHasCanvasObjectsState);
+        FCanvas.on('selection:created', updateHasCanvasObjectsState); 
+        FCanvas.on('selection:cleared', updateHasCanvasObjectsState); 
         
-        updateHasCanvasObjects(); 
+        updateHasCanvasObjectsState(); // Initial check on mount/re-render
 
         return () => {
-            FCanvas.off('object:added', updateHasCanvasObjects);
-            FCanvas.off('object:removed', updateHasCanvasObjects);
-            FCanvas.off('selection:created', updateHasCanvasObjects);
-            FCanvas.off('selection:cleared', updateHasCanvasObjects);
+            FCanvas.off('object:added', updateHasCanvasObjectsState);
+            FCanvas.off('object:removed', updateHasCanvasObjectsState);
+            FCanvas.off('selection:created', updateHasCanvasObjectsState);
+            FCanvas.off('selection:cleared', updateHasCanvasObjectsState);
         };
-    }, [selectedDesign]); // Trigger this effect when selectedDesign changes as well
+    }, [selectedDesign]);
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
 
-    // This function is now mainly a placeholder. The core logic for updating
-    // Fabric.js object properties and re-rendering is directly within the
-    // onChange handlers for the controls (color, size, font family).
-    // It's kept for potential future abstract logic.
-    const updateFabricObjectProperty = useCallback((property, value) => {
-        const FCanvas = fabricCanvas.current;
-        const currentActiveObject = activeObjectRef.current;
-        if (!FCanvas || !currentActiveObject || currentActiveObject.type !== 'i-text') {
-            return;
-        }
-        currentActiveObject.set(property, value);
-        FCanvas.renderAll();
-    }, []);
+    // This function is now removed, as logic is directly in onChange handlers.
+    // The only function here is for `addTextToCanvas` etc.
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -158,7 +147,7 @@ export default function ProductStudio() {
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
             fabricCanvas.current.discardActiveObject(); // Ensure no object is active after clear
-            activeObjectRef.current = null; // Clear active ref
+            setActiveFabricObject(null); // Clear active object state
         }
     }, []);
 
@@ -169,7 +158,7 @@ export default function ProductStudio() {
                 fabricCanvas.current.remove(activeObject);
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
-                activeObjectRef.current = null; // Clear active ref
+                setActiveFabricObject(null); // Clear active object state
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
                     setSelectedDesign(null);
                 }
@@ -382,11 +371,11 @@ export default function ProductStudio() {
 
             const FCanvas = fabricCanvas.current;
 
-            // --- IMPORTANT: Fabric.js Event Listeners for UI Sync & Active Object Ref ---
-            // These listeners keep `activeObjectRef.current` and the UI control states updated
+            // --- IMPORTANT: Fabric.js Event Listeners for UI Sync & Active Object ---
+            // These listeners keep `activeFabricObject` state and the UI control states updated
             const handleSelectionChange = (e) => {
                 const target = e.target;
-                activeObjectRef.current = target; // Always update the ref with the active object instance
+                setActiveFabricObject(target); // Update the state with the active Fabric.js object
 
                 if (target && target.type === 'i-text') {
                     // Update React states for text controls to reflect the selected object's properties
@@ -456,7 +445,7 @@ export default function ProductStudio() {
                 }
             };
         }
-    }, [deleteSelectedObject]); // Only re-run if deleteSelectedObject callback itself changes (which it shouldn't)
+    }, [deleteSelectedObject]);
 
     // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
@@ -740,11 +729,12 @@ export default function ProductStudio() {
                                             type="color"
                                             value={textColor}
                                             onChange={(e) => {
-                                                setTextColor(e.target.value);
+                                                const newColor = e.target.value;
+                                                setTextColor(newColor); // Update React state for control's value
                                                 // DIRECT FABRIC.JS UPDATE & RENDER HERE
-                                                const currentActiveObject = activeObjectRef.current;
+                                                const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
                                                 if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
-                                                    currentActiveObject.set('fill', e.target.value);
+                                                    currentActiveObject.set('fill', newColor);
                                                     fabricCanvas.current.renderAll();
                                                 }
                                             }}
@@ -763,7 +753,7 @@ export default function ProductStudio() {
                                         const newSize = parseFloat(val);
                                         setFontSize(newSize);
                                         // DIRECT FABRIC.JS UPDATE & RENDER HERE
-                                        const currentActiveObject = activeObjectRef.current;
+                                        const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
                                         if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
                                             currentActiveObject.set('fontSize', newSize);
                                             fabricCanvas.current.renderAll();
@@ -785,7 +775,7 @@ export default function ProductStudio() {
                                         const newFontFamily = e.target.value;
                                         setFontFamily(newFontFamily);
                                         // DIRECT FABRIC.JS UPDATE & RENDER HERE
-                                        const currentActiveObject = activeObjectRef.current;
+                                        const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
                                         if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
                                             currentActiveObject.set('fontFamily', newFontFamily);
                                             fabricCanvas.current.renderAll();
