@@ -64,8 +64,7 @@ export default function ProductStudio() {
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    // Removed activeObjectRef, as Fabric.js's getActiveObject() is more reliable for real-time check
-    // const activeObjectRef = useRef(null); 
+    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object instance
 
     // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -111,19 +110,17 @@ export default function ProductStudio() {
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
 
-    // Renamed: This function now directly updates the Fabric.js object and re-asserts selection
+    // This function directly updates the Fabric.js object and ensures selection persistence
     const updateFabricObjectProperty = useCallback((property, value) => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return;
-
-        const activeObject = FCanvas.getActiveObject();
-        if (activeObject && activeObject.type === 'i-text') { // Only apply to text objects
-            activeObject.set(property, value);
-            FCanvas.renderAll();
-            FCanvas.setActiveObject(activeObject); // Crucial for maintaining selection after property change
-        } else {
-            // No toast here. The UI controls themselves will be enabled/disabled or visually reflect no selection.
+        if (!FCanvas || !activeObjectRef.current || activeObjectRef.current.type !== 'i-text') {
+            // No toast here; UI controls are handled by sync effect or disabled state
+            return;
         }
+
+        activeObjectRef.current.set(property, value);
+        FCanvas.renderAll();
+        FCanvas.setActiveObject(activeObjectRef.current); // Crucial for maintaining selection
     }, []);
 
     const addTextToCanvas = useCallback(() => {
@@ -378,17 +375,29 @@ export default function ProductStudio() {
                 selection: true,
             });
 
-            // Event listeners for object selection (to track active object for tool controls)
-            // No longer updating activeObjectRef here, relying on getActiveObject() directly in handlers
+            // Event listeners for object selection: update activeObjectRef and sync UI controls
             fabricCanvas.current.on('selection:created', (e) => {
-                // You can still use this to update state for UI controls if needed
-                // e.g., set someActiveObjectId(e.target.id);
+                activeObjectRef.current = e.target;
+                if (e.target && e.target.type === 'i-text') {
+                    setTextColor(e.target.fill || '#FDF6EE');
+                    setFontSize(e.target.fontSize || 30);
+                    setFontFamily(e.target.fontFamily || 'Montserrat');
+                }
             });
             fabricCanvas.current.on('selection:updated', (e) => {
-                // e.g., set someActiveObjectId(e.target.id);
+                activeObjectRef.current = e.target;
+                if (e.target && e.target.type === 'i-text') {
+                    setTextColor(e.target.fill || '#FDF6EE');
+                    setFontSize(e.target.fontSize || 30);
+                    setFontFamily(e.target.fontFamily || 'Montserrat');
+                }
             });
             fabricCanvas.current.on('selection:cleared', () => {
-                // e.g., set someActiveObjectId(null);
+                activeObjectRef.current = null;
+                // Optionally reset UI controls or set default values if nothing is selected
+                // setTextColor('#FDF6EE');
+                // setFontSize(30);
+                // setFontFamily('Montserrat');
             });
 
             // Global keydown listener for delete key
@@ -397,7 +406,7 @@ export default function ProductStudio() {
                     if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
                         return;
                     }
-                    deleteSelectedObject(); // Now correctly references the stable useCallback
+                    deleteSelectedObject();
                 }
             };
             document.addEventListener('keydown', handleKeyDown);
@@ -405,7 +414,6 @@ export default function ProductStudio() {
             // Cleanup function for Fabric.js
             return () => {
                 if (fabricCanvas.current) {
-                    // Remove listeners that were added here
                     fabricCanvas.current.off('selection:created');
                     fabricCanvas.current.off('selection:updated');
                     fabricCanvas.current.off('selection:cleared');
@@ -432,7 +440,7 @@ export default function ProductStudio() {
             if (currentMockupType === 'tee' && teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
             } else if (currentMockupType === 'man' && manMockupImage) {
-                mockupSrc = manMockupImage.url; // Corrected typo here
+                mockupSrc = manMockupImage.url; 
             } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
             } else if (firstAvailableImage) {
@@ -559,7 +567,7 @@ export default function ProductStudio() {
         }
     }, [user, location, navigate]);
 
-    // Effect to synchronize text tool inputs with active Fabric.js object
+    // Effect to synchronize text tool inputs with active Fabric.js object (now simpler due to refactoring)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas) return;
@@ -571,11 +579,11 @@ export default function ProductStudio() {
                 setFontSize(activeObject.fontSize || 30);
                 setFontFamily(activeObject.fontFamily || 'Montserrat');
             } else {
-                // If no text object is selected, we can optionally reset text input or just keep previous state
+                // If no text object is selected, controls might show last value, or you can reset them
             }
         };
 
-        // Listen to all selection changes to update controls
+        // These listeners are crucial for updating UI controls when selection changes by canvas interaction
         FCanvas.on('selection:created', onSelectionChange);
         FCanvas.on('selection:updated', onSelectionChange);
         FCanvas.on('selection:cleared', onSelectionChange);
@@ -725,7 +733,6 @@ export default function ProductStudio() {
                                             type="color"
                                             value={textColor}
                                             onChange={(e) => {
-                                                // Update React state for control's value
                                                 setTextColor(e.target.value);
                                                 // Directly update Fabric.js object and re-assert selection
                                                 updateFabricObjectProperty('fill', e.target.value);
@@ -743,9 +750,7 @@ export default function ProductStudio() {
                                     <FormLabel fontSize="sm" color="brand.textLight">Size</FormLabel>
                                     <NumberInput value={fontSize} onChange={(val) => {
                                         const newSize = parseFloat(val);
-                                        // Update React state
                                         setFontSize(newSize);
-                                        // Directly update Fabric.js object and re-assert selection
                                         updateFabricObjectProperty('fontSize', newSize);
                                     }} min={10} max={100} size="md">
                                         <NumberInputField as={ThemedControlInput} />
@@ -762,9 +767,7 @@ export default function ProductStudio() {
                                     value={fontFamily}
                                     onChange={(e) => {
                                         const newFontFamily = e.target.value;
-                                        // Update React state
                                         setFontFamily(newFontFamily);
-                                        // Directly update Fabric.js object and re-assert selection
                                         updateFabricObjectProperty('fontFamily', newFontFamily);
                                     }}
                                     size="md"
@@ -804,7 +807,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)} // Fixed logic here
+                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)}
                             width="full"
                             maxW="md"
                         >
