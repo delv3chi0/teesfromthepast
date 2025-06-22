@@ -25,6 +25,7 @@ const ThemedSelect = (props) => (
     />
 );
 
+// New ThemedInput component for customization controls (for text input, color pickers etc.)
 const ThemedControlInput = (props) => (
     <Input
         size="sm"
@@ -76,11 +77,7 @@ export default function ProductStudio() {
         : null;
     
     const hasSelectedDesign = selectedDesign !== null;
-    const [hasCanvasObjects, setHasCanvasObjects] = useState(useState(false)); // ERROR: useState called twice
-
-    // FIX: Corrected double useState call
-    // const [hasCanvasObjects, setHasCanvasObjects] = useState(false); 
-
+    const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
 
     // Effect to update hasCanvasObjects state whenever canvas objects change
     useEffect(() => {
@@ -228,16 +225,15 @@ export default function ProductStudio() {
         }
 
         // --- Calculate bounding box of all customizable objects on PREVIEW canvas using a temporary group ---
-        // This is the most reliable way to get combined bounds of multiple, potentially transformed objects.
-        const tempGroup = new window.fabric.Group(customizableObjects, {
-            // Do NOT add to canvas here, just use for calculation
+        const previewDesignGroup = new window.fabric.Group(customizableObjects, {
+            // Do NOT add to canvas here, just use for calculation.
+            // Fabric.js groups created this way calculate bounds correctly from the source objects' positions.
         });
-        tempGroup.setCoords(); // Ensure current transform is applied to coordinates
-        const contentBounds = tempGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
+        previewDesignGroup.setCoords(); // Ensure current transform is applied to coordinates
+        const contentBounds = previewDesignGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
         
         // Destroy the temporary group immediately after getting bounds to prevent memory leaks
-        // and ensure original objects are not implicitly affected.
-        tempGroup.destroy(); 
+        previewDesignGroup.destroy(); 
         
         console.log("DEBUG: Content Bounds (Preview Canvas):", contentBounds);
 
@@ -249,9 +245,10 @@ export default function ProductStudio() {
         }
 
         // --- Calculate optimal scaling and positioning for the combined content ---
+        // This scale factor ensures the entire composite design fits within the print canvas without distortion.
         const scaleToFitX = PRINT_READY_WIDTH / contentBounds.width;
         const scaleToFitY = PRINT_READY_HEIGHT / contentBounds.height;
-        const contentScale = Math.min(scaleToFitX, scaleToFitY); // Choose the smaller scale to fit entirely without distortion
+        const contentScale = Math.min(scaleToFitX, scaleToFitY); 
 
         console.log("DEBUG: Calculated Content Scale:", contentScale);
 
@@ -269,12 +266,12 @@ export default function ProductStudio() {
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate object's top-left position on the PREVIEW canvas (ignoring its own originX/Y for this step)
-            // This is safer for relative positioning within the group's bounds.
-            const objRectPreview = obj.getBoundingRect(true); // Gets top-left, width, height including transforms
+            // Get original object's top-left corner (independent of its originX/Y) on the PREVIEW canvas.
+            // This is crucial for correctly positioning it relative to the overall design's bounding box.
+            const objRectPreview = obj.getBoundingRect(true); 
 
             // Calculate object's position relative to the content's bounding box top-left on preview.
-            // Then scale it, and add the overall centering offset.
+            // Then scale this relative position, and add the overall centering offset.
             const relativeXInContent = objRectPreview.left - contentBounds.left;
             const relativeYInContent = objRectPreview.top - contentBounds.top;
 
@@ -286,7 +283,9 @@ export default function ProductStudio() {
                 angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
-                // IMPORTANT: Set origin back to 'left', 'top' for consistent positioning via `newLeft`/`newTop`
+                // IMPORTANT: Use 'left', 'top' origin for consistent positioning via `newLeft`/`newTop`.
+                // If original object had 'center' origin, its `obj.left`/`obj.top` refer to its center.
+                // `obj.getBoundingRect(true)` gives top-left regardless of origin, which is consistent.
                 originX: 'left', 
                 originY: 'top',
             });
@@ -297,9 +296,9 @@ export default function ProductStudio() {
                     left: newLeft,
                     top: newTop,
                 });
-            } else { // For image objects
+            } else { // For image objects (like selected designs)
                 clonedObj.set({
-                    // For images, we scale their *actual rendered dimensions on preview* by the contentScale
+                    // Scale its *current rendered dimensions* (getScaledWidth/Height) by the contentScale.
                     width: obj.getScaledWidth() * contentScale, 
                     height: obj.getScaledHeight() * contentScale,
                     left: newLeft,
@@ -309,11 +308,13 @@ export default function ProductStudio() {
             printReadyCanvas.add(clonedObj);
             console.log(`DEBUG: Cloned Object ${index} Properties:`, { 
                 type: clonedObj.type, 
-                left: clonedObj.left, 
-                top: clonedObj.top, 
+                original_left_top_preview: { x: obj.left, y: obj.top },
+                objRectPreview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
+                relative_in_content: { x: relativeXInContent, y: relativeYInContent },
+                new_left_top_print: { x: newLeft, y: newTop },
                 width: clonedObj.width, 
                 height: clonedObj.height, 
-                fontSize: clonedObj.fontSize, // Will be undefined for images
+                fontSize: clonedObj.fontSize, 
                 angle: clonedObj.angle,
                 originX: clonedObj.originX,
                 originY: clonedObj.originY
@@ -366,7 +367,7 @@ export default function ProductStudio() {
                 status: "error",
                 isClosable: true,
             });
-            return;
+            return; // Stop checkout process if upload fails
         }
 
         // 4. Prepare checkout item with the Cloudinary URL
