@@ -64,7 +64,8 @@ export default function ProductStudio() {
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object
+    // Removed activeObjectRef, as Fabric.js's getActiveObject() is more reliable for real-time check
+    // const activeObjectRef = useRef(null); 
 
     // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -109,30 +110,21 @@ export default function ProductStudio() {
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
-    const updateActiveObject = useCallback((property, value) => {
-        if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject) {
-                if (activeObject.type === 'i-text') {
-                    if (property === 'fill') {
-                        activeObject.set('fill', value);
-                        setTextColor(value);
-                    } else if (property === 'fontSize') {
-                        activeObject.set('fontSize', value);
-                        setFontSize(value);
-                    } else if (property === 'fontFamily') {
-                        activeObject.set('fontFamily', value);
-                        setFontFamily(value);
-                    }
-                } else {
-                    activeObject.set(property, value);
-                }
-                fabricCanvas.current.renderAll();
-            } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to update its properties.", status: "info", isClosable: true });
-            }
+
+    // Renamed: This function now directly updates the Fabric.js object and re-asserts selection
+    const updateFabricObjectProperty = useCallback((property, value) => {
+        const FCanvas = fabricCanvas.current;
+        if (!FCanvas) return;
+
+        const activeObject = FCanvas.getActiveObject();
+        if (activeObject && activeObject.type === 'i-text') { // Only apply to text objects
+            activeObject.set(property, value);
+            FCanvas.renderAll();
+            FCanvas.setActiveObject(activeObject); // Crucial for maintaining selection after property change
+        } else {
+            // No toast here. The UI controls themselves will be enabled/disabled or visually reflect no selection.
         }
-    }, [toast]);
+    }, []);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -387,9 +379,17 @@ export default function ProductStudio() {
             });
 
             // Event listeners for object selection (to track active object for tool controls)
-            fabricCanvas.current.on('selection:created', (e) => activeObjectRef.current = e.target);
-            fabricCanvas.current.on('selection:updated', (e) => activeObjectRef.current = e.target);
-            fabricCanvas.current.on('selection:cleared', () => activeObjectRef.current = null);
+            // No longer updating activeObjectRef here, relying on getActiveObject() directly in handlers
+            fabricCanvas.current.on('selection:created', (e) => {
+                // You can still use this to update state for UI controls if needed
+                // e.g., set someActiveObjectId(e.target.id);
+            });
+            fabricCanvas.current.on('selection:updated', (e) => {
+                // e.g., set someActiveObjectId(e.target.id);
+            });
+            fabricCanvas.current.on('selection:cleared', () => {
+                // e.g., set someActiveObjectId(null);
+            });
 
             // Global keydown listener for delete key
             const handleKeyDown = (e) => {
@@ -405,6 +405,7 @@ export default function ProductStudio() {
             // Cleanup function for Fabric.js
             return () => {
                 if (fabricCanvas.current) {
+                    // Remove listeners that were added here
                     fabricCanvas.current.off('selection:created');
                     fabricCanvas.current.off('selection:updated');
                     fabricCanvas.current.off('selection:cleared');
@@ -414,12 +415,12 @@ export default function ProductStudio() {
                 }
             };
         }
-    }, [deleteSelectedObject]); // deleteSelectedObject is a stable useCallback, so this is correct.
+    }, [deleteSelectedObject]);
 
     // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas || !window.fabric) return;
+        if (!FCanvas) return;
 
         const updateCanvasBackground = (fabricInstance) => {
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
@@ -431,8 +432,7 @@ export default function ProductStudio() {
             if (currentMockupType === 'tee' && teeMockupImage) {
                 mockupSrc = teeMockupImage.url;
             } else if (currentMockupType === 'man' && manMockupImage) {
-                // FIX: Corrected typo 'mock-upSrc' to 'mockupSrc'
-                mockupSrc = manMockupImage.url;
+                mockupSrc = manMockupImage.url; // Corrected typo here
             } else if (primaryImageFound) {
                 mockupSrc = primaryImageFound.url;
             } else if (firstAvailableImage) {
@@ -575,6 +575,7 @@ export default function ProductStudio() {
             }
         };
 
+        // Listen to all selection changes to update controls
         FCanvas.on('selection:created', onSelectionChange);
         FCanvas.on('selection:updated', onSelectionChange);
         FCanvas.on('selection:cleared', onSelectionChange);
@@ -723,7 +724,12 @@ export default function ProductStudio() {
                                         <ThemedControlInput
                                             type="color"
                                             value={textColor}
-                                            onChange={(e) => { setTextColor(e.target.value); updateActiveObject('fill', e.target.value); }}
+                                            onChange={(e) => {
+                                                // Update React state for control's value
+                                                setTextColor(e.target.value);
+                                                // Directly update Fabric.js object and re-assert selection
+                                                updateFabricObjectProperty('fill', e.target.value);
+                                            }}
                                             w="full"
                                             p={0}
                                             height="38px"
@@ -735,7 +741,13 @@ export default function ProductStudio() {
                                 </FormControl>
                                 <FormControl isDisabled={!isCustomizeEnabled}>
                                     <FormLabel fontSize="sm" color="brand.textLight">Size</FormLabel>
-                                    <NumberInput value={fontSize} onChange={(val) => { setFontSize(parseFloat(val)); updateActiveObject('fontSize', parseFloat(val)); }} min={10} max={100} size="md">
+                                    <NumberInput value={fontSize} onChange={(val) => {
+                                        const newSize = parseFloat(val);
+                                        // Update React state
+                                        setFontSize(newSize);
+                                        // Directly update Fabric.js object and re-assert selection
+                                        updateFabricObjectProperty('fontSize', newSize);
+                                    }} min={10} max={100} size="md">
                                         <NumberInputField as={ThemedControlInput} />
                                         <NumberInputStepper>
                                             <NumberIncrementStepper />
@@ -748,7 +760,13 @@ export default function ProductStudio() {
                                 <FormLabel fontSize="sm" color="brand.textLight">Font Family</FormLabel>
                                 <ThemedSelect
                                     value={fontFamily}
-                                    onChange={(e) => { setFontFamily(e.target.value); updateActiveObject('fontFamily', e.target.value); }}
+                                    onChange={(e) => {
+                                        const newFontFamily = e.target.value;
+                                        // Update React state
+                                        setFontFamily(newFontFamily);
+                                        // Directly update Fabric.js object and re-assert selection
+                                        updateFabricObjectProperty('fontFamily', newFontFamily);
+                                    }}
                                     size="md"
                                 >
                                     <option value="Bungee">Bungee (Heading)</option>
