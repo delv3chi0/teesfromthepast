@@ -10,7 +10,7 @@ import {
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
-import { useAuth } from '../context/AuthProvider'; // Corrected import path
+import { useAuth } from '../context/AuthProvider';
 import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa';
 
 // Reusable ThemedSelect for consistency
@@ -223,41 +223,63 @@ export default function ProductStudio() {
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
         );
 
-        // --- NEW: Calculate bounding box of all customizable objects on the PREVIEW canvas ---
-        const activeGroup = new window.fabric.Group(customizableObjects, {
-            canvas: fabricCanvas.current // Important to link to current canvas
+        // --- NEW & IMPROVED: Calculate a single scale factor based on combined content bounding box ---
+        if (customizableObjects.length === 0) {
+            // Should not happen due to initial check, but good for robustness
+            console.error("No customizable objects found for print generation.");
+            return; 
+        }
+
+        const tempGroup = new window.fabric.Group(customizableObjects, {
+            canvas: fabricCanvas.current // Important for correct bounds calculation if objects are off-canvas
         });
-        fabricCanvas.current.add(activeGroup); // Temporarily add group to calculate bounds
-
-        // Get bounds of the combined group of objects on the preview canvas
-        const groupLeft = activeGroup.left;
-        const groupTop = activeGroup.top;
-        const groupWidth = activeGroup.getScaledWidth();
-        const groupHeight = activeGroup.getScaledHeight();
         
-        // Remove the temporary group
-        fabricCanvas.current.remove(activeGroup);
-        // Add back individual objects if they were removed by grouping (they shouldn't be if temp group)
-        // Ensure original objects are still on canvas for further use.
+        // Get the bounding box of all combined custom objects on the PREVIEW canvas
+        const contentBounds = tempGroup.getBoundingRect();
 
-        // Calculate scaling factor from the bounding box of content to the print canvas dimensions
-        const scaleXFromContent = PRINT_READY_WIDTH / groupWidth;
-        const scaleYFromContent = PRINT_READY_HEIGHT / groupHeight;
-        const contentScale = Math.min(scaleXFromContent, scaleYFromContent); // Scale to fit within the print area without distortion
+        // Remove tempGroup from original canvas if it was added, otherwise this step is a no-op
+        // It's safer to ensure objects are not added to the canvas via Group constructor
+        // or remove it after calculation: fabricCanvas.current.remove(tempGroup);
+        // For simplicity and to avoid unintended side effects, we often just use bounds directly.
+        // Fabric.js getBoundingRect works without adding the group to canvas for calculation.
+        // Re-creating group is safer for bounds if objects are scattered.
 
+        // Calculate scaling needed for this combined content to fit print canvas
+        const scaleToFitX = PRINT_READY_WIDTH / contentBounds.width;
+        const scaleToFitY = PRINT_READY_HEIGHT / contentBounds.height;
+        const contentScale = Math.min(scaleToFitX, scaleToFitY); // Choose the smaller scale to fit entirely without overflow
 
+        // Calculate the center of the combined content on the PREVIEW canvas
+        const contentCenterX_preview = contentBounds.left + contentBounds.width / 2;
+        const contentCenterY_preview = contentBounds.top + contentBounds.height / 2;
+
+        // Calculate the target center for the entire scaled content on the PRINT_READY_CANVAS
+        const targetContentCenterX_print = contentCenterX_preview * contentScale;
+        const targetContentCenterY_print = contentCenterY_preview * contentScale;
+
+        // Calculate the top-left offset needed to center the scaled content on the printReadyCanvas
+        const scaledContentWidth = contentBounds.width * contentScale;
+        const scaledContentHeight = contentBounds.height * contentScale;
+
+        const offsetX_center = (PRINT_READY_WIDTH / 2) - (scaledContentWidth / 2);
+        const offsetY_center = (PRINT_READY_HEIGHT / 2) - (scaledContentHeight / 2);
+        
         customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate object's position and size relative to the *group's bounding box*
-            const relativeLeftInGroup = (obj.left - groupLeft);
-            const relativeTopInGroup = (obj.top - groupTop);
+            // Calculate object's position relative to the content's bounding box top-left on preview
+            const relativeXInContent = obj.left - contentBounds.left;
+            const relativeYInContent = obj.top - contentBounds.top;
 
-            // Apply contentScale to object's properties
+            // Calculate its new position on the print canvas:
+            // Scaled relative position within content bounds + offset for centering content on print canvas
+            const newLeft = (relativeXInContent * contentScale) + offsetX_center;
+            const newTop = (relativeYInContent * contentScale) + offsetY_center;
+            
             clonedObj.set({
                 hasControls: false, hasBorders: false,
                 angle: obj.angle, // Preserve rotation
-                scaleX: 1, // Reset scale to 1, apply scaling via width/height/fontSize
+                scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
                 originX: obj.originX, // Maintain original origin setting
                 originY: obj.originY, // Maintain original origin setting
@@ -266,33 +288,23 @@ export default function ProductStudio() {
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
                     fontSize: obj.fontSize * contentScale,
-                    left: relativeLeftInGroup * contentScale,
-                    top: relativeTopInGroup * contentScale,
+                    left: newLeft,
+                    top: newTop,
                 });
             } else { // For image objects
                 clonedObj.set({
-                    width: obj.width * obj.scaleX * contentScale, // Use original dimensions * current scale * contentScale
+                    width: obj.width * obj.scaleX * contentScale, // Original unscaled * user's scale * contentScale
                     height: obj.height * obj.scaleY * contentScale,
-                    left: relativeLeftInGroup * contentScale,
-                    top: relativeTopInGroup * contentScale,
+                    left: newLeft,
+                    top: newTop,
                 });
             }
             printReadyCanvas.add(clonedObj);
         });
 
-        // After all objects are added, center the entire composite design on the print-ready canvas
-        const finalPrintGroup = new window.fabric.Group(printReadyCanvas.getObjects(), {
-            canvas: printReadyCanvas
-        });
-        printReadyCanvas.remove(...printReadyCanvas.getObjects()); // Clear canvas
-        printReadyCanvas.add(finalPrintGroup); // Add the group back (effectively flattening it for render)
-        
-        // Ensure final group is centered on the print canvas
-        finalPrintGroup.centerH();
-        finalPrintGroup.centerV();
-        finalPrintGroup.setCoords(); // Update coordinates after centering
-
-
+        // The temporary group created earlier is just for bounds calculation.
+        // We've added individual cloned objects to printReadyCanvas.
+        // Now, just render the printReadyCanvas.
         printReadyCanvas.renderAll();
         const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
             format: 'png',
@@ -301,14 +313,14 @@ export default function ProductStudio() {
         });
         printReadyCanvas.dispose(); // Clean up the temporary canvas
 
-        // 3. Upload print-ready image to Cloudinary via backend
+        // ... (rest of handleProceedToCheckout: Cloudinary upload, localStorage, navigate)
         let cloudinaryPublicUrl = '';
         try {
             toast({
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
-                duration: null,
+                duration: null, // Keep open until resolved
                 isClosable: false,
                 position: "top",
             });
@@ -331,7 +343,6 @@ export default function ProductStudio() {
             return;
         }
 
-        // 4. Prepare checkout item with the Cloudinary URL
         const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
         const checkoutItem = {
             designId: selectedDesign?._id || 'custom-design-' + Date.now(),
@@ -541,10 +552,6 @@ export default function ProductStudio() {
                             FCanvas.add(img);
                             img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
-                            // We are explicitly NOT calling setActiveObject here. Fabric.js's own
-                            // selection event system will typically make a newly added object active.
-                            // If not, the user will click it.
-                            // The handleSelectionChange listener will then update activeObjectRef.current
                         }, { crossOrigin: 'anonymous' });
                     } else {
                         // If object already exists, we are not setting it active here.
@@ -755,8 +762,7 @@ export default function ProductStudio() {
                                             value={textColor}
                                             onChange={(e) => {
                                                 setTextColor(e.target.value);
-                                                // DIRECT FABRIC.JS UPDATE & RENDER HERE
-                                                const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
+                                                const currentActiveObject = fabricCanvas.current.getActiveObject();
                                                 if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
                                                     currentActiveObject.set('fill', e.target.value);
                                                     fabricCanvas.current.renderAll();
@@ -776,8 +782,7 @@ export default function ProductStudio() {
                                     <NumberInput value={fontSize} onChange={(val) => {
                                         const newSize = parseFloat(val);
                                         setFontSize(newSize);
-                                        // DIRECT FABRIC.JS UPDATE & RENDER HERE
-                                        const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
+                                        const currentActiveObject = fabricCanvas.current.getActiveObject();
                                         if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
                                             currentActiveObject.set('fontSize', newSize);
                                             fabricCanvas.current.renderAll();
@@ -798,8 +803,7 @@ export default function ProductStudio() {
                                     onChange={(e) => {
                                         const newFontFamily = e.target.value;
                                         setFontFamily(newFontFamily);
-                                        // DIRECT FABRIC.JS UPDATE & RENDER HERE
-                                        const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
+                                        const currentActiveObject = fabricCanvas.current.getActiveObject();
                                         if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
                                             currentActiveObject.set('fontFamily', newFontFamily);
                                             fabricCanvas.current.renderAll();
