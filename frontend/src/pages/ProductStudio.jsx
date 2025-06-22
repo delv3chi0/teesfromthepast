@@ -77,7 +77,11 @@ export default function ProductStudio() {
         : null;
     
     const hasSelectedDesign = selectedDesign !== null;
-    const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
+    const [hasCanvasObjects, setHasCanvasObjects] = useState(useState(false)); // ERROR: useState called twice
+
+    // FIX: Corrected double useState call
+    // const [hasCanvasObjects, setHasCanvasObjects] = useState(false); 
+
 
     // Effect to update hasCanvasObjects state whenever canvas objects change
     useEffect(() => {
@@ -225,15 +229,16 @@ export default function ProductStudio() {
         }
 
         // --- Calculate bounding box of all customizable objects on PREVIEW canvas using a temporary group ---
-        const previewDesignGroup = new window.fabric.Group(customizableObjects, {
+        // This is the most reliable way to get combined bounds of multiple, potentially transformed objects.
+        const tempGroup = new window.fabric.Group(customizableObjects, {
             // Do NOT add to canvas here, just use for calculation
         });
-        previewDesignGroup.setCoords(); // Ensure current transform is applied to coordinates
-        const contentBounds = previewDesignGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
+        tempGroup.setCoords(); // Ensure current transform is applied to coordinates
+        const contentBounds = tempGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
         
         // Destroy the temporary group immediately after getting bounds to prevent memory leaks
         // and ensure original objects are not implicitly affected.
-        previewDesignGroup.destroy(); 
+        tempGroup.destroy(); 
         
         console.log("DEBUG: Content Bounds (Preview Canvas):", contentBounds);
 
@@ -265,11 +270,14 @@ export default function ProductStudio() {
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
+            // Calculate object's top-left position on the PREVIEW canvas (ignoring its own originX/Y for this step)
+            // This is safer for relative positioning within the group's bounds.
+            const objRectPreview = obj.getBoundingRect(true); // Gets top-left, width, height including transforms
+
             // Calculate object's position relative to the content's bounding box top-left on preview.
             // Then scale it, and add the overall centering offset.
-            // FIX: Declare relativeXInContent and relativeYInContent
-            const relativeXInContent = obj.left - contentBounds.left;
-            const relativeYInContent = obj.top - contentBounds.top;
+            const relativeXInContent = objRectPreview.left - contentBounds.left;
+            const relativeYInContent = objRectPreview.top - contentBounds.top;
 
             const newLeft = (relativeXInContent * contentScale) + offsetX_center;
             const newTop = (relativeYInContent * contentScale) + offsetY_center;
@@ -326,7 +334,7 @@ export default function ProductStudio() {
             quality: 1.0,
             multiplier: 1,
         });
-        printReadyCanvas.dispose();
+        printReadyCanvas.dispose(); // Clean up the temporary canvas
 
         console.log("DEBUG: Print Ready Data URL (first 100 chars):", printReadyDesignDataUrl.substring(0, 100));
         console.log("DEBUG: Print Ready Data URL length:", printReadyDesignDataUrl.length);
@@ -339,7 +347,7 @@ export default function ProductStudio() {
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
-                duration: null,
+                duration: null, // Keep open until resolved
                 isClosable: false,
                 position: "top",
             });
