@@ -143,7 +143,7 @@ export default function ProductStudio() {
         }
         const textObject = new window.fabric.IText(textInputValue, {
             left: (fabricCanvas.current.width / 2),
-            top: (fabricCanvas.current.height * 0.6),
+            top: (fabricCanvas.current.height * 0.6), // 60% down for text
             originX: 'center',
             originY: 'center',
             fill: textColor,
@@ -243,7 +243,7 @@ export default function ProductStudio() {
             // Calculate scaling factors based on canvas size ratio
             const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
             const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallResolutionScale = Math.min(scaleFactorX, scaleFactorY);
+            const overallResolutionScale = Math.min(scaleFactorX, scaleFactorY); // Use min to avoid distortion if aspect ratios differ
 
             // Get original object's center point and dimensions on the PREVIEW canvas
             const originalCenter = obj.getCenterPoint();
@@ -340,7 +340,7 @@ export default function ProductStudio() {
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
         navigate('/checkout');
-    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects]); // Added new dependencies
+    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects]);
 
 
     // Handlers for dropdowns - use `useCallback` for consistency and stability
@@ -474,10 +474,10 @@ export default function ProductStudio() {
                             if (!img) return;
                             img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
                             img.scaleToWidth(FCanvas.width * 0.33); // Initial scale for display
-                            // --- NEW DEFAULT PLACEMENT FOR DESIGN IMAGE: Centered horizontally, 25% down vertically ---
+                            // --- ADJUSTED DEFAULT PLACEMENT FOR DESIGN IMAGE: Centered horizontally, 37.5% down vertically ---
                             img.set({
                                 left: (FCanvas.width / 2),
-                                top: (FCanvas.height * 0.25), // 25% down from top for center of image
+                                top: (FCanvas.height * 0.375), // 37.5% down from top for center of image
                                 originX: 'center',
                                 originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
