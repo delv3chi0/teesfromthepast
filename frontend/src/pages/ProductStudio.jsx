@@ -77,7 +77,7 @@ export default function ProductStudio() {
         : null;
     
     const hasSelectedDesign = selectedDesign !== null;
-    const [hasCanvasObjects, setHasCanvasObjects] = useState(false); // Corrected this line in previous commit
+    const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
 
 
     // Effect to update hasCanvasObjects state whenever canvas objects change
@@ -225,32 +225,39 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- NEW STRATEGY: Calculate scale for entire composite design AND then center it ---
-        // This is crucial for matching preview layout exactly.
+        // --- Calculate preview content bounds more robustly to ensure `left/top` and `width/height` are correct ---
+        let minX_preview = Infinity, minY_preview = Infinity, maxX_preview = -Infinity, maxY_preview = -Infinity;
 
-        // Get the bounding box of all customizable objects on the PREVIEW canvas
-        const previewDesignGroup = new window.fabric.Group(customizableObjects, {
-            // Not added to canvas, just used for calculation
+        customizableObjects.forEach(obj => {
+            obj.setCoords(); // Ensure latest coords are used
+            const objRect = obj.getBoundingRect(true); // Get top-left bounds including transforms
+            minX_preview = Math.min(minX_preview, objRect.left);
+            minY_preview = Math.min(minY_preview, objRect.top);
+            maxX_preview = Math.max(maxX_preview, objRect.left + objRect.width);
+            maxY_preview = Math.max(maxY_preview, objRect.top + objRect.height);
         });
-        previewDesignGroup.setCoords(); // Ensure bounds are fresh
-        const contentBoundsPreview = previewDesignGroup.getBoundingRect(true); // Get bounds including transforms
 
-        // Destroy the temporary group immediately after getting bounds
-        previewDesignGroup.destroy(); 
+        const contentBoundsPreview = {
+            left: minX_preview,
+            top: minY_preview,
+            width: maxX_preview - minX_preview,
+            height: maxY_preview - minY_preview,
+        };
         
-        console.log("DEBUG: Content Bounds (Preview Canvas):", contentBoundsPreview);
+        console.log("DEBUG: Content Bounds (Preview Canvas, calculated):", contentBoundsPreview);
 
-        // --- Validate contentBoundsPreview to prevent division by zero or NaN ---
+        // --- Validate contentBoundsPreview ---
         if (contentBoundsPreview.width <= 0 || contentBoundsPreview.height <= 0 || !Number.isFinite(contentBoundsPreview.width) || !Number.isFinite(contentBoundsPreview.height)) {
-            console.error("DEBUG: Invalid content bounds for scaling, or content is too small:", contentBoundsPreview);
-            toast({ title: "Error", description: "Design elements are too small or invalid for print. Please adjust your design.", status: "error" });
+            console.error("DEBUG: Invalid content bounds for scaling:", contentBoundsPreview);
+            toast({ title: "Error", description: "Design elements too small or invalid for print. Please adjust your design.", status: "error" });
             return;
         }
 
-        // Calculate a single scale factor for the entire composite design to fit the PRINT_READY_CANVAS
+        // --- Calculate the master scale factor and offsets for the print canvas ---
+        // This scale factor ensures the entire composite design fits within the print canvas without distortion.
         const scaleToFitX = PRINT_READY_WIDTH / contentBoundsPreview.width;
         const scaleToFitY = PRINT_READY_HEIGHT / contentBoundsPreview.height;
-        const compositeDesignScale = Math.min(scaleToFitX, scaleToFitY); // Use smaller scale to fit entirely without distortion
+        const compositeDesignScale = Math.min(scaleToFitX, scaleToFitY); 
 
         console.log("DEBUG: Calculated Composite Design Scale:", compositeDesignScale);
 
@@ -268,14 +275,14 @@ export default function ProductStudio() {
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate object's top-left position on the PREVIEW canvas relative to its *composite bounding box*.
-            // This maintains the exact relative spacing from the preview.
-            const objRectPreview = obj.getBoundingRect(true); // Gets top-left, width, height including transforms
-            
+            // Get original object's top-left position on the PREVIEW canvas (relative to canvas origin)
+            const objRectPreview = obj.getBoundingRect(true); 
+
+            // Calculate object's position relative to the *top-left of the original composite design's bounding box*.
+            // Then scale this relative position, and add the overall centering offset.
             const relativeXInComposite = objRectPreview.left - contentBoundsPreview.left;
             const relativeYInComposite = objRectPreview.top - contentBoundsPreview.top;
 
-            // Apply compositeDesignScale to these relative positions, then add the overall centering offset.
             const newLeft = (relativeXInComposite * compositeDesignScale) + offsetX_finalCenter;
             const newTop = (relativeYInComposite * compositeDesignScale) + offsetY_finalCenter;
             
@@ -290,15 +297,14 @@ export default function ProductStudio() {
             });
 
             if (clonedObj.type === 'i-text') {
-                // Apply the compositeDesignScale directly to fontSize
                 clonedObj.set({
                     fontSize: obj.fontSize * compositeDesignScale,
                     left: newLeft,
                     top: newTop,
                 });
-            } else { // For image objects (id starts with 'design-')
-                // Scale its *current rendered dimensions on preview* by the compositeDesignScale.
+            } else { // For image objects
                 clonedObj.set({
+                    // Scale its *current rendered dimensions on preview* by the compositeDesignScale.
                     width: obj.getScaledWidth() * compositeDesignScale, 
                     height: obj.getScaledHeight() * compositeDesignScale,
                     left: newLeft,
@@ -308,15 +314,16 @@ export default function ProductStudio() {
             printReadyCanvas.add(clonedObj);
             console.log(`DEBUG: Cloned Object ${index} Properties:`, { 
                 type: clonedObj.type, 
-                original_left_top_preview_objRect: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
+                original_obj_left_top_on_canvas: { x: obj.left, y: obj.top }, // obj.left/top (might be center-based if originX/Y='center')
+                original_obj_rect_preview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
                 relative_in_composite: { x: relativeXInComposite, y: relativeYInComposite },
                 new_left_top_print: { x: newLeft, y: newTop },
                 width_final: clonedObj.width, 
                 height_final: clonedObj.height, 
                 fontSize_final: clonedObj.fontSize, 
                 angle: clonedObj.angle,
-                originX_set: clonedObj.originX,
-                originY_set: clonedObj.originY
+                originX_set_on_cloned: clonedObj.originX,
+                originY_set_on_cloned: clonedObj.originY
             });
         });
 
