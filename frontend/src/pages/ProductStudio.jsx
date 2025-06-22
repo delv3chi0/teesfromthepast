@@ -228,7 +228,7 @@ export default function ProductStudio() {
         // This is crucial for scaling the entire design as a unit.
         // Use a temporary group to get accurate combined bounds, then destroy it.
         const previewDesignGroup = new window.fabric.Group(customizableObjects, {
-            // Options for the group, typically not added to main canvas
+            // Do NOT add to canvas here, just use for calculation.
         });
         previewDesignGroup.setCoords(); // Ensure current transform is applied to coordinates
         const contentBounds = previewDesignGroup.getBoundingRect(true); // Get bounds including transforms
@@ -248,17 +248,17 @@ export default function ProductStudio() {
         // --- Calculate optimal scaling factor for the entire composite design ---
         const scaleToFitX = PRINT_READY_WIDTH / contentBounds.width;
         const scaleToFitY = PRINT_READY_HEIGHT / contentBounds.height;
-        const compositeDesignScale = Math.min(scaleToFitX, scaleToFitY); // Scale to fit entirely without distortion
+        const compositeDesignScale = Math.min(scaleToFitX, scaleToFitY); // Choose the smaller scale to fit entirely without distortion
 
         console.log("DEBUG: Calculated Composite Design Scale:", compositeDesignScale);
 
-        // Calculate the effective scaled width and height of the composite design on the print canvas
-        const scaledCompositeWidth = contentBounds.width * compositeDesignScale;
-        const scaledCompositeHeight = contentBounds.height * compositeDesignScale;
+        // Calculate the total scaled width/height of the content on print canvas
+        const scaledContentWidth = contentBounds.width * compositeDesignScale;
+        const scaledContentHeight = contentBounds.height * compositeDesignScale;
 
-        // Calculate the offsets needed to center this scaled composite design within the printReadyCanvas
-        const offsetX_final = (PRINT_READY_WIDTH - scaledCompositeWidth) / 2;
-        const offsetY_final = (PRINT_READY_HEIGHT - scaledCompositeHeight) / 2;
+        // Calculate offsets to center the scaled content within the printReadyCanvas
+        const offsetX_final = (PRINT_READY_WIDTH - scaledContentWidth) / 2;
+        const offsetY_final = (PRINT_READY_HEIGHT - scaledContentHeight) / 2;
         
         console.log("DEBUG: Final Centering Offsets (Print Canvas):", { offsetX_final, offsetY_final });
 
@@ -266,24 +266,23 @@ export default function ProductStudio() {
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get object's top-left position on the PREVIEW canvas (relative to its own properties/transforms)
+            // Calculate object's top-left position on the PREVIEW canvas (relative to its own properties/transforms)
             const objRectPreview = obj.getBoundingRect(true); 
 
-            // Calculate object's position relative to the *top-left of the original composite design's bounding box*
-            const relativeXInComposite = objRectPreview.left - contentBounds.left;
-            const relativeYInComposite = objRectPreview.top - contentBounds.top;
+            // Calculate object's position relative to the content's bounding box top-left on preview.
+            // Then scale it, and add the overall centering offset.
+            const relativeXInContent = objRectPreview.left - contentBounds.left;
+            const relativeYInContent = objRectPreview.top - contentBounds.top;
 
-            // Calculate its new top-left position on the print canvas:
-            // Scaled relative position within composite + final centering offset
-            const newLeft = (relativeXInComposite * compositeDesignScale) + offsetX_final;
-            const newTop = (relativeYInComposite * compositeDesignScale) + offsetY_final;
+            const newLeft = (relativeXInContent * compositeDesignScale) + offsetX_final;
+            const newTop = (relativeYInContent * compositeDesignScale) + offsetY_final;
             
             clonedObj.set({
                 hasControls: false, hasBorders: false,
                 angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
-                // Set origin to 'left', 'top' for consistent positioning via `newLeft`/`newTop`
+                // IMPORTANT: Set origin back to 'left', 'top' for consistent positioning via `newLeft`/`newTop`
                 originX: 'left', 
                 originY: 'top',
             });
@@ -309,7 +308,7 @@ export default function ProductStudio() {
                 type: clonedObj.type, 
                 original_left_top_preview: { x: obj.left, y: obj.top },
                 objRectPreview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
-                relative_in_composite: { x: relativeXInComposite, y: relativeYInComposite },
+                relative_in_content: { x: relativeXInContent, y: relativeYInContent },
                 new_left_top_print: { x: newLeft, y: newTop },
                 width: clonedObj.width, 
                 height: clonedObj.height, 
