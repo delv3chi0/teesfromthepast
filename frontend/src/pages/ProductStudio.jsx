@@ -92,6 +92,8 @@ export default function ProductStudio() {
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
+        // These listeners are outside the main canvas init useEffect to ensure they always reflect the current state
+        // of objects on the canvas, which impacts the checkout button.
         FCanvas.on('object:added', updateHasCanvasObjects);
         FCanvas.on('object:removed', updateHasCanvasObjects);
         FCanvas.on('selection:created', updateHasCanvasObjects); 
@@ -105,26 +107,24 @@ export default function ProductStudio() {
             FCanvas.off('selection:created', updateHasCanvasObjects);
             FCanvas.off('selection:cleared', updateHasCanvasObjects);
         };
-    }, [selectedDesign]);
+    }, [selectedDesign]); // Trigger this effect when selectedDesign changes as well
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
 
-    // This function directly updates the Fabric.js object and ensures selection persistence
+    // This function is now mainly a placeholder. The core logic for updating
+    // Fabric.js object properties and re-rendering is directly within the
+    // onChange handlers for the controls (color, size, font family).
+    // It's kept for potential future abstract logic.
     const updateFabricObjectProperty = useCallback((property, value) => {
         const FCanvas = fabricCanvas.current;
-        const currentActiveObject = activeObjectRef.current; // Get the object from the ref
-
+        const currentActiveObject = activeObjectRef.current;
         if (!FCanvas || !currentActiveObject || currentActiveObject.type !== 'i-text') {
-            return; // Only proceed if canvas and a text object are active
+            return;
         }
-
         currentActiveObject.set(property, value);
         FCanvas.renderAll();
-        // IMPORTANT: DO NOT call FCanvas.setActiveObject(currentActiveObject) here.
-        // Let Fabric.js manage the selection naturally via its event system.
-        // The selection:updated event should fire and keep activeObjectRef.current correct.
-    }, []); // No dependencies here, as it operates on refs
+    }, []);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -441,9 +441,6 @@ export default function ProductStudio() {
             };
             document.addEventListener('keydown', handleKeyDown);
 
-            // Initial check for canvas objects (e.g., if a design is pre-loaded via selectedDesign state change)
-            // This is handled by selectedDesign dependency in the main canvas content useEffect.
-
             // Cleanup function
             return () => {
                 if (fabricCanvas.current) {
@@ -530,12 +527,13 @@ export default function ProductStudio() {
                             FCanvas.add(img);
                             img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
-                            // REMOVED: FCanvas.setActiveObject(img); // Let Fabric.js event listeners handle activation
-                            // REMOVED: activeObjectRef.current = img; // Let selection:created handle this
+                            // We are explicitly NOT calling setActiveObject here. Fabric.js's own
+                            // selection event system will typically make a newly added object active.
+                            // If not, the user will click it.
+                            // The handleSelectionChange listener will then update activeObjectRef.current
                         }, { crossOrigin: 'anonymous' });
                     } else {
-                        // REMOVED: FCanvas.setActiveObject(existingDesignObject); // Let Fabric.js event listeners handle activation
-                        // REMOVED: activeObjectRef.current = existingDesignObject; // Let selection:created handle this
+                        // If object already exists, we are not setting it active here.
                         FCanvas.renderAll();
                     }
                 } else {
@@ -743,7 +741,12 @@ export default function ProductStudio() {
                                             value={textColor}
                                             onChange={(e) => {
                                                 setTextColor(e.target.value);
-                                                updateFabricObjectProperty('fill', e.target.value);
+                                                // DIRECT FABRIC.JS UPDATE & RENDER HERE
+                                                const currentActiveObject = activeObjectRef.current;
+                                                if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
+                                                    currentActiveObject.set('fill', e.target.value);
+                                                    fabricCanvas.current.renderAll();
+                                                }
                                             }}
                                             w="full"
                                             p={0}
@@ -759,7 +762,12 @@ export default function ProductStudio() {
                                     <NumberInput value={fontSize} onChange={(val) => {
                                         const newSize = parseFloat(val);
                                         setFontSize(newSize);
-                                        updateFabricObjectProperty('fontSize', newSize);
+                                        // DIRECT FABRIC.JS UPDATE & RENDER HERE
+                                        const currentActiveObject = activeObjectRef.current;
+                                        if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
+                                            currentActiveObject.set('fontSize', newSize);
+                                            fabricCanvas.current.renderAll();
+                                        }
                                     }} min={10} max={100} size="md">
                                         <NumberInputField as={ThemedControlInput} />
                                         <NumberInputStepper>
@@ -776,7 +784,12 @@ export default function ProductStudio() {
                                     onChange={(e) => {
                                         const newFontFamily = e.target.value;
                                         setFontFamily(newFontFamily);
-                                        updateFabricObjectProperty('fontFamily', newFontFamily);
+                                        // DIRECT FABRIC.JS UPDATE & RENDER HERE
+                                        const currentActiveObject = activeObjectRef.current;
+                                        if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
+                                            currentActiveObject.set('fontFamily', newFontFamily);
+                                            fabricCanvas.current.renderAll();
+                                        }
                                     }}
                                     size="md"
                                 >
