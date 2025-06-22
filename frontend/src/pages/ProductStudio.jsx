@@ -187,12 +187,13 @@ export default function ProductStudio() {
         }
     }, [selectedDesign, toast]);
 
+    // --- MODIFIED: Center only horizontally ---
     const centerSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
             if (activeObject) {
-                activeObject.centerH();
-                activeObject.centerV();
+                activeObject.centerH(); // Only center horizontally
+                // activeObject.centerV(); // Removed vertical centering
                 fabricCanvas.current.renderAll();
             } else {
                 toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
@@ -788,7 +789,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)} // Fixed logic here
+                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)}
                             width="full"
                             maxW="md"
                         >
@@ -800,3 +801,4 @@ export default function ProductStudio() {
         </VStack>
     );
 }
+
