@@ -61,11 +61,11 @@ export default function ProductStudio() {
     const [fontSize, setFontSize] = useState(30); // Default, or actual active text size
     const [fontFamily, setFontFamily] = useState('Montserrat'); // Default, or actual active text font
 
-    // Refs for Fabric.js Canvas
+    // Refs for Fabric.js Canvas and the active object
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    // NEW STATE: Holds the currently active Fabric.js object for reactive updates
-    const [activeFabricObject, setActiveFabricObject] = useState(null); 
+    // No longer directly storing active object in ref; using getActiveObject() and reactive state below
+    // const activeObjectRef = useRef(null); 
 
     // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -86,34 +86,44 @@ export default function ProductStudio() {
         const FCanvas = fabricCanvas.current;
         if (!FCanvas) return;
 
-        const updateHasCanvasObjectsState = () => {
+        const updateHasCanvasObjects = () => {
             const userAddedObjects = FCanvas.getObjects().filter(obj => 
                 obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
             );
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
-        // Listeners for overall canvas object changes affecting checkout button enablement
-        FCanvas.on('object:added', updateHasCanvasObjectsState);
-        FCanvas.on('object:removed', updateHasCanvasObjectsState);
-        FCanvas.on('selection:created', updateHasCanvasObjectsState); 
-        FCanvas.on('selection:cleared', updateHasCanvasObjectsState); 
+        FCanvas.on('object:added', updateHasCanvasObjects);
+        FCanvas.on('object:removed', updateHasCanvasObjects);
+        FCanvas.on('selection:created', updateHasCanvasObjects); 
+        FCanvas.on('selection:cleared', updateHasCanvasObjects); 
         
-        updateHasCanvasObjectsState(); // Initial check on mount/re-render
+        updateHasCanvasObjects(); 
 
         return () => {
-            FCanvas.off('object:added', updateHasCanvasObjectsState);
-            FCanvas.off('object:removed', updateHasCanvasObjectsState);
-            FCanvas.off('selection:created', updateHasCanvasObjectsState);
-            FCanvas.off('selection:cleared', updateHasCanvasObjectsState);
+            FCanvas.off('object:added', updateHasCanvasObjects);
+            FCanvas.off('object:removed', updateHasCanvasObjects);
+            FCanvas.off('selection:created', updateHasCanvasObjects);
+            FCanvas.off('selection:cleared', updateHasCanvasObjects);
         };
     }, [selectedDesign]);
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
 
-    // This function is now removed, as logic is directly in onChange handlers.
-    // The only function here is for `addTextToCanvas` etc.
+    // This function is now mainly a placeholder. The core logic for updating
+    // Fabric.js object properties and re-rendering is directly within the
+    // onChange handlers for the controls (color, size, font family).
+    // It's kept for potential future abstract logic.
+    const updateFabricObjectProperty = useCallback((property, value) => {
+        const FCanvas = fabricCanvas.current;
+        const currentActiveObject = FCanvas.getActiveObject(); 
+        if (!FCanvas || !currentActiveObject || currentActiveObject.type !== 'i-text') {
+            return;
+        }
+        currentActiveObject.set(property, value);
+        FCanvas.renderAll();
+    }, []);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -147,7 +157,6 @@ export default function ProductStudio() {
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
             fabricCanvas.current.discardActiveObject(); // Ensure no object is active after clear
-            setActiveFabricObject(null); // Clear active object state
         }
     }, []);
 
@@ -158,7 +167,6 @@ export default function ProductStudio() {
                 fabricCanvas.current.remove(activeObject);
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
-                setActiveFabricObject(null); // Clear active object state
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
                     setSelectedDesign(null);
                 }
@@ -215,62 +223,81 @@ export default function ProductStudio() {
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
         );
 
+        // --- NEW: Calculate bounding box of all customizable objects on the PREVIEW canvas ---
+        const activeGroup = new window.fabric.Group(customizableObjects, {
+            canvas: fabricCanvas.current // Important to link to current canvas
+        });
+        fabricCanvas.current.add(activeGroup); // Temporarily add group to calculate bounds
+
+        // Get bounds of the combined group of objects on the preview canvas
+        const groupLeft = activeGroup.left;
+        const groupTop = activeGroup.top;
+        const groupWidth = activeGroup.getScaledWidth();
+        const groupHeight = activeGroup.getScaledHeight();
+        
+        // Remove the temporary group
+        fabricCanvas.current.remove(activeGroup);
+        // Add back individual objects if they were removed by grouping (they shouldn't be if temp group)
+        // Ensure original objects are still on canvas for further use.
+
+        // Calculate scaling factor from the bounding box of content to the print canvas dimensions
+        const scaleXFromContent = PRINT_READY_WIDTH / groupWidth;
+        const scaleYFromContent = PRINT_READY_HEIGHT / groupHeight;
+        const contentScale = Math.min(scaleXFromContent, scaleYFromContent); // Scale to fit within the print area without distortion
+
+
         customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get original object's properties on the PREVIEW canvas
-            const originalCenter = obj.getCenterPoint();
-            const originalScaledWidth = obj.getScaledWidth();
-            const originalScaledHeight = obj.getScaledHeight();
-            const originalAngle = obj.angle; // Preserve rotation
+            // Calculate object's position and size relative to the *group's bounding box*
+            const relativeLeftInGroup = (obj.left - groupLeft);
+            const relativeTopInGroup = (obj.top - groupTop);
 
-            // Calculate overall scaling factor from preview canvas to print-ready canvas
-            const scaleFactorCanvasWidth = PRINT_READY_WIDTH / previewCanvasWidth;
-            const scaleFactorCanvasHeight = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallResolutionScale = Math.min(scaleFactorCanvasWidth, scaleFactorCanvasHeight); // Use min to avoid distortion if aspect ratios differ
-
-            // Calculate the relative center position (0-1 range) from the PREVIEW canvas
-            const relativeCenterX = originalCenter.x / previewCanvasWidth;
-            const relativeCenterY = originalCenter.y / previewCanvasHeight;
-
-            // Calculate the target center position on the PRINT_READY canvas
-            const targetCenterX = relativeCenterX * PRINT_READY_WIDTH;
-            const targetCenterY = relativeCenterY * PRINT_READY_HEIGHT;
-            
-            // Set scale to 1 on cloned object, and set width/height or fontSize directly
-            // This ensures we don't compound scales and rely on absolute pixel values
+            // Apply contentScale to object's properties
             clonedObj.set({
-                hasControls: false, hasBorders: false, // No controls on print file
+                hasControls: false, hasBorders: false,
+                angle: obj.angle, // Preserve rotation
+                scaleX: 1, // Reset scale to 1, apply scaling via width/height/fontSize
+                scaleY: 1,
                 originX: obj.originX, // Maintain original origin setting
                 originY: obj.originY, // Maintain original origin setting
-                angle: originalAngle // Preserve rotation
             });
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    fontSize: obj.fontSize * overallResolutionScale, // Scale font size directly
-                    scaleX: 1, // Reset scale to 1 to prevent compounding
-                    scaleY: 1,
-                    left: targetCenterX, // Position using calculated center
-                    top: targetCenterY,
+                    fontSize: obj.fontSize * contentScale,
+                    left: relativeLeftInGroup * contentScale,
+                    top: relativeTopInGroup * contentScale,
                 });
-            } else { // For image objects (like selected designs)
+            } else { // For image objects
                 clonedObj.set({
-                    width: originalScaledWidth * overallResolutionScale,
-                    height: originalScaledHeight * overallResolutionScale,
-                    scaleX: 1, // Reset scale to 1
-                    scaleY: 1,
-                    left: targetCenterX, // Position using calculated center
-                    top: targetCenterY,
+                    width: obj.width * obj.scaleX * contentScale, // Use original dimensions * current scale * contentScale
+                    height: obj.height * obj.scaleY * contentScale,
+                    left: relativeLeftInGroup * contentScale,
+                    top: relativeTopInGroup * contentScale,
                 });
             }
             printReadyCanvas.add(clonedObj);
         });
+
+        // After all objects are added, center the entire composite design on the print-ready canvas
+        const finalPrintGroup = new window.fabric.Group(printReadyCanvas.getObjects(), {
+            canvas: printReadyCanvas
+        });
+        printReadyCanvas.remove(...printReadyCanvas.getObjects()); // Clear canvas
+        printReadyCanvas.add(finalPrintGroup); // Add the group back (effectively flattening it for render)
+        
+        // Ensure final group is centered on the print canvas
+        finalPrintGroup.centerH();
+        finalPrintGroup.centerV();
+        finalPrintGroup.setCoords(); // Update coordinates after centering
+
+
         printReadyCanvas.renderAll();
         const printReadyDesignDataUrl = printReadyCanvas.toDataURL({
             format: 'png',
-            quality: 1.0, // High quality for print
-            multiplier: 1, // Already at target resolution, no further scaling
+            quality: 1.0,
+            multiplier: 1,
         });
         printReadyCanvas.dispose(); // Clean up the temporary canvas
 
@@ -281,7 +308,7 @@ export default function ProductStudio() {
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
-                duration: null, // Keep open until resolved
+                duration: null,
                 isClosable: false,
                 position: "top",
             });
@@ -290,18 +317,18 @@ export default function ProductStudio() {
                 designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
             });
             cloudinaryPublicUrl = uploadResponse.data.publicUrl;
-            toast.closeAll(); // Close previous toast
+            toast.closeAll();
             toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
         } catch (error) {
             console.error("Error uploading print file to Cloudinary:", error);
-            toast.closeAll(); // Close previous toast
+            toast.closeAll();
             toast({
                 title: "Upload Failed",
                 description: "Could not upload your design for printing. Please try again.",
                 status: "error",
                 isClosable: true,
             });
-            return; // Stop checkout process if upload fails
+            return;
         }
 
         // 4. Prepare checkout item with the Cloudinary URL
@@ -375,10 +402,8 @@ export default function ProductStudio() {
             // These listeners keep `activeFabricObject` state and the UI control states updated
             const handleSelectionChange = (e) => {
                 const target = e.target;
-                setActiveFabricObject(target); // Update the state with the active Fabric.js object
-
+                // Update React states for text controls to reflect the selected object's properties
                 if (target && target.type === 'i-text') {
-                    // Update React states for text controls to reflect the selected object's properties
                     setTextColor(target.fill || '#FDF6EE');
                     setFontSize(target.fontSize || 30);
                     setFontFamily(target.fontFamily || 'Montserrat');
@@ -445,7 +470,7 @@ export default function ProductStudio() {
                 }
             };
         }
-    }, [deleteSelectedObject]);
+    }, [deleteSelectedObject]); // Only re-run if deleteSelectedObject callback itself changes (which it shouldn't)
 
     // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
     useEffect(() => {
@@ -729,12 +754,11 @@ export default function ProductStudio() {
                                             type="color"
                                             value={textColor}
                                             onChange={(e) => {
-                                                const newColor = e.target.value;
-                                                setTextColor(newColor); // Update React state for control's value
+                                                setTextColor(e.target.value);
                                                 // DIRECT FABRIC.JS UPDATE & RENDER HERE
                                                 const currentActiveObject = fabricCanvas.current.getActiveObject(); // Get live active object
                                                 if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
-                                                    currentActiveObject.set('fill', newColor);
+                                                    currentActiveObject.set('fill', e.target.value);
                                                     fabricCanvas.current.renderAll();
                                                 }
                                             }}
