@@ -225,51 +225,53 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- Calculate preview content bounds more robustly to ensure `left/top` and `width/height` are correct ---
-        let minX_preview = Infinity, minY_preview = Infinity, maxX_preview = -Infinity, maxY_preview = -Infinity;
+        // --- Determine the central print area on the 4500x5400 canvas ---
+        // Let's assume a print zone that is slightly smaller than the canvas, centered.
+        // This is where the scaled content should ideally sit.
+        const TARGET_PRINT_ZONE_WIDTH = PRINT_READY_WIDTH * 0.9; // 90% of 4500 = 4050px
+        const TARGET_PRINT_ZONE_HEIGHT = PRINT_READY_HEIGHT * 0.9; // 90% of 5400 = 4860px
+        const TARGET_PRINT_ZONE_LEFT = (PRINT_READY_WIDTH - TARGET_PRINT_ZONE_WIDTH) / 2;
+        const TARGET_PRINT_ZONE_TOP = (PRINT_READY_HEIGHT - TARGET_PRINT_ZONE_HEIGHT) / 2;
 
-        customizableObjects.forEach(obj => {
-            obj.setCoords(); // Ensure latest coords are used
-            const objRect = obj.getBoundingRect(true); // Get top-left bounds including transforms
-            minX_preview = Math.min(minX_preview, objRect.left);
-            minY_preview = Math.min(minY_preview, objRect.top);
-            maxX_preview = Math.max(maxX_preview, objRect.left + objRect.width);
-            maxY_preview = Math.max(maxY_preview, objRect.top + objRect.height);
+        console.log("DEBUG: Target Print Zone on Print Canvas:", {
+            left: TARGET_PRINT_ZONE_LEFT,
+            top: TARGET_PRINT_ZONE_TOP,
+            width: TARGET_PRINT_ZONE_WIDTH,
+            height: TARGET_PRINT_ZONE_HEIGHT
         });
 
-        const contentBoundsPreview = {
-            left: minX_preview,
-            top: minY_preview,
-            width: maxX_preview - minX_preview,
-            height: maxY_preview - minY_preview,
-        };
-        
-        console.log("DEBUG: Content Bounds (Preview Canvas, calculated):", contentBoundsPreview);
 
-        // --- Validate contentBoundsPreview ---
-        if (contentBoundsPreview.width <= 0 || contentBoundsPreview.height <= 0 || !Number.isFinite(contentBoundsPreview.width) || !Number.isFinite(contentBoundsPreview.height)) {
-            console.error("DEBUG: Invalid content bounds for scaling:", contentBoundsPreview);
-            toast({ title: "Error", description: "Design elements too small or invalid for print. Please adjust your design.", status: "error" });
+        // --- Calculate a single master scale factor for the entire composite design from PREVIEW to TARGET PRINT ZONE ---
+        // This ensures the entire design (image + text) scales proportionally to fit within the designated print zone.
+        let previewContentMinX = Infinity, previewContentMinY = Infinity, previewContentMaxX = -Infinity, previewContentMaxY = -Infinity;
+        customizableObjects.forEach(obj => {
+            obj.setCoords();
+            const objRect = obj.getBoundingRect(true);
+            previewContentMinX = Math.min(previewContentMinX, objRect.left);
+            previewContentMinY = Math.min(previewContentMinY, objRect.top);
+            previewContentMaxX = Math.max(previewContentMaxX, objRect.left + objRect.width);
+            previewContentMaxY = Math.max(previewContentMaxY, objRect.top + objRect.height);
+        });
+
+        const previewContentBounds = {
+            left: previewContentMinX,
+            top: previewContentMinY,
+            width: previewContentMaxX - previewContentMinX,
+            height: previewContentMaxY - previewContentMinY,
+        };
+        console.log("DEBUG: Preview Content Bounding Box (Actual):", previewContentBounds);
+
+        if (previewContentBounds.width <= 0 || previewContentBounds.height <= 0) {
+            console.error("DEBUG: Preview content bounding box has zero or negative dimensions. Cannot scale.");
+            toast({ title: "Error", description: "Design too small or invalid.", status: "error" });
             return;
         }
 
-        // --- Calculate the master scale factor and offsets for the print canvas ---
-        // This scale factor ensures the entire composite design fits within the print canvas without distortion.
-        const scaleToFitX = PRINT_READY_WIDTH / contentBoundsPreview.width;
-        const scaleToFitY = PRINT_READY_HEIGHT / contentBoundsPreview.height;
-        const compositeDesignScale = Math.min(scaleToFitX, scaleToFitY); 
-
-        console.log("DEBUG: Calculated Composite Design Scale:", compositeDesignScale);
-
-        // Calculate the scaled dimensions of the composite design on the PRINT_READY_CANVAS
-        const scaledCompositeWidth = contentBoundsPreview.width * compositeDesignScale;
-        const scaledCompositeHeight = contentBoundsPreview.height * compositeDesignScale;
-
-        // Calculate offsets to center the *scaled composite design* within the PRINT_READY_CANVAS
-        const offsetX_finalCenter = (PRINT_READY_WIDTH - scaledCompositeWidth) / 2;
-        const offsetY_finalCenter = (PRINT_READY_HEIGHT - scaledCompositeHeight) / 2;
+        const scaleXForContent = TARGET_PRINT_ZONE_WIDTH / previewContentBounds.width;
+        const scaleYForContent = TARGET_PRINT_ZONE_HEIGHT / previewContentBounds.height;
+        const compositeDesignScale = Math.min(scaleXForContent, scaleYForContent); // Scale to fit the *zone* without distortion
         
-        console.log("DEBUG: Final Centering Offsets for Composite Design (Print Canvas):", { offsetX_finalCenter, offsetY_finalCenter });
+        console.log("DEBUG: Composite Design Scale to fit Zone:", compositeDesignScale);
 
         // --- Process each customizable object for the print-ready canvas ---
         customizableObjects.forEach((obj, index) => {
@@ -279,20 +281,19 @@ export default function ProductStudio() {
             const objRectPreview = obj.getBoundingRect(true); 
 
             // Calculate object's position relative to the *top-left of the original composite design's bounding box*.
-            // Then scale this relative position, and add the overall centering offset.
-            const relativeXInComposite = objRectPreview.left - contentBoundsPreview.left;
-            const relativeYInComposite = objRectPreview.top - contentBoundsPreview.top;
+            const relativeXInComposite = objRectPreview.left - previewContentBounds.left;
+            const relativeYInComposite = objRectPreview.top - previewContentBounds.top;
 
-            const newLeft = (relativeXInComposite * compositeDesignScale) + offsetX_finalCenter;
-            const newTop = (relativeYInComposite * compositeDesignScale) + offsetY_finalCenter;
+            // Apply compositeDesignScale to these relative positions, then add the offset to the TARGET PRINT ZONE.
+            const newLeft = (relativeXInComposite * compositeDesignScale) + TARGET_PRINT_ZONE_LEFT;
+            const newTop = (relativeYInComposite * compositeDesignScale) + TARGET_PRINT_ZONE_TOP;
             
             clonedObj.set({
                 hasControls: false, hasBorders: false,
                 angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
-                // Always use 'left', 'top' origin for consistent positioning with calculated `newLeft`/`newTop`.
-                originX: 'left', 
+                originX: 'left', // Set origin to 'left', 'top' for predictable positioning
                 originY: 'top',
             });
 
@@ -314,16 +315,16 @@ export default function ProductStudio() {
             printReadyCanvas.add(clonedObj);
             console.log(`DEBUG: Cloned Object ${index} Properties:`, { 
                 type: clonedObj.type, 
-                original_obj_left_top_on_canvas: { x: obj.left, y: obj.top }, // obj.left/top (might be center-based if originX/Y='center')
+                original_obj_left_top_on_canvas: { x: obj.left, y: obj.top },
                 original_obj_rect_preview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
                 relative_in_composite: { x: relativeXInComposite, y: relativeYInComposite },
-                new_left_top_print: { x: newLeft, y: newTop },
+                new_left_top_print_cloned_obj: { x: newLeft, y: newTop },
                 width_final: clonedObj.width, 
                 height_final: clonedObj.height, 
                 fontSize_final: clonedObj.fontSize, 
                 angle: clonedObj.angle,
-                originX_set_on_cloned: clonedObj.originX,
-                originY_set_on_cloned: clonedObj.originY
+                originX_set: clonedObj.originX,
+                originY_set: clonedObj.originY
             });
         });
 

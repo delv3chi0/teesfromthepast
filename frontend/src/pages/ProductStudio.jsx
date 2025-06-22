@@ -41,7 +41,7 @@ export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
-    const location = useLocation();
+    const location = new URLSearchParams(useLocation().search);
 
     // --- State Declarations ---
     const [products, setProducts] = useState([]);
@@ -49,10 +49,10 @@ export default function ProductStudio() {
     const [designs, setDesigns] = useState([]);
     const [loadingDesigns, setLoadingDesigns] = useState(true);
 
-    const [selectedProductId, setSelectedProductId] = useState('');
-    const [selectedColorName, setSelectedColorName] = useState('');
-    const [selectedSize, setSelectedSize] = useState('');
-    const [selectedDesign, setSelectedDesign] = useState(null);
+    const [selectedProductId, setSelectedProductId] = useState(location.get('productId') || '');
+    const [selectedColorName, setSelectedColorName] = useState(location.get('color') || '');
+    const [selectedSize, setSelectedSize] = useState(location.get('size') || '');
+    const [selectedDesign, setSelectedDesign] = useState(null); // Assuming selectedDesign comes from design gallery click, not URL param
     const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
 
     // States for customization tools (reflect properties of ACTIVE text object)
@@ -225,100 +225,71 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- Determine the central print area on the 4500x5400 canvas ---
-        // Let's assume a print zone that is slightly smaller than the canvas, centered.
-        // This is where the scaled content should ideally sit.
-        const TARGET_PRINT_ZONE_WIDTH = PRINT_READY_WIDTH * 0.9; // 90% of 4500 = 4050px
-        const TARGET_PRINT_ZONE_HEIGHT = PRINT_READY_HEIGHT * 0.9; // 90% of 5400 = 4860px
-        const TARGET_PRINT_ZONE_LEFT = (PRINT_READY_WIDTH - TARGET_PRINT_ZONE_WIDTH) / 2;
-        const TARGET_PRINT_ZONE_TOP = (PRINT_READY_HEIGHT - TARGET_PRINT_ZONE_HEIGHT) / 2;
+        // --- NEW STRATEGY: Scale by a universal factor derived from preview dimensions, then center ---
 
-        console.log("DEBUG: Target Print Zone on Print Canvas:", {
-            left: TARGET_PRINT_ZONE_LEFT,
-            top: TARGET_PRINT_ZONE_TOP,
-            width: TARGET_PRINT_ZONE_WIDTH,
-            height: TARGET_PRINT_ZONE_HEIGHT
-        });
+        // Calculate direct scaling factors for X and Y dimensions from preview to print canvas
+        const scaleXFactor = PRINT_READY_WIDTH / previewCanvasWidth;   // 4500 / 600 = 7.5
+        const scaleYFactor = PRINT_READY_HEIGHT / previewCanvasHeight; // 5400 / 600 = 9.0
 
+        // Use a universal scale factor for all object properties to preserve relative proportions
+        // and ensure the overall composite design doesn't get distorted in one axis relative to the other.
+        // Let's use the X-factor as the primary scale for all dimensions (size & position).
+        // This means the design will scale as if the preview's 600px width maps to 4500px print width.
+        // The Y-axis will then expand or contract based on original relative positions.
+        const universalScale = scaleXFactor; // 7.5
 
-        // --- Calculate a single master scale factor for the entire composite design from PREVIEW to TARGET PRINT ZONE ---
-        // This ensures the entire design (image + text) scales proportionally to fit within the designated print zone.
-        let previewContentMinX = Infinity, previewContentMinY = Infinity, previewContentMaxX = -Infinity, previewContentMaxY = -Infinity;
-        customizableObjects.forEach(obj => {
-            obj.setCoords();
-            const objRect = obj.getBoundingRect(true);
-            previewContentMinX = Math.min(previewContentMinX, objRect.left);
-            previewContentMinY = Math.min(previewContentMinY, objRect.top);
-            previewContentMaxX = Math.max(previewContentMaxX, objRect.left + objRect.width);
-            previewContentMaxY = Math.max(previewContentMaxY, objRect.top + objRect.height);
-        });
+        console.log("DEBUG: Universal Scale Factor (based on width):", universalScale);
 
-        const previewContentBounds = {
-            left: previewContentMinX,
-            top: previewContentMinY,
-            width: previewContentMaxX - previewContentMinX,
-            height: previewContentMaxY - previewContentMinY,
-        };
-        console.log("DEBUG: Preview Content Bounding Box (Actual):", previewContentBounds);
+        const scaledObjectsOnPrintCanvas = []; // To collect scaled objects for final bounding box
 
-        if (previewContentBounds.width <= 0 || previewContentBounds.height <= 0) {
-            console.error("DEBUG: Preview content bounding box has zero or negative dimensions. Cannot scale.");
-            toast({ title: "Error", description: "Design too small or invalid.", status: "error" });
-            return;
-        }
-
-        const scaleXForContent = TARGET_PRINT_ZONE_WIDTH / previewContentBounds.width;
-        const scaleYForContent = TARGET_PRINT_ZONE_HEIGHT / previewContentBounds.height;
-        const compositeDesignScale = Math.min(scaleXForContent, scaleYForContent); // Scale to fit the *zone* without distortion
-        
-        console.log("DEBUG: Composite Design Scale to fit Zone:", compositeDesignScale);
-
-        // --- Process each customizable object for the print-ready canvas ---
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get original object's top-left position on the PREVIEW canvas (relative to canvas origin)
-            const objRectPreview = obj.getBoundingRect(true); 
+            // Get original object's properties (position, dimensions) from preview canvas
+            const originalLeft = obj.left;
+            const originalTop = obj.top;
+            const originalScaledWidth = obj.getScaledWidth();
+            const originalScaledHeight = obj.getScaledHeight();
+            const originalAngle = obj.angle;
+            const originalOriginX = obj.originX;
+            const originalOriginY = obj.originY;
 
-            // Calculate object's position relative to the *top-left of the original composite design's bounding box*.
-            const relativeXInComposite = objRectPreview.left - previewContentBounds.left;
-            const relativeYInComposite = objRectPreview.top - previewContentBounds.top;
-
-            // Apply compositeDesignScale to these relative positions, then add the offset to the TARGET PRINT ZONE.
-            const newLeft = (relativeXInComposite * compositeDesignScale) + TARGET_PRINT_ZONE_LEFT;
-            const newTop = (relativeYInComposite * compositeDesignScale) + TARGET_PRINT_ZONE_TOP;
+            // Apply universalScale to position coordinates
+            const newLeft = originalLeft * universalScale;
+            const newTop = originalTop * universalScale;
             
             clonedObj.set({
                 hasControls: false, hasBorders: false,
-                angle: obj.angle, // Preserve rotation
-                scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
+                angle: originalAngle, // Preserve rotation
+                scaleX: 1, // Reset scale to 1, as dimensions/font size are set explicitly
                 scaleY: 1,
-                originX: 'left', // Set origin to 'left', 'top' for predictable positioning
-                originY: 'top',
+                originX: originalOriginX, // Preserve original origin
+                originY: originalOriginY,
             });
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    fontSize: obj.fontSize * compositeDesignScale,
+                    fontSize: obj.fontSize * universalScale, // Scale font size directly
                     left: newLeft,
                     top: newTop,
                 });
             } else { // For image objects
                 clonedObj.set({
-                    // Scale its *current rendered dimensions on preview* by the compositeDesignScale.
-                    width: obj.getScaledWidth() * compositeDesignScale, 
-                    height: obj.getScaledHeight() * compositeDesignScale,
+                    // Scale *current rendered dimensions* by universalScale
+                    width: originalScaledWidth * universalScale, 
+                    height: originalScaledHeight * universalScale,
                     left: newLeft,
                     top: newTop,
                 });
             }
-            printReadyCanvas.add(clonedObj);
-            console.log(`DEBUG: Cloned Object ${index} Properties:`, { 
+            printReadyCanvas.add(clonedObj); // Add to canvas for final bounding box calculation
+            scaledObjectsOnPrintCanvas.push(clonedObj);
+
+            console.log(`DEBUG: Cloned Object ${index} Properties (After Universal Scale) - `, { 
                 type: clonedObj.type, 
-                original_obj_left_top_on_canvas: { x: obj.left, y: obj.top },
-                original_obj_rect_preview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
-                relative_in_composite: { x: relativeXInComposite, y: relativeYInComposite },
-                new_left_top_print_cloned_obj: { x: newLeft, y: newTop },
+                original_left_top_preview: { x: originalLeft, y: originalTop },
+                original_scaled_wh: { w: originalScaledWidth, h: originalScaledHeight },
+                new_left_top_print: { x: newLeft, y: newTop },
                 width_final: clonedObj.width, 
                 height_final: clonedObj.height, 
                 fontSize_final: clonedObj.fontSize, 
@@ -328,9 +299,42 @@ export default function ProductStudio() {
             });
         });
 
-        console.log("DEBUG: Print Ready Canvas Objects Length (after adding scaled objects):", printReadyCanvas.getObjects().length);
+        // --- Final Centering Pass on the printReadyCanvas ---
+        // After all objects are scaled and added to printReadyCanvas, calculate their combined bounds
+        // and then shift the entire composite to the absolute center of the printReadyCanvas.
+        
+        console.log("DEBUG: Print Ready Canvas Objects Length (after add, before final shift):", printReadyCanvas.getObjects().length);
+        if (scaledObjectsOnPrintCanvas.length > 0) {
+            // Create a temporary group of the objects *already on the printReadyCanvas* to get their combined bounds
+            const finalPrintGroupForBounds = new window.fabric.Group(scaledObjectsOnPrintCanvas, {
+                // Not added to printReadyCanvas itself, just used for bounds calculation
+            });
+            finalPrintGroupForBounds.setCoords(); // Ensure bounds are fresh
+            const finalBounds = finalPrintGroupForBounds.getBoundingRect(true);
+            finalPrintGroupForBounds.destroy(); // Clean up temporary group
+
+            // Calculate final offset to center the scaled composite design on PRINT_READY_CANVAS
+            const offsetX_final = (PRINT_READY_WIDTH / 2) - (finalBounds.left + finalBounds.width / 2);
+            const offsetY_final = (PRINT_READY_HEIGHT / 2) - (finalBounds.top + finalBounds.height / 2);
+
+            console.log("DEBUG: Final Bounding Box (Print Canvas before final shift):", finalBounds);
+            console.log("DEBUG: Final Centering Shifts:", { offsetX_final, offsetY_final });
+
+            // Apply the final centering shift to each object on the printReadyCanvas
+            printReadyCanvas.getObjects().forEach((obj, index) => {
+                obj.set({
+                    left: obj.left + offsetX_final,
+                    top: obj.top + offsetY_final,
+                });
+                obj.setCoords(); // Update object's coordinates after shifting
+                console.log(`DEBUG: Object ${index} Position (After Final Centering Shift):`, { type: obj.type, left: obj.left, top: obj.top });
+            });
+        }
+
+        // Verify objects are still on the printReadyCanvas and render
+        console.log("DEBUG: Print Ready Canvas Objects Length (after final shifts):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
-            console.error("DEBUG: printReadyCanvas is empty after adding objects - this will result in a blank image.");
+            console.error("DEBUG: printReadyCanvas is empty after final shifts - this will result in a blank image.");
             toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
             return;
         }
