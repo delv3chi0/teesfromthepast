@@ -228,12 +228,14 @@ export default function ProductStudio() {
         // --- NEW STRATEGY: Scale all objects by a master factor, then collectively center them ---
 
         // 1. Determine a master scale factor from preview to print canvas dimensions.
-        // Let's use the width ratio, as a common constraint for shirts is print width.
+        // Let's use the ratio of PRINT_READY_WIDTH to previewCanvasWidth as the master scale.
+        // This will mean objects are scaled as if the 600px preview width corresponds to the 4500px print width.
+        // This is typically the primary constraint on a shirt.
         const masterScaleFactor = PRINT_READY_WIDTH / previewCanvasWidth; // 4500 / 600 = 7.5
 
         console.log("DEBUG: Master Scale Factor:", masterScaleFactor);
 
-        const tempObjectsForPrintLayout = []; // Will hold objects scaled to print dimensions, before final centering
+        const tempObjectsForPrintLayout = []; // Will hold objects prepared for printReadyCanvas
 
         customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
@@ -247,14 +249,14 @@ export default function ProductStudio() {
             const originalOriginX = obj.originX;
             const originalOriginY = obj.originY;
 
-            // Apply the masterScaleFactor to all relevant properties for the print canvas
+            // Apply the masterScaleFactor to all relevant properties
             const newLeft = originalLeft * masterScaleFactor;
             const newTop = originalTop * masterScaleFactor;
 
             clonedObj.set({
                 hasControls: false, hasBorders: false,
                 angle: originalAngle, // Preserve rotation
-                scaleX: 1, // Reset scale to 1, as dimensions/font size are now explicitly set
+                scaleX: 1, // Reset scale to 1, as width/height/fontSize are now explicit
                 scaleY: 1,
                 originX: originalOriginX, // Preserve original origin
                 originY: originalOriginY,
@@ -313,7 +315,7 @@ export default function ProductStudio() {
             console.log("DEBUG: Final Bounding Box (Print Canvas before shift):", finalBounds);
             console.log("DEBUG: Final Centering Shifts:", { finalOffsetX, finalOffsetY });
 
-            // Apply the final centering shift to each object already on the printReadyCanvas
+            // Apply the final centering shift to each object on the printReadyCanvas
             printReadyCanvas.getObjects().forEach((obj, index) => {
                 obj.set({
                     left: obj.left + finalOffsetX,
@@ -479,7 +481,7 @@ export default function ProductStudio() {
             FCanvas.on('selection:updated', handleSelectionChange);
             FCanvas.on('selection:cleared', handleSelectionChange);
             FCanvas.on('object:added', handleObjectAdded);
-            FCanvas.on('object:removed', handleObjectRemoved); // Corrected this line
+            FCanvas.on('object:removed', handleObjectRemoved);
             FCanvas.on('object:modified', handleObjectModified);
 
             const handleKeyDown = (e) => {
