@@ -10,7 +10,7 @@ import {
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
-import { useAuth } from '../context/AuthProvider';
+import { useAuth } from '../context/AuthProvider/AuthProvider'; // Ensure correct import path for AuthProvider
 import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa';
 
 // Reusable ThemedSelect for consistency
@@ -55,16 +55,16 @@ export default function ProductStudio() {
     const [selectedDesign, setSelectedDesign] = useState(null);
     const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
 
-    // States for customization tools
-    const [textInputValue, setTextInputValue] = useState('');
-    const [textColor, setTextColor] = useState('#FDF6EE'); // Default to brand.textLight
-    const [fontSize, setFontSize] = useState(30);
-    const [fontFamily, setFontFamily] = useState('Montserrat'); // Default body font
+    // States for customization tools (reflect properties of ACTIVE text object)
+    const [textInputValue, setTextInputValue] = useState(''); // Only for adding new text
+    const [textColor, setTextColor] = useState('#FDF6EE'); // Default, or actual active text color
+    const [fontSize, setFontSize] = useState(30); // Default, or actual active text size
+    const [fontFamily, setFontFamily] = useState('Montserrat'); // Default, or actual active text font
 
-    // Refs for Fabric.js Canvas
+    // Refs for Fabric.js Canvas and the active object
     const canvasEl = useRef(null);
     const fabricCanvas = useRef(null);
-    const activeObjectRef = useRef(null); // Ref to store the currently active Fabric.js object instance
+    const activeObjectRef = useRef(null); // CRITICAL: This ref will hold the actual active Fabric.js object instance
 
     // --- Derived States ---
     const selectedProduct = products.find(p => p._id === selectedProductId);
@@ -92,12 +92,14 @@ export default function ProductStudio() {
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
+        // These listeners are outside the main canvas init useEffect to ensure they always reflect the current state
+        // of objects on the canvas, which impacts the checkout button.
         FCanvas.on('object:added', updateHasCanvasObjects);
         FCanvas.on('object:removed', updateHasCanvasObjects);
         FCanvas.on('selection:created', updateHasCanvasObjects); 
         FCanvas.on('selection:cleared', updateHasCanvasObjects); 
         
-        updateHasCanvasObjects(); 
+        updateHasCanvasObjects(); // Initial check on mount/re-render
 
         return () => {
             FCanvas.off('object:added', updateHasCanvasObjects);
@@ -105,7 +107,7 @@ export default function ProductStudio() {
             FCanvas.off('selection:created', updateHasCanvasObjects);
             FCanvas.off('selection:cleared', updateHasCanvasObjects);
         };
-    }, [selectedDesign]);
+    }, [selectedDesign]); // Trigger this effect when selectedDesign changes as well
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
@@ -154,6 +156,8 @@ export default function ProductStudio() {
             });
             fabricCanvas.current.renderAll();
             setSelectedDesign(null);
+            fabricCanvas.current.discardActiveObject(); // Ensure no object is active after clear
+            activeObjectRef.current = null; // Clear active ref
         }
     }, []);
 
@@ -164,6 +168,7 @@ export default function ProductStudio() {
                 fabricCanvas.current.remove(activeObject);
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
+                activeObjectRef.current = null; // Clear active ref
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
                     setSelectedDesign(null);
                 }
@@ -361,9 +366,8 @@ export default function ProductStudio() {
 
     // --- Effects (Data Fetching and Canvas Initialization) ---
 
-    // Canvas Initialization (runs once on mount)
+    // Canvas Initialization: Runs once to set up Fabric.js canvas and core event listeners
     useEffect(() => {
-        // Only initialize if window.fabric is available and canvas hasn't been initialized yet
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
             const canvasWidth = 600;
             const canvasHeight = 600;
@@ -375,30 +379,55 @@ export default function ProductStudio() {
                 selection: true,
             });
 
-            // Event listeners for object selection: update activeObjectRef and sync UI controls
-            fabricCanvas.current.on('selection:created', (e) => {
-                activeObjectRef.current = e.target;
-                if (e.target && e.target.type === 'i-text') {
-                    setTextColor(e.target.fill || '#FDF6EE');
-                    setFontSize(e.target.fontSize || 30);
-                    setFontFamily(e.target.fontFamily || 'Montserrat');
+            const FCanvas = fabricCanvas.current;
+
+            // --- IMPORTANT: Fabric.js Event Listeners for UI Sync & Active Object Ref ---
+            // These listeners keep `activeObjectRef.current` and the UI control states updated
+            const handleSelectionChange = (e) => {
+                const target = e.target;
+                activeObjectRef.current = target; // Always update the ref with the active object instance
+
+                if (target && target.type === 'i-text') {
+                    // Update React states for text controls to reflect the selected object's properties
+                    setTextColor(target.fill || '#FDF6EE');
+                    setFontSize(target.fontSize || 30);
+                    setFontFamily(target.fontFamily || 'Montserrat');
+                } else {
+                    // If a non-text object is selected or nothing is selected, controls will show default/last values.
+                    // You could reset them here if desired.
                 }
-            });
-            fabricCanvas.current.on('selection:updated', (e) => {
-                activeObjectRef.current = e.target;
-                if (e.target && e.target.type === 'i-text') {
-                    setTextColor(e.target.fill || '#FDF6EE');
-                    setFontSize(e.target.fontSize || 30);
-                    setFontFamily(e.target.fontFamily || 'Montserrat');
+                // Update hasCanvasObjects state whenever selection changes (good for checkout button)
+                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
+                setHasCanvasObjects(userAddedObjects.length > 0);
+            };
+
+            // Event listener for when objects are modified (e.g., dragged, scaled manually)
+            const handleObjectModified = () => {
+                // Ensure UI controls reflect changes if the modified object is text
+                const activeObject = FCanvas.getActiveObject(); // Re-get active object just in case
+                if (activeObject && activeObject.type === 'i-text') {
+                    setTextColor(activeObject.fill || '#FDF6EE');
+                    setFontSize(activeObject.fontSize || 30);
+                    setFontFamily(activeObject.fontFamily || 'Montserrat');
                 }
-            });
-            fabricCanvas.current.on('selection:cleared', () => {
-                activeObjectRef.current = null;
-                // Optionally reset UI controls or set default values if nothing is selected
-                // setTextColor('#FDF6EE');
-                // setFontSize(30);
-                // setFontFamily('Montserrat');
-            });
+            };
+
+            const handleObjectAdded = () => {
+                 const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
+                 setHasCanvasObjects(userAddedObjects.length > 0);
+            };
+            const handleObjectRemoved = () => {
+                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
+                setHasCanvasObjects(userAddedObjects.length > 0);
+            };
+
+
+            FCanvas.on('selection:created', handleSelectionChange);
+            FCanvas.on('selection:updated', handleSelectionChange);
+            FCanvas.on('selection:cleared', handleSelectionChange);
+            FCanvas.on('object:added', handleObjectAdded);
+            FCanvas.on('object:removed', handleObjectRemoved);
+            FCanvas.on('object:modified', handleObjectModified); // Important for reflecting manual changes
 
             // Global keydown listener for delete key
             const handleKeyDown = (e) => {
@@ -411,24 +440,30 @@ export default function ProductStudio() {
             };
             document.addEventListener('keydown', handleKeyDown);
 
-            // Cleanup function for Fabric.js
+            // Initial check for canvas objects (e.g., if a design is pre-loaded via selectedDesign state change)
+            // This is handled by selectedDesign dependency in the main canvas content useEffect.
+
+            // Cleanup function
             return () => {
                 if (fabricCanvas.current) {
-                    fabricCanvas.current.off('selection:created');
-                    fabricCanvas.current.off('selection:updated');
-                    fabricCanvas.current.off('selection:cleared');
-                    fabricCanvas.current.dispose();
+                    FCanvas.off('selection:created', handleSelectionChange);
+                    FCanvas.off('selection:updated', handleSelectionChange);
+                    FCanvas.off('selection:cleared', handleSelectionChange);
+                    FCanvas.off('object:added', handleObjectAdded);
+                    FCanvas.off('object:removed', handleObjectRemoved);
+                    FCanvas.off('object:modified', handleObjectModified);
+                    FCanvas.dispose();
                     fabricCanvas.current = null;
                     document.removeEventListener('keydown', handleKeyDown);
                 }
             };
         }
-    }, [deleteSelectedObject]);
+    }, [deleteSelectedObject]); // Only re-run if deleteSelectedObject callback itself changes (which it shouldn't)
 
-    // Canvas Content Update (runs when finalVariant, currentMockupType, or selectedDesign changes)
+    // Canvas Content Update: handles background image and adding selected design
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return;
+        if (!FCanvas) return; // Canvas not initialized yet
 
         const updateCanvasBackground = (fabricInstance) => {
             const teeMockupImage = finalVariant?.imageSet?.find(img => img.url.includes('tee_') && !img.url.includes('man_'));
@@ -467,11 +502,12 @@ export default function ProductStudio() {
         };
 
         const pollForFabricAndSetupContent = () => {
-            if (window.fabric) {
+            if (window.fabric) { // Ensure Fabric.js is loaded
                 updateCanvasBackground(window.fabric);
 
                 // Remove previous design image if any, but preserve other objects like text
-                FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-')).forEach(obj => FCanvas.remove(obj));
+                // Filter out current selectedDesign from removal if it's the one being kept/updated
+                FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-') && obj.id !== `design-${selectedDesign?._id}`).forEach(obj => FCanvas.remove(obj));
 
                 if (selectedDesign?.imageDataUrl) {
                     const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
@@ -480,7 +516,6 @@ export default function ProductStudio() {
                             if (!img) return;
                             img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
                             img.scaleToWidth(FCanvas.width * 0.33); // Initial scale for display
-                            // --- ADJUSTED DEFAULT PLACEMENT FOR DESIGN IMAGE: Centered horizontally, 37.5% down vertically ---
                             img.set({
                                 left: (FCanvas.width / 2),
                                 top: (FCanvas.height * 0.375), // 37.5% down from top for center of image
@@ -495,10 +530,11 @@ export default function ProductStudio() {
                             img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
                             FCanvas.setActiveObject(img); // Make it the active object
+                            activeObjectRef.current = img; // Update the ref immediately
                         }, { crossOrigin: 'anonymous' });
                     } else {
-                        // If for some reason it already exists, just make it active
                         FCanvas.setActiveObject(existingDesignObject);
+                        activeObjectRef.current = existingDesignObject; // Update the ref immediately
                         FCanvas.renderAll();
                     }
                 } else {
@@ -506,12 +542,12 @@ export default function ProductStudio() {
                 }
 
             } else {
-                setTimeout(pollForFabricAndSetupContent, 100);
+                setTimeout(pollForFabricAndSetupContent, 100); // Polling for window.fabric
             }
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, currentMockupType, selectedDesign]);
+    }, [finalVariant, currentMockupType, selectedDesign]); // Reruns when product/mockup/selected design changes
 
 
     // Fetch products and initialize selections from URL params
@@ -566,34 +602,6 @@ export default function ProductStudio() {
             setLoadingDesigns(false);
         }
     }, [user, location, navigate]);
-
-    // Effect to synchronize text tool inputs with active Fabric.js object (now simpler due to refactoring)
-    useEffect(() => {
-        const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return;
-
-        const onSelectionChange = () => {
-            const activeObject = FCanvas.getActiveObject();
-            if (activeObject && activeObject.type === 'i-text') {
-                setTextColor(activeObject.fill || '#FDF6EE');
-                setFontSize(activeObject.fontSize || 30);
-                setFontFamily(activeObject.fontFamily || 'Montserrat');
-            } else {
-                // If no text object is selected, controls might show last value, or you can reset them
-            }
-        };
-
-        // These listeners are crucial for updating UI controls when selection changes by canvas interaction
-        FCanvas.on('selection:created', onSelectionChange);
-        FCanvas.on('selection:updated', onSelectionChange);
-        FCanvas.on('selection:cleared', onSelectionChange);
-
-        return () => {
-            FCanvas.off('selection:created', onSelectionChange);
-            FCanvas.off('selection:updated', onSelectionChange);
-            FCanvas.off('selection:cleared', onSelectionChange);
-        };
-    }, []);
 
 
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
@@ -734,7 +742,6 @@ export default function ProductStudio() {
                                             value={textColor}
                                             onChange={(e) => {
                                                 setTextColor(e.target.value);
-                                                // Directly update Fabric.js object and re-assert selection
                                                 updateFabricObjectProperty('fill', e.target.value);
                                             }}
                                             w="full"
@@ -801,7 +808,6 @@ export default function ProductStudio() {
                                 : "$0.00"
                             }
                         </Text>
-                        {/* FINALIZED Checkout button logic: enabled if finalVariant is selected AND (an AI design is selected OR any text/design object is manually added to canvas) */}
                         <Button
                             colorScheme="brandAccentOrange"
                             size="lg"
