@@ -109,10 +109,10 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
-            // Initial positioning can be centered for new text, then user can drag
+            // NEW DEFAULT PLACEMENT FOR TEXT: Centered horizontally, 60% down vertically
             left: (fabricCanvas.current.width / 2),
-            top: (fabricCanvas.current.height / 2),
-            originX: 'center', // Set origin to center for easier positioning
+            top: (fabricCanvas.current.height * 0.6), // 60% down for text
+            originX: 'center',
             originY: 'center',
             fill: textColor,
             fontSize: fontSize,
@@ -169,11 +169,9 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        // --- FINALIZED LOGIC FOR `hasCustomizations`: Check for selectedDesign OR any text/design object on canvas ---
         const hasSelectedDesign = selectedDesign !== null;
         const hasAddedTextOrImageOnCanvas = fabricCanvas.current.getObjects().some(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
 
-        // If no primary product variant is selected, OR there's neither a selected AI design NOR any added text/design on the canvas
         if (!finalVariant || (!hasSelectedDesign && !hasAddedTextOrImageOnCanvas)) {
             toast({
                 title: "Incomplete Customization",
@@ -184,7 +182,6 @@ export default function ProductStudio() {
             return;
         }
 
-
         // 1. Generate low-res preview image (for display in cart/order history)
         const finalPreviewImage = fabricCanvas.current.toDataURL({
             format: 'png',
@@ -193,8 +190,8 @@ export default function ProductStudio() {
         });
 
         // 2. Generate high-res print-ready image (for Printful)
-        const PRINT_READY_WIDTH = 4500;
-        const PRINT_READY_HEIGHT = 5400;
+        const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
+        const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
         const printReadyCanvas = new window.fabric.Canvas(null, {
             width: PRINT_READY_WIDTH,
@@ -205,7 +202,6 @@ export default function ProductStudio() {
         const previewCanvasWidth = fabricCanvas.current.width;
         const previewCanvasHeight = fabricCanvas.current.height;
 
-        // Loop through all *customizable* objects (designs and text) on the preview canvas
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
         );
@@ -213,48 +209,54 @@ export default function ProductStudio() {
         customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate scaling factors based on canvas size ratio
-            const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
-            const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallResolutionScale = Math.min(scaleFactorX, scaleFactorY); // Use min to avoid distortion if aspect ratios differ
-
-            // Apply global scaling to the object's dimensions
-            clonedObj.set({
-                scaleX: obj.scaleX * overallResolutionScale,
-                scaleY: obj.scaleY * overallResolutionScale,
-                hasControls: false, hasBorders: false, // No controls on print file
-            });
-
-            // --- CRITICAL FIX: Recalculate position based on NEW SCALED DIMENSIONS and original relative center ---
-            // 1. Get original object's center point on the PREVIEW canvas
+            // Get original object's center point and dimensions on the PREVIEW canvas
             const originalCenter = obj.getCenterPoint();
+            const originalScaledWidth = obj.getScaledWidth();
+            const originalScaledHeight = obj.getScaledHeight();
 
-            // 2. Calculate relative center position (0-1 range) on the PREVIEW canvas
+            // Calculate overall scaling factor from preview canvas to print-ready canvas
+            const scaleFactorCanvasWidth = PRINT_READY_WIDTH / previewCanvasWidth;
+            const scaleFactorCanvasHeight = PRINT_READY_HEIGHT / previewCanvasHeight;
+            const overallResolutionScale = Math.min(scaleFactorCanvasWidth, scaleFactorCanvasHeight); // Use min to fit proportionally
+
+            // Calculate the desired scaled dimensions of the object for the print-ready canvas
+            const desiredPrintWidth = originalScaledWidth * overallResolutionScale;
+            const desiredPrintHeight = originalScaledHeight * overallResolutionScale;
+
+            // Calculate the relative center position (0-1 range) from the PREVIEW canvas
             const relativeCenterX = originalCenter.x / previewCanvasWidth;
             const relativeCenterY = originalCenter.y / previewCanvasHeight;
 
-            // 3. Calculate target center position on the PRINT_READY canvas
+            // Calculate the target center position on the PRINT_READY canvas
             const targetCenterX = relativeCenterX * PRINT_READY_WIDTH;
             const targetCenterY = relativeCenterY * PRINT_READY_HEIGHT;
             
-            // 4. Set the origin to center *before* setting left/top for accurate positioning based on center points
+            // Set scale to 1 on cloned object, and set width/height or fontSize directly
+            // This avoids compounding scales from previous operations
             clonedObj.set({
-                originX: 'center',
+                scaleX: 1, // Reset scale to 1, as we're setting width/height directly
+                scaleY: 1,
+                hasControls: false, hasBorders: false, // No controls on print file
+                originX: 'center', // Crucial for positioning by center
                 originY: 'center',
-                left: targetCenterX,
-                top: targetCenterY,
             });
 
             if (clonedObj.type === 'i-text') {
-                // For text, apply the overall resolution scale directly to the fontSize
                 clonedObj.set({
-                    fontSize: obj.fontSize * overallResolutionScale
+                    fontSize: obj.fontSize * overallResolutionScale // Scale font size directly
                 });
-                // Ensure scaleX and scaleY are reset to 1 for text objects AFTER fontSize is set,
-                // to prevent compounding scales that lead to huge text.
+                // After setting fontSize, its effective scaled width/height might change
+                // We ensure it's positioned using its center point
                 clonedObj.set({
-                    scaleX: 1,
-                    scaleY: 1
+                     left: targetCenterX,
+                     top: targetCenterY,
+                });
+            } else { // For image objects (like selected designs)
+                clonedObj.set({
+                    width: desiredPrintWidth,
+                    height: desiredPrintHeight,
+                    left: targetCenterX,
+                    top: targetCenterY,
                 });
             }
             printReadyCanvas.add(clonedObj);
@@ -322,7 +324,7 @@ export default function ProductStudio() {
         setSelectedProductId(newProductId);
         setSelectedColorName('');
         setSelectedSize('');
-        clearCanvas(); // clearCanvas is a useCallback and stable
+        clearCanvas();
 
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct && newSelectedProduct.variants.length > 0) {
@@ -447,10 +449,12 @@ export default function ProductStudio() {
                             if (!img) return;
                             img.id = `design-${selectedDesign._id}`; // Assign a unique ID for tracking
                             img.scaleToWidth(FCanvas.width * 0.33); // Initial scale for display
-                            // --- NEW: Center the image upon addition ---
+                            // --- NEW DEFAULT PLACEMENT FOR DESIGN IMAGE: Centered horizontally, 25% down vertically ---
                             img.set({
-                                top: (FCanvas.height - img.getScaledHeight()) / 2, // Center vertically
-                                left: (FCanvas.width - img.getScaledWidth()) / 2, // Center horizontally
+                                left: (FCanvas.width / 2),
+                                top: (FCanvas.height * 0.25), // 25% down from top for center of image
+                                originX: 'center',
+                                originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
@@ -759,7 +763,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (!selectedDesign && fabricCanvas.current && fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))).length === 0)}
+                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasAddedTextOrImageOnCanvas)}
                             width="full"
                             maxW="md"
                         >
