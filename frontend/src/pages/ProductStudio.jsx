@@ -219,49 +219,37 @@ export default function ProductStudio() {
 
         console.log("DEBUG: Customizable Objects Count:", customizableObjects.length);
         if (customizableObjects.length === 0) {
-            console.error("DEBUG: customizableObjects array is empty within handleProceedToCheckout loop.");
-            toast({ title: "Error", description: "No design elements found on canvas for print. Please try adding a design or text.", status: "error" });
+            console.error("DEBUG: customizableObjects array is empty within handleProceedToCheckout loop, despite initial check.");
+            toast({ title: "Error", description: "No design elements found on canvas for print. This is an internal error.", status: "error" });
             return;
         }
 
-        // --- NEW & IMPROVED: Calculate bounding box of all customizable objects on PREVIEW canvas ---
-        // This is crucial for scaling the entire design as a unit.
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-        customizableObjects.forEach(obj => {
-            obj.setCoords(); // Ensure current transform is applied to coordinates
-            // Use obj.aCoords for absolute bounding box, more reliable than getBoundingRect sometimes with rotation
-            const coords = obj.aCoords; // {tl, tr, bl, br} (top-left, top-right, bottom-left, bottom-right)
-            const objPoints = [coords.tl, coords.tr, coords.bl, coords.br];
-            
-            objPoints.forEach(point => {
-                minX = Math.min(minX, point.x);
-                minY = Math.min(minY, point.y);
-                maxX = Math.max(maxX, point.x);
-                maxY = Math.max(maxY, point.y);
-            });
+        // --- Calculate bounding box of all customizable objects on PREVIEW canvas using a temporary group ---
+        // This is the most reliable way to get combined bounds of multiple, potentially transformed objects.
+        const tempGroup = new window.fabric.Group(customizableObjects, {
+            canvas: fabricCanvas.current // Important for correct bounds calculation, but not added to canvas itself
         });
+        // Call setCoords on the group to ensure its bounding box is up-to-date
+        tempGroup.setCoords(); 
+        const contentBounds = tempGroup.getBoundingRect(true); // getBoundingRect(true) to include transforms
 
-        const contentBounds = {
-            left: minX,
-            top: minY,
-            width: maxX - minX,
-            height: maxY - minY,
-        };
-
+        // Important: Dispose the temporary group immediately after getting bounds to prevent memory leaks
+        // and ensure original objects are not implicitly removed from the main canvas.
+        tempGroup.destroy(); 
+        
         console.log("DEBUG: Content Bounds (Preview Canvas):", contentBounds);
 
         // --- Validate contentBounds to prevent division by zero or NaN ---
         if (contentBounds.width <= 0 || contentBounds.height <= 0 || !Number.isFinite(contentBounds.width) || !Number.isFinite(contentBounds.height)) {
-            console.error("DEBUG: Invalid content bounds for scaling:", contentBounds);
-            toast({ title: "Error", description: "Design elements too small or invalid for print.", status: "error" });
+            console.error("DEBUG: Invalid content bounds for scaling, or content is too small:", contentBounds);
+            toast({ title: "Error", description: "Design elements are too small or invalid for print. Please adjust your design.", status: "error" });
             return;
         }
 
         // --- Calculate optimal scaling and positioning for the combined content ---
         const scaleToFitX = PRINT_READY_WIDTH / contentBounds.width;
         const scaleToFitY = PRINT_READY_HEIGHT / contentBounds.height;
-        const contentScale = Math.min(scaleToFitX, scaleToFitY); // Scale to fit entirely without distortion
+        const contentScale = Math.min(scaleToFitX, scaleToFitY); // Choose the smaller scale to fit entirely without overflow
 
         console.log("DEBUG: Calculated Content Scale:", contentScale);
 
@@ -279,26 +267,21 @@ export default function ProductStudio() {
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Calculate object's position relative to the content's bounding box top-left on preview
-            // Then scale it, and add the overall centering offset.
-            // Using obj.left/top (which are relative to obj.originX/Y on its own, then offset)
-            // and contentBounds.left/top (which is the combined group's top-left from canvas origin)
-            // requires careful calculation.
-            
-            // First, get the object's top-left corner on the PREVIEW canvas (regardless of its own originX/Y)
-            const objRectPreview = obj.getBoundingRect(true); // Gets top-left, width, height including transforms
+            // Calculate object's position relative to the content's bounding box top-left on preview.
+            // This ensures relative spacing is maintained.
+            const relativeLeftInContent = obj.left - contentBounds.left;
+            const relativeTopInContent = obj.top - contentBounds.top;
 
-            // Calculate its new top-left position on the print canvas relative to the *scaled bounding box*
-            const newLeft = ((objRectPreview.left - contentBounds.left) * contentScale) + offsetX_center;
-            const newTop = ((objRectPreview.top - contentBounds.top) * contentScale) + offsetY_center;
+            // Apply contentScale to these relative positions, then add the overall centering offset.
+            const newLeft = (relativeLeftInContent * contentScale) + offsetX_center;
+            const newTop = (relativeYInContent * contentScale) + offsetY_center;
             
             clonedObj.set({
                 hasControls: false, hasBorders: false,
                 angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1; new dimensions/font size are set explicitly
                 scaleY: 1,
-                // IMPORTANT: Set origin back to 'left', 'top' for consistent positioning via `newLeft`/`newTop`
-                // This simplifies logic if the original object had 'center' origin.
+                // IMPORTANT: Use 'left', 'top' origin for consistent positioning based on calculated newLeft/newTop
                 originX: 'left', 
                 originY: 'top',
             });
@@ -312,8 +295,9 @@ export default function ProductStudio() {
             } else { // For image objects
                 clonedObj.set({
                     // For images, we scale their *actual rendered dimensions on preview* by the contentScale
-                    width: originalScaledWidth * contentScale, 
-                    height: originalScaledHeight * contentScale,
+                    // This correctly accounts for any user-applied scaling (obj.scaleX/Y) on the preview.
+                    width: obj.getScaledWidth() * contentScale, 
+                    height: obj.getScaledHeight() * contentScale,
                     left: newLeft,
                     top: newTop,
                 });
@@ -325,15 +309,17 @@ export default function ProductStudio() {
                 top: clonedObj.top, 
                 width: clonedObj.width, 
                 height: clonedObj.height, 
-                fontSize: clonedObj.fontSize, 
-                angle: clonedObj.angle 
+                fontSize: clonedObj.fontSize, // Will be undefined for images
+                angle: clonedObj.angle,
+                originX: clonedObj.originX,
+                originY: clonedObj.originY
             });
         });
 
         // Verify objects are on the printReadyCanvas
-        console.log("DEBUG: Print Ready Canvas Objects Length:", printReadyCanvas.getObjects().length);
+        console.log("DEBUG: Print Ready Canvas Objects Length (after add):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
-            console.error("DEBUG: printReadyCanvas is empty after adding objects.");
+            console.error("DEBUG: printReadyCanvas is empty after adding objects - this will result in a blank image.");
             toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
             return;
         }
