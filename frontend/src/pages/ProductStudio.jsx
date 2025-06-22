@@ -10,7 +10,7 @@ import {
 } from '@chakra-ui/react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
-import { useAuth } from '../context/AuthProvider'; // CORRECTED IMPORT PATH
+import { useAuth } from '../context/AuthProvider'; // Corrected import path
 import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa';
 
 // Reusable ThemedSelect for consistency
@@ -92,14 +92,12 @@ export default function ProductStudio() {
             setHasCanvasObjects(userAddedObjects.length > 0);
         };
 
-        // These listeners are outside the main canvas init useEffect to ensure they always reflect the current state
-        // of objects on the canvas, which impacts the checkout button.
         FCanvas.on('object:added', updateHasCanvasObjects);
         FCanvas.on('object:removed', updateHasCanvasObjects);
         FCanvas.on('selection:created', updateHasCanvasObjects); 
         FCanvas.on('selection:cleared', updateHasCanvasObjects); 
         
-        updateHasCanvasObjects(); // Initial check on mount/re-render
+        updateHasCanvasObjects(); 
 
         return () => {
             FCanvas.off('object:added', updateHasCanvasObjects);
@@ -107,7 +105,7 @@ export default function ProductStudio() {
             FCanvas.off('selection:created', updateHasCanvasObjects);
             FCanvas.off('selection:cleared', updateHasCanvasObjects);
         };
-    }, [selectedDesign]); // Trigger this effect when selectedDesign changes as well
+    }, [selectedDesign]);
 
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
@@ -115,15 +113,18 @@ export default function ProductStudio() {
     // This function directly updates the Fabric.js object and ensures selection persistence
     const updateFabricObjectProperty = useCallback((property, value) => {
         const FCanvas = fabricCanvas.current;
-        if (!FCanvas || !activeObjectRef.current || activeObjectRef.current.type !== 'i-text') {
-            // No toast here; UI controls are handled by sync effect or disabled state
-            return;
+        const currentActiveObject = activeObjectRef.current; // Get the object from the ref
+
+        if (!FCanvas || !currentActiveObject || currentActiveObject.type !== 'i-text') {
+            return; // Only proceed if canvas and a text object are active
         }
 
-        activeObjectRef.current.set(property, value);
+        currentActiveObject.set(property, value);
         FCanvas.renderAll();
-        FCanvas.setActiveObject(activeObjectRef.current); // Crucial for maintaining selection
-    }, []);
+        // IMPORTANT: DO NOT call FCanvas.setActiveObject(currentActiveObject) here.
+        // Let Fabric.js manage the selection naturally via its event system.
+        // The selection:updated event should fire and keep activeObjectRef.current correct.
+    }, []); // No dependencies here, as it operates on refs
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -142,7 +143,7 @@ export default function ProductStudio() {
             cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
         });
         fabricCanvas.current.add(textObject);
-        fabricCanvas.current.setActiveObject(textObject);
+        fabricCanvas.current.setActiveObject(textObject); // Make newly added text active
         fabricCanvas.current.renderAll();
         setTextInputValue('');
     }, [textInputValue, textColor, fontSize, fontFamily, toast]);
@@ -529,12 +530,12 @@ export default function ProductStudio() {
                             FCanvas.add(img);
                             img.sendToBack(); // Send image behind text if text is added later
                             FCanvas.renderAll();
-                            FCanvas.setActiveObject(img); // Make it the active object
-                            activeObjectRef.current = img; // Update the ref immediately after setting active
+                            // REMOVED: FCanvas.setActiveObject(img); // Let Fabric.js event listeners handle activation
+                            // REMOVED: activeObjectRef.current = img; // Let selection:created handle this
                         }, { crossOrigin: 'anonymous' });
                     } else {
-                        FCanvas.setActiveObject(existingDesignObject);
-                        activeObjectRef.current = existingDesignObject; // Update the ref immediately
+                        // REMOVED: FCanvas.setActiveObject(existingDesignObject); // Let Fabric.js event listeners handle activation
+                        // REMOVED: activeObjectRef.current = existingDesignObject; // Let selection:created handle this
                         FCanvas.renderAll();
                     }
                 } else {
