@@ -76,6 +76,39 @@ export default function ProductStudio() {
     const finalVariant = selectedColorVariant && selectedSizeVariant
         ? { ...selectedColorVariant, ...selectedSizeVariant }
         : null;
+    
+    // --- CRITICAL FIX: Move these variables to the component body for correct scope ---
+    // These need to be reactive or derived from reactive states.
+    const hasSelectedDesign = selectedDesign !== null;
+    // We need a way to check if there are *any* user-added objects on the canvas
+    // We can use a state for this or derive it dynamically. Let's make it reactive to Fabric.js changes.
+    const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
+
+    // Effect to update hasCanvasObjects state whenever canvas objects change
+    useEffect(() => {
+        const FCanvas = fabricCanvas.current;
+        if (!FCanvas) return;
+
+        const updateHasCanvasObjects = () => {
+            // Filter to ensure we only count user-added designs (not background) or text
+            const userAddedObjects = FCanvas.getObjects().filter(obj => 
+                obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
+            );
+            setHasCanvasObjects(userAddedObjects.length > 0);
+        };
+
+        // Listen for object additions, removals, modifications
+        FCanvas.on('object:added', updateHasCanvasObjects);
+        FCanvas.on('object:removed', updateHasCanvasObjects);
+        // Also call once initially in case objects are loaded from selectedDesign
+        updateHasCanvasObjects(); 
+
+        return () => {
+            FCanvas.off('object:added', updateHasCanvasObjects);
+            FCanvas.off('object:removed', updateHasCanvasObjects);
+        };
+    }, [selectedDesign]); // Trigger this effect when selectedDesign changes as well
+
 
     // --- Customization Tool Handlers (Fabric.js interactions) ---
     const updateActiveObject = useCallback((property, value) => {
@@ -109,9 +142,8 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
-            // NEW DEFAULT PLACEMENT FOR TEXT: Centered horizontally, 60% down vertically
             left: (fabricCanvas.current.width / 2),
-            top: (fabricCanvas.current.height * 0.6), // 60% down for text
+            top: (fabricCanvas.current.height * 0.6),
             originX: 'center',
             originY: 'center',
             fill: textColor,
@@ -169,10 +201,9 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
-        const hasSelectedDesign = selectedDesign !== null;
-        const hasAddedTextOrImageOnCanvas = fabricCanvas.current.getObjects().some(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
-
-        if (!finalVariant || (!hasSelectedDesign && !hasAddedTextOrImageOnCanvas)) {
+        // hasSelectedDesign and hasCanvasObjects are now defined in the component's main body
+        // and are reactive states/derived values.
+        if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) { // Use the states directly here
             toast({
                 title: "Incomplete Customization",
                 description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
@@ -209,19 +240,15 @@ export default function ProductStudio() {
         customizableObjects.forEach(obj => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
+            // Calculate scaling factors based on canvas size ratio
+            const scaleFactorX = PRINT_READY_WIDTH / previewCanvasWidth;
+            const scaleFactorY = PRINT_READY_HEIGHT / previewCanvasHeight;
+            const overallResolutionScale = Math.min(scaleFactorX, scaleFactorY);
+
             // Get original object's center point and dimensions on the PREVIEW canvas
             const originalCenter = obj.getCenterPoint();
             const originalScaledWidth = obj.getScaledWidth();
             const originalScaledHeight = obj.getScaledHeight();
-
-            // Calculate overall scaling factor from preview canvas to print-ready canvas
-            const scaleFactorCanvasWidth = PRINT_READY_WIDTH / previewCanvasWidth;
-            const scaleFactorCanvasHeight = PRINT_READY_HEIGHT / previewCanvasHeight;
-            const overallResolutionScale = Math.min(scaleFactorCanvasWidth, scaleFactorCanvasHeight); // Use min to fit proportionally
-
-            // Calculate the desired scaled dimensions of the object for the print-ready canvas
-            const desiredPrintWidth = originalScaledWidth * overallResolutionScale;
-            const desiredPrintHeight = originalScaledHeight * overallResolutionScale;
 
             // Calculate the relative center position (0-1 range) from the PREVIEW canvas
             const relativeCenterX = originalCenter.x / previewCanvasWidth;
@@ -232,10 +259,7 @@ export default function ProductStudio() {
             const targetCenterY = relativeCenterY * PRINT_READY_HEIGHT;
             
             // Set scale to 1 on cloned object, and set width/height or fontSize directly
-            // This avoids compounding scales from previous operations
             clonedObj.set({
-                scaleX: 1, // Reset scale to 1, as we're setting width/height directly
-                scaleY: 1,
                 hasControls: false, hasBorders: false, // No controls on print file
                 originX: 'center', // Crucial for positioning by center
                 originY: 'center',
@@ -243,19 +267,19 @@ export default function ProductStudio() {
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    fontSize: obj.fontSize * overallResolutionScale // Scale font size directly
-                });
-                // After setting fontSize, its effective scaled width/height might change
-                // We ensure it's positioned using its center point
-                clonedObj.set({
-                     left: targetCenterX,
-                     top: targetCenterY,
+                    fontSize: obj.fontSize * overallResolutionScale, // Scale font size directly
+                    scaleX: 1, // Ensure scale is 1 to avoid compounding with fontSize
+                    scaleY: 1,
+                    left: targetCenterX, // Position using calculated center
+                    top: targetCenterY,
                 });
             } else { // For image objects (like selected designs)
                 clonedObj.set({
-                    width: desiredPrintWidth,
-                    height: desiredPrintHeight,
-                    left: targetCenterX,
+                    width: originalScaledWidth * overallResolutionScale,
+                    height: originalScaledHeight * overallResolutionScale,
+                    scaleX: 1, // Ensure scale is 1
+                    scaleY: 1,
+                    left: targetCenterX, // Position using calculated center
                     top: targetCenterY,
                 });
             }
@@ -274,7 +298,7 @@ export default function ProductStudio() {
         try {
             toast({
                 title: "Uploading design...",
-                description: "Preparing your custom design for print. This may take a moment.",
+                description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
                 duration: null, // Keep open until resolved
                 isClosable: false,
@@ -316,7 +340,8 @@ export default function ProductStudio() {
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
         navigate('/checkout');
-    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast]);
+    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects]); // Added new dependencies
+
 
     // Handlers for dropdowns - use `useCallback` for consistency and stability
     const handleProductChange = useCallback((e) => {
@@ -763,7 +788,7 @@ export default function ProductStudio() {
                             size="lg"
                             onClick={handleProceedToCheckout}
                             leftIcon={<Icon as={FaShoppingCart} />}
-                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasAddedTextOrImageOnCanvas)}
+                            isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)} // Fixed logic here
                             width="full"
                             maxW="md"
                         >
