@@ -231,100 +231,101 @@ export default function ProductStudio() {
 
         customizableObjects.forEach(obj => {
             if (obj.id && obj.id.startsWith('design-')) {
-                imageObjectInPreview = obj;
+                imageObjectInPreview = obj; // Assuming one primary image
             } else if (obj.type === 'i-text') {
                 textObjectsInPreview.push(obj);
             }
         });
 
-        // Universal scale factor based on desired image width on print canvas.
-        // If no image, use a default scale based on preview canvas width.
-        const DESIRED_IMAGE_PRINT_WIDTH = 1800; // Aim for image to be ~6 inches wide on print
-        const DEFAULT_TEXT_PRINT_FONT_SIZE = 110; // A good readable font size for print if no image
+        // Define target print dimensions for the main image (astronaut/surfer)
+        const TARGET_IMAGE_PRINT_WIDTH = 1800; // A good size for a T-shirt graphic (approx 6 inches)
+        const IMAGE_TOP_POSITION_ON_PRINT = 1000; // Vertical pixel position for top of image on 5400px canvas
 
-        let baseContentScale = 1;
-
+        let masterContentScale = 1;
         if (imageObjectInPreview && imageObjectInPreview.getScaledWidth() > 0) {
-            baseContentScale = DESIRED_IMAGE_PRINT_WIDTH / imageObjectInPreview.getScaledWidth();
+            masterContentScale = TARGET_IMAGE_PRINT_WIDTH / imageObjectInPreview.getScaledWidth();
         } else {
-            // If only text, or image is invalid, use a sensible default scale derived from overall canvas size
-            baseContentScale = (PRINT_READY_WIDTH * 0.25) / (previewCanvasWidth * 0.33); // A heuristic to make text a reasonable size
+            // If no image, default scale for text to be reasonably sized on print canvas
+            masterContentScale = (PRINT_READY_WIDTH * 0.3) / (previewCanvasWidth * 0.33); // Heuristic if only text is present
         }
-        console.log("DEBUG: Base Content Scale:", baseContentScale);
+        console.log("DEBUG: Master Content Scale:", masterContentScale);
 
 
-        // --- Step 2: Scale and Position Each Object Individually on printReadyCanvas ---
-        // Maintain relative vertical stacking and horizontal centering.
-
-        let currentYPositionOnPrint = PRINT_READY_HEIGHT * 0.15; // Start placing content 15% down from print canvas top
+        // --- Step 2: Scale and Position Each Object Precisely on printReadyCanvas ---
+        let currentYPositionForNextObject = 0; // Tracks where the next object should be placed vertically
 
         if (imageObjectInPreview) {
             const clonedImage = window.fabric.util.object.clone(imageObjectInPreview);
             
-            // Calculate final image dimensions
-            const finalImageWidth = imageObjectInPreview.getScaledWidth() * baseContentScale;
-            const finalImageHeight = imageObjectInPreview.getScaledHeight() * baseContentScale;
-
+            // Apply scale to dimensions
             clonedImage.set({
                 hasControls: false, hasBorders: false,
                 angle: imageObjectInPreview.angle,
                 scaleX: 1, scaleY: 1, // Reset scales, apply dimensions explicitly
-                width: finalImageWidth,
-                height: finalImageHeight,
-                left: PRINT_READY_WIDTH / 2, // Center horizontally
-                top: currentYPositionOnPrint, // Use calculated start position
-                originX: 'center',
-                originY: 'top', // Position by top edge
+                width: imageObjectInPreview.getScaledWidth() * masterContentScale,
+                height: imageObjectInPreview.getScaledHeight() * masterContentScale,
+                left: PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
+                top: IMAGE_TOP_POSITION_ON_PRINT, // Set fixed top position for image
+                originX: 'center', // Image is centered horizontally
+                originY: 'top', // Image position is defined by its top edge
             });
             printReadyCanvas.add(clonedImage);
-            currentYPositionOnPrint += finalImageHeight + (PRINT_READY_HEIGHT * 0.03); // Add image height + vertical gap for text
+            
+            // Update the starting Y position for subsequent text based on image's new bottom
+            currentYPositionForNextObject = clonedImage.top + clonedImage.getScaledHeight();
 
             console.log("DEBUG: Image Properties (Cloned for Print):", {
-                width: finalImageWidth, height: finalImageHeight,
+                width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
                 left: clonedImage.left, top: clonedImage.top,
                 angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedImage.originY
             });
+        } else {
+            // If there's no image, text should start higher up (e.g., center of the canvas initially)
+            currentYPositionForNextObject = PRINT_READY_HEIGHT * 0.4;
         }
 
-        // Sort text objects by their original top position to maintain vertical order
+        // Sort text objects by their original top position to maintain vertical order from preview
         textObjectsInPreview.sort((a, b) => a.top - b.top);
+
+        // Constants for vertical spacing of text
+        const VERTICAL_GAP_BETWEEN_ELEMENTS = 75; // Pixels gap between image bottom and text top, or between text lines
+        const TEXT_SIZE_REDUCER_FACTOR = 0.8; // Reduce text font size slightly (e.g., 80% of master scale)
 
         for (const textObj of textObjectsInPreview) {
             const clonedText = window.fabric.util.object.clone(textObj);
 
-            let finalFontSize = textObj.fontSize * baseContentScale;
-            if (!imageObjectInPreview) { // If only text, cap font size for readability
-                finalFontSize = Math.min(finalFontSize, DEFAULT_TEXT_PRINT_FONT_SIZE); 
-            } else {
-                // If text is with image, make it slightly smaller relative to image's scale
-                finalFontSize *= 0.8; // Reduce text size slightly more (e.g., to 80% of current scale)
-            }
+            // Apply master scale and text reducer to font size
+            const finalFontSize = textObj.fontSize * masterContentScale * TEXT_SIZE_REDUCER_FACTOR;
             
+            // Add vertical gap
+            currentYPositionForNextObject += VERTICAL_GAP_BETWEEN_ELEMENTS;
+
             clonedText.set({
                 fontSize: finalFontSize,
                 left: PRINT_READY_WIDTH / 2, // Center horizontally
-                top: currentYPositionOnPrint, // Position based on previous object's bottom + gap
+                top: currentYPositionForNextObject, // Position based on previous object's bottom + gap
                 originX: 'center',
-                originY: 'top', // Position by top edge
+                originY: 'top', // Text position defined by its top edge
                 hasControls: false, hasBorders: false,
                 angle: textObj.angle, // Preserve rotation
                 scaleX: 1, scaleY: 1, // Reset scales
             });
             printReadyCanvas.add(clonedText);
 
-            currentYPositionOnPrint += clonedText.getScaledHeight() + (PRINT_READY_HEIGHT * 0.015); // Add text height + small gap for next text
+            // Update next vertical position based on this text object's new bottom
+            currentYPositionForNextObject += clonedText.getScaledHeight();
 
             console.log("DEBUG: Text Properties (Cloned for Print):", {
                 font_size: finalFontSize,
-                width: clonedText.getScaledWidth(), // Scaled width after setting font size
-                height: clonedText.getScaledHeight(), // Scaled height after setting font size
+                width: clonedText.getScaledWidth(),
+                height: clonedText.getScaledHeight(),
                 left: clonedText.left, top: clonedText.top,
                 angle: clonedText.angle, originX: clonedText.originX, originY: clonedText.originY
             });
         }
         
         // Final sanity check for objects on canvas
-        console.log("DEBUG: Print Ready Canvas Objects Length (after adding scaled objects):", printReadyCanvas.getObjects().length);
+        console.log("DEBUG: Print Ready Canvas Objects Length (after adding all):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
             console.error("DEBUG: printReadyCanvas is empty after adding objects.");
             toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
