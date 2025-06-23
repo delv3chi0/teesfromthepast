@@ -41,7 +41,7 @@ export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
-    const reactLocation = useLocation(); // Use a different name for react-router-dom's useLocation
+    const reactLocation = useLocation();
 
     // --- State Declarations ---
     const [products, setProducts] = useState([]);
@@ -225,107 +225,112 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- Calculate direct scaling factors from preview to print canvas dimensions ---
-        const scaleX = PRINT_READY_WIDTH / previewCanvasWidth;   // 4500 / 600 = 7.5
-        const scaleY = PRINT_READY_HEIGHT / previewCanvasHeight; // 5400 / 600 = 9.0
+        // --- Determine the universal scale factor for content based on desired image size ---
+        // Let's assume a desired image width on print canvas (e.g., 1800px-2000px).
+        // This is a common optimal size for a primary graphic on a T-shirt.
+        const DESIRED_IMAGE_PRINT_WIDTH = 1800; // pixels, for print resolution
 
-        console.log("DEBUG: ScaleX:", scaleX, "ScaleY:", scaleY);
+        let masterContentScale = 1;
+        let imageObjectInPreview = customizableObjects.find(obj => obj.id && obj.id.startsWith('design-'));
 
-        const scaledObjectsOnPrintCanvas = []; // To collect scaled objects for final bounding box calculation and centering
+        if (imageObjectInPreview && imageObjectInPreview.getScaledWidth() > 0) {
+            // Calculate scale based on desired print image width vs. preview image width
+            masterContentScale = DESIRED_IMAGE_PRINT_WIDTH / imageObjectInPreview.getScaledWidth();
+        } else {
+            // If no image, or image is tiny, use a default scale based on preview canvas width
+            masterContentScale = PRINT_READY_WIDTH / previewCanvasWidth * 0.4; // Default if only text or very small image
+        }
 
-        customizableObjects.forEach((obj, index) => {
+        console.log("DEBUG: Master Content Scale (based on image or default):", masterContentScale);
+
+
+        // Track final calculated positions to potentially align subsequent text
+        let lastObjectBottom = 0; // Tracks the bottom of the last placed object
+        let printImageFinalLeft = 0;
+        let printImageFinalTop = 0;
+        let printImageFinalHeight = 0;
+
+        // --- Process each customizable object for the print-ready canvas ---
+        for (const obj of customizableObjects) { // Use for...of for async safety if needed, or simple forEach is fine
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get original object's properties (position, dimensions, scale) from preview canvas
-            const originalLeft = obj.left;
-            const originalTop = obj.top;
-            const originalScaledWidth = obj.getScaledWidth();
-            const originalScaledHeight = obj.getScaledHeight();
-            const originalAngle = obj.angle;
-            const originalOriginX = obj.originX;
-            const originalOriginY = obj.originY;
+            // Calculate scaled dimensions for this object
+            let finalWidth = obj.getScaledWidth() * masterContentScale;
+            let finalHeight = obj.getScaledHeight() * masterContentScale;
+            let finalFontSize = obj.fontSize ? obj.fontSize * masterContentScale : undefined;
 
-            // Apply specific axis scaling to position (left, top) and dimensions (width, height)
-            const newLeft = originalLeft * scaleX;
-            const newTop = originalTop * scaleY; // Use scaleY for vertical position
+            // Initialize positioning variables
+            let currentLeft = 0;
+            let currentTop = 0;
+
+            // --- Primary Positioning Logic for Print Canvas ---
+            if (obj.id && obj.id.startsWith('design-')) { // This is the image
+                // Center image horizontally
+                currentLeft = (PRINT_READY_WIDTH / 2); 
+                // Position image vertically (e.g., top edge 10% down from canvas top)
+                currentTop = PRINT_READY_HEIGHT * 0.15; // Top of image at 15% of total print height
+                
+                // Store image's final calculated position/dimensions for text alignment
+                printImageFinalLeft = currentLeft;
+                printImageFinalTop = currentTop;
+                printImageFinalHeight = finalHeight; // Using calculated final height
+                imageFound = true; // Flag for text positioning
+            } else if (obj.type === 'i-text') { // This is text
+                // Center text horizontally
+                currentLeft = (PRINT_READY_WIDTH / 2);
+                
+                if (imageFound) {
+                    // Position text below the image with a specific gap
+                    const VERTICAL_GAP_PRINT_PIXELS = 150; // Gap between image bottom and text top
+                    currentTop = printImageFinalTop + printImageFinalHeight + VERTICAL_GAP_PRINT_PIXELS;
+                } else {
+                    // If no image, center text vertically on the canvas
+                    currentTop = PRINT_READY_HEIGHT / 2;
+                }
+            }
 
             clonedObj.set({
                 hasControls: false, hasBorders: false,
-                angle: originalAngle, // Preserve rotation
-                scaleX: 1, // Reset scale to 1, as width/height/fontSize are now explicitly set
+                angle: obj.angle, // Preserve rotation
+                scaleX: 1, // Reset scale to 1, as dimensions/font size are set explicitly
                 scaleY: 1,
-                originX: originalOriginX, // Preserve original origin (important for rotation/scaling behavior if not 'left','top')
-                originY: originalOriginY,
+                originX: 'center', // Crucial for using currentLeft/Top as center coordinates
+                originY: 'center',
             });
 
+            // Set final scaled dimensions and calculated position
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    // Scale font size by masterX scale to keep it proportional to width
-                    fontSize: obj.fontSize * scaleX, // Use scaleX here for consistent font sizing with width
-                    left: newLeft,
-                    top: newTop,
+                    fontSize: finalFontSize,
+                    left: currentLeft,
+                    top: currentTop,
                 });
             } else { // For image objects
                 clonedObj.set({
-                    // Scale *current rendered dimensions on preview* by their respective axis scales
-                    width: originalScaledWidth * scaleX, 
-                    height: originalScaledHeight * scaleY,
-                    left: newLeft,
-                    top: newTop,
+                    width: finalWidth,
+                    height: finalHeight,
+                    left: currentLeft,
+                    top: currentTop,
                 });
             }
-            printReadyCanvas.add(clonedObj); // Add to print canvas immediately
-            scaledObjectsOnPrintCanvas.push(clonedObj); // Collect for final centering pass
+            printReadyCanvas.add(clonedObj);
 
-            console.log(`DEBUG: Cloned Object ${index} Properties (After Initial Scaling) - `, { 
+            console.log(`DEBUG: Cloned Object ${customizableObjects.indexOf(obj)} Properties (After Placement Logic) - `, { 
                 type: clonedObj.type, 
-                original_left_top_preview: { x: originalLeft, y: originalTop },
-                original_scaled_wh: { w: originalScaledWidth, h: originalScaledHeight },
-                new_left_top_print: { x: newLeft, y: newTop },
-                width_final: clonedObj.width, 
-                height_final: clonedObj.height, 
-                fontSize_final: clonedObj.fontSize, 
+                original_left_top_preview: { x: obj.left, y: obj.top },
+                original_scaled_wh_preview: { w: obj.getScaledWidth(), h: obj.getScaledHeight() },
+                final_scaled_wh: { w: clonedObj.width, h: clonedObj.height }, // Will be undefined for text
+                final_font_size: clonedObj.fontSize, // Will be undefined for images
+                final_left_top_print: { x: clonedObj.left, y: clonedObj.top },
                 angle: clonedObj.angle,
                 originX_set: clonedObj.originX,
                 originY_set: clonedObj.originY
             });
-        });
-
-        // --- Final Centering Pass on the printReadyCanvas ---
-        // Calculate the combined bounding box of all scaled objects on printReadyCanvas.
-        // Then shift the entire composite to the absolute center of the printReadyCanvas.
-        
-        console.log("DEBUG: Print Ready Canvas Objects Length (after add, before final shift):", printReadyCanvas.getObjects().length);
-        if (scaledObjectsOnPrintCanvas.length > 0) {
-            // Create a temporary group of the objects *already on the printReadyCanvas* to get their combined bounds
-            const finalPrintGroupForBounds = new window.fabric.Group(scaledObjectsOnPrintCanvas, {
-                // Not added to printReadyCanvas itself, just used for bounds calculation
-            });
-            finalPrintGroupForBounds.setCoords(); // Ensure bounds are fresh
-            const finalBounds = finalPrintGroupForBounds.getBoundingRect(true);
-            finalPrintGroupForBounds.destroy(); // Clean up temporary group
-
-            // Calculate final offset to center the scaled composite design on PRINT_READY_CANVAS
-            const centeringOffsetX = (PRINT_READY_WIDTH / 2) - (finalBounds.left + finalBounds.width / 2);
-            const centeringOffsetY = (PRINT_READY_HEIGHT / 2) - (finalBounds.top + finalBounds.height / 2);
-
-            console.log("DEBUG: Final Bounding Box (Print Canvas before final shift):", finalBounds);
-            console.log("DEBUG: Final Centering Shifts:", { centeringOffsetX, centeringOffsetY });
-
-            // Apply the final centering shift to each object on the printReadyCanvas
-            printReadyCanvas.getObjects().forEach((obj, index) => {
-                obj.set({
-                    left: obj.left + centeringOffsetX,
-                    top: obj.top + centeringOffsetY,
-                });
-                obj.setCoords(); // Update object's coordinates after shifting
-                console.log(`DEBUG: Object ${index} Position (After Final Centering Shift):`, { type: obj.type, left: obj.left, top: obj.top });
-            });
         }
 
-        console.log("DEBUG: Print Ready Canvas Objects Length (after final shifts):", printReadyCanvas.getObjects().length);
+        console.log("DEBUG: Print Ready Canvas Objects Length (after adding scaled objects):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
-            console.error("DEBUG: printReadyCanvas is empty after final shifts - this will result in a blank image.");
+            console.error("DEBUG: printReadyCanvas is empty after adding objects - this will result in a blank image.");
             toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
             return;
         }
@@ -336,7 +341,7 @@ export default function ProductStudio() {
             quality: 1.0,
             multiplier: 1,
         });
-        printReadyCanvas.dispose(); // Clean up the temporary canvas
+        printReadyCanvas.dispose();
 
         console.log("DEBUG: Print Ready Data URL (first 100 chars):", printReadyDesignDataUrl.substring(0, 100));
         console.log("DEBUG: Print Ready Data URL length:", printReadyDesignDataUrl.length);
@@ -874,3 +879,4 @@ export default function ProductStudio() {
         </VStack>
     );
 }
+
