@@ -37,19 +37,20 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (MOVED HERE) ---
+// --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
 const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
 const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
-const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
-// Adjusted from 15% of height, which might be too high. Let's try 1000px down.
-const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
+// Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
+const TARGET_IMAGE_PRINT_WIDTH = 1800; // e.g., 6 inches at 300 DPI
+// Desired vertical starting point for the top edge of the scaled image on the print canvas.
+// This is a fixed pixel value to ensure consistent initial placement.
+const IMAGE_TOP_POSITION_ON_PRINT = 800; // Vertical pixel position for top edge of image on 5400px canvas
 
 const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
-const VERTICAL_GAP_IMAGE_TEXT = 150; // Vertical pixel gap between image bottom and text top
-const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines
-const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
+const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
+const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
+const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduces text font size when accompanying an image
 
 
 export default function ProductStudio() {
@@ -217,8 +218,6 @@ export default function ProductStudio() {
         });
 
         // 2. Generate high-res print-ready image (for Printful)
-        // Constants are defined at the top of the component for scope.
-
         const printReadyCanvas = new window.fabric.Canvas(null, {
             width: PRINT_READY_WIDTH,
             height: PRINT_READY_HEIGHT,
@@ -226,7 +225,7 @@ export default function ProductStudio() {
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height; // Use this for calculations from preview object original position
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -251,7 +250,7 @@ export default function ProductStudio() {
             }
         });
 
-        // --- Step 2: Calculate a base scale for content ---
+        // --- Step 2: Calculate a base scale for content based on desired image width ---
         // This scale ensures the image is the desired width, and text scales proportionally from preview.
         let baseContentScale = 1;
 
@@ -284,22 +283,22 @@ export default function ProductStudio() {
                 width: finalImageWidth,
                 height: finalImageHeight,
                 left: PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Image's center Y: top position + half its height
+                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
                 originX: 'center', 
-                originY: 'center',
+                originY: 'center', 
             });
             printReadyCanvas.add(clonedImage);
             
             // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
-            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TEXT + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
+            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
 
             console.log("DEBUG: Image Properties (Cloned for Print):", {
                 width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
                 left: clonedImage.left, top: clonedImage.top,
                 angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedImage.originY
             });
-            console.log("DEBUG: Image Top Y on Print:", clonedImage.top - (clonedImage.getScaledHeight() / 2)); // Calculate actual top edge for logging
-            console.log("DEBUG: Image Bottom Y on Print:", clonedImage.top + (clonedImage.getScaledHeight() / 2)); // Calculate actual bottom edge for logging
+            console.log("DEBUG: Image Top Y on Print (calculated):", clonedImage.top - (clonedImage.getScaledHeight() / 2)); // Calculate actual top edge for logging
+            console.log("DEBUG: Image Bottom Y on Print (calculated):", clonedImage.top + (clonedImage.getScaledHeight() / 2)); // Calculate actual bottom edge for logging
             console.log("DEBUG: Next Stack Y for Text (center):", currentStackYCenter);
         } else {
             // If no image, text starts from a sensible vertical center
@@ -319,7 +318,7 @@ export default function ProductStudio() {
             
             clonedText.set({
                 fontSize: finalFontSize,
-                left: PRINT_READY_WIDTH / 2, // Center horizontally
+                left: PRINT_READY_WIDTH / 2, // Center text horizontally
                 top: currentStackYCenter, // Position based on current stack Y center
                 originX: 'center', 
                 originY: 'center', 
@@ -329,7 +328,7 @@ export default function ProductStudio() {
             });
             printReadyCanvas.add(clonedText);
 
-            // Update currentStackYCenter for the next text object (center of next line)
+            // Update currentStackYCenter for the next text object
             currentStackYCenter += (clonedText.getScaledHeight() / 2) + VERTICAL_GAP_BETWEEN_TEXT_LINES + (clonedText.getScaledHeight() / 2);
 
             console.log("DEBUG: Text Properties (Cloned for Print):", {

@@ -41,16 +41,15 @@ const ThemedControlInput = (props) => (
 const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
 const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
-// Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
-const TARGET_IMAGE_PRINT_WIDTH = 1800; // e.g., 6 inches at 300 DPI
-// Desired vertical starting point for the top edge of the scaled image on the print canvas.
-// This is a fixed pixel value to ensure consistent initial placement.
-const IMAGE_TOP_POSITION_ON_PRINT = 800; // Vertical pixel position for top edge of image on 5400px canvas
+const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
+// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
+// Adjusted from 15% of height, which might be too high. Let's try 1000px down.
+const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
 
 const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
 const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
 const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
-const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduces text font size when accompanying an image
+const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
 
 
 export default function ProductStudio() {
@@ -295,7 +294,7 @@ export default function ProductStudio() {
             console.log("DEBUG: Image Properties (Cloned for Print):", {
                 width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
                 left: clonedImage.left, top: clonedImage.top,
-                angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedImage.originY
+                angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedObj.originY
             });
             console.log("DEBUG: Image Top Y on Print (calculated):", clonedImage.top - (clonedImage.getScaledHeight() / 2)); // Calculate actual top edge for logging
             console.log("DEBUG: Image Bottom Y on Print (calculated):", clonedImage.top + (clonedImage.getScaledHeight() / 2)); // Calculate actual bottom edge for logging
@@ -318,7 +317,7 @@ export default function ProductStudio() {
             
             clonedText.set({
                 fontSize: finalFontSize,
-                left: PRINT_READY_WIDTH / 2, // Center text horizontally
+                left: PRINT_READY_WIDTH / 2, // Center horizontally
                 top: currentStackYCenter, // Position based on current stack Y center
                 originX: 'center', 
                 originY: 'center', 
