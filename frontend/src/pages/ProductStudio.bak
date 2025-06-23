@@ -39,15 +39,16 @@ const ThemedControlInput = (props) => (
 
 // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
 // These are adjusted based on previous debugging and visual feedback.
-// They are defined here to be accessible within the component's render cycle.
 const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
 const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
 const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-const IMAGE_CENTER_Y_ON_PRINT = 1800; // Center of image at 1800px down from print canvas top (visually pleasing for shirt)
+// Image will be vertically centered around this point. Adjust based on shirt graphic's natural position.
+const IMAGE_OVERALL_CENTER_Y_ON_PRINT = PRINT_READY_HEIGHT * 0.35; // e.g., 35% down from top for image's vertical center
 
-const TEXT_FONT_SIZE_ON_PRINT = 120; // Default font size for text on print (e.g., ~0.4 inches)
-const VERTICAL_GAP_BETWEEN_ELEMENTS = 150; // Pixels gap between image bottom and text top, or between text lines
+const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
+const VERTICAL_GAP_IMAGE_TO_TEXT_CENTER = 150; // Vertical pixel distance from image's bottom center to text's center.
+const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (center to center)
 const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
 
 
@@ -216,8 +217,7 @@ export default function ProductStudio() {
         });
 
         // 2. Generate high-res print-ready image (for Printful)
-        // Constants for PRINT_READY_WIDTH, PRINT_READY_HEIGHT, TARGET_IMAGE_PRINT_WIDTH, etc.
-        // are now defined outside the component for clarity and consistency.
+        // Constants are defined at the top of the component for scope.
 
         const printReadyCanvas = new window.fabric.Canvas(null, {
             width: PRINT_READY_WIDTH,
@@ -226,7 +226,7 @@ export default function ProductStudio() {
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height;
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -234,7 +234,7 @@ export default function ProductStudio() {
 
         console.log("DEBUG: Customizable Objects Count:", customizableObjects.length);
         if (customizableObjects.length === 0) {
-            console.error("DEBUG: customizableObjects array is empty within handleProceedToCheckout loop, despite initial check.");
+            console.error("DEBUG: customizableObjects array is empty within handleProceedToCheckout loop.");
             toast({ title: "Error", description: "No design elements found on canvas for print. This is an internal error.", status: "error" });
             return;
         }
@@ -252,23 +252,23 @@ export default function ProductStudio() {
         });
 
         // --- Step 2: Calculate a base scale for content based on desired image width ---
+        // This scale ensures the image is the desired width, and text scales proportionally from preview.
         let baseContentScale = 1;
 
         if (mainImageObj && mainImageObj.getScaledWidth() > 0) {
             baseContentScale = TARGET_IMAGE_PRINT_WIDTH / mainImageObj.getScaledWidth();
         } else {
-            // If no image, or image is invalid, use a sensible default scale for text only
-            // This is a heuristic to make text a reasonable size if no image to base scale on.
-            baseContentScale = (PRINT_READY_WIDTH * 0.3) / previewCanvasWidth; // approx 30% of print width relative to preview width
+            // If no image, scale text by a factor that makes it a reasonable size on print.
+            // Heuristic: scale preview's default text size (30px) to TARGET_TEXT_FONT_SIZE_ON_PRINT
+            baseContentScale = TEXT_FONT_SIZE_ON_PRINT_DEFAULT / 30; // Original default font size on preview
         }
         console.log("DEBUG: Base Content Scale:", baseContentScale);
 
 
-        // --- Step 3: Scale and Position Each Object Precisely on printReadyCanvas ---
-        // Use consistent origin ('center', 'center') for easier positioning.
-        // Position by absolute centers, then correct if needed.
+        // --- Step 3: Position Image and Text Precisely on printReadyCanvas ---
+        // Use consistent origin ('center', 'center') for all objects for reliable positioning.
 
-        let currentStackYCenter = 0; // Tracks the center Y position for the next element in the stack
+        let currentStackYCenter = IMAGE_OVERALL_CENTER_Y_ON_PRINT; // Start placing content from image's desired center Y
 
         if (mainImageObj) {
             const clonedImage = window.fabric.util.object.clone(mainImageObj);
@@ -284,13 +284,13 @@ export default function ProductStudio() {
                 width: finalImageWidth,
                 height: finalImageHeight,
                 left: PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_CENTER_Y_ON_PRINT, // Set fixed center Y for image
-                originX: 'center', // Image is centered horizontally
-                originY: 'center', // Image position is defined by its center
+                top: currentStackYCenter, // Set image center Y
+                originX: 'center', 
+                originY: 'center',
             });
             printReadyCanvas.add(clonedImage);
             
-            // Update the starting Y position for subsequent text based on image's new bottom
+            // Update currentStackYCenter for text placement: image's bottom center + vertical gap
             currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_BETWEEN_ELEMENTS;
 
             console.log("DEBUG: Image Properties (Cloned for Print):", {
@@ -298,9 +298,10 @@ export default function ProductStudio() {
                 left: clonedImage.left, top: clonedImage.top,
                 angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedImage.originY
             });
+            console.log("DEBUG: Image Center Y on Print:", clonedImage.top);
+            console.log("DEBUG: Next Stack Y for Text (center):", currentStackYCenter);
         } else {
-            // If no image, start text higher up, centered vertically in the available space
-            // This assumes a vertical center for the first text block
+            // If no image, text starts from canvas vertical center (or slightly above)
             currentStackYCenter = PRINT_READY_HEIGHT / 2;
         }
 
@@ -310,15 +311,15 @@ export default function ProductStudio() {
         for (const textObj of textObjArray) {
             const clonedText = window.fabric.util.object.clone(textObj);
 
-            let finalFontSize = TEXT_FONT_SIZE_ON_PRINT; // Use the fixed target font size for print
-            if (mainImageObj) { // If text is accompanied by an image, scale it relative to the image's overall scale
+            let finalFontSize = TEXT_FONT_SIZE_ON_PRINT_DEFAULT; 
+            if (imageFound) { // Only adjust text size if an image is present
                  finalFontSize = textObj.fontSize * baseContentScale * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE;
             }
             
             clonedText.set({
                 fontSize: finalFontSize,
-                left: PRINT_READY_WIDTH / 2, // Center text horizontally
-                top: currentStackYCenter, // Position based on previous object's center + half its height + gap
+                left: PRINT_READY_WIDTH / 2, // Center horizontally
+                top: currentStackYCenter, // Position based on previous object's bottom + gap
                 originX: 'center', // Text is centered horizontally
                 originY: 'center', // Text position is defined by its center
                 hasControls: false, hasBorders: false,
@@ -327,8 +328,9 @@ export default function ProductStudio() {
             });
             printReadyCanvas.add(clonedText);
 
-            // Update currentStackYCenter for the next text object (center of next line)
-            currentStackYCenter += (clonedText.getScaledHeight() / 2) + (VERTICAL_GAP_BETWEEN_ELEMENTS / 2) + (clonedText.getScaledHeight() / 2);
+            // Update currentStackYCenter for the next text object
+            currentStackYCenter += (clonedText.getScaledHeight() / 2) + (VERTICAL_GAP_BETWEEN_TEXT_LINES / 2) + (clonedText.getScaledHeight() / 2);
+
 
             console.log("DEBUG: Text Properties (Cloned for Print):", {
                 font_size: finalFontSize,
@@ -337,6 +339,7 @@ export default function ProductStudio() {
                 left: clonedText.left, top: clonedText.top,
                 angle: clonedText.angle, originX: clonedText.originX, originY: clonedText.originY
             });
+            console.log("DEBUG: Text Center Y on Print:", clonedText.top);
         }
         
         // Final sanity check for objects on canvas
