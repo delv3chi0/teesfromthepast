@@ -225,59 +225,62 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- NEW STRATEGY: Calculate a scale for each axis independently and apply to position/size ---
+        // --- Calculate direct scaling factors from preview to print canvas dimensions ---
         const scaleX = PRINT_READY_WIDTH / previewCanvasWidth;   // 4500 / 600 = 7.5
         const scaleY = PRINT_READY_HEIGHT / previewCanvasHeight; // 5400 / 600 = 9.0
 
-        // Use a consistent content scale (e.g., based on X-axis) for overall sizing of objects
-        // If the preview is 1:1 and print is 1:1.2, some stretching/compression relative to total print area will occur
-        // but relative positioning within the design will be preserved.
-        const contentSizeScale = scaleX; // This makes preview width map to print width proportionally.
-
-        console.log("DEBUG: ScaleX:", scaleX, "ScaleY:", scaleY, "ContentSizeScale:", contentSizeScale);
+        console.log("DEBUG: ScaleX:", scaleX, "ScaleY:", scaleY);
 
         const scaledObjectsOnPrintCanvas = []; // To collect scaled objects for final bounding box calculation and centering
 
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get object's top-left coordinates and dimensions from the PREVIEW canvas
-            const objRectPreview = obj.getBoundingRect(true); 
+            // Get original object's properties (position, dimensions, scale) from preview canvas
+            const originalLeft = obj.left;
+            const originalTop = obj.top;
+            const originalScaledWidth = obj.getScaledWidth();
+            const originalScaledHeight = obj.getScaledHeight();
+            const originalAngle = obj.angle;
+            const originalOriginX = obj.originX;
+            const originalOriginY = obj.originY;
 
-            // Calculate new position and size based on independent axis scaling
-            const newLeft = objRectPreview.left * scaleX;
-            const newTop = objRectPreview.top * scaleY; // Apply scaleY to Top for proper vertical positioning
+            // Apply specific axis scaling to position (left, top) and dimensions (width, height)
+            const newLeft = originalLeft * scaleX;
+            const newTop = originalTop * scaleY; // Use scaleY for vertical position
 
             clonedObj.set({
                 hasControls: false, hasBorders: false,
-                angle: obj.angle, // Preserve rotation
-                scaleX: 1, // Reset scale to 1, as dimensions/font size are set explicitly
+                angle: originalAngle, // Preserve rotation
+                scaleX: 1, // Reset scale to 1, as width/height/fontSize are now explicitly set
                 scaleY: 1,
-                originX: 'left', // Set origin to 'left', 'top' for predictable positioning
-                originY: 'top',
+                originX: originalOriginX, // Preserve original origin (important for rotation/scaling behavior if not 'left','top')
+                originY: originalOriginY,
             });
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    fontSize: obj.fontSize * contentSizeScale, // Scale font size by contentSizeScale (7.5)
+                    // Scale font size by masterX scale to keep it proportional to width
+                    fontSize: obj.fontSize * scaleX, // Use scaleX here for consistent font sizing with width
                     left: newLeft,
                     top: newTop,
                 });
             } else { // For image objects
                 clonedObj.set({
-                    width: obj.getScaledWidth() * contentSizeScale, // Scale width by contentSizeScale (7.5)
-                    height: obj.getScaledHeight() * contentSizeScale, // Scale height by contentSizeScale (7.5)
+                    // Scale *current rendered dimensions on preview* by their respective axis scales
+                    width: originalScaledWidth * scaleX, 
+                    height: originalScaledHeight * scaleY,
                     left: newLeft,
                     top: newTop,
                 });
             }
-            printReadyCanvas.add(clonedObj);
+            printReadyCanvas.add(clonedObj); // Add to print canvas immediately
             scaledObjectsOnPrintCanvas.push(clonedObj); // Collect for final centering pass
 
             console.log(`DEBUG: Cloned Object ${index} Properties (After Initial Scaling) - `, { 
                 type: clonedObj.type, 
-                original_left_top_preview: { x: obj.left, y: obj.top },
-                original_obj_rect_preview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
+                original_left_top_preview: { x: originalLeft, y: originalTop },
+                original_scaled_wh: { w: originalScaledWidth, h: originalScaledHeight },
                 new_left_top_print: { x: newLeft, y: newTop },
                 width_final: clonedObj.width, 
                 height_final: clonedObj.height, 
@@ -294,25 +297,26 @@ export default function ProductStudio() {
         
         console.log("DEBUG: Print Ready Canvas Objects Length (after add, before final shift):", printReadyCanvas.getObjects().length);
         if (scaledObjectsOnPrintCanvas.length > 0) {
+            // Create a temporary group of the objects *already on the printReadyCanvas* to get their combined bounds
             const finalPrintGroupForBounds = new window.fabric.Group(scaledObjectsOnPrintCanvas, {
                 // Not added to printReadyCanvas itself, just used for bounds calculation
             });
-            finalPrintGroupForBounds.setCoords();
+            finalPrintGroupForBounds.setCoords(); // Ensure bounds are fresh
             const finalBounds = finalPrintGroupForBounds.getBoundingRect(true);
             finalPrintGroupForBounds.destroy(); // Clean up temporary group
 
             // Calculate final offset to center the scaled composite design on PRINT_READY_CANVAS
-            const offsetX_final = (PRINT_READY_WIDTH / 2) - (finalBounds.left + finalBounds.width / 2);
-            const offsetY_final = (PRINT_READY_HEIGHT / 2) - (finalBounds.top + finalBounds.height / 2);
+            const centeringOffsetX = (PRINT_READY_WIDTH / 2) - (finalBounds.left + finalBounds.width / 2);
+            const centeringOffsetY = (PRINT_READY_HEIGHT / 2) - (finalBounds.top + finalBounds.height / 2);
 
             console.log("DEBUG: Final Bounding Box (Print Canvas before final shift):", finalBounds);
-            console.log("DEBUG: Final Centering Shifts:", { offsetX_final, offsetY_final });
+            console.log("DEBUG: Final Centering Shifts:", { centeringOffsetX, centeringOffsetY });
 
             // Apply the final centering shift to each object on the printReadyCanvas
             printReadyCanvas.getObjects().forEach((obj, index) => {
                 obj.set({
-                    left: obj.left + offsetX_final,
-                    top: obj.top + offsetY_final,
+                    left: obj.left + centeringOffsetX,
+                    top: obj.top + centeringOffsetY,
                 });
                 obj.setCoords(); // Update object's coordinates after shifting
                 console.log(`DEBUG: Object ${index} Position (After Final Centering Shift):`, { type: obj.type, left: obj.left, top: obj.top });
@@ -591,7 +595,7 @@ export default function ProductStudio() {
                 const fetchedProducts = res.data || [];
                 setProducts(fetchedProducts);
 
-                const params = new URLSearchParams(reactLocation.search); // Use reactLocation here
+                const params = new URLSearchParams(reactLocation.search);
                 const productId = params.get('productId');
                 const color = params.get('color');
                 const size = params.get('size');
@@ -623,7 +627,7 @@ export default function ProductStudio() {
                 toast({ title: "Error", description: "Could not load products for customization. Please try again later.", status: "error" });
             })
             .finally(() => setLoading(false));
-    }, [reactLocation.search, toast]); // Corrected dependency
+    }, [reactLocation.search, toast]);
 
 
     useEffect(() => {
@@ -634,7 +638,7 @@ export default function ProductStudio() {
             setDesigns([]);
             setLoadingDesigns(false);
         }
-    }, [user, reactLocation, navigate]); // Corrected dependency
+    }, [user, reactLocation, navigate]);
 
 
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
