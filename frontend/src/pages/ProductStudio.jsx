@@ -41,7 +41,7 @@ export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
-    const location = new URLSearchParams(useLocation().search);
+    const reactLocation = useLocation(); // Use a different name for react-router-dom's useLocation
 
     // --- State Declarations ---
     const [products, setProducts] = useState([]);
@@ -49,9 +49,9 @@ export default function ProductStudio() {
     const [designs, setDesigns] = useState([]);
     const [loadingDesigns, setLoadingDesigns] = useState(true);
 
-    const [selectedProductId, setSelectedProductId] = useState(location.get('productId') || '');
-    const [selectedColorName, setSelectedColorName] = useState(location.get('color') || '');
-    const [selectedSize, setSelectedSize] = useState(location.get('size') || '');
+    const [selectedProductId, setSelectedProductId] = useState('');
+    const [selectedColorName, setSelectedColorName] = useState('');
+    const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null); // Assuming selectedDesign comes from design gallery click, not URL param
     const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
 
@@ -225,70 +225,59 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- NEW STRATEGY: Scale by a universal factor derived from preview dimensions, then center ---
+        // --- NEW STRATEGY: Calculate a scale for each axis independently and apply to position/size ---
+        const scaleX = PRINT_READY_WIDTH / previewCanvasWidth;   // 4500 / 600 = 7.5
+        const scaleY = PRINT_READY_HEIGHT / previewCanvasHeight; // 5400 / 600 = 9.0
 
-        // Calculate direct scaling factors for X and Y dimensions from preview to print canvas
-        const scaleXFactor = PRINT_READY_WIDTH / previewCanvasWidth;   // 4500 / 600 = 7.5
-        const scaleYFactor = PRINT_READY_HEIGHT / previewCanvasHeight; // 5400 / 600 = 9.0
+        // Use a consistent content scale (e.g., based on X-axis) for overall sizing of objects
+        // If the preview is 1:1 and print is 1:1.2, some stretching/compression relative to total print area will occur
+        // but relative positioning within the design will be preserved.
+        const contentSizeScale = scaleX; // This makes preview width map to print width proportionally.
 
-        // Use a universal scale factor for all object properties to preserve relative proportions
-        // and ensure the overall composite design doesn't get distorted in one axis relative to the other.
-        // Let's use the X-factor as the primary scale for all dimensions (size & position).
-        // This means the design will scale as if the preview's 600px width maps to 4500px print width.
-        // The Y-axis will then expand or contract based on original relative positions.
-        const universalScale = scaleXFactor; // 7.5
+        console.log("DEBUG: ScaleX:", scaleX, "ScaleY:", scaleY, "ContentSizeScale:", contentSizeScale);
 
-        console.log("DEBUG: Universal Scale Factor (based on width):", universalScale);
-
-        const scaledObjectsOnPrintCanvas = []; // To collect scaled objects for final bounding box
+        const scaledObjectsOnPrintCanvas = []; // To collect scaled objects for final bounding box calculation and centering
 
         customizableObjects.forEach((obj, index) => {
             const clonedObj = window.fabric.util.object.clone(obj);
 
-            // Get original object's properties (position, dimensions) from preview canvas
-            const originalLeft = obj.left;
-            const originalTop = obj.top;
-            const originalScaledWidth = obj.getScaledWidth();
-            const originalScaledHeight = obj.getScaledHeight();
-            const originalAngle = obj.angle;
-            const originalOriginX = obj.originX;
-            const originalOriginY = obj.originY;
+            // Get object's top-left coordinates and dimensions from the PREVIEW canvas
+            const objRectPreview = obj.getBoundingRect(true); 
 
-            // Apply universalScale to position coordinates
-            const newLeft = originalLeft * universalScale;
-            const newTop = originalTop * universalScale;
-            
+            // Calculate new position and size based on independent axis scaling
+            const newLeft = objRectPreview.left * scaleX;
+            const newTop = objRectPreview.top * scaleY; // Apply scaleY to Top for proper vertical positioning
+
             clonedObj.set({
                 hasControls: false, hasBorders: false,
-                angle: originalAngle, // Preserve rotation
+                angle: obj.angle, // Preserve rotation
                 scaleX: 1, // Reset scale to 1, as dimensions/font size are set explicitly
                 scaleY: 1,
-                originX: originalOriginX, // Preserve original origin
-                originY: originalOriginY,
+                originX: 'left', // Set origin to 'left', 'top' for predictable positioning
+                originY: 'top',
             });
 
             if (clonedObj.type === 'i-text') {
                 clonedObj.set({
-                    fontSize: obj.fontSize * universalScale, // Scale font size directly
+                    fontSize: obj.fontSize * contentSizeScale, // Scale font size by contentSizeScale (7.5)
                     left: newLeft,
                     top: newTop,
                 });
             } else { // For image objects
                 clonedObj.set({
-                    // Scale *current rendered dimensions* by universalScale
-                    width: originalScaledWidth * universalScale, 
-                    height: originalScaledHeight * universalScale,
+                    width: obj.getScaledWidth() * contentSizeScale, // Scale width by contentSizeScale (7.5)
+                    height: obj.getScaledHeight() * contentSizeScale, // Scale height by contentSizeScale (7.5)
                     left: newLeft,
                     top: newTop,
                 });
             }
-            printReadyCanvas.add(clonedObj); // Add to canvas for final bounding box calculation
-            scaledObjectsOnPrintCanvas.push(clonedObj);
+            printReadyCanvas.add(clonedObj);
+            scaledObjectsOnPrintCanvas.push(clonedObj); // Collect for final centering pass
 
-            console.log(`DEBUG: Cloned Object ${index} Properties (After Universal Scale) - `, { 
+            console.log(`DEBUG: Cloned Object ${index} Properties (After Initial Scaling) - `, { 
                 type: clonedObj.type, 
-                original_left_top_preview: { x: originalLeft, y: originalTop },
-                original_scaled_wh: { w: originalScaledWidth, h: originalScaledHeight },
+                original_left_top_preview: { x: obj.left, y: obj.top },
+                original_obj_rect_preview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
                 new_left_top_print: { x: newLeft, y: newTop },
                 width_final: clonedObj.width, 
                 height_final: clonedObj.height, 
@@ -300,16 +289,15 @@ export default function ProductStudio() {
         });
 
         // --- Final Centering Pass on the printReadyCanvas ---
-        // After all objects are scaled and added to printReadyCanvas, calculate their combined bounds
-        // and then shift the entire composite to the absolute center of the printReadyCanvas.
+        // Calculate the combined bounding box of all scaled objects on printReadyCanvas.
+        // Then shift the entire composite to the absolute center of the printReadyCanvas.
         
         console.log("DEBUG: Print Ready Canvas Objects Length (after add, before final shift):", printReadyCanvas.getObjects().length);
         if (scaledObjectsOnPrintCanvas.length > 0) {
-            // Create a temporary group of the objects *already on the printReadyCanvas* to get their combined bounds
             const finalPrintGroupForBounds = new window.fabric.Group(scaledObjectsOnPrintCanvas, {
                 // Not added to printReadyCanvas itself, just used for bounds calculation
             });
-            finalPrintGroupForBounds.setCoords(); // Ensure bounds are fresh
+            finalPrintGroupForBounds.setCoords();
             const finalBounds = finalPrintGroupForBounds.getBoundingRect(true);
             finalPrintGroupForBounds.destroy(); // Clean up temporary group
 
@@ -331,7 +319,6 @@ export default function ProductStudio() {
             });
         }
 
-        // Verify objects are still on the printReadyCanvas and render
         console.log("DEBUG: Print Ready Canvas Objects Length (after final shifts):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
             console.error("DEBUG: printReadyCanvas is empty after final shifts - this will result in a blank image.");
@@ -604,7 +591,7 @@ export default function ProductStudio() {
                 const fetchedProducts = res.data || [];
                 setProducts(fetchedProducts);
 
-                const params = new URLSearchParams(location.search);
+                const params = new URLSearchParams(reactLocation.search); // Use reactLocation here
                 const productId = params.get('productId');
                 const color = params.get('color');
                 const size = params.get('size');
@@ -636,7 +623,8 @@ export default function ProductStudio() {
                 toast({ title: "Error", description: "Could not load products for customization. Please try again later.", status: "error" });
             })
             .finally(() => setLoading(false));
-    }, [location.search, toast]);
+    }, [reactLocation.search, toast]); // Corrected dependency
+
 
     useEffect(() => {
         if (user) {
@@ -646,7 +634,7 @@ export default function ProductStudio() {
             setDesigns([]);
             setLoadingDesigns(false);
         }
-    }, [user, location, navigate]);
+    }, [user, reactLocation, navigate]); // Corrected dependency
 
 
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
