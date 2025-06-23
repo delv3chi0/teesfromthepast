@@ -43,6 +43,7 @@ const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
 const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
 // This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
+// Adjusted from 15% of height, which might be too high. Let's try 1000px down.
 const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
 
 const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
@@ -225,7 +226,7 @@ export default function ProductStudio() {
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
+        const previewCanvasHeight = fabricCanvas.current.height; // Use this for calculations from preview object original position
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -251,6 +252,7 @@ export default function ProductStudio() {
         });
 
         // --- Step 2: Calculate a base scale for content based on desired image width ---
+        // This scale ensures the image is the desired width, and text scales proportionally from preview.
         let baseContentScale = 1;
 
         if (mainImageObj && mainImageObj.getScaledWidth() > 0) {
@@ -281,7 +283,7 @@ export default function ProductStudio() {
                 width: finalImageWidth,
                 height: finalImageHeight,
                 left: PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
+                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Image's center Y: top position + half its height
                 originX: 'center', 
                 originY: 'center', 
             });
