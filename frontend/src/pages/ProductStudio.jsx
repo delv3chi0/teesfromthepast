@@ -225,121 +225,112 @@ export default function ProductStudio() {
             return;
         }
 
-        // --- NEW STRATEGY: Explicit positioning for IMAGE and TEXT ---
-        // This is the most direct way to get the desired image-above-text layout.
+        // --- Define a target "print zone" for the combined design ---
+        // This simulates the area on the shirt where the design should roughly go.
+        // We will scale the preview design to fit this zone and then place it.
+        const PRINT_ZONE_WIDTH = PRINT_READY_WIDTH * 0.9; // e.g., 90% of 4500 = 4050px
+        const PRINT_ZONE_HEIGHT = PRINT_READY_HEIGHT * 0.9; // e.g., 90% of 5400 = 4860px
+        const PRINT_ZONE_LEFT_OFFSET = (PRINT_READY_WIDTH - PRINT_ZONE_WIDTH) / 2;
+        const PRINT_ZONE_TOP_OFFSET = (PRINT_READY_HEIGHT - PRINT_ZONE_HEIGHT) / 2; // For initial zone centering
 
-        let printImageObj = null;
-        const printTextObjArray = [];
 
-        // First pass: Separate image and text objects
+        // Find actual bounding box of all objects on the PREVIEW canvas
+        let previewContentMinX = Infinity, previewContentMinY = Infinity, previewContentMaxX = -Infinity, previewContentMaxY = -Infinity;
         customizableObjects.forEach(obj => {
-            if (obj.id && obj.id.startsWith('design-')) {
-                printImageObj = obj; // Assuming one primary image
-            } else if (obj.type === 'i-text') {
-                printTextObjArray.push(obj);
-            }
+            obj.setCoords(); // Ensure latest coords are used
+            const objRect = obj.getBoundingRect(true); // Get top-left bounds including transforms
+            previewContentMinX = Math.min(previewContentMinX, objRect.left);
+            previewContentMinY = Math.min(previewContentMinY, objRect.top);
+            previewContentMaxX = Math.max(previewContentMaxX, objRect.left + objRect.width);
+            previewContentMaxY = Math.max(previewContentMaxY, objRect.top + objRect.height);
         });
 
-        const clonedPrintObjects = []; // Array to hold the cloned and scaled objects for the print canvas
+        const previewContentBounds = {
+            left: previewContentMinX,
+            top: previewContentMinY,
+            width: previewContentMaxX - previewContentMinX,
+            height: previewContentMaxY - previewContentMinY,
+        };
+        console.log("DEBUG: Preview Content Bounding Box (Actual):", previewContentBounds);
 
-        // --- Handle Image Positioning & Scaling ---
-        let imageBottomYOnPrint = 0;
-        if (printImageObj) {
-            const clonedImage = window.fabric.util.object.clone(printImageObj);
 
-            // Determine image's final scaled width based on desired print size (e.g., 1800px wide)
-            // Or based on its proportion of the preview canvas width (600px).
-            // Let's use 1/3rd of the print canvas width, which is 1500px, close to a common graphic size.
-            const TARGET_IMAGE_WIDTH_ON_PRINT = PRINT_READY_WIDTH * 0.33; // Approx 1500px
-
-            // Scale image to target width, maintaining aspect ratio
-            clonedImage.scaleToWidth(TARGET_IMAGE_WIDTH_ON_PRINT);
-
-            // Center image horizontally on PRINT_READY_CANVAS
-            clonedImage.set({
-                left: PRINT_READY_WIDTH / 2,
-                originX: 'center', // Set origin to center for horizontal centering
-                hasControls: false, hasBorders: false,
-            });
-
-            // Position image vertically (e.g., top edge at 15% of PRINT_READY_HEIGHT for its top center)
-            const IMAGE_TOP_OFFSET_PERCENT = 0.15; // Top edge of image at 15% of total print height
-            clonedImage.set({
-                top: PRINT_READY_HEIGHT * IMAGE_TOP_OFFSET_PERCENT,
-                originY: 'top', // Set origin to top for vertical positioning
-            });
-
-            printReadyCanvas.add(clonedImage);
-            clonedPrintObjects.push(clonedImage);
-
-            // Calculate image's bottom Y on print canvas for text positioning
-            imageBottomYOnPrint = clonedImage.top + clonedImage.getScaledHeight();
-
-            console.log("DEBUG: Image (Cloned for Print) Properties:", {
-                width: clonedImage.getScaledWidth(),
-                height: clonedImage.getScaledHeight(),
-                left: clonedImage.left,
-                top: clonedImage.top,
-                originX: clonedImage.originX,
-                originY: clonedImage.originY
-            });
-        }
-
-        // --- Handle Text Positioning & Scaling ---
-        let currentTextYPosition = imageBottomYOnPrint; // Start positioning text below the image
-        if (imageFound) {
-            currentTextYPosition += (PRINT_READY_HEIGHT * 0.05); // Add a vertical gap (e.g., 5% of print height)
-        } else {
-            // If no image, start text higher up, centered vertically in the available space
-            currentTextYPosition = PRINT_READY_HEIGHT * 0.4; // Default starting point if only text
-        }
+        // Calculate scale factor for the entire composite design to fit the TARGET PRINT ZONE without distortion
+        const scaleToFitXInZone = PRINT_ZONE_WIDTH / previewContentBounds.width;
+        const scaleToFitYInZone = PRINT_ZONE_HEIGHT / previewContentBounds.height;
+        const compositeDesignScale = Math.min(scaleToFitXInZone, scaleToFitYInZone); 
         
-        // Sort text objects if needed (e.g., by original top position to maintain order)
-        printTextObjArray.sort((a, b) => a.top - b.top);
+        console.log("DEBUG: Composite Design Scale to fit Zone:", compositeDesignScale);
 
-        for (const textObj of printTextObjArray) {
-            const clonedText = window.fabric.util.object.clone(textObj);
+        // Calculate the actual scaled dimensions of the composite design when placed in the print zone
+        const scaledCompositeDesignWidth = previewContentBounds.width * compositeDesignScale;
+        const scaledCompositeDesignHeight = previewContentBounds.height * compositeDesignScale;
 
-            // Determine text's final font size (e.g., 100px-150px is readable on print)
-            // Or scale relative to image's master scale, then fine-tune.
-            // Let's use a percentage of the PRINT_READY_WIDTH to determine text size.
-            const TEXT_FONT_SIZE_ON_PRINT = PRINT_READY_WIDTH * 0.025; // 2.5% of 4500px = 112.5px font size
+        // Calculate the center point for the *entire scaled composite design* within the PRINT_READY_CANVAS
+        // This is where the scaled design's bounding box center will end up.
+        const finalCompositeCenterX = PRINT_READY_WIDTH / 2;
+        const finalCompositeCenterY = PRINT_READY_HEIGHT / 2;
 
-            clonedText.set({
-                fontSize: TEXT_FONT_SIZE_ON_PRINT,
-                // Center text horizontally
-                left: PRINT_READY_WIDTH / 2,
-                originX: 'center', // Crucial for horizontal centering
-                // Position text vertically
-                top: currentTextYPosition,
-                originY: 'top', // Crucial for vertical stacking
+        // Calculate the top-left corner of where the scaled composite design should start
+        const compositeStartLeft = finalCompositeCenterX - (scaledCompositeDesignWidth / 2);
+        const compositeStartTop = finalCompositeCenterY - (scaledCompositeDesignHeight / 2);
+
+        // --- Process each customizable object for the print-ready canvas ---
+        customizableObjects.forEach((obj, index) => {
+            const clonedObj = window.fabric.util.object.clone(obj);
+
+            // Get object's top-left position on the PREVIEW canvas (relative to canvas origin)
+            const objRectPreview = obj.getBoundingRect(true); 
+
+            // Calculate object's position relative to the *top-left of the original composite design's bounding box*.
+            const relativeXInComposite = objRectPreview.left - previewContentBounds.left;
+            const relativeYInComposite = objRectPreview.top - previewContentBounds.top;
+
+            // Apply compositeDesignScale to these relative positions, then add the final offset.
+            const newLeft = (relativeXInComposite * compositeDesignScale) + compositeStartLeft;
+            const newTop = (relativeYInComposite * compositeDesignScale) + compositeStartTop;
+            
+            clonedObj.set({
                 hasControls: false, hasBorders: false,
-                angle: textObj.angle, // Preserve rotation
-                scaleX: 1, // Ensure scale is 1
+                angle: obj.angle, // Preserve rotation
+                scaleX: 1, // Reset scale to 1; dimensions/font size are set explicitly
                 scaleY: 1,
+                originX: 'left', // Set origin to 'left', 'top' for consistent positioning
+                originY: 'top',
             });
 
-            printReadyCanvas.add(clonedText);
-            clonedPrintObjects.push(clonedText);
-
-            // Update current vertical position for next text object (if any)
-            currentTextYPosition += clonedText.getScaledHeight() + (PRINT_READY_HEIGHT * 0.02); // Add text height + small gap
-
-            console.log("DEBUG: Text (Cloned for Print) Properties:", {
-                font_size: clonedText.fontSize,
-                width: clonedText.getScaledWidth(),
-                height: clonedText.getScaledHeight(),
-                left: clonedText.left,
-                top: clonedText.top,
-                originX: clonedText.originX,
-                originY: clonedText.originY
+            if (clonedObj.type === 'i-text') {
+                clonedObj.set({
+                    fontSize: obj.fontSize * compositeDesignScale,
+                    left: newLeft,
+                    top: newTop,
+                });
+            } else { // For image objects
+                clonedObj.set({
+                    width: obj.getScaledWidth() * compositeDesignScale, 
+                    height: obj.getScaledHeight() * compositeDesignScale,
+                    left: newLeft,
+                    top: newTop,
+                });
+            }
+            printReadyCanvas.add(clonedObj);
+            console.log(`DEBUG: Cloned Object ${index} Properties:`, { 
+                type: clonedObj.type, 
+                original_obj_left_top_on_canvas: { x: obj.left, y: obj.top },
+                original_obj_rect_preview: { left: objRectPreview.left, top: objRectPreview.top, width: objRectPreview.width, height: objRectPreview.height },
+                relative_in_composite: { x: relativeXInComposite, y: relativeYInComposite },
+                new_left_top_print: { x: newLeft, y: newTop },
+                width_final: clonedObj.width, 
+                height_final: clonedObj.height, 
+                fontSize_final: clonedObj.fontSize, 
+                angle: clonedObj.angle,
+                originX_set: clonedObj.originX,
+                originY_set: clonedObj.originY
             });
-        }
+        });
 
-        // Final sanity check for objects on canvas
-        console.log("DEBUG: Print Ready Canvas Objects Length (after adding all):", printReadyCanvas.getObjects().length);
+        console.log("DEBUG: Print Ready Canvas Objects Length (after adding scaled objects):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
-            console.error("DEBUG: printReadyCanvas is empty after adding objects.");
+            console.error("DEBUG: printReadyCanvas is empty after adding objects - this will result in a blank image.");
             toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
             return;
         }
