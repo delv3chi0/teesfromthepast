@@ -76,6 +76,8 @@ export default function ProductStudio() {
     const selectedSizeVariant = availableSizes.find(s => s.size === selectedSize);
     const finalVariant = selectedColorVariant && selectedSizeVariant ? { ...selectedColorVariant, ...selectedSizeVariant } : null;
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
+    const hasSelectedDesign = selectedDesign !== null; // Add this line
+
 
     // Calculate print dimensions based on product or use defaults
     const getPrintDimensions = () => {
