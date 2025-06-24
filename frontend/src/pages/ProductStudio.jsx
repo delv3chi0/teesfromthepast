@@ -37,14 +37,17 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
-const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
-const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
+// --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT & DPI ---
+const DPI = 300; // Standard for Printful
 
-const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
-// Adjusted to be a fixed pixel value for its TOP edge
-const IMAGE_TOP_Y_ON_PRINT = 1200; // Vertical pixel position for TOP edge of image on 5400px canvas
+// These will be overridden by selectedProduct.printInfo, but provide fallbacks or default structure
+// You MUST ensure your product data from backend includes:
+// product.printInfo: {
+//   printAreaWidthInches: number, // e.g., 12 for T-Shirt
+//   printAreaHeightInches: number // e.g., 16 for T-Shirt
+// }
+const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Default for T-Shirts
+const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Default for T-Shirts
 
 const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
 const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
@@ -209,6 +212,21 @@ export default function ProductStudio() {
             return;
         }
 
+        // --- Calculate dynamic printReadyCanvas dimensions based on selected product ---
+        const currentProductPrintInfo = selectedProduct?.printInfo || { // Use default if printInfo is missing
+            printAreaWidthInches: DEFAULT_PRINT_AREA_WIDTH_INCHES,
+            printAreaHeightInches: DEFAULT_PRINT_AREA_HEIGHT_INCHES
+        };
+
+        const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI;
+        const DYNAMIC_PRINT_READY_HEIGHT = currentProductPrintInfo.printAreaHeightInches * DPI;
+
+        console.log("DEBUG: Dynamic Print Ready Canvas Dimensions:", {
+            width: DYNAMIC_PRINT_READY_WIDTH,
+            height: DYNAMIC_PRINT_READY_HEIGHT
+        });
+
+
         // 1. Generate low-res preview image (for display in cart/order history)
         const finalPreviewImage = fabricCanvas.current.toDataURL({
             format: 'png',
@@ -217,16 +235,14 @@ export default function ProductStudio() {
         });
 
         // 2. Generate high-res print-ready image (for Printful)
-        // Constants are defined at the top of the component for scope.
-
         const printReadyCanvas = new window.fabric.Canvas(null, {
-            width: PRINT_READY_WIDTH,
-            height: PRINT_READY_HEIGHT,
+            width: DYNAMIC_PRINT_READY_WIDTH, // Use dynamic width
+            height: DYNAMIC_PRINT_READY_HEIGHT, // Use dynamic height
             backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height;
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -281,8 +297,8 @@ export default function ProductStudio() {
                 scaleX: 1, scaleY: 1, // Reset scales, apply new width/height explicitly
                 width: finalImageWidth,
                 height: finalImageHeight,
-                left: PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Calculate image's center Y: Top edge Y + half its scaled height
+                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
+                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Image's center Y: top position + half its height
                 originX: 'center', 
                 originY: 'center', 
             });
@@ -301,7 +317,7 @@ export default function ProductStudio() {
             console.log("DEBUG: Next Stack Y for Text (center):", currentStackYCenter);
         } else {
             // If no image, text starts from a sensible vertical center
-            currentStackYCenter = PRINT_READY_HEIGHT * 0.45; // Start solo text higher up
+            currentStackYCenter = DYNAMIC_PRINT_READY_HEIGHT * 0.45; // Start solo text higher up
         }
 
         // Sort text objects by their original top position on the preview canvas
@@ -317,7 +333,7 @@ export default function ProductStudio() {
             
             clonedText.set({
                 fontSize: finalFontSize,
-                left: PRINT_READY_WIDTH / 2, // Center horizontally
+                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally
                 top: currentStackYCenter, // Position based on current stack Y center
                 originX: 'center', 
                 originY: 'center', 
