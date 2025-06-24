@@ -37,8 +37,9 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE NOW DEFINED INSIDE THE COMPONENT FUNCTION ---
-// This ensures they are in scope for all hooks and callbacks without complex dependency management.
+// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE NOW MOVED INSIDE handleProceedToCheckout ---
+// This is a workaround for persistent ReferenceErrors when used in useCallback's dependencies.
+// These are not truly global but defined within the callback's scope.
 
 
 export default function ProductStudio() {
@@ -46,30 +47,6 @@ export default function ProductStudio() {
     const navigate = useNavigate();
     const toast = useToast();
     const reactLocation = useLocation();
-
-    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (MOVED HERE) ---
-    // Defined inside the component function so they are part of its scope,
-    // but not inside any specific hook to avoid re-definition issues.
-    const DPI = 300; // Standard for Printful
-    const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
-    const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
-
-    const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-    const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
-
-    const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
-    const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
-    const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
-    const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
-
-    // You MUST ensure your product data from backend includes:
-    // product.printInfo: {
-    //   printAreaWidthInches: number, // e.g., 12 for T-Shirt
-    //   printAreaHeightInches: number // e.g., 16 for T-Shirt
-    // }
-    const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
-    const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
-
 
     // --- State Declarations ---
     const [products, setProducts] = useState([]);
@@ -212,6 +189,22 @@ export default function ProductStudio() {
     }, [toast]);
 
     const handleProceedToCheckout = useCallback(async () => {
+        // --- LOCAL CONSTANTS FOR handleProceedToCheckout (Workaround for useCallback dependency issues) ---
+        const DPI_LOCAL = 300; 
+        const PRINT_READY_WIDTH_LOCAL = 4500; 
+        const PRINT_READY_HEIGHT_LOCAL = 5400; 
+
+        const TARGET_IMAGE_PRINT_WIDTH_LOCAL = 1800; 
+        const IMAGE_TOP_Y_ON_PRINT_LOCAL = 1000; 
+
+        const TEXT_FONT_SIZE_ON_PRINT_DEFAULT_LOCAL = 120; 
+        const VERTICAL_GAP_IMAGE_TO_TEXT_LOCAL = 150; 
+        const VERTICAL_GAP_BETWEEN_TEXT_LINES_LOCAL = 75; 
+        const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE_LOCAL = 0.8; 
+
+        const DEFAULT_PRINT_AREA_WIDTH_INCHES_LOCAL = 12; 
+        const DEFAULT_PRINT_AREA_HEIGHT_INCHES_LOCAL = 16; 
+
         if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) {
             toast({
                 title: "Incomplete Customization",
@@ -223,13 +216,13 @@ export default function ProductStudio() {
         }
 
         // --- Calculate dynamic printReadyCanvas dimensions based on selected product ---
-        const currentProductPrintInfo = selectedProduct?.printInfo || { // Use default if printInfo is missing
-            printAreaWidthInches: DEFAULT_PRINT_AREA_WIDTH_INCHES,
-            printAreaHeightInches: DEFAULT_PRINT_AREA_HEIGHT_INCHES
+        const currentProductPrintInfo = selectedProduct?.printInfo || { 
+            printAreaWidthInches: DEFAULT_PRINT_AREA_WIDTH_INCHES_LOCAL,
+            printAreaHeightInches: DEFAULT_PRINT_AREA_HEIGHT_INCHES_LOCAL
         };
 
-        const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI;
-        const DYNAMIC_PRINT_READY_HEIGHT = currentProductPrintInfo.printAreaHeightInches * DPI;
+        const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI_LOCAL;
+        const DYNAMIC_PRINT_READY_HEIGHT = currentProductPrintInfo.printAreaHeightInches * DPI_LOCAL;
 
         console.log("DEBUG: Dynamic Print Ready Canvas Dimensions:", {
             width: DYNAMIC_PRINT_READY_WIDTH,
@@ -252,7 +245,7 @@ export default function ProductStudio() {
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height; // Use this for calculations from preview object original position
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -281,10 +274,10 @@ export default function ProductStudio() {
         let baseContentScale = 1;
 
         if (mainImageObj && mainImageObj.getScaledWidth() > 0) {
-            baseContentScale = TARGET_IMAGE_PRINT_WIDTH / mainImageObj.getScaledWidth();
+            baseContentScale = TARGET_IMAGE_PRINT_WIDTH_LOCAL / mainImageObj.getScaledWidth();
         } else {
             // If no image, scale text by a factor that makes it a reasonable size on print.
-            baseContentScale = TEXT_FONT_SIZE_ON_PRINT_DEFAULT / 30; // 30px is Fabric's default fontSize when adding text
+            baseContentScale = TEXT_FONT_SIZE_ON_PRINT_DEFAULT_LOCAL / 30; // 30px is Fabric's default fontSize when adding text
         }
         console.log("DEBUG: Base Content Scale:", baseContentScale);
 
@@ -308,14 +301,14 @@ export default function ProductStudio() {
                 width: finalImageWidth,
                 height: finalImageHeight,
                 left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Calculate image's center Y: Top edge Y + half its height
+                top: IMAGE_TOP_Y_ON_PRINT_LOCAL + (finalImageHeight / 2), // Calculate image's center Y: Top edge Y + half its height
                 originX: 'center', 
                 originY: 'center', 
             });
             printReadyCanvas.add(clonedImage);
             
             // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
-            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
+            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT_LOCAL + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT_LOCAL * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE_LOCAL / 2);
 
             console.log("DEBUG: Image Properties (Cloned for Print):", {
                 width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
@@ -336,9 +329,9 @@ export default function ProductStudio() {
         for (const textObj of textObjArray) {
             const clonedText = window.fabric.util.object.clone(textObj);
 
-            let finalFontSize = TEXT_FONT_SIZE_ON_PRINT_DEFAULT; 
+            let finalFontSize = TEXT_FONT_SIZE_ON_PRINT_DEFAULT_LOCAL; 
             if (mainImageObj) { // If text is accompanied by an image, scale it relative to the image's overall scale
-                 finalFontSize = textObj.fontSize * baseContentScale * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE;
+                 finalFontSize = textObj.fontSize * baseContentScale * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE_LOCAL;
             }
             
             clonedText.set({
@@ -923,4 +916,3 @@ export default function ProductStudio() {
         </VStack>
     );
 }
-
