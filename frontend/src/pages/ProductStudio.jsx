@@ -37,8 +37,28 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE NOW DEFINED INSIDE THE COMPONENT FUNCTION ---
-// This ensures they are in scope for all hooks and callbacks without complex dependency management.
+// --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (Defined outside component, will be passed to useCallback dependencies) ---
+const DPI = 300; // Standard for Printful
+const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
+const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
+
+// Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
+const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
+// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
+const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
+
+const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
+const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
+const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
+const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
+
+// You MUST ensure your product data from backend includes:
+// product.printInfo: {
+//   printAreaWidthInches: number, // e.g., 12 for T-Shirt
+//   printAreaHeightInches: number // e.g., 16 for T-Shirt
+// }
+const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
+const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
 
 
 export default function ProductStudio() {
@@ -46,30 +66,6 @@ export default function ProductStudio() {
     const navigate = useNavigate();
     const toast = useToast();
     const reactLocation = useLocation();
-
-    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (MOVED HERE) ---
-    // Defined inside the component function so they are part of its scope,
-    // but not inside any specific hook to avoid re-definition issues.
-    const DPI = 300; // Standard for Printful
-    const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
-    const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
-
-    const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-    const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
-
-    const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
-    const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
-    const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
-    const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
-
-    // You MUST ensure your product data from backend includes:
-    // product.printInfo: {
-    //   printAreaWidthInches: number, // e.g., 12 for T-Shirt
-    //   printAreaHeightInches: number // e.g., 16 for T-Shirt
-    // }
-    const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
-    const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
-
 
     // --- State Declarations ---
     const [products, setProducts] = useState([]);
@@ -252,7 +248,7 @@ export default function ProductStudio() {
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height; // Use this for calculations from preview object original position
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -308,7 +304,7 @@ export default function ProductStudio() {
                 width: finalImageWidth,
                 height: finalImageHeight,
                 left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Calculate image's center Y: Top edge Y + half its height
+                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
                 originX: 'center', 
                 originY: 'center', 
             });
@@ -923,4 +919,3 @@ export default function ProductStudio() {
         </VStack>
     );
 }
-

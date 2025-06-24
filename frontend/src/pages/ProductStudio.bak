@@ -37,29 +37,8 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
-const DPI = 300; // Standard for Printful
-const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
-const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
-
-// Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
-const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
-// Adjusted from 15% of height, which might be too high. Let's try 1000px down.
-const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
-
-const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
-const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
-const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
-const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
-
-// You MUST ensure your product data from backend includes:
-// product.printInfo: {
-//   printAreaWidthInches: number, // e.g., 12 for T-Shirt
-//   printAreaHeightInches: number // e.g., 16 for T-Shirt
-// }
-const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
-const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
+// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE NOW DEFINED INSIDE THE COMPONENT FUNCTION ---
+// This ensures they are in scope for all hooks and callbacks without complex dependency management.
 
 
 export default function ProductStudio() {
@@ -67,6 +46,30 @@ export default function ProductStudio() {
     const navigate = useNavigate();
     const toast = useToast();
     const reactLocation = useLocation();
+
+    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (MOVED HERE) ---
+    // Defined inside the component function so they are part of its scope,
+    // but not inside any specific hook to avoid re-definition issues.
+    const DPI = 300; // Standard for Printful
+    const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
+    const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
+
+    const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
+    const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
+
+    const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
+    const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
+    const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
+    const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
+
+    // You MUST ensure your product data from backend includes:
+    // product.printInfo: {
+    //   printAreaWidthInches: number, // e.g., 12 for T-Shirt
+    //   printAreaHeightInches: number // e.g., 16 for T-Shirt
+    // }
+    const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
+    const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
+
 
     // --- State Declarations ---
     const [products, setProducts] = useState([]);
@@ -275,7 +278,6 @@ export default function ProductStudio() {
         });
 
         // --- Step 2: Calculate a base scale for content ---
-        // This scale ensures the image is the desired width, and text scales proportionally from preview.
         let baseContentScale = 1;
 
         if (mainImageObj && mainImageObj.getScaledWidth() > 0) {
@@ -431,7 +433,12 @@ export default function ProductStudio() {
         };
         localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
         navigate('/checkout');
-    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects]);
+    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
+        // Explicitly list all constants used by this useCallback
+        DPI, PRINT_READY_WIDTH, PRINT_READY_HEIGHT, TARGET_IMAGE_PRINT_WIDTH, IMAGE_TOP_Y_ON_PRINT, TEXT_FONT_SIZE_ON_PRINT_DEFAULT,
+        VERTICAL_GAP_IMAGE_TO_TEXT, VERTICAL_GAP_BETWEEN_TEXT_LINES, TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE,
+        DEFAULT_PRINT_AREA_WIDTH_INCHES, DEFAULT_PRINT_AREA_HEIGHT_INCHES
+    ]);
 
 
     // Handlers for dropdowns - use `useCallback` for consistency and stability
@@ -916,3 +923,4 @@ export default function ProductStudio() {
         </VStack>
     );
 }
+
