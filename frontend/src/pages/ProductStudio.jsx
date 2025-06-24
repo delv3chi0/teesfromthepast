@@ -42,24 +42,19 @@ const DPI = 300; // Standard for Printful
 const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
 const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
-// Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
-const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
-// Adjusted from 15% of height, which might be too high. Let's try 1000px down.
-const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
+// These are now ABSOLUTE PIXEL VALUES for the PRINT_READY_CANVAS
+// If the image is square 1800x1800, and text is 120px font size, and 150px gap.
+const IMAGE_FINAL_WIDTH_PX = 1800; // Target width for the image on print canvas
+const IMAGE_FINAL_HEIGHT_PX = 1800; // Target height for the image on print canvas (assuming square source)
+const IMAGE_FINAL_LEFT_PX = (PRINT_READY_WIDTH / 2) - (IMAGE_FINAL_WIDTH_PX / 2); // Center horizontally
+const IMAGE_FINAL_TOP_PX = 1000; // Top edge of the image on the print canvas
 
-const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
-const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
-const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
-const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
+const TEXT_FINAL_FONT_SIZE_PX = 120; // Fixed font size for text on print canvas
+const TEXT_TOP_OFFSET_BELOW_IMAGE_PX = IMAGE_FINAL_TOP_PX + IMAGE_FINAL_HEIGHT_PX + 150; // Text top below image + gap
 
-// You MUST ensure your product data from backend includes:
-// product.printInfo: {
-//   printAreaWidthInches: number, // e.g., 12 for T-Shirt
-//   printAreaHeightInches: number // e.g., 16 for T-Shirt
-// }
-const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
-const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
+// Fallback for products without printInfo (e.g., T-Shirt)
+const FALLBACK_PRINT_AREA_WIDTH_INCHES = 12;
+const FALLBACK_PRINT_AREA_HEIGHT_INCHES = 16;
 
 
 export default function ProductStudio() {
@@ -248,8 +243,8 @@ export default function ProductStudio() {
             backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
-        const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height; // Use this for calculations from preview object original position
+        // const previewCanvasWidth = fabricCanvas.current.width; // Not directly used in hardcoded absolute positioning
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in hardcoded absolute positioning
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -288,9 +283,10 @@ export default function ProductStudio() {
 
 
         // --- Step 3: Position Image and Text Precisely on printReadyCanvas ---
-        // Use consistent origin ('center', 'center') for all objects for reliable positioning.
+        // Use consistent origin ('left', 'top') for all objects for predictable absolute positioning.
+        // Then adjust their left/top to achieve desired centering.
 
-        let currentStackYCenter = 0; // Tracks the center Y position for the next element in the stack
+        let currentStackYTop = 0; // Tracks the top Y position for the next element in the stack
 
         if (mainImageObj) {
             const clonedImage = window.fabric.util.object.clone(mainImageObj);
@@ -299,33 +295,36 @@ export default function ProductStudio() {
             const finalImageWidth = mainImageObj.getScaledWidth() * baseContentScale;
             const finalImageHeight = mainImageObj.getScaledHeight() * baseContentScale;
 
+            // Calculate exact left position to center image horizontally
+            const imageLeft = (DYNAMIC_PRINT_READY_WIDTH / 2) - (finalImageWidth / 2);
+
             clonedImage.set({
                 hasControls: false, hasBorders: false,
                 angle: mainImageObj.angle, // Preserve rotation
                 scaleX: 1, scaleY: 1, // Reset scales, apply new width/height explicitly
                 width: finalImageWidth,
                 height: finalImageHeight,
-                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Calculate image's center Y: Top edge Y + half its height
-                originX: 'center', 
-                originY: 'center', 
+                left: imageLeft, // Absolute left position
+                top: IMAGE_TOP_Y_ON_PRINT, // Absolute top position
+                originX: 'left', // Set origin to top-left for absolute positioning
+                originY: 'top', 
             });
             printReadyCanvas.add(clonedImage);
             
-            // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
-            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
+            // Update the starting Y position for subsequent text: image's bottom edge + vertical gap
+            currentStackYTop = clonedImage.top + clonedImage.getScaledHeight() + VERTICAL_GAP_IMAGE_TO_TEXT;
 
             console.log("DEBUG: Image Properties (Cloned for Print):", {
                 width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
                 left: clonedImage.left, top: clonedImage.top,
                 angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedImage.originY
             });
-            console.log("DEBUG: Image Top Y on Print (calculated):", clonedImage.top - (clonedImage.getScaledHeight() / 2)); // Calculate actual top edge for logging
-            console.log("DEBUG: Image Bottom Y on Print (calculated):", clonedImage.top + (clonedImage.getScaledHeight() / 2)); // Calculate actual bottom edge for logging
-            console.log("DEBUG: Next Stack Y for Text (center):", currentStackYCenter);
+            console.log("DEBUG: Image Top Y on Print (calculated):", clonedImage.top);
+            console.log("DEBUG: Image Bottom Y on Print (calculated):", clonedImage.top + clonedImage.getScaledHeight());
+            console.log("DEBUG: Next Stack Y for Text (top):", currentStackYTop);
         } else {
-            // If no image, text starts from a sensible vertical center
-            currentStackYCenter = DYNAMIC_PRINT_READY_HEIGHT * 0.45; // Start solo text higher up
+            // If no image, text starts from a sensible vertical center for solo text
+            currentStackYTop = DYNAMIC_PRINT_READY_HEIGHT * 0.45; // Arbitrary top position if only text
         }
 
         // Sort text objects by their original top position on the preview canvas
@@ -339,20 +338,26 @@ export default function ProductStudio() {
                  finalFontSize = textObj.fontSize * baseContentScale * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE;
             }
             
+            // Calculate exact left position to center text horizontally
+            // Note: Fabric's `text.width` is the unscaled width. `text.getScaledWidth()` is the rendered width.
+            // We use `finalFontSize` here which will determine final width.
+            const tempTextForWidthCalc = new window.fabric.Text(clonedText.text, { fontSize: finalFontSize, fontFamily: clonedText.fontFamily });
+            const textLeft = (DYNAMIC_PRINT_READY_WIDTH / 2) - (tempTextForWidthCalc.width / 2); // Get unscaled width from temp object
+
             clonedText.set({
                 fontSize: finalFontSize,
-                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally
-                top: currentStackYCenter, // Position based on current stack Y center
-                originX: 'center', 
-                originY: 'center', 
+                left: textLeft, // Absolute left position
+                top: currentStackYTop, // Absolute top position
+                originX: 'left', 
+                originY: 'top', 
                 hasControls: false, hasBorders: false,
                 angle: textObj.angle, // Preserve rotation
                 scaleX: 1, scaleY: 1, // Reset scales
             });
             printReadyCanvas.add(clonedText);
 
-            // Update currentStackYCenter for the next text object
-            currentStackYCenter += (clonedText.getScaledHeight() / 2) + VERTICAL_GAP_BETWEEN_TEXT_LINES + (clonedText.getScaledHeight() / 2);
+            // Update currentStackYTop for the next text object
+            currentStackYTop += clonedText.getScaledHeight() + VERTICAL_GAP_BETWEEN_TEXT_LINES;
 
             console.log("DEBUG: Text Properties (Cloned for Print):", {
                 font_size: finalFontSize,
@@ -361,7 +366,7 @@ export default function ProductStudio() {
                 left: clonedText.left, top: clonedText.top,
                 angle: clonedText.angle, originX: clonedText.originX, originY: clonedText.originY
             });
-            console.log("DEBUG: Text Center Y on Print:", clonedText.top);
+            console.log("DEBUG: Text Top Y on Print:", clonedText.top);
         }
         
         // Final sanity check for objects on canvas
@@ -434,7 +439,7 @@ export default function ProductStudio() {
     }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
         DPI, PRINT_READY_WIDTH, PRINT_READY_HEIGHT, TARGET_IMAGE_PRINT_WIDTH, IMAGE_TOP_Y_ON_PRINT, TEXT_FONT_SIZE_ON_PRINT_DEFAULT,
         VERTICAL_GAP_IMAGE_TO_TEXT, VERTICAL_GAP_BETWEEN_TEXT_LINES, TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE,
-        DEFAULT_PRINT_AREA_WIDTH_INCHES, DEFAULT_PRINT_AREA_HEIGHT_INCHES // Include all global constants
+        DEFAULT_PRINT_AREA_WIDTH_INCHES, DEFAULT_PRINT_AREA_HEIGHT_INCHES
     ]);
 
 
