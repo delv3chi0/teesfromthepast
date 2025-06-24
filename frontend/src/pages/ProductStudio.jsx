@@ -39,22 +39,27 @@ const ThemedControlInput = (props) => (
 
 // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
 const DPI = 300; // Standard for Printful
-// PRINT_READY_WIDTH and PRINT_READY_HEIGHT will be calculated dynamically based on product.printInfo
+const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
+const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
-// These constants define the visual scaling and spacing rules relative to the print canvas.
-// They are less about direct preview coordinates and more about 'how big should this look on a shirt'.
-const TARGET_IMAGE_PRINT_WIDTH_PX = 1800; // Desired width of the main image on the print canvas (e.g., 6 inches)
-const DEFAULT_TEXT_PRINT_FONT_SIZE_PX = 120; // Default font size for text on print canvas
-const VERTICAL_GAP_IMAGE_TO_TEXT_PX = 150; // Vertical pixel gap from image's bottom to text's top
-const VERTICAL_GAP_BETWEEN_TEXT_LINES_PX = 75; // Vertical pixel gap between subsequent text lines
+// Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
+const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
+// This is the desired Y coordinate for the TOP EDGE of the image on the print canvas.
+// Adjusted from 15% of height, which might be too high. Let's try 1000px down.
+const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
+
+const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
+const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
+const VERTICAL_GAP_BETWEEN_TEXT_LINES = 75; // Vertical pixel gap between subsequent text lines (top of line to top of next line)
+const TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE = 0.8; // Reduce text font size slightly more when with an image
 
 // You MUST ensure your product data from backend includes:
 // product.printInfo: {
 //   printAreaWidthInches: number, // e.g., 12 for T-Shirt
 //   printAreaHeightInches: number // e.g., 16 for T-Shirt
 // }
-const FALLBACK_PRINT_AREA_WIDTH_INCHES = 12; // Fallback for products without printInfo
-const FALLBACK_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback for products without printInfo
+const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
+const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
 
 
 export default function ProductStudio() {
@@ -72,14 +77,14 @@ export default function ProductStudio() {
     const [selectedProductId, setSelectedProductId] = useState('');
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
-    const [selectedDesign, setSelectedDesign] = useState(null);
-    const [currentMockupType, setCurrentMockupType] = useState('tee');
+    const [selectedDesign, setSelectedDesign] = useState(null); // Assuming selectedDesign comes from design gallery click, not URL param
+    const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
 
     // States for customization tools (reflect properties of ACTIVE text object)
-    const [textInputValue, setTextInputValue] = useState('');
-    const [textColor, setTextColor] = useState('#FDF6EE');
-    const [fontSize, setFontSize] = useState(30);
-    const [fontFamily, setFontFamily] = useState('Montserrat');
+    const [textInputValue, setTextInputValue] = useState(''); // Only for adding new text
+    const [textColor, setTextColor] = useState('#FDF6EE'); // Default, or actual active text color
+    const [fontSize, setFontSize] = useState(30); // Default, or actual active text size
+    const [fontFamily, setFontFamily] = useState('Montserrat'); // Default, or actual active text font
 
     // Refs for Fabric.js Canvas
     const canvasEl = useRef(null);
@@ -216,8 +221,8 @@ export default function ProductStudio() {
 
         // --- Calculate dynamic printReadyCanvas dimensions based on selected product ---
         const currentProductPrintInfo = selectedProduct?.printInfo || { // Use default if printInfo is missing
-            printAreaWidthInches: FALLBACK_PRINT_AREA_WIDTH_INCHES,
-            printAreaHeightInches: FALLBACK_PRINT_AREA_HEIGHT_INCHES
+            printAreaWidthInches: DEFAULT_PRINT_AREA_WIDTH_INCHES,
+            printAreaHeightInches: DEFAULT_PRINT_AREA_HEIGHT_INCHES
         };
 
         const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI;
@@ -269,14 +274,15 @@ export default function ProductStudio() {
             }
         });
 
-        // --- Step 2: Calculate a base scale for content based on desired image width ---
+        // --- Step 2: Calculate a base scale for content ---
+        // This scale ensures the image is the desired width, and text scales proportionally from preview.
         let baseContentScale = 1;
 
         if (mainImageObj && mainImageObj.getScaledWidth() > 0) {
             baseContentScale = TARGET_IMAGE_PRINT_WIDTH / mainImageObj.getScaledWidth();
         } else {
             // If no image, scale text by a factor that makes it a reasonable size on print.
-            baseContentScale = DEFAULT_TEXT_PRINT_FONT_SIZE_PX / 30; // 30px is Fabric's default fontSize when adding text
+            baseContentScale = TEXT_FONT_SIZE_ON_PRINT_DEFAULT / 30; // 30px is Fabric's default fontSize when adding text
         }
         console.log("DEBUG: Base Content Scale:", baseContentScale);
 
@@ -307,7 +313,7 @@ export default function ProductStudio() {
             printReadyCanvas.add(clonedImage);
             
             // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
-            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT + (DEFAULT_TEXT_PRINT_FONT_SIZE_PX * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
+            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
 
             console.log("DEBUG: Image Properties (Cloned for Print):", {
                 width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
