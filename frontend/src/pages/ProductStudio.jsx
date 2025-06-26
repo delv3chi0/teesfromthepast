@@ -400,22 +400,48 @@ export default function ProductStudio() {
         console.log("DEBUG: Print Ready Data URL length:", printReadyDesignDataUrl.length);
 
 
-        // 3. Upload print-ready image to Cloudinary via backend
+        
+        // 3. Upload print-ready image to Cloudinary via backend using FormData
         let cloudinaryPublicUrl = '';
         try {
             toast({
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
-                duration: null, // Keep open until resolved
+                duration: null,
                 isClosable: false,
                 position: "top",
             });
-            const uploadResponse = await client.post('/upload-print-file', {
-                imageData: printReadyDesignDataUrl,
-                designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
+
+            const printBlob = await new Promise(resolve => {
+                printReadyCanvas.toBlob(blob => resolve(blob), 'image/png');
             });
+
+            const formData = new FormData();
+            formData.append('file', printBlob, 'print-file.png');
+            formData.append('designName', selectedDesign?.prompt || `${selectedProduct.name} Custom Design`);
+
+            const uploadResponse = await client.post('/upload-print-file', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
             cloudinaryPublicUrl = uploadResponse.data.publicUrl;
+            toast.closeAll();
+            toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
+        } catch (error) {
+            console.error("Error uploading print file to Cloudinary:", error);
+            toast.closeAll();
+            toast({
+                title: "Upload Failed",
+                description: "Could not upload your design for printing. Please try again.",
+                status: "error",
+                isClosable: true,
+            });
+            return;
+        }
+
             toast.closeAll();
             toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
         } catch (error) {
