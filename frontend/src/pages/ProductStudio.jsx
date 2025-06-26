@@ -233,22 +233,6 @@ export default function ProductStudio() {
 
         const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI;
         const DYNAMIC_PRINT_READY_HEIGHT = currentProductPrintInfo.printAreaHeightInches * DPI;
-const PRINT_PADDING = 200;
-const PRINTABLE_REGION = {
-    x: PRINT_PADDING,
-    y: PRINT_PADDING,
-    width: DYNAMIC_PRINT_READY_WIDTH - 2 * PRINT_PADDING,
-    height: DYNAMIC_PRINT_READY_HEIGHT - 2 * PRINT_PADDING,
-};
-
-        const PRINT_PADDING = 200; // Padding around edges
-        const PRINTABLE_REGION = {
-            x: PRINT_PADDING,
-            y: PRINT_PADDING,
-            width: DYNAMIC_PRINT_READY_WIDTH - 2 * PRINT_PADDING,
-            height: DYNAMIC_PRINT_READY_HEIGHT - 2 * PRINT_PADDING,
-        };
-
 
         console.log("DEBUG: Dynamic Print Ready Canvas Dimensions:", {
             width: DYNAMIC_PRINT_READY_WIDTH,
@@ -319,17 +303,6 @@ const PRINTABLE_REGION = {
             // Calculate final image dimensions
             const finalImageWidth = mainImageObj.getScaledWidth() * baseContentScale;
             const finalImageHeight = mainImageObj.getScaledHeight() * baseContentScale;
-
-            
-            const scaleRatio = PRINTABLE_REGION.width / mainImageObj.getScaledWidth();
-            const scaledImageWidth = mainImageObj.getScaledWidth() * scaleRatio;
-            const scaledImageHeight = mainImageObj.getScaledHeight() * scaleRatio;
-
-            
-            const scaleRatio = PRINTABLE_REGION.width / mainImageObj.getScaledWidth();
-            const scaledImageWidth = mainImageObj.getScaledWidth() * scaleRatio;
-            const scaledImageHeight = mainImageObj.getScaledHeight() * scaleRatio;
-
             clonedImage.set({
                 hasControls: false, hasBorders: false,
                 angle: mainImageObj.angle,
