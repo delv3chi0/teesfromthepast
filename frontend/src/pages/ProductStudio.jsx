@@ -156,6 +156,7 @@ export default function ProductStudio() {
         }
         const textObject = new window.fabric.IText(textInputValue, {
     textBaseline: 'alphabetic',
+    textBaseline: 'alphabetic',
             left: (fabricCanvas.current.width / 2),
             top: (fabricCanvas.current.height * 0.6), // 60% down for text
             originX: 'center',
@@ -232,6 +233,14 @@ export default function ProductStudio() {
 
         const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI;
         const DYNAMIC_PRINT_READY_HEIGHT = currentProductPrintInfo.printAreaHeightInches * DPI;
+const PRINT_PADDING = 200;
+const PRINTABLE_REGION = {
+    x: PRINT_PADDING,
+    y: PRINT_PADDING,
+    width: DYNAMIC_PRINT_READY_WIDTH - 2 * PRINT_PADDING,
+    height: DYNAMIC_PRINT_READY_HEIGHT - 2 * PRINT_PADDING,
+};
+
         const PRINT_PADDING = 200; // Padding around edges
         const PRINTABLE_REGION = {
             x: PRINT_PADDING,
@@ -316,6 +325,11 @@ export default function ProductStudio() {
             const scaledImageWidth = mainImageObj.getScaledWidth() * scaleRatio;
             const scaledImageHeight = mainImageObj.getScaledHeight() * scaleRatio;
 
+            
+            const scaleRatio = PRINTABLE_REGION.width / mainImageObj.getScaledWidth();
+            const scaledImageWidth = mainImageObj.getScaledWidth() * scaleRatio;
+            const scaledImageHeight = mainImageObj.getScaledHeight() * scaleRatio;
+
             clonedImage.set({
                 hasControls: false, hasBorders: false,
                 angle: mainImageObj.angle,
@@ -326,6 +340,7 @@ export default function ProductStudio() {
                 originX: 'center',
                 originY: 'center',
             });
+
 
             printReadyCanvas.add(clonedImage);
             
@@ -402,6 +417,7 @@ export default function ProductStudio() {
 
 
         
+        
         // 3. Upload print-ready image to Cloudinary via backend using FormData
         let cloudinaryPublicUrl = '';
         try {
@@ -430,7 +446,12 @@ export default function ProductStudio() {
 
             cloudinaryPublicUrl = uploadResponse.data.publicUrl;
             toast.closeAll();
-            toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
+            toast({
+                title: "Design uploaded!",
+                description: "Your custom design is ready.",
+                status: "success",
+                isClosable: true
+            });
         } catch (error) {
             console.error("Error uploading print file to Cloudinary:", error);
             toast.closeAll();
@@ -442,6 +463,7 @@ export default function ProductStudio() {
             });
             return;
         }
+
 
             toast.closeAll();
             toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
