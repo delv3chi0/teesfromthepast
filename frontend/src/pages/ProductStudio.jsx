@@ -155,6 +155,7 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
+    textBaseline: 'alphabetic',
             left: (fabricCanvas.current.width / 2),
             top: (fabricCanvas.current.height * 0.6), // 60% down for text
             originX: 'center',
