@@ -37,7 +37,7 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE NOW DEFINED INSIDE THE COMPONENT FUNCTION ---
+// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE DEFINED INSIDE THE COMPONENT FUNCTION ---
 // This ensures they are in scope for all hooks and callbacks without complex dependency management.
 
 
@@ -54,6 +54,7 @@ export default function ProductStudio() {
     const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
     const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
 
+    // Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
     const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
     const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
 
@@ -252,7 +253,7 @@ export default function ProductStudio() {
         });
 
         const previewCanvasWidth = fabricCanvas.current.width;
-        const previewCanvasHeight = fabricCanvas.current.height; // Use this for calculations from preview object original position
+        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -308,7 +309,7 @@ export default function ProductStudio() {
                 width: finalImageWidth,
                 height: finalImageHeight,
                 left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT + (finalImageHeight / 2), // Calculate image's center Y: Top edge Y + half its height
+                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
                 originX: 'center', 
                 originY: 'center', 
             });
@@ -923,4 +924,3 @@ export default function ProductStudio() {
         </VStack>
     );
 }
-

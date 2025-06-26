@@ -231,6 +231,14 @@ export default function ProductStudio() {
 
         const DYNAMIC_PRINT_READY_WIDTH = currentProductPrintInfo.printAreaWidthInches * DPI;
         const DYNAMIC_PRINT_READY_HEIGHT = currentProductPrintInfo.printAreaHeightInches * DPI;
+        const PRINT_PADDING = 200; // Padding around edges
+        const PRINTABLE_REGION = {
+            x: PRINT_PADDING,
+            y: PRINT_PADDING,
+            width: DYNAMIC_PRINT_READY_WIDTH - 2 * PRINT_PADDING,
+            height: DYNAMIC_PRINT_READY_HEIGHT - 2 * PRINT_PADDING,
+        };
+
 
         console.log("DEBUG: Dynamic Print Ready Canvas Dimensions:", {
             width: DYNAMIC_PRINT_READY_WIDTH,
@@ -302,17 +310,22 @@ export default function ProductStudio() {
             const finalImageWidth = mainImageObj.getScaledWidth() * baseContentScale;
             const finalImageHeight = mainImageObj.getScaledHeight() * baseContentScale;
 
+            
+            const scaleRatio = PRINTABLE_REGION.width / mainImageObj.getScaledWidth();
+            const scaledImageWidth = mainImageObj.getScaledWidth() * scaleRatio;
+            const scaledImageHeight = mainImageObj.getScaledHeight() * scaleRatio;
+
             clonedImage.set({
                 hasControls: false, hasBorders: false,
-                angle: mainImageObj.angle, // Preserve rotation
-                scaleX: 1, scaleY: 1, // Reset scales, apply new width/height explicitly
-                width: finalImageWidth,
-                height: finalImageHeight,
-                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
-                originX: 'center', 
-                originY: 'center', 
+                angle: mainImageObj.angle,
+                scaleX: scaleRatio,
+                scaleY: scaleRatio,
+                left: DYNAMIC_PRINT_READY_WIDTH / 2,
+                top: PRINTABLE_REGION.y + scaledImageHeight / 2,
+                originX: 'center',
+                originY: 'center',
             });
+
             printReadyCanvas.add(clonedImage);
             
             // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
