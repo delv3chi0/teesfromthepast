@@ -1,4 +1,27 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, 
+// === Design Alignment Constants ===
+const PREVIEW_FRAME = { x: 205, y: 225, width: 614, height: 614 };
+const EXPORT_FRAME = { x: 600, y: 1200, width: 2400, height: 2400 };
+
+// Convert preview coordinates to export coordinates
+function mapPreviewToExport(obj) {
+    const scaleX = EXPORT_FRAME.width / PREVIEW_FRAME.width;
+    const scaleY = EXPORT_FRAME.height / PREVIEW_FRAME.height;
+
+    return {
+        left: EXPORT_FRAME.x + (obj.left - PREVIEW_FRAME.x) * scaleX,
+        top: EXPORT_FRAME.y + (obj.top - PREVIEW_FRAME.y) * scaleY,
+        scaleX: obj.scaleX * scaleX,
+        scaleY: obj.scaleY * scaleY,
+        angle: obj.angle,
+        text: obj.text,
+        fontSize: obj.fontSize * scaleY,
+        fontFamily: obj.fontFamily,
+        fill: obj.fill
+    };
+}
+
+useEffect, useRef, useCallback } from 'react';
 import {
     Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
     AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink,
