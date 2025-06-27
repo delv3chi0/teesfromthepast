@@ -31,3 +31,6 @@ function mapPreviewToExport(obj) {
 
 // The rest of ProductStudio.jsx code should follow here...
 // For now this is just the fixed scaffold, user will paste in full logic after this
+
+
+export default ProductStudio;
