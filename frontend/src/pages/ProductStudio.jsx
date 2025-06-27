@@ -13,8 +13,6 @@ import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaPaintBrush, FaArrowsAltH } from 'react-icons/fa';
 
-
-// === Design Alignment Constants ===
 const PREVIEW_FRAME = { x: 205, y: 225, width: 614, height: 614 }; // based on tee_black.png mockup
 const EXPORT_FRAME = { x: 600, y: 1200, width: 2400, height: 2400 }; // Printify spec for 12x16" at 300 DPI
 
@@ -42,10 +40,6 @@ const ThemedControlInput = (props) => (
         {...props}
     />
 );
-
-// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE DEFINED INSIDE THE COMPONENT FUNCTION ---
-// This ensures they are in scope for all hooks and callbacks without complex dependency management.
-
 
 export default function ProductStudio() {
     const { user } = useAuth();
