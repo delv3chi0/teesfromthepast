@@ -155,8 +155,6 @@ export default function ProductStudio() {
             return;
         }
         const textObject = new window.fabric.IText(textInputValue, {
-    textBaseline: 'alphabetic',
-    textBaseline: 'alphabetic',
             left: (fabricCanvas.current.width / 2),
             top: (fabricCanvas.current.height * 0.6), // 60% down for text
             originX: 'center',
@@ -303,18 +301,18 @@ export default function ProductStudio() {
             // Calculate final image dimensions
             const finalImageWidth = mainImageObj.getScaledWidth() * baseContentScale;
             const finalImageHeight = mainImageObj.getScaledHeight() * baseContentScale;
+
             clonedImage.set({
                 hasControls: false, hasBorders: false,
-                angle: mainImageObj.angle,
-                scaleX: scaleRatio,
-                scaleY: scaleRatio,
-                left: DYNAMIC_PRINT_READY_WIDTH / 2,
-                top: PRINTABLE_REGION.y + scaledImageHeight / 2,
-                originX: 'center',
-                originY: 'center',
+                angle: mainImageObj.angle, // Preserve rotation
+                scaleX: 1, scaleY: 1, // Reset scales, apply new width/height explicitly
+                width: finalImageWidth,
+                height: finalImageHeight,
+                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
+                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
+                originX: 'center', 
+                originY: 'center', 
             });
-
-
             printReadyCanvas.add(clonedImage);
             
             // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
@@ -389,55 +387,22 @@ export default function ProductStudio() {
         console.log("DEBUG: Print Ready Data URL length:", printReadyDesignDataUrl.length);
 
 
-        
-        
-        // 3. Upload print-ready image to Cloudinary via backend using FormData
+        // 3. Upload print-ready image to Cloudinary via backend
         let cloudinaryPublicUrl = '';
         try {
             toast({
                 title: "Uploading design...",
                 description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
                 status: "info",
-                duration: null,
+                duration: null, // Keep open until resolved
                 isClosable: false,
                 position: "top",
             });
-
-            const printBlob = await new Promise(resolve => {
-                printReadyCanvas.toBlob(blob => resolve(blob), 'image/png');
+            const uploadResponse = await client.post('/upload-print-file', {
+                imageData: printReadyDesignDataUrl,
+                designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
             });
-
-            const formData = new FormData();
-            formData.append('file', printBlob, 'print-file.png');
-            formData.append('designName', selectedDesign?.prompt || `${selectedProduct.name} Custom Design`);
-
-            const uploadResponse = await client.post('/upload-print-file', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
-
             cloudinaryPublicUrl = uploadResponse.data.publicUrl;
-            toast.closeAll();
-            toast({
-                title: "Design uploaded!",
-                description: "Your custom design is ready.",
-                status: "success",
-                isClosable: true
-            });
-        } catch (error) {
-            console.error("Error uploading print file to Cloudinary:", error);
-            toast.closeAll();
-            toast({
-                title: "Upload Failed",
-                description: "Could not upload your design for printing. Please try again.",
-                status: "error",
-                isClosable: true,
-            });
-            return;
-        }
-
-
             toast.closeAll();
             toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
         } catch (error) {

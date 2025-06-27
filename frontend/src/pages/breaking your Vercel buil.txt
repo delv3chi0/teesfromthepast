@@ -1,0 +1,6 @@
+ breaking your Vercel build
+
+🔗 Download ProductStudio_FIXED_CLEANED.jsx
+
+You should now be able to deploy successfully on Vercel. Let me know if you want to modularize product-specific dimensions or add fallback logic. 
+
