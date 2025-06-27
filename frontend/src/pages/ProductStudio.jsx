@@ -15,7 +15,7 @@ import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaP
 
 
 // === Design Alignment Constants ===
-const PREVIEW_FRAME = { x: 77, y: 205, width: 614, height: 614 }; // based on tee_black.png mockup
+const PREVIEW_FRAME = { x: 160, y: 0, width: 768, height: 1024 }; // based on tee_black.png mockup
 const EXPORT_FRAME = { x: 600, y: 1600, width: 2400, height: 2400 };  // adjusted y to push design lower
 const Y_PRINT_OFFSET = 200;  // shifts design lower on export // Printify spec for 12x16" at 300 DPI
 
