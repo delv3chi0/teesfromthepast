@@ -637,12 +637,12 @@ export default function ProductStudio() {
                             // If your mockup is 768px wide (representing, say, 18 inches),
                             // then 12 inches is 12/18 = 0.66 of the mockup width.
                             // Let's aim for a preview design width that is about 40-50% of the preview canvas width.
-                            const designTargetWidth = FCanvas.width * 0.45; // Adjust this percentage as needed (e.g., 0.4 to 0.6)
+                            const designTargetWidth = FCanvas.width * 0.35; // Adjust this percentage as needed (e.3 to 0.4)
                             img.scaleToWidth(designTargetWidth);
 
                             img.set({
                                 left: (FCanvas.width / 2), // Center horizontally on the new canvas
-                                top: (FCanvas.height * 0.35), // Adjust vertical position for tee mockups (higher up)
+                                top: (FCanvas.height * 0.48), // Adjust vertical position for tee mockups (higher up)
                                 originX: 'center',
                                 originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
@@ -810,7 +810,7 @@ export default function ProductStudio() {
 
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                         {/* Left Column: Canvas Preview */}
-                        <VStack spacing={4} align="stretch">
+                        <VStack spacing={4} align="stretch"> **alignSelf="center"**>
                             {/* Mockup Toggle */}
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
