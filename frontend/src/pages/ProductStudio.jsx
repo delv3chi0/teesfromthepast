@@ -25,7 +25,6 @@ const ThemedSelect = (props) => (
     />
 );
 
-// New ThemedInput component for customization controls (for text input, color pickers etc.)
 const ThemedControlInput = (props) => (
     <Input
         size="sm"
