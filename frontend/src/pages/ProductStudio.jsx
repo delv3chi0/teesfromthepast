@@ -810,7 +810,8 @@ export default function ProductStudio() {
 
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                         {/* Left Column: Canvas Preview */}
-                        <VStack spacing={4} align="stretch"> **alignSelf="center"**>
+                        {/* Corrected placement of alignSelf="center" */}
+                        <VStack spacing={4} align="stretch" alignSelf="center">
                             {/* Mockup Toggle */}
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
