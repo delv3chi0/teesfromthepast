@@ -141,34 +141,7 @@ export default function ProductStudio() {
         }
         currentActiveObject.set(property, value);
         FCanvas.renderAll();
-    
-    // Draw 12x16 print area as dashed box on preview canvas
-    const drawPrintBoundary = () => {
-      const printBoxWidth = 768 * 0.75;
-      const printBoxHeight = 1024 * 0.75;
-      const boxLeft = (768 - printBoxWidth) / 2;
-      const boxTop = (1024 - printBoxHeight) / 2;
-
-      const printBox = new window.fabric.Rect({
-        left: boxLeft,
-        top: boxTop,
-        width: printBoxWidth,
-        height: printBoxHeight,
-        fill: 'rgba(0,0,0,0)',
-        stroke: 'white',
-        strokeDashArray: [6, 6],
-        selectable: false,
-        evented: false,
-        excludeFromExport: true,
-      });
-
-      fabricCanvas.current.add(printBox);
-      printBox.moveTo(0);
-    };
-
-    drawPrintBoundary();
-    
-}, []);
+    }, []);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -861,7 +834,7 @@ export default function ProductStudio() {
                                 overflow="hidden"
                                 position="relative"
                             >
-                                <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
+                                <canvas ref={canvasEl} style={{ width: '100%', height: '100%', display: 'block' }} />
                             </Box>
 
                             <Button onClick={clearCanvas} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Clear All Customizations</Button>
