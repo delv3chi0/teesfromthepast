@@ -489,8 +489,10 @@ export default function ProductStudio() {
     useEffect(() => {
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
             // Set canvas dimensions to match the new mockup aspect ratio
-            const canvasWidth = MOCKUP_PREVIEW_WIDTH;
-            const canvasHeight = MOCKUP_PREVIEW_HEIGHT;
+            const canvasWidth = 768;
+const canvasHeight = 1024;
+const safeWidth = 528;
+const safeHeight = 640;
 
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
                 width: canvasWidth,
