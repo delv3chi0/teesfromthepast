@@ -141,7 +141,34 @@ export default function ProductStudio() {
         }
         currentActiveObject.set(property, value);
         FCanvas.renderAll();
-    }, []);
+    
+    // Draw 12x16 print area as dashed box on preview canvas
+    const drawPrintBoundary = () => {
+      const printBoxWidth = 768 * 0.75;
+      const printBoxHeight = 1024 * 0.75;
+      const boxLeft = (768 - printBoxWidth) / 2;
+      const boxTop = (1024 - printBoxHeight) / 2;
+
+      const printBox = new window.fabric.Rect({
+        left: boxLeft,
+        top: boxTop,
+        width: printBoxWidth,
+        height: printBoxHeight,
+        fill: 'rgba(0,0,0,0)',
+        stroke: 'white',
+        strokeDashArray: [6, 6],
+        selectable: false,
+        evented: false,
+        excludeFromExport: true,
+      });
+
+      fabricCanvas.current.add(printBox);
+      printBox.moveTo(0);
+    };
+
+    drawPrintBoundary();
+    
+}, []);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
@@ -151,8 +178,8 @@ export default function ProductStudio() {
         const textObject = new window.fabric.IText(textInputValue, {
             left: (fabricCanvas.current.width / 2),
             top: (fabricCanvas.current.height * 0.6), // 60% down for text
-            originX: 'left',
-            originY: 'top',
+            originX: 'center',
+            originY: 'center',
             fill: textColor,
             fontSize: fontSize,
             fontFamily: fontFamily,
@@ -302,8 +329,8 @@ export default function ProductStudio() {
                 left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
                 // Convert preview Y position to print Y position
                 top: (originalImageTopRelativeToCanvas * scaleFactor) + (finalImageHeight / 2),
-                originX: 'left',
-                originY: 'top',
+                originX: 'center',
+                originY: 'center',
             });
             printReadyCanvas.add(clonedImage);
 
@@ -345,8 +372,8 @@ export default function ProductStudio() {
                 top: mainImageObj
                     ? (originalTextTopRelativeToCanvas * scaleFactor) + (clonedText.getScaledHeight() / 2)
                     : (originalTextTopRelativeToCanvas * scaleFactor) + (clonedText.getScaledHeight() / 2),
-                originX: 'left',
-                originY: 'top',
+                originX: 'center',
+                originY: 'center',
                 hasControls: false, hasBorders: false,
                 angle: textObj.angle, // Preserve rotation
                 scaleX: 1, scaleY: 1, // Reset scales
@@ -603,8 +630,8 @@ export default function ProductStudio() {
                         scaleY: scale,
                         top: FCanvas.height / 2, // Center vertically
                         left: FCanvas.width / 2,  // Center horizontally
-                        originX: 'left',
-                        originY: 'top',
+                        originX: 'center',
+                        originY: 'center',
                         crossOrigin: 'anonymous',
                         selectable: false,
                         evented: false,
@@ -642,9 +669,9 @@ export default function ProductStudio() {
 
                             img.set({
                                 left: (FCanvas.width / 2), // Center horizontally on the new canvas
-                                top: (FCanvas.height * 0.25), // Adjust vertical position for tee mockups (higher up)
-                                originX: 'left',
-                                originY: 'top',
+                                top: (FCanvas.height * 0.48), // Adjust vertical position for tee mockups (higher up)
+                                originX: 'center',
+                                originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
