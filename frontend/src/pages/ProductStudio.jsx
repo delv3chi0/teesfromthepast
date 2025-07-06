@@ -127,9 +127,15 @@ export default function ProductStudio() {
       img.sendToBack();
     });
 
+    // Manual offsets based on visible shirt inside mockup
+    const visibleShirtLeft = 60;
+    const visibleShirtTop = 80;
+    const visibleShirtWidth = 648;
+    const visibleShirtHeight = 864;
+
     const printBox = new fabric.Rect({
-      left: 96,
-      top: 128,
+      left: visibleShirtLeft + (visibleShirtWidth - 576) / 2,
+      top: visibleShirtTop + (visibleShirtHeight - 768) / 2,
       width: 576,
       height: 768,
       fill: 'rgba(0,0,0,0)',
