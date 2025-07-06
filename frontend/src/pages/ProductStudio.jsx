@@ -105,43 +105,41 @@ export default function ProductStudio() {
 
     // Effect to update hasCanvasObjects state whenever canvas objects change
     useEffect(() => {
-        const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return;
+    const canvas = new fabric.Canvas(canvasEl.current, {
+      width: 768,
+      height: 1024,
+      selection: false
+    });
+    fabricCanvas.current = canvas;
 
-        const updateHasCanvasObjects = () => {
-            const userAddedObjects = FCanvas.getObjects().filter(obj =>
-                obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
-            );
-            setHasCanvasObjects(userAddedObjects.length > 0);
-        };
+    fabric.Image.fromURL('/mockups/tee_black.png', (img) => {
+      img.set({
+        scaleX: 1,
+        scaleY: 1,
+        left: 0,
+        top: 0,
+        originX: 'left',
+        originY: 'top',
+        selectable: false,
+        evented: false
+      });
+      canvas.add(img);
+      img.sendToBack();
+    });
 
-        FCanvas.on('object:added', updateHasCanvasObjects);
-        FCanvas.on('object:removed', updateHasCanvasObjects);
-        FCanvas.on('selection:created', updateHasCanvasObjects);
-        FCanvas.on('selection:cleared', updateHasCanvasObjects);
-
-        updateHasCanvasObjects();
-
-        return () => {
-            FCanvas.off('object:added', updateHasCanvasObjects);
-            FCanvas.off('object:removed', updateHasCanvasObjects);
-            FCanvas.off('selection:created', updateHasCanvasObjects);
-            FCanvas.off('selection:cleared', updateHasCanvasObjects);
-        };
-    }, [selectedDesign]);
-
-
-    // --- Customization Tool Handlers (Fabric.js interactions) ---
-
-    const updateFabricObjectProperty = useCallback((property, value) => {
-        const FCanvas = fabricCanvas.current;
-        const currentActiveObject = FCanvas.getActiveObject();
-        if (!FCanvas || !currentActiveObject || currentActiveObject.type !== 'i-text') {
-            return;
-        }
-        currentActiveObject.set(property, value);
-        FCanvas.renderAll();
-    }, []);
+    const printBox = new fabric.Rect({
+      left: 96,
+      top: 128,
+      width: 576,
+      height: 768,
+      fill: 'rgba(0,0,0,0)',
+      stroke: 'white',
+      strokeDashArray: [6, 6],
+      selectable: false,
+      evented: false
+    });
+    canvas.add(printBox);
+}, []);
 
     const addTextToCanvas = useCallback(() => {
         if (!fabricCanvas.current || !textInputValue.trim()) {
