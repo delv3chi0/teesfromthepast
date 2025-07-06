@@ -834,7 +834,7 @@ export default function ProductStudio() {
                                 overflow="hidden"
                                 position="relative"
                             >
-                                <canvas ref={canvasEl} style={{ width: '100%', height: '100%', display: 'block' }} />
+                                <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
                             </Box>
 
                             <Button onClick={clearCanvas} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm" maxW="200px" mx="auto" isDisabled={!isCustomizeEnabled}>Clear All Customizations</Button>
