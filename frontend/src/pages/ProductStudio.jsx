@@ -151,8 +151,8 @@ export default function ProductStudio() {
         const textObject = new window.fabric.IText(textInputValue, {
             left: (fabricCanvas.current.width / 2),
             top: (fabricCanvas.current.height * 0.6), // 60% down for text
-            originX: 'center',
-            originY: 'center',
+            originX: 'left',
+            originY: 'top',
             fill: textColor,
             fontSize: fontSize,
             fontFamily: fontFamily,
@@ -302,8 +302,8 @@ export default function ProductStudio() {
                 left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
                 // Convert preview Y position to print Y position
                 top: (originalImageTopRelativeToCanvas * scaleFactor) + (finalImageHeight / 2),
-                originX: 'center',
-                originY: 'center',
+                originX: 'left',
+                originY: 'top',
             });
             printReadyCanvas.add(clonedImage);
 
@@ -345,8 +345,8 @@ export default function ProductStudio() {
                 top: mainImageObj
                     ? (originalTextTopRelativeToCanvas * scaleFactor) + (clonedText.getScaledHeight() / 2)
                     : (originalTextTopRelativeToCanvas * scaleFactor) + (clonedText.getScaledHeight() / 2),
-                originX: 'center',
-                originY: 'center',
+                originX: 'left',
+                originY: 'top',
                 hasControls: false, hasBorders: false,
                 angle: textObj.angle, // Preserve rotation
                 scaleX: 1, scaleY: 1, // Reset scales
@@ -603,8 +603,8 @@ export default function ProductStudio() {
                         scaleY: scale,
                         top: FCanvas.height / 2, // Center vertically
                         left: FCanvas.width / 2,  // Center horizontally
-                        originX: 'center',
-                        originY: 'center',
+                        originX: 'left',
+                        originY: 'top',
                         crossOrigin: 'anonymous',
                         selectable: false,
                         evented: false,
@@ -642,9 +642,9 @@ export default function ProductStudio() {
 
                             img.set({
                                 left: (FCanvas.width / 2), // Center horizontally on the new canvas
-                                top: (FCanvas.height * 0.48), // Adjust vertical position for tee mockups (higher up)
-                                originX: 'center',
-                                originY: 'center',
+                                top: (FCanvas.height * 0.25), // Adjust vertical position for tee mockups (higher up)
+                                originX: 'left',
+                                originY: 'top',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
                                 cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
                                 lockMovementX: false, lockMovementY: false, lockRotation: false,
