@@ -42,11 +42,12 @@ export default function ProductStudio() {
     const toast = useToast();
     const reactLocation = useLocation();
 
-    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (MOVED HERE) ---
+    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
     const DPI = 300; // Standard for Printful
-    // Mockup Dimensions for Tee (consistent with your update)
-    const MOCKUP_PREVIEW_WIDTH = 768; // New width for the preview canvas
-    const MOCKUP_PREVIEW_HEIGHT = 1024; // New height for the preview canvas
+
+    // *** UPDATED MOCKUP PREVIEW DIMENSIONS ***
+    const MOCKUP_PREVIEW_WIDTH = 1011; // Width of your new mockup image
+    const MOCKUP_PREVIEW_HEIGHT = 1200; // Height of your new mockup image
 
     // Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
     const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
@@ -630,19 +631,14 @@ export default function ProductStudio() {
                             if (!img) return;
                             img.id = `design-${selectedDesign._id}`;
 
-                            // Calculate ideal width for the design on the new preview canvas
-                            // Let's assume the design should occupy a certain percentage of the *mockup* width,
-                            // rather than a fixed ratio of the square canvas, to look good on the tee.
-                            // A common print area for a tee is about 12-14 inches wide.
-                            // If your mockup is 768px wide (representing, say, 18 inches),
-                            // then 12 inches is 12/18 = 0.66 of the mockup width.
-                            // Let's aim for a preview design width that is about 40-50% of the preview canvas width.
-                            const designTargetWidth = FCanvas.width * 0.35; // Adjust this percentage as needed (e.3 to 0.4)
+                            // --- ADJUSTED DESIGN INITIAL PLACEMENT/SCALING ---
+                            // Design area is 768x1024 on the 1011x1200 mockup
+                            const designTargetWidth = FCanvas.width * (768 / 1011); // This will make the design ~768px wide
                             img.scaleToWidth(designTargetWidth);
 
                             img.set({
-                                left: (FCanvas.width / 2), // Center horizontally on the new canvas
-                                top: (FCanvas.height * 0.48), // Adjust vertical position for tee mockups (higher up)
+                                left: (FCanvas.width / 2), // Center horizontally on the canvas
+                                top: (FCanvas.height * 0.45), // Adjust vertical position for typical tee print area
                                 originX: 'center',
                                 originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
@@ -810,7 +806,6 @@ export default function ProductStudio() {
 
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                         {/* Left Column: Canvas Preview */}
-                        {/* Corrected placement of alignSelf="center" */}
                         <VStack spacing={4} align="stretch" alignSelf="center">
                             {/* Mockup Toggle */}
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
@@ -824,8 +819,8 @@ export default function ProductStudio() {
                             <Box
                                 maxW="800px"
                                 w="100%"
-                                // Adjust AspectRatio to match the new mockup dimensions (768x1024 => 3:4)
-                                aspectRatio={768 / 1024}
+                                // Adjust AspectRatio to match your new mockup dimensions (1011x1200)
+                                aspectRatio={1011 / 1200}
                                 bg="brand.primary"
                                 mx="auto"
                                 borderRadius="md"
