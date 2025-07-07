@@ -46,8 +46,8 @@ export default function ProductStudio() {
     const DPI = 300; // Standard for Printful
 
     // *** IDEAL STANDARD PREVIEW AREA DIMENSIONS ***
-    const MOCKUP_PREVIEW_WIDTH = 1080; // New width for the preview canvas
-    const MOCKUP_PREVIEW_HEIGHT = 1440; // New height for the preview canvas (3:4 aspect ratio)
+    const MOCKUP_PREVIEW_WIDTH = 1080; // Width of your new mockup image
+    const MOCKUP_PREVIEW_HEIGHT = 1440; // New height for the preview image (3:4 aspect ratio)
 
     // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS ***
     const DOTTED_PRINT_AREA_WIDTH = 768;
@@ -297,7 +297,7 @@ export default function ProductStudio() {
         });
 
         // --- Step 3: Position Image and Text Precisely on printReadyCanvas ---
-        // These calculations should be relative to the DOTTED_PRINT_AREA's position on the PREVIEW_CANVAS.
+        // These calculations should be relative to the DOTTED PRINT AREA's position on the PREVIEW_CANVAS.
         // We assume the DOTTED_PRINT_AREA is centered on the MOCKUP_PREVIEW_CANVAS.
 
         const dottedAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - DOTTED_PRINT_AREA_WIDTH) / 2;
@@ -350,7 +350,7 @@ export default function ProductStudio() {
         console.log("DEBUG: Print Ready Canvas Objects Length (after adding all):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
             console.error("DEBUG: printReadyCanvas is empty after adding objects.");
-            toast({ title: "Error", description: "No design elements found on canvas for print. This is an internal error.", status: "error" });
+            toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
             return;
         }
 
@@ -568,7 +568,7 @@ export default function ProductStudio() {
                     // and has no internal transparent borders, this will make the shirt fill.
                     const scaleX = FCanvas.width / img.width;
                     const scaleY = FCanvas.height / img.height;
-                    const scale = Math.max(scaleX, scaleY);
+                    const scale = Math.max(scaleX, scaleY); // Use Math.max for 'cover' behavior
 
                     FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
                         scaleX: scale,
@@ -645,7 +645,7 @@ export default function ProductStudio() {
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
-                            img.sendToBack(); // Keep background image behind everything else
+                            FCanvas.sendToBack(); // Keep background image behind everything else
                             FCanvas.renderAll();
                         }, { crossOrigin: 'anonymous' });
                     } else {
@@ -815,11 +815,11 @@ export default function ProductStudio() {
 
                             {/* Canvas Container */}
                             <Box
-                                maxW="800px" // This sets a maximum width for the box, but aspectRatio will control its height based on width.
+                                // Removed maxW to allow the Box to expand to MOCKUP_PREVIEW_WIDTH
                                 w="100%"    // This ensures the box takes up 100% of its parent column's width.
                                 // *** IDEAL STANDARD PREVIEW AREA ASPECT RATIO ***
-                                aspectRatio={1080 / 1440} // Sets the aspect ratio to 3:4
-                                bg="brand.primary" // This is the purple/dark green background you see
+                                aspectRatio={MOCKUP_PREVIEW_WIDTH / MOCKUP_PREVIEW_HEIGHT} // Sets the aspect ratio to 3:4 (1080/1440)
+                                bg="brand.primary" // This is the dark green/teal background you see
                                 mx="auto" // This attempts to center the box horizontally within its column
                                 borderRadius="md"
                                 borderWidth="1px"
