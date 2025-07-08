@@ -46,9 +46,10 @@ export default function ProductStudio() {
     const DPI = 300; // Standard for Printful
 
     // *** UPDATED PREVIEW AREA DIMENSIONS TO MATCH ACTUAL RENDERED SIZE ***
-    // This is the actual size your preview Box is rendering at, as per DevTools
-    const MOCKUP_PREVIEW_WIDTH = 489.19; // From DevTools computed width
-    const MOCKUP_PREVIEW_HEIGHT = 652.26; // From DevTools computed height (maintains 3:4 aspect ratio)
+    // These values (489.19 x 652.26) are the actual width and height your Box is rendering at.
+    // Making the canvas match this will prevent horizontal clipping.
+    const MOCKUP_PREVIEW_WIDTH = 489.19;
+    const MOCKUP_PREVIEW_HEIGHT = 652.26;
 
     // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS (Conceptual) ***
     // These remain the conceptual dimensions for Printify's recommended area
@@ -304,8 +305,8 @@ export default function ProductStudio() {
 
         // Calculate the effective scale of the preview area relative to the conceptual 1080x1440.
         // This is necessary because MOCKUP_PREVIEW_WIDTH/HEIGHT are now smaller (489.19/652.26).
-        const previewScaleRatioX = MOCKUP_PREVIEW_WIDTH / 1080; 
-        const previewScaleRatioY = MOCKUP_PREVIEW_HEIGHT / 1440; 
+        const previewScaleRatioX = MOCKUP_PREVIEW_WIDTH / 1080;
+        const previewScaleRatioY = MOCKUP_PREVIEW_HEIGHT / 1440;
 
         const dottedAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - (DOTTED_PRINT_AREA_WIDTH * previewScaleRatioX)) / 2;
         const dottedAreaTopOnPreview = (MOCKUP_PREVIEW_HEIGHT - (DOTTED_PRINT_AREA_HEIGHT * previewScaleRatioY)) / 2;
@@ -359,7 +360,7 @@ export default function ProductStudio() {
         console.log("DEBUG: Print Ready Canvas Objects Length (after adding all):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
             console.error("DEBUG: printReadyCanvas is empty after adding objects.");
-            toast({ title: "Error", description: "No design elements found on canvas for print. This is an internal error.", status: "error" });
+            toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
             return;
         }
 
@@ -592,16 +593,18 @@ export default function ProductStudio() {
                     });
 
                     // *** Dynamically add the 768x1024 Dotted Print Area Guideline ***
-                    // Scale the dotted print area to fit proportionally on the actual rendered canvas size
-                    const dottedRectScaleX = MOCKUP_PREVIEW_WIDTH / 1080; // Scale based on current preview width vs conceptual 1080
-                    const dottedRectScaleY = MOCKUP_PREVIEW_HEIGHT / 1440; // Scale based on current preview height vs conceptual 1440
+                    // Scale the conceptual 768x1024 dotted print area to fit proportionally on the actual MOCKUP_PREVIEW_WIDTH/HEIGHT
+                    const dottedRectScaleFactor = Math.min(
+                        MOCKUP_PREVIEW_WIDTH / DOTTED_PRINT_AREA_WIDTH,
+                        MOCKUP_PREVIEW_HEIGHT / DOTTED_PRINT_AREA_HEIGHT
+                    );
 
                     const printAreaRect = new window.fabric.Rect({
                         id: 'printAreaGuideline', // Unique ID for easy identification
                         left: FCanvas.width / 2,
                         top: FCanvas.height / 2,
-                        width: DOTTED_PRINT_AREA_WIDTH * dottedRectScaleX, // Scaled width
-                        height: DOTTED_PRINT_AREA_HEIGHT * dottedRectScaleY, // Scaled height
+                        width: DOTTED_PRINT_AREA_WIDTH * dottedRectScaleFactor, // Scaled width
+                        height: DOTTED_PRINT_AREA_HEIGHT * dottedRectScaleFactor, // Scaled height
                         stroke: 'white', // Color of the dotted line
                         strokeWidth: 2,
                         strokeDashArray: [5, 5], // Creates the dotted effect
@@ -640,8 +643,8 @@ export default function ProductStudio() {
 
                             // --- DESIGN INITIAL PLACEMENT/SCALING ---
                             // Scale the design to fit within the *scaled* DOTTED_PRINT_AREA on the current canvas
-                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / 1080);
-                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / 1440);
+                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / 1080); // Using 1080 as original conceptual width
+                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / 1440); // Using 1440 as original conceptual height
 
                             const scaleFactorToFitScaledDottedArea = Math.min(
                                 scaledDottedWidth / img.width,
@@ -660,7 +663,7 @@ export default function ProductStudio() {
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
-                            img.sendToBack(); // Keep background image behind everything else
+                            FCanvas.sendToBack(); // Keep background image behind everything else
                             FCanvas.renderAll();
                         }, { crossOrigin: 'anonymous' });
                     } else {
