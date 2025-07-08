@@ -45,12 +45,13 @@ export default function ProductStudio() {
     // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
     const DPI = 300; // Standard for Printful
 
-    // *** IDEAL STANDARD PREVIEW AREA DIMENSIONS (Matching the 3:4 Aspect Ratio of the preview box) ***
-    // This is the target size for your mockup image files as well.
-    const MOCKUP_PREVIEW_WIDTH = 1080;
-    const MOCKUP_PREVIEW_HEIGHT = 1440;
+    // *** UPDATED PREVIEW AREA DIMENSIONS TO MATCH ACTUAL RENDERED SIZE ***
+    // These values (380 x 506.67) are the exact width and height your preview Box is rendering at.
+    // Making the canvas match this will prevent horizontal clipping.
+    const MOCKUP_PREVIEW_WIDTH = 380;
+    const MOCKUP_PREVIEW_HEIGHT = 506.67;
 
-    // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS (Conceptual 768x1024 is 3:4 Aspect Ratio) ***
+    // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS (Conceptual - 768x1024 is 3:4 Aspect Ratio) ***
     const DOTTED_PRINT_AREA_WIDTH = 768;
     const DOTTED_PRINT_AREA_HEIGHT = 1024;
 
@@ -271,7 +272,7 @@ export default function ProductStudio() {
             backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
-        // The scaling factor for print should be based on the conceptual DOTTED PRINT AREA and the final PRINT-READY dimensions.
+        // The scaling factor for print should be based on the relationship between the DOTTED PRINT AREA and the final PRINT-READY dimensions.
         const scaleFactorForPrint = DYNAMIC_PRINT_READY_WIDTH / DOTTED_PRINT_AREA_WIDTH;
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
@@ -302,7 +303,7 @@ export default function ProductStudio() {
         // We assume the DOTTED_PRINT_AREA is centered on the MOCKUP_PREVIEW_CANVAS.
 
         // Calculate the effective scale of the preview area relative to the conceptual 1080x1440.
-        // This is necessary because MOCKUP_PREVIEW_WIDTH/HEIGHT might be smaller due to layout constraints.
+        // This is necessary because MOCKUP_PREVIEW_WIDTH/HEIGHT are now smaller (489.19/652.26).
         const conceptualPreviewWidthForScaling = 1080; // The conceptual width from ideal plan
         const conceptualPreviewHeightForScaling = 1440; // The conceptual height from ideal plan
 
@@ -573,7 +574,7 @@ export default function ProductStudio() {
                     if (!img) return;
 
                     // Calculate scale to make the image perfectly 'cover' the canvas.
-                    // IMPORTANT: This assumes your mockup image (tee_black.png) is ALREADY
+                    // This assumes your mockup image (tee_black.png) is ALREADY
                     // prepared to be exactly MOCKUP_PREVIEW_WIDTH x MOCKUP_PREVIEW_HEIGHT
                     // with the shirt filling it edge-to-edge (no internal transparent borders).
                     const scaleX = FCanvas.width / img.width;
@@ -594,20 +595,19 @@ export default function ProductStudio() {
 
                     // *** Dynamically add the 768x1024 Dotted Print Area Guideline ***
                     // Scale the conceptual 768x1024 dotted print area to fit proportionally on the actual MOCKUP_PREVIEW_WIDTH/HEIGHT
-                    // This creates a scaling ratio based on a fixed conceptual size (e.g., a "reference" canvas size if the shirt was filling 1080x1440)
-                    // If your shirt is 2:3 aspect ratio, and preview is 3:4, scale by width to ensure it fits horizontally.
-                    const conceptualShirtWidthReference = 810; // From previous rough 2:3 estimation
-                    const conceptualShirtHeightReference = 1215; // From previous rough 2:3 estimation
+                    // This creates a scaling ratio based on a reference conceptual size (e.g., if shirt was 1080px wide conceptually).
+                    const conceptualPreviewWidthReference = 1080; // The original conceptual width we aimed for
+                    const conceptualPreviewHeightReference = 1440; // The original conceptual height we aimed for
 
                     const dottedRectScaleFactor = Math.min(
-                        MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference,
-                        MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightReference
+                        MOCKUP_PREVIEW_WIDTH / conceptualPreviewWidthReference,
+                        MOCKUP_PREVIEW_HEIGHT / conceptualPreviewHeightReference
                     );
 
                     const printAreaRect = new window.fabric.Rect({
                         id: 'printAreaGuideline', // Unique ID for easy identification
                         left: FCanvas.width / 2,
-                        // Adjusted top for chest placement on the shirt, relative to the actual canvas height
+                        // Adjusted top for chest placement, relative to the actual canvas height
                         top: FCanvas.height * 0.38, // Adjusted: moved higher up to chest area (try values between 0.35 and 0.45)
                         width: DOTTED_PRINT_AREA_WIDTH * dottedRectScaleFactor, // Scaled width
                         height: DOTTED_PRINT_AREA_HEIGHT * dottedRectScaleFactor, // Scaled height
@@ -649,11 +649,11 @@ export default function ProductStudio() {
 
                             // --- DESIGN INITIAL PLACEMENT/SCALING ---
                             // Scale the design to fit within the *scaled* DOTTED_PRINT_AREA on the current canvas
-                            const conceptualShirtWidthReference = 810;
-                            const conceptualShirtHeightReference = 1215;
+                            const conceptualPreviewWidthReference = 1080;
+                            const conceptualPreviewHeightReference = 1440;
 
-                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference);
-                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightReference);
+                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / conceptualPreviewWidthReference);
+                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / conceptualPreviewHeightReference);
 
                             const scaleFactorToFitScaledDottedArea = Math.min(
                                 scaledDottedWidth / img.width,
@@ -974,7 +974,7 @@ export default function ProductStudio() {
                             maxW="md"
                         >
                             Proceed to Checkout
-                        </Button>
+                            </Button>
                     </VStack>
                 </VStack>
             </Box>
