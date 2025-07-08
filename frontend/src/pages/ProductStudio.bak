@@ -25,7 +25,6 @@ const ThemedSelect = (props) => (
     />
 );
 
-// New ThemedInput component for customization controls (for text input, color pickers etc.)
 const ThemedControlInput = (props) => (
     <Input
         size="sm"
@@ -37,26 +36,27 @@ const ThemedControlInput = (props) => (
     />
 );
 
-// --- NOTE: GLOBAL CONSTANTS FOR PRINT ALIGNMENT ARE DEFINED INSIDE THE COMPONENT FUNCTION ---
-// This ensures they are in scope for all hooks and callbacks without complex dependency management.
-
-
 export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
     const toast = useToast();
     const reactLocation = useLocation();
 
-    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT (MOVED HERE) ---
-    // Defined inside the component function so they are part of its scope,
-    // but not inside any specific hook to avoid re-definition issues.
+    // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
     const DPI = 300; // Standard for Printful
-    const PRINT_READY_WIDTH = 4500; // Corresponds to 15 inches at 300 DPI
-    const PRINT_READY_HEIGHT = 5400; // Corresponds to 18 inches at 300 DPI
+
+    // *** NEW IDEAL STANDARD PREVIEW AREA DIMENSIONS (Matches Shirt's ~2:3 Aspect Ratio) ***
+    // This is the target size for your mockup image files as well, ensuring the shirt fills the preview.
+    const MOCKUP_PREVIEW_WIDTH = 960; // New width (a 2:3 aspect ratio base)
+    const MOCKUP_PREVIEW_HEIGHT = 1440; // New height (960 * 1.5 = 1440, exactly 2:3)
+
+    // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS (Conceptual - 768x1024 is 3:4 Aspect Ratio) ***
+    const DOTTED_PRINT_AREA_WIDTH = 768;
+    const DOTTED_PRINT_AREA_HEIGHT = 1024;
 
     // Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
     const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
-    const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas
+    const IMAGE_TOP_Y_ON_PRINT = 1000; // Vertical pixel position for top edge of image on 5400px canvas (Printful canvas is 4500x5400)
 
     const TEXT_FONT_SIZE_ON_PRINT_DEFAULT = 120; // Default font size for text on print (e.g., ~0.4 inches)
     const VERTICAL_GAP_IMAGE_TO_TEXT = 150; // Vertical pixel gap from image's bottom to text's top
@@ -65,8 +65,8 @@ export default function ProductStudio() {
 
     // You MUST ensure your product data from backend includes:
     // product.printInfo: {
-    //   printAreaWidthInches: number, // e.g., 12 for T-Shirt
-    //   printAreaHeightInches: number // e.g., 16 for T-Shirt
+    //    printAreaWidthInches: number, // e.g., 12 for T-Shirt
+    //    printAreaHeightInches: number // e.g., 16 for T-Shirt
     // }
     const DEFAULT_PRINT_AREA_WIDTH_INCHES = 12; // Fallback default for T-Shirts
     const DEFAULT_PRINT_AREA_HEIGHT_INCHES = 16; // Fallback default for T-Shirts
@@ -104,7 +104,7 @@ export default function ProductStudio() {
     const finalVariant = selectedColorVariant && selectedSizeVariant
         ? { ...selectedColorVariant, ...selectedSizeVariant }
         : null;
-    
+
     const hasSelectedDesign = selectedDesign !== null;
     const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
 
@@ -115,7 +115,7 @@ export default function ProductStudio() {
         if (!FCanvas) return;
 
         const updateHasCanvasObjects = () => {
-            const userAddedObjects = FCanvas.getObjects().filter(obj => 
+            const userAddedObjects = FCanvas.getObjects().filter(obj =>
                 obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
             );
             setHasCanvasObjects(userAddedObjects.length > 0);
@@ -123,10 +123,10 @@ export default function ProductStudio() {
 
         FCanvas.on('object:added', updateHasCanvasObjects);
         FCanvas.on('object:removed', updateHasCanvasObjects);
-        FCanvas.on('selection:created', updateHasCanvasObjects); 
-        FCanvas.on('selection:cleared', updateHasCanvasObjects); 
-        
-        updateHasCanvasObjects(); 
+        FCanvas.on('selection:created', updateHasCanvasObjects);
+        FCanvas.on('selection:cleared', updateHasCanvasObjects);
+
+        updateHasCanvasObjects();
 
         return () => {
             FCanvas.off('object:added', updateHasCanvasObjects);
@@ -141,7 +141,7 @@ export default function ProductStudio() {
 
     const updateFabricObjectProperty = useCallback((property, value) => {
         const FCanvas = fabricCanvas.current;
-        const currentActiveObject = FCanvas.getActiveObject(); 
+        const currentActiveObject = FCanvas.getActiveObject();
         if (!FCanvas || !currentActiveObject || currentActiveObject.type !== 'i-text') {
             return;
         }
@@ -173,8 +173,9 @@ export default function ProductStudio() {
 
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
+            // Remove all objects except the background image and the print area guideline
             fabricCanvas.current.getObjects().forEach(obj => {
-                if (obj !== fabricCanvas.current.backgroundImage) {
+                if (obj !== fabricCanvas.current.backgroundImage && obj.id !== 'printAreaGuideline') {
                     fabricCanvas.current.remove(obj);
                 }
             });
@@ -187,7 +188,8 @@ export default function ProductStudio() {
     const deleteSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject) {
+            // Prevent deletion of the background image or the print area guideline
+            if (activeObject && activeObject !== fabricCanvas.current.backgroundImage && activeObject.id !== 'printAreaGuideline') {
                 fabricCanvas.current.remove(activeObject);
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
@@ -195,7 +197,7 @@ export default function ProductStudio() {
                     setSelectedDesign(null);
                 }
             } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to delete it.", status: "info", isClosable: true });
+                toast({ title: "No deletable object selected", description: "Select custom text or a design on the canvas to delete it. The shirt and print area are not deletable.", status: "info", isClosable: true });
             }
         }
     }, [selectedDesign, toast]);
@@ -203,7 +205,7 @@ export default function ProductStudio() {
     const centerSelectedObject = useCallback(() => {
         if (fabricCanvas.current) {
             const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject) {
+            if (activeObject && activeObject.id !== 'printAreaGuideline') { // Don't allow centering print guideline itself
                 activeObject.centerH(); // Only center horizontally
                 fabricCanvas.current.renderAll();
             } else {
@@ -239,11 +241,28 @@ export default function ProductStudio() {
 
 
         // 1. Generate low-res preview image (for display in cart/order history)
-        const finalPreviewImage = fabricCanvas.current.toDataURL({
+        // Ensure the preview generated for cart/order history does NOT include the dotted guideline
+        let previewCanvasTemp = new window.fabric.Canvas(null, {
+            width: MOCKUP_PREVIEW_WIDTH,
+            height: MOCKUP_PREVIEW_HEIGHT,
+            backgroundColor: 'rgba(0,0,0,0)',
+        });
+        // Copy background image
+        if (fabricCanvas.current.backgroundImage) {
+             previewCanvasTemp.setBackgroundImage(fabricCanvas.current.backgroundImage, previewCanvasTemp.renderAll.bind(previewCanvasTemp));
+        }
+        // Copy only user-added objects (not the guideline)
+        fabricCanvas.current.getObjects().filter(obj => obj.id !== 'printAreaGuideline').forEach(obj => {
+            previewCanvasTemp.add(window.fabric.util.object.clone(obj));
+        });
+        previewCanvasTemp.renderAll();
+        const finalPreviewImage = previewCanvasTemp.toDataURL({
             format: 'png',
             quality: 1.0,
-            multiplier: 1, // At 600x600 resolution
+            multiplier: 1,
         });
+        previewCanvasTemp.dispose(); // Clean up the temporary canvas
+
 
         // 2. Generate high-res print-ready image (for Printful)
         const printReadyCanvas = new window.fabric.Canvas(null, {
@@ -252,8 +271,8 @@ export default function ProductStudio() {
             backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
-        const previewCanvasWidth = fabricCanvas.current.width;
-        // const previewCanvasHeight = fabricCanvas.current.height; // Not directly used in new scaling
+        // The scaling factor for print should be based on the conceptual DOTTED PRINT AREA and the final PRINT-READY dimensions.
+        const scaleFactorForPrint = DYNAMIC_PRINT_READY_WIDTH / DOTTED_PRINT_AREA_WIDTH;
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
             obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-'))
@@ -278,95 +297,63 @@ export default function ProductStudio() {
             }
         });
 
-        // --- Step 2: Calculate a base scale for content ---
-        let baseContentScale = 1;
-
-        if (mainImageObj && mainImageObj.getScaledWidth() > 0) {
-            baseContentScale = TARGET_IMAGE_PRINT_WIDTH / mainImageObj.getScaledWidth();
-        } else {
-            // If no image, scale text by a factor that makes it a reasonable size on print.
-            baseContentScale = TEXT_FONT_SIZE_ON_PRINT_DEFAULT / 30; // 30px is Fabric's default fontSize when adding text
-        }
-        console.log("DEBUG: Base Content Scale:", baseContentScale);
-
-
         // --- Step 3: Position Image and Text Precisely on printReadyCanvas ---
-        // Use consistent origin ('center', 'center') for all objects for reliable positioning.
+        // These calculations should be relative to the DOTTED PRINT AREA's position on the PREVIEW_CANVAS.
+        // We assume the DOTTED_PRINT_AREA is centered on the MOCKUP_PREVIEW_CANVAS.
 
-        let currentStackYCenter = 0; // Tracks the center Y position for the next element in the stack
+        // Calculate the effective scale of the preview area relative to the conceptual 960x1440 shirt area.
+        const conceptualShirtWidthReference = 960;
+        const conceptualShirtHeightReference = 1440;
+
+        const dottedAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - (DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference))) / 2;
+        const dottedAreaTopOnPreview = (MOCKUP_PREVIEW_HEIGHT - (DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightReference))) / 2;
+
 
         if (mainImageObj) {
             const clonedImage = window.fabric.util.object.clone(mainImageObj);
             
-            // Calculate final image dimensions
-            const finalImageWidth = mainImageObj.getScaledWidth() * baseContentScale;
-            const finalImageHeight = mainImageObj.getScaledHeight() * baseContentScale;
+            // Calculate position relative to the scaled DOTTED PRINT AREA's top-left corner on the current preview
+            const originalImageRelX = mainImageObj.left - dottedAreaLeftOnPreview;
+            const originalImageRelY = mainImageObj.top - dottedAreaTopOnPreview;
 
             clonedImage.set({
                 hasControls: false, hasBorders: false,
                 angle: mainImageObj.angle, // Preserve rotation
-                scaleX: 1, scaleY: 1, // Reset scales, apply new width/height explicitly
-                width: finalImageWidth,
-                height: finalImageHeight,
-                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally on print canvas
-                top: IMAGE_TOP_Y_ON_PRINT, // Set fixed center Y for image (this is the Y center of the object)
-                originX: 'center', 
-                originY: 'center', 
+                // Scale based on the design's current scale / its scale relative to conceptual dotted area * to the final Printify scale
+                scaleX: mainImageObj.scaleX / (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference) * scaleFactorForPrint,
+                scaleY: mainImageObj.scaleY / (MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightReference) * scaleFactorForPrint,
+                left: originalImageRelX / (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference) * scaleFactorForPrint,
+                top: originalImageRelY / (MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightReference) * scaleFactorForPrint,
+                originX: 'center',
+                originY: 'center',
             });
             printReadyCanvas.add(clonedImage);
-            
-            // Update the starting Y center for subsequent text: image's bottom center + vertical gap to text's center
-            currentStackYCenter = clonedImage.top + (clonedImage.getScaledHeight() / 2) + VERTICAL_GAP_IMAGE_TO_TEXT + (TEXT_FONT_SIZE_ON_PRINT_DEFAULT * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE / 2);
-
-            console.log("DEBUG: Image Properties (Cloned for Print):", {
-                width: clonedImage.getScaledWidth(), height: clonedImage.getScaledHeight(),
-                left: clonedImage.left, top: clonedImage.top,
-                angle: clonedImage.angle, originX: clonedImage.originX, originY: clonedImage.originY
-            });
-            console.log("DEBUG: Image Top Y on Print (calculated):", clonedImage.top - (clonedImage.getScaledHeight() / 2)); // Calculate actual top edge for logging
-            console.log("DEBUG: Image Bottom Y on Print (calculated):", clonedImage.top + (clonedImage.getScaledHeight() / 2)); // Calculate actual bottom edge for logging
-            console.log("DEBUG: Next Stack Y for Text (center):", currentStackYCenter);
-        } else {
-            // If no image, text starts from a sensible vertical center
-            currentStackYCenter = DYNAMIC_PRINT_READY_HEIGHT * 0.45; // Start solo text higher up
         }
-
+        
         // Sort text objects by their original top position on the preview canvas
         textObjArray.sort((a, b) => a.top - b.top);
 
         for (const textObj of textObjArray) {
             const clonedText = window.fabric.util.object.clone(textObj);
 
-            let finalFontSize = TEXT_FONT_SIZE_ON_PRINT_DEFAULT; 
-            if (mainImageObj) { // If text is accompanied by an image, scale it relative to the image's overall scale
-                 finalFontSize = textObj.fontSize * baseContentScale * TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE;
-            }
-            
+            // Calculate position relative to the scaled DOTTED PRINT AREA's top-left corner on the current preview
+            const originalTextRelX = textObj.left - dottedAreaLeftOnPreview;
+            const originalTextRelY = textObj.top - dottedAreaTopOnPreview;
+
             clonedText.set({
-                fontSize: finalFontSize,
-                left: DYNAMIC_PRINT_READY_WIDTH / 2, // Center horizontally
-                top: currentStackYCenter, // Position based on current stack Y center
-                originX: 'center', 
-                originY: 'center', 
+                // Scale based on the text's current font size / its scale relative to conceptual dotted area * to the final Printify scale
+                fontSize: textObj.fontSize / (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference) * scaleFactorForPrint,
+                left: originalTextRelX / (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthReference) * scaleFactorForPrint,
+                top: originalTextRelY / (MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightReference) * scaleFactorForPrint,
+                originX: 'center',
+                originY: 'center',
                 hasControls: false, hasBorders: false,
                 angle: textObj.angle, // Preserve rotation
                 scaleX: 1, scaleY: 1, // Reset scales
             });
             printReadyCanvas.add(clonedText);
-
-            // Update currentStackYCenter for the next text object
-            currentStackYCenter += (clonedText.getScaledHeight() / 2) + VERTICAL_GAP_BETWEEN_TEXT_LINES + (clonedText.getScaledHeight() / 2);
-
-            console.log("DEBUG: Text Properties (Cloned for Print):", {
-                font_size: finalFontSize,
-                width: clonedText.getScaledWidth(),
-                height: clonedText.getScaledHeight(),
-                left: clonedText.left, top: clonedText.top,
-                angle: clonedText.angle, originX: clonedText.originX, originY: clonedText.originY
-            });
-            console.log("DEBUG: Text Center Y on Print:", clonedText.top);
         }
-        
+            
         // Final sanity check for objects on canvas
         console.log("DEBUG: Print Ready Canvas Objects Length (after adding all):", printReadyCanvas.getObjects().length);
         if (printReadyCanvas.getObjects().length === 0) {
@@ -436,7 +423,7 @@ export default function ProductStudio() {
         navigate('/checkout');
     }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
         // Explicitly list all constants used by this useCallback
-        DPI, PRINT_READY_WIDTH, PRINT_READY_HEIGHT, TARGET_IMAGE_PRINT_WIDTH, IMAGE_TOP_Y_ON_PRINT, TEXT_FONT_SIZE_ON_PRINT_DEFAULT,
+        DPI, DOTTED_PRINT_AREA_WIDTH, DOTTED_PRINT_AREA_HEIGHT, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, TARGET_IMAGE_PRINT_WIDTH, IMAGE_TOP_Y_ON_PRINT, TEXT_FONT_SIZE_ON_PRINT_DEFAULT,
         VERTICAL_GAP_IMAGE_TO_TEXT, VERTICAL_GAP_BETWEEN_TEXT_LINES, TEXT_SIZE_REDUCER_FACTOR_IF_WITH_IMAGE,
         DEFAULT_PRINT_AREA_WIDTH_INCHES, DEFAULT_PRINT_AREA_HEIGHT_INCHES
     ]);
@@ -477,8 +464,9 @@ export default function ProductStudio() {
     // Canvas Initialization: Runs once to set up Fabric.js canvas and core event listeners
     useEffect(() => {
         if (canvasEl.current && !fabricCanvas.current && window.fabric) {
-            const canvasWidth = 600;
-            const canvasHeight = 600;
+            // Set canvas dimensions to match the new mockup aspect ratio
+            const canvasWidth = MOCKUP_PREVIEW_WIDTH;
+            const canvasHeight = MOCKUP_PREVIEW_HEIGHT;
 
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
                 width: canvasWidth,
@@ -499,7 +487,7 @@ export default function ProductStudio() {
                 } else {
                     // Reset text controls or display defaults when a non-text object is selected or no object is selected
                 }
-                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
+                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')) || obj.id === 'printAreaGuideline');
                 setHasCanvasObjects(userAddedObjects.length > 0);
             };
 
@@ -513,11 +501,11 @@ export default function ProductStudio() {
             };
 
             const handleObjectAdded = () => {
-                 const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
-                 setHasCanvasObjects(userAddedObjects.length > 0);
+                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')) || obj.id === 'printAreaGuideline');
+                setHasCanvasObjects(userAddedObjects.length > 0);
             };
             const handleObjectRemoved = () => {
-                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
+                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')) || obj.id === 'printAreaGuideline');
                 setHasCanvasObjects(userAddedObjects.length > 0);
             };
 
@@ -553,7 +541,7 @@ export default function ProductStudio() {
                 }
             };
         }
-    }, [deleteSelectedObject]);
+    }, [deleteSelectedObject, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT]); // Add new constants as dependencies
 
     useEffect(() => {
         const FCanvas = fabricCanvas.current;
@@ -576,19 +564,65 @@ export default function ProductStudio() {
                 mockupSrc = firstAvailableImage.url;
             }
 
+            // Remove existing print area guideline before adding a new one or updating
+            FCanvas.remove(FCanvas.getObjects().find(obj => obj.id === 'printAreaGuideline'));
+
             if (mockupSrc) {
                 fabricInstance.Image.fromURL(mockupSrc, (img) => {
                     if (!img) return;
+
+                    // Calculate scale to make the image perfectly 'cover' the canvas.
+                    // This assumes your mockup image (tee_black.png) is ALREADY
+                    // prepared to be exactly MOCKUP_PREVIEW_WIDTH x MOCKUP_PREVIEW_HEIGHT
+                    // with the shirt filling it edge-to-edge (no internal transparent borders).
+                    const scaleX = FCanvas.width / img.width;
+                    const scaleY = FCanvas.height / img.height;
+                    const scale = Math.max(scaleX, scaleY); // Use Math.max for 'cover' behavior
+
                     FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
-                        scaleX: FCanvas.width / img.width,
-                        scaleY: FCanvas.height / img.height,
+                        scaleX: scale,
+                        scaleY: scale,
+                        top: FCanvas.height / 2, // Center vertically
+                        left: FCanvas.width / 2,  // Center horizontally
+                        originX: 'center',
+                        originY: 'center',
                         crossOrigin: 'anonymous',
                         selectable: false,
                         evented: false,
-                        alignX: 'center',
-                        alignY: 'center',
-                        meetOrSlice: 'meet'
                     });
+
+                    // *** Dynamically add the 768x1024 Dotted Print Area Guideline ***
+                    // Scale the conceptual 768x1024 dotted print area to fit proportionally on the actual MOCKUP_PREVIEW_WIDTH/HEIGHT
+                    // This creates a scaling ratio based on the target preview size (960x1440)
+                    const conceptualPreviewWidthReference = 960;
+                    const conceptualPreviewHeightReference = 1440;
+
+                    const dottedRectScaleFactor = Math.min(
+                        MOCKUP_PREVIEW_WIDTH / conceptualPreviewWidthReference, // Scale based on current actual preview width
+                        MOCKUP_PREVIEW_HEIGHT / conceptualPreviewHeightReference // Scale based on current actual preview height
+                    );
+
+                    const printAreaRect = new window.fabric.Rect({
+                        id: 'printAreaGuideline', // Unique ID for easy identification
+                        left: FCanvas.width / 2,
+                        // Adjusted top for chest placement, relative to the actual canvas height
+                        top: FCanvas.height * 0.38, // Adjusted: moved higher up to chest area (try values between 0.35 and 0.45)
+                        width: DOTTED_PRINT_AREA_WIDTH * dottedRectScaleFactor, // Scaled width
+                        height: DOTTED_PRINT_AREA_HEIGHT * dottedRectScaleFactor, // Scaled height
+                        stroke: 'white', // Color of the dotted line
+                        strokeWidth: 2,
+                        strokeDashArray: [5, 5], // Creates the dotted effect
+                        fill: 'transparent', // Make it transparent inside
+                        originX: 'center',
+                        originY: 'center',
+                        selectable: false, // User can't select or move this guide
+                        evented: false, // User interactions pass through it
+                        hoverCursor: 'default' // Keep default cursor
+                    });
+                    FCanvas.add(printAreaRect);
+                    FCanvas.sendToBack(printAreaRect); // Ensure it's behind user designs but above background image
+                    FCanvas.renderAll();
+
                 }, { crossOrigin: 'anonymous' });
             } else {
                 FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
@@ -599,7 +633,10 @@ export default function ProductStudio() {
             if (window.fabric) {
                 updateCanvasBackground(window.fabric);
 
-                FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-') && obj.id !== `design-${selectedDesign?._id}`).forEach(obj => FCanvas.remove(obj));
+                // Clear any existing design objects before adding a new one
+                // Ensure printAreaGuideline is not removed here
+                FCanvas.getObjects().filter(obj => obj.id?.startsWith('design-') && obj.id !== `design-${selectedDesign?._id}` && obj.id !== 'printAreaGuideline').forEach(obj => FCanvas.remove(obj));
+
 
                 if (selectedDesign?.imageDataUrl) {
                     const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
@@ -607,10 +644,24 @@ export default function ProductStudio() {
                         window.fabric.Image.fromURL(selectedDesign.imageDataUrl, (img) => {
                             if (!img) return;
                             img.id = `design-${selectedDesign._id}`;
-                            img.scaleToWidth(FCanvas.width * 0.33);
+
+                            // --- DESIGN INITIAL PLACEMENT/SCALING ---
+                            // Scale the design to fit within the *scaled* DOTTED_PRINT_AREA on the current canvas
+                            const conceptualPreviewWidthReference = 960;
+                            const conceptualPreviewHeightReference = 1440;
+
+                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / conceptualPreviewWidthReference);
+                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / conceptualPreviewHeightReference);
+
+                            const scaleFactorToFitScaledDottedArea = Math.min(
+                                scaledDottedWidth / img.width,
+                                scaledDottedHeight / img.height
+                            );
+                            img.scale(scaleFactorToFitScaledDottedArea * 0.9); // Scale down slightly to give it some padding inside the dotted box
+
                             img.set({
-                                left: (FCanvas.width / 2),
-                                top: (FCanvas.height * 0.375),
+                                left: (FCanvas.width / 2), // Center horizontally on the canvas (which is also center of scaled dotted box)
+                                top: (FCanvas.height * 0.38), // Adjusted: Initial placement for design to match dotted box chest area
                                 originX: 'center',
                                 originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
@@ -619,7 +670,7 @@ export default function ProductStudio() {
                                 lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
                             });
                             FCanvas.add(img);
-                            img.sendToBack();
+                            FCanvas.sendToBack(); // Keep background image behind everything else
                             FCanvas.renderAll();
                         }, { crossOrigin: 'anonymous' });
                     } else {
@@ -635,7 +686,7 @@ export default function ProductStudio() {
         };
         pollForFabricAndSetupContent();
 
-    }, [finalVariant, currentMockupType, selectedDesign]);
+    }, [finalVariant, currentMockupType, selectedDesign, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, DOTTED_PRINT_AREA_WIDTH, DOTTED_PRINT_AREA_HEIGHT]);
 
 
     useEffect(() => {
@@ -778,7 +829,7 @@ export default function ProductStudio() {
 
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
                         {/* Left Column: Canvas Preview */}
-                        <VStack spacing={4} align="stretch">
+                        <VStack spacing={4} align="stretch" alignSelf="center">
                             {/* Mockup Toggle */}
                             <RadioGroup onChange={setCurrentMockupType} value={currentMockupType} isDisabled={!isCustomizeEnabled}>
                                 <Stack direction="row" spacing={4} justifyContent="center" mb={4}>
@@ -789,17 +840,21 @@ export default function ProductStudio() {
 
                             {/* Canvas Container */}
                             <Box
-                                maxW="800px"
+                                // Removed maxW property previously.
+                                // w="100%" makes the Box take 100% of its parent column's width.
+                                // The Box's actual rendered size is determined by the parent column.
                                 w="100%"
-                                aspectRatio={1 / 1}
-                                bg="brand.primary"
-                                mx="auto"
+                                // *** PREVIEW AREA ASPECT RATIO BASED ON ACTUAL RENDERED SIZE ***
+                                aspectRatio={MOCKUP_PREVIEW_WIDTH / MOCKUP_PREVIEW_HEIGHT} // This will be 489.19 / 652.26
+                                bg="brand.primary" // This is the dark green/teal background you see
+                                mx="auto" // This attempts to center the box horizontally within its column
                                 borderRadius="md"
                                 borderWidth="1px"
                                 borderColor="whiteAlpha.300"
                                 overflow="hidden"
                                 position="relative"
                             >
+                                {/* The canvas inside must always fill its parent Box */}
                                 <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
                             </Box>
 
@@ -917,7 +972,7 @@ export default function ProductStudio() {
                             maxW="md"
                         >
                             Proceed to Checkout
-                        </Button>
+                            </Button>
                     </VStack>
                 </VStack>
             </Box>
