@@ -45,16 +45,13 @@ export default function ProductStudio() {
     // --- GLOBAL CONSTANTS FOR PRINT ALIGNMENT ---
     const DPI = 300; // Standard for Printful
 
-    // *** UPDATED PREVIEW AREA DIMENSIONS TO MATCH ACTUAL RENDERED SIZE ***
-    // These values (489.19 x 652.26) are the actual width and height your Box is rendering at.
-    // Making the canvas match this will prevent horizontal clipping.
-    const MOCKUP_PREVIEW_WIDTH = 489.19;
-    const MOCKUP_PREVIEW_HEIGHT = 652.26;
+    // *** NEW IDEAL STANDARD PREVIEW AREA DIMENSIONS (Matching Shirt's ~2:3 Aspect Ratio) ***
+    const MOCKUP_PREVIEW_WIDTH = 810; // New width
+    const MOCKUP_PREVIEW_HEIGHT = 1215; // New height (maintains 2:3 aspect ratio: 810/1215 = 0.666...)
 
-    // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS (Conceptual) ***
-    // These remain the conceptual dimensions for Printify's recommended area
-    const DOTTED_PRINT_AREA_WIDTH = 768; // Conceptual print area width
-    const DOTTED_PRINT_AREA_HEIGHT = 1024; // Conceptual print area height
+    // *** DOTTED PRINT AREA GUIDELINE DIMENSIONS (Conceptual - 768x1024 is 3:4 Aspect Ratio) ***
+    const DOTTED_PRINT_AREA_WIDTH = 768;
+    const DOTTED_PRINT_AREA_HEIGHT = 1024;
 
     // Target dimensions for the main image (e.g., Robot, Astronaut) on the print canvas
     const TARGET_IMAGE_PRINT_WIDTH = 1800; // Desired image width on print canvas (e.g., 6 inches)
@@ -273,7 +270,7 @@ export default function ProductStudio() {
             backgroundColor: 'rgba(0,0,0,0)', // Transparent background for POD
         });
 
-        // The scaling factor should be based on the relationship between the DOTTED PRINT AREA and the final PRINT-READY dimensions.
+        // The scaling factor for print should be based on the conceptual DOTTED PRINT AREA and the final PRINT-READY dimensions.
         const scaleFactorForPrint = DYNAMIC_PRINT_READY_WIDTH / DOTTED_PRINT_AREA_WIDTH;
 
         const customizableObjects = fabricCanvas.current.getObjects().filter(obj =>
@@ -303,29 +300,29 @@ export default function ProductStudio() {
         // These calculations should be relative to the DOTTED PRINT AREA's position on the PREVIEW_CANVAS.
         // We assume the DOTTED_PRINT_AREA is centered on the MOCKUP_PREVIEW_CANVAS.
 
-        // Calculate the effective scale of the preview area relative to the conceptual 1080x1440.
-        // This is necessary because MOCKUP_PREVIEW_WIDTH/HEIGHT are now smaller (489.19/652.26).
-        const previewScaleRatioX = MOCKUP_PREVIEW_WIDTH / 1080;
-        const previewScaleRatioY = MOCKUP_PREVIEW_HEIGHT / 1440;
+        // Calculate the actual scaled size of the dotted area on the current canvas
+        const scaledDottedWidthOnPreview = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / 810); // Using 810 as the assumed conceptual width for shirt content
+        const scaledDottedHeightOnPreview = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / 1215); // Using 1215 as the assumed conceptual height for shirt content
 
-        const dottedAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - (DOTTED_PRINT_AREA_WIDTH * previewScaleRatioX)) / 2;
-        const dottedAreaTopOnPreview = (MOCKUP_PREVIEW_HEIGHT - (DOTTED_PRINT_AREA_HEIGHT * previewScaleRatioY)) / 2;
+        const dottedAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - scaledDottedWidthOnPreview) / 2;
+        const dottedAreaTopOnPreview = (MOCKUP_PREVIEW_HEIGHT - scaledDottedHeightOnPreview) / 2;
+
 
         if (mainImageObj) {
             const clonedImage = window.fabric.util.object.clone(mainImageObj);
             
-            // Calculate original position relative to the scaled DOTTED PRINT AREA's top-left corner
+            // Calculate position relative to the scaled DOTTED PRINT AREA's top-left corner on the current preview
             const originalImageRelX = mainImageObj.left - dottedAreaLeftOnPreview;
             const originalImageRelY = mainImageObj.top - dottedAreaTopOnPreview;
 
             clonedImage.set({
                 hasControls: false, hasBorders: false,
                 angle: mainImageObj.angle, // Preserve rotation
-                // Scale based on the design's current scale * relative to the conceptual DOTTED area scale * to the final Printify scale
-                scaleX: mainImageObj.scaleX / previewScaleRatioX * scaleFactorForPrint,
-                scaleY: mainImageObj.scaleY / previewScaleRatioY * scaleFactorForPrint,
-                left: originalImageRelX / previewScaleRatioX * scaleFactorForPrint,
-                top: originalImageRelY / previewScaleRatioY * scaleFactorForPrint,
+                // Scale based on the design's current scale * relative to its scale on original DOTTED area * to the final Printify scale
+                scaleX: mainImageObj.scaleX / (scaledDottedWidthOnPreview / DOTTED_PRINT_AREA_WIDTH) * scaleFactorForPrint,
+                scaleY: mainImageObj.scaleY / (scaledDottedHeightOnPreview / DOTTED_PRINT_AREA_HEIGHT) * scaleFactorForPrint,
+                left: originalImageRelX / (scaledDottedWidthOnPreview / DOTTED_PRINT_AREA_WIDTH) * scaleFactorForPrint,
+                top: originalImageRelY / (scaledDottedHeightOnPreview / DOTTED_PRINT_AREA_HEIGHT) * scaleFactorForPrint,
                 originX: 'center',
                 originY: 'center',
             });
@@ -338,15 +335,15 @@ export default function ProductStudio() {
         for (const textObj of textObjArray) {
             const clonedText = window.fabric.util.object.clone(textObj);
 
-            // Calculate original position relative to the scaled DOTTED PRINT AREA's top-left corner
+            // Calculate position relative to the scaled DOTTED PRINT AREA's top-left corner on the current preview
             const originalTextRelX = textObj.left - dottedAreaLeftOnPreview;
             const originalTextRelY = textObj.top - dottedAreaTopOnPreview;
 
             clonedText.set({
-                // Scale based on the text's current font size * relative to conceptual DOTTED area scale * to the final Printify scale
-                fontSize: textObj.fontSize / previewScaleRatioX * scaleFactorForPrint,
-                left: originalTextRelX / previewScaleRatioX * scaleFactorForPrint,
-                top: originalTextRelY / previewScaleRatioY * scaleFactorForPrint,
+                // Scale based on the text's current font size * relative to its scale on original DOTTED area * to the final Printify scale
+                fontSize: textObj.fontSize / (scaledDottedWidthOnPreview / DOTTED_PRINT_AREA_WIDTH) * scaleFactorForPrint,
+                left: originalTextRelX / (scaledDottedWidthOnPreview / DOTTED_PRINT_AREA_WIDTH) * scaleFactorForPrint,
+                top: originalTextRelY / (scaledDottedHeightOnPreview / DOTTED_PRINT_AREA_HEIGHT) * scaleFactorForPrint,
                 originX: 'center',
                 originY: 'center',
                 hasControls: false, hasBorders: false,
@@ -594,17 +591,24 @@ export default function ProductStudio() {
 
                     // *** Dynamically add the 768x1024 Dotted Print Area Guideline ***
                     // Scale the conceptual 768x1024 dotted print area to fit proportionally on the actual MOCKUP_PREVIEW_WIDTH/HEIGHT
-                    const dottedRectScaleFactor = Math.min(
-                        MOCKUP_PREVIEW_WIDTH / DOTTED_PRINT_AREA_WIDTH,
-                        MOCKUP_PREVIEW_HEIGHT / DOTTED_PRINT_AREA_HEIGHT
-                    );
+                    // This creates a scaling ratio based on a reference conceptual size (e.g., if shirt was 1080px wide conceptually).
+                    const conceptualShirtWidthForDottedRatio = 810; // The 810 from our last estimated 2:3 ratio
+                    const conceptualShirtHeightForDottedRatio = 1215; // The 1215 from our last estimated 2:3 ratio
+
+                    const dottedRectScaleFactorX = MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthForDottedRatio;
+                    const dottedRectScaleFactorY = MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightForDottedRatio;
+
+                    // Use Math.min to ensure the dotted box fits within the narrower of the scaled dimensions
+                    const dottedRectActualScale = Math.min(dottedRectScaleFactorX, dottedRectScaleFactorY);
+
 
                     const printAreaRect = new window.fabric.Rect({
                         id: 'printAreaGuideline', // Unique ID for easy identification
                         left: FCanvas.width / 2,
-                        top: FCanvas.height / 2,
-                        width: DOTTED_PRINT_AREA_WIDTH * dottedRectScaleFactor, // Scaled width
-                        height: DOTTED_PRINT_AREA_HEIGHT * dottedRectScaleFactor, // Scaled height
+                        // Adjusted top for chest placement, relative to the actual canvas height
+                        top: FCanvas.height * 0.38, // Adjusted: moved higher up to chest area (try values between 0.35 and 0.45)
+                        width: DOTTED_PRINT_AREA_WIDTH * dottedRectActualScale, // Scaled width
+                        height: DOTTED_PRINT_AREA_HEIGHT * dottedRectActualScale, // Scaled height
                         stroke: 'white', // Color of the dotted line
                         strokeWidth: 2,
                         strokeDashArray: [5, 5], // Creates the dotted effect
@@ -643,8 +647,11 @@ export default function ProductStudio() {
 
                             // --- DESIGN INITIAL PLACEMENT/SCALING ---
                             // Scale the design to fit within the *scaled* DOTTED_PRINT_AREA on the current canvas
-                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / 1080); // Using 1080 as original conceptual width
-                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / 1440); // Using 1440 as original conceptual height
+                            const conceptualShirtWidthForDottedRatio = 810;
+                            const conceptualShirtHeightForDottedRatio = 1215;
+
+                            const scaledDottedWidth = DOTTED_PRINT_AREA_WIDTH * (MOCKUP_PREVIEW_WIDTH / conceptualShirtWidthForDottedRatio);
+                            const scaledDottedHeight = DOTTED_PRINT_AREA_HEIGHT * (MOCKUP_PREVIEW_HEIGHT / conceptualShirtHeightForDottedRatio);
 
                             const scaleFactorToFitScaledDottedArea = Math.min(
                                 scaledDottedWidth / img.width,
@@ -654,7 +661,7 @@ export default function ProductStudio() {
 
                             img.set({
                                 left: (FCanvas.width / 2), // Center horizontally on the canvas (which is also center of scaled dotted box)
-                                top: (FCanvas.height / 2), // Center vertically on the canvas (which is also center of scaled dotted box)
+                                top: (FCanvas.height * 0.38), // Adjusted: Initial placement for design to match dotted box chest area
                                 originX: 'center',
                                 originY: 'center',
                                 hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
