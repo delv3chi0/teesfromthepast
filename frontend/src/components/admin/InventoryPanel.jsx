@@ -18,13 +18,22 @@ import { useAuth } from '../../context/AuthProvider';
 const SIZES = ["XS", "S", "M", "L", "XL", "XXL", "One Size", "6M", "12M", "18M", "24M"];
 const CORE_COLORS = [ { name: "Black", hex: "#000000" }, { name: "White", hex: "#FFFFFF" }, { name: "Navy Blue", hex: "#000080" }, { name: "Heather Grey", hex: "#B2BEB5" }, { name: "Cream / Natural", hex: "#FFFDD0" }, { name: "Mustard Yellow", hex: "#FFDB58" }, { name: "Olive Green", hex: "#556B2F" }, { name: "Maroon", hex: "#800000" }, { name: "Burnt Orange", hex: "#CC5500" }, { name: "Heather Forest", hex: "#228B22" }, { name: "Royal Blue", hex: "#4169E1" }, { name: "Charcoal", hex: "#36454F" }, { name: "Sand", hex: "#C2B280" }, { name: "Light Blue", hex: "#ADD8E6" }, { name: "Cardinal Red", hex: "#C41E3A" }, { name: "Teal", hex: "#008080" } ];
 
+// *** ADDED: New constant for predefined Printify print areas ***
+const PREDEFINED_PRINT_AREAS = [
+  { placement: "Full-front", widthInches: 12, heightInches: 14 },
+  { placement: "Center-chest", widthInches: 8, heightInches: 8 },
+  { placement: "Oversized front", widthInches: 15, heightInches: 16 },
+  { placement: "Full-back", widthInches: 14, heightInches: 15 },
+  { placement: "Left-chest", widthInches: 4, heightInches: 4 },
+  { placement: "Sleeve", widthInches: 3, heightInches: 3 },
+];
+
 const initialColorVariantState = {
   colorName: '',
   colorHex: '',
   podProductId: '',
   isDefaultDisplay: false,
   imageSet: [{ url: '', isPrimary: true }],
-  // *** ADDED: New initial state for print areas ***
   printAreas: [],
 };
 // --- END Product Manager Specific Constants ---
@@ -43,7 +52,10 @@ const InventoryPanel = () => {
   const [productFormData, setProductFormData] = useState({ name: '', description: '', basePrice: 0, tags: '', isActive: true, variants: [] });
   const [newColorData, setNewColorData] = useState({ colorName: '', colorHex: '', podProductId: '' });
 
-  // FIX: Ensured this useDisclosure hook is present for the product modal
+  // *** ADDED: New state for the dropdown selector on the admin page ***
+  const [newPrintAreaPlacement, setNewPrintAreaPlacement] = useState(PREDEFINED_PRINT_AREAS[0].placement);
+  const [newPrintAreaInches, setNewPrintAreaInches] = useState({ widthInches: PREDEFINED_PRINT_AREAS[0].widthInches, heightInches: PREDEFINED_PRINT_AREAS[0].heightInches });
+
   const { isOpen: isProductModalOpen, onOpen: onProductModalOpen, onClose: onProductModalClose } = useDisclosure();
   
   const { isOpen: isDeleteProductModalOpen, onOpen: onDeleteProductModalOpen, onClose: onDeleteProductModalClose } = useDisclosure();
@@ -84,7 +96,6 @@ const InventoryPanel = () => {
             ...v,
             imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }],
             sizes: v.sizes || [],
-            // *** ADDED: Ensure printAreas exists in state from fetched data ***
             printAreas: v.printAreas || [],
           }))
         });
@@ -100,7 +111,7 @@ const InventoryPanel = () => {
   const handleBasePriceChange = (valStr, valNum) => { setProductFormData(prev => ({ ...prev, basePrice: valNum || 0 })); };
   const handleNewColorFormChange = (e) => { const { name, value } = e.target; if (name === "colorName") { const sel = CORE_COLORS.find(c => c.name === value); setNewColorData(prev => ({ ...prev, colorName: value, colorHex: sel ? sel.hex : '' })); } else { setNewColorData(prev => ({ ...prev, [name]: value })); } };
 
-  // Handler to update properties of an existing color variant (like colorHex, podProductId)
+  // Handler to update properties of an existing color variant
   const handleVariantPropertyChange = (colorIndex, field, value) => {
     const newVariants = [...productFormData.variants];
     newVariants[colorIndex][field] = value;
@@ -114,23 +125,20 @@ const InventoryPanel = () => {
     const newIndex = colorIndex + direction;
 
     if (newIndex >= 0 && newIndex < newVariants.length) {
-      newVariants.splice(colorIndex, 1); // Remove from current position
-      newVariants.splice(newIndex, 0, itemToMove); // Insert at new position
-
-      // Re-evaluate isDefaultDisplay after reordering
+      newVariants.splice(colorIndex, 1);
+      newVariants.splice(newIndex, 0, itemToMove);
       let defaultFound = false;
       newVariants.forEach((v, idx) => {
         if (v.isDefaultDisplay) {
-          if (v === itemToMove) { // If the moved item was the default, it stays default
+          if (v === itemToMove) {
             defaultFound = true;
-          } else { // If another item was default, it's no longer default (only one can be)
+          } else {
             v.isDefaultDisplay = false;
           }
         }
       });
-
       if (!defaultFound && newVariants.length > 0) {
-        newVariants[0].isDefaultDisplay = true; // Set first as default if none is found after reorder
+        newVariants[0].isDefaultDisplay = true;
       }
       setProductFormData(prev => ({ ...prev, variants: newVariants }));
     }
@@ -156,7 +164,7 @@ const InventoryPanel = () => {
   const setPrimaryImage = (colorIndex, imageIndex) => { const newVariants = [...productFormData.variants]; newVariants[colorIndex].imageSet.forEach((img, idx) => { img.isPrimary = idx === imageIndex; }); setProductFormData(prev => ({ ...prev, variants: newVariants })); };
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = productFormData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setProductFormData(prev => ({ ...prev, variants: newVariants })); };
 
-  // *** ADDED: New Handlers for managing the printAreas array ***
+  // Handlers for managing the printAreas array
   const handlePrintAreaChange = (colorIndex, areaIndex, field, value) => {
     const newVariants = [...productFormData.variants];
     newVariants[colorIndex].printAreas[areaIndex][field] = value;
@@ -168,6 +176,30 @@ const InventoryPanel = () => {
     newVariants[colorIndex].printAreas.push({ placement: '', widthInches: 0, heightInches: 0 });
     setProductFormData(prev => ({ ...prev, variants: newVariants }));
   };
+  
+  // *** ADDED: Handler to add a predefined print area from the dropdown ***
+  const handleAddPredefinedPrintArea = (colorIndex) => {
+    const area = PREDEFINED_PRINT_AREAS.find(p => p.placement === newPrintAreaPlacement);
+    if (area && productFormData.variants[colorIndex].printAreas.some(pa => pa.placement === area.placement)) {
+      toast({ title: "Duplicate Print Area", description: "This placement already exists for this variant.", status: "warning" });
+      return;
+    }
+    if (area) {
+      const newVariants = [...productFormData.variants];
+      newVariants[colorIndex].printAreas.push(area);
+      setProductFormData(prev => ({ ...prev, variants: newVariants }));
+    }
+  };
+
+  const handleNewPrintAreaPlacementChange = (e) => {
+    const selectedPlacement = e.target.value;
+    const area = PREDEFINED_PRINT_AREAS.find(p => p.placement === selectedPlacement);
+    if(area) {
+      setNewPrintAreaPlacement(area.placement);
+      setNewPrintAreaInches({ widthInches: area.widthInches, heightInches: area.heightInches });
+    }
+  }
+
 
   const handleRemovePrintArea = (colorIndex, areaIndex) => {
     const newVariants = [...productFormData.variants];
@@ -393,7 +425,24 @@ const InventoryPanel = () => {
                                         </HStack>
                                     ))}
                                 </VStack>
-                                <Button size="sm" mt={3} onClick={() => handleAddPrintArea(colorIndex)} leftIcon={<FaPlus />}>Add Print Area</Button>
+                                {/* *** This is the NEW dropdown section for adding predefined print areas *** */}
+                                <HStack mt={3}>
+                                    <FormControl>
+                                        <FormLabel fontSize="sm">Add Predefined Area</FormLabel>
+                                        <Select
+                                            size="sm"
+                                            value={newPrintAreaPlacement}
+                                            onChange={handleNewPrintAreaPlacementChange}
+                                        >
+                                            {PREDEFINED_PRINT_AREAS.map(p => (
+                                                <option key={p.placement} value={p.placement}>
+                                                    {`${p.placement} (${p.widthInches}" x ${p.heightInches}")`}
+                                                </option>
+                                            ))}
+                                        </Select>
+                                    </FormControl>
+                                    <Button mt={6} size="sm" colorScheme="teal" onClick={() => handleAddPredefinedPrintArea(colorIndex)}>Add</Button>
+                                </HStack>
                                 {/* *** END ADDED SECTION *** */}
 
                             </AccordionPanel>
