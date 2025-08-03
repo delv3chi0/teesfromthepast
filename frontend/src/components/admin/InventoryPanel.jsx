@@ -24,6 +24,8 @@ const initialColorVariantState = {
   podProductId: '',
   isDefaultDisplay: false,
   imageSet: [{ url: '', isPrimary: true }],
+  // *** ADDED: New initial state for print areas ***
+  printAreas: [],
 };
 // --- END Product Manager Specific Constants ---
 
@@ -81,7 +83,9 @@ const InventoryPanel = () => {
           variants: (fullProductData.variants || []).map(v => ({
             ...v,
             imageSet: v.imageSet && v.imageSet.length > 0 ? v.imageSet : [{ url: '', isPrimary: true }],
-            sizes: v.sizes || []
+            sizes: v.sizes || [],
+            // *** ADDED: Ensure printAreas exists in state from fetched data ***
+            printAreas: v.printAreas || [],
           }))
         });
       } else {
@@ -114,8 +118,6 @@ const InventoryPanel = () => {
       newVariants.splice(newIndex, 0, itemToMove); // Insert at new position
 
       // Re-evaluate isDefaultDisplay after reordering
-      // If the moved item was the default, try to keep it default at its new position.
-      // If no default exists (e.g., if one was removed or not set), set the first as default.
       let defaultFound = false;
       newVariants.forEach((v, idx) => {
         if (v.isDefaultDisplay) {
@@ -154,27 +156,49 @@ const InventoryPanel = () => {
   const setPrimaryImage = (colorIndex, imageIndex) => { const newVariants = [...productFormData.variants]; newVariants[colorIndex].imageSet.forEach((img, idx) => { img.isPrimary = idx === imageIndex; }); setProductFormData(prev => ({ ...prev, variants: newVariants })); };
   const setDefaultVariant = (colorIndexToSet) => { const newVariants = productFormData.variants.map((v, index) => ({ ...v, isDefaultDisplay: index === colorIndexToSet })); setProductFormData(prev => ({ ...prev, variants: newVariants })); };
 
+  // *** ADDED: New Handlers for managing the printAreas array ***
+  const handlePrintAreaChange = (colorIndex, areaIndex, field, value) => {
+    const newVariants = [...productFormData.variants];
+    newVariants[colorIndex].printAreas[areaIndex][field] = value;
+    setProductFormData(prev => ({ ...prev, variants: newVariants }));
+  };
+
+  const handleAddPrintArea = (colorIndex) => {
+    const newVariants = [...productFormData.variants];
+    newVariants[colorIndex].printAreas.push({ placement: '', widthInches: 0, heightInches: 0 });
+    setProductFormData(prev => ({ ...prev, variants: newVariants }));
+  };
+
+  const handleRemovePrintArea = (colorIndex, areaIndex) => {
+    const newVariants = [...productFormData.variants];
+    newVariants[colorIndex].printAreas.splice(areaIndex, 1);
+    setProductFormData(prev => ({ ...prev, variants: newVariants }));
+  };
+
+
   const handleProductSubmit = async () => {
     if (!productFormData.name.trim()) { toast({ title: "Validation Error", description: "Product Name is required.", status: "error" }); return; }
     for (const variant of productFormData.variants) { for (const image of variant.imageSet) { if (!image.url || image.url.trim() === '') { toast({ title: "Image URL Missing", description: `Please provide a URL for all images in the "${variant.colorName}" variant gallery.`, status: "error" }); return; } } }
     if (productFormData.variants.length === 0) {
-        toast({ title: "Validation Error", description: "At least one product variant (color) is required.", status: "error" }); return;
+      toast({ title: "Validation Error", description: "At least one product variant (color) is required.", status: "error" }); return;
     }
     if (!productFormData.variants.some(v => v.isDefaultDisplay)) {
-        productFormData.variants[0].isDefaultDisplay = true;
+      productFormData.variants[0].isDefaultDisplay = true;
     }
     for (const variant of productFormData.variants) {
-        if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) {
-            if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true;
-        }
-        for (const size of variant.sizes) {
-            if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; }
-        }
+      if (variant.imageSet && !variant.imageSet.some(img => img.isPrimary)) {
+        if(variant.imageSet.length > 0) variant.imageSet[0].isPrimary = true;
+      }
+      for (const size of variant.sizes) {
+        if (size.inStock && !size.sku) { toast({ title: "Validation Error", description: `SKU missing for in-stock size ${size.size} in ${variant.colorName}.`, status: "error" }); return; }
+      }
     }
     
     const method = isEditingProduct ? 'put' : 'post';
     const url = isEditingProduct ? `/admin/products/${selectedProduct._id}` : '/admin/products';
-    const payload = { ...productFormData, tags: (productFormData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean) };
+    const tagsArray = (productFormData.tags || '').split(',').map(tag => tag.trim()).filter(Boolean);
+    
+    const payload = { ...productFormData, tags: tagsArray };
     delete payload.category;
 
     try { await client[method](url, payload, { headers: { Authorization: `Bearer ${token}` } }); toast({ title: `Product ${isEditingProduct ? 'Updated' : 'Created'}`, status: "success" }); fetchProducts(); onProductModalClose(); }
@@ -275,7 +299,6 @@ const InventoryPanel = () => {
                           (variant && variant.sizes) ?
                           <Accordion
                               key={colorIndex}
-                              // Made collapsed by default: Removed defaultIndex={[0]}
                               allowToggle
                               borderWidth="1px"
                               borderRadius="md"
@@ -290,7 +313,6 @@ const InventoryPanel = () => {
                                         <Text fontWeight="bold" color="brand.textLight">{variant.colorName}</Text>
                                     </HStack>
                                 </AccordionButton>
-                                {/* NEW: Reordering Buttons */}
                                 <Tooltip label="Move Up" isDisabled={colorIndex === 0}>
                                   <ChakraIconButton
                                     icon={<Icon as={FaArrowUp} />}
@@ -314,42 +336,66 @@ const InventoryPanel = () => {
                                 <CloseButton size="sm" onClick={() => handleRemoveColorVariant(colorIndex)} />
                               </Flex>
                             <AccordionPanel bg="brand.secondary" pb={4}>
-                              {/* NEW: Input for Color Hex */}
-                              <FormControl mb={3}>
-                                <FormLabel fontSize="sm">Color Hex</FormLabel>
-                                <HStack>
-                                  <Input
-                                    size="sm"
-                                    value={variant.colorHex || ''}
-                                    onChange={(e) => handleVariantPropertyChange(colorIndex, 'colorHex', e.target.value)}
-                                    placeholder="#RRGGBB"
-                                  />
-                                  <Box w="24px" h="24px" bg={variant.colorHex} borderRadius="sm" border="1px solid" borderColor="brand.textMuted"/>
-                                </HStack>
-                              </FormControl>
-                              <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => handleVariantPropertyChange(colorIndex, 'podProductId', e.target.value)} /></FormControl>
-                              <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
-                              <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
-                                <VStack align="stretch" spacing={2}>{variant.imageSet?.map((img, imgIndex) => (<HStack key={imgIndex}><Radio value={imgIndex.toString()} colorScheme="green"/><Input flex="1" size="sm" placeholder="https://image.url/shirt.png" value={img.url} onChange={(e) => handleImageSetUrlChange(colorIndex, imgIndex, e.target.value)} /><Image src={img.url} alt="Preview" boxSize="32px" objectFit="cover" borderRadius="sm" bg="whiteAlpha.200" fallback={<Icon as={FaImage} color="brand.textMuted" boxSize="32px" p={1}/>}/><ChakraIconButton size="sm" icon={<Icon as={FaTrashAlt}/>} onClick={() => removeImageFromSet(colorIndex, imgIndex)} isDisabled={variant.imageSet.length <= 1} /></HStack>))}</VStack>
-                              </RadioGroup>
-                              <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
-                              <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
-                              <Wrap spacing={4}>
-                                {variant.sizes?.map((size, sizeIndex) => (
-                                  <WrapItem key={size.size}>
-                                    <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.800' : 'red.800'}>
-                                      <HStack justifyContent="space-between" w="100%">
-                                        <Text fontWeight="bold">{size.size}</Text>
-                                        <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
-                                      </HStack>
-                                      <FormControl isDisabled={!size.inStock}>
-                                        <FormLabel fontSize="xs">SKU</FormLabel>
-                                        <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} />
-                                      </FormControl>
-                                    </VStack>
-                                  </WrapItem>
-                                ))}
-                              </Wrap>
+                                <FormControl mb={3}>
+                                    <FormLabel fontSize="sm">Color Hex</FormLabel>
+                                    <HStack>
+                                        <Input
+                                          size="sm"
+                                          value={variant.colorHex || ''}
+                                          onChange={(e) => handleVariantPropertyChange(colorIndex, 'colorHex', e.target.value)}
+                                          placeholder="#RRGGBB"
+                                        />
+                                        <Box w="24px" h="24px" bg={variant.colorHex} borderRadius="sm" border="1px solid" borderColor="brand.textMuted"/>
+                                    </HStack>
+                                </FormControl>
+                                <FormControl><FormLabel fontSize="sm">POD Product ID</FormLabel><Input size="sm" value={variant.podProductId || ''} onChange={(e) => handleVariantPropertyChange(colorIndex, 'podProductId', e.target.value)} /></FormControl>
+                                <Divider my={4} /><Heading size="xs" mb={3}>Image Gallery for {variant.colorName}</Heading>
+                                <RadioGroup onChange={(idx) => setPrimaryImage(colorIndex, parseInt(idx))} value={variant.imageSet?.findIndex(img => img.isPrimary)?.toString() ?? "-1"}>
+                                  <VStack align="stretch" spacing={2}>{variant.imageSet?.map((img, imgIndex) => (<HStack key={imgIndex}><Radio value={imgIndex.toString()} colorScheme="green"/><Input flex="1" size="sm" placeholder="https://image.url/shirt.png" value={img.url} onChange={(e) => handleImageSetUrlChange(colorIndex, imgIndex, e.target.value)} /><Image src={img.url} alt="Preview" boxSize="32px" objectFit="cover" borderRadius="sm" bg="whiteAlpha.200" fallback={<Icon as={FaImage} color="brand.textMuted" boxSize="32px" p={1}/>}/><ChakraIconButton size="sm" icon={<Icon as={FaTrashAlt}/>} onClick={() => removeImageFromSet(colorIndex, imgIndex)} isDisabled={variant.imageSet.length <= 1} /></HStack>))}</VStack>
+                                </RadioGroup>
+                                <Button size="sm" mt={3} onClick={() => addImageToSet(colorIndex)} leftIcon={<FaPlus/>}>Add Image</Button>
+                                <Divider my={4} /><Heading size="xs" mb={3}>Available Sizes</Heading>
+                                <Wrap spacing={4}>
+                                  {variant.sizes?.map((size, sizeIndex) => (
+                                    <WrapItem key={size.size}>
+                                      <VStack p={2} borderWidth="1px" borderRadius="md" spacing={1} minW="180px" bg={size.inStock ? 'green.800' : 'red.800'}>
+                                        <HStack justifyContent="space-between" w="100%">
+                                          <Text fontWeight="bold">{size.size}</Text>
+                                          <Switch size="sm" isChecked={size.inStock} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'inStock', e.target.checked)}/>
+                                        </HStack>
+                                        <FormControl isDisabled={!size.inStock}>
+                                          <FormLabel fontSize="xs">SKU</FormLabel>
+                                          <Input size="sm" value={size.sku} onChange={e => handleSizeDetailChange(colorIndex, sizeIndex, 'sku', e.target.value)} />
+                                        </FormControl>
+                                      </VStack>
+                                    </WrapItem>
+                                  ))}
+                                </Wrap>
+
+                                {/* *** ADDED: New Print Area Management Section *** */}
+                                <Divider my={4} /><Heading size="xs" mb={3}>Print Area Placements</Heading>
+                                <VStack align="stretch" spacing={2}>
+                                    {variant.printAreas.map((area, areaIndex) => (
+                                        <HStack key={areaIndex} p={2} borderWidth="1px" borderRadius="md" bg="brand.primary" spacing={2}>
+                                            <FormControl flex="1" isRequired>
+                                                <FormLabel fontSize="xs">Placement</FormLabel>
+                                                <Input size="sm" value={area.placement} onChange={(e) => handlePrintAreaChange(colorIndex, areaIndex, 'placement', e.target.value)} />
+                                            </FormControl>
+                                            <FormControl isRequired>
+                                                <FormLabel fontSize="xs">W (in)</FormLabel>
+                                                <Input size="sm" type="number" step="0.1" value={area.widthInches} onChange={(e) => handlePrintAreaChange(colorIndex, areaIndex, 'widthInches', parseFloat(e.target.value))} />
+                                            </FormControl>
+                                            <FormControl isRequired>
+                                                <FormLabel fontSize="xs">H (in)</FormLabel>
+                                                <Input size="sm" type="number" step="0.1" value={area.heightInches} onChange={(e) => handlePrintAreaChange(colorIndex, areaIndex, 'heightInches', parseFloat(e.target.value))} />
+                                            </FormControl>
+                                            <CloseButton onClick={() => handleRemovePrintArea(colorIndex, areaIndex)} />
+                                        </HStack>
+                                    ))}
+                                </VStack>
+                                <Button size="sm" mt={3} onClick={() => handleAddPrintArea(colorIndex)} leftIcon={<FaPlus />}>Add Print Area</Button>
+                                {/* *** END ADDED SECTION *** */}
+
                             </AccordionPanel>
                             </AccordionItem>
                           </Accordion>

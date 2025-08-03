@@ -20,6 +20,14 @@ const colorVariantSchema = new mongoose.Schema({
     isPrimary: { type: Boolean, default: false }
   }],
   sizes: [sizeVariantSchema],
+  
+  // *** ADDED: Print Areas for Dynamic Selection ***
+  // This array will hold all the possible print placements for this product.
+  printAreas: [{
+    placement: { type: String, required: true }, // e.g., "Full-front", "Left-chest"
+    widthInches: { type: Number, required: true }, // e.g., 12
+    heightInches: { type: Number, required: true } // e.g., 14
+  }],
 });
 
 const productSchema = new mongoose.Schema(
