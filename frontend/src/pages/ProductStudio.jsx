@@ -267,7 +267,7 @@ export default function ProductStudio() {
         setSelectedProductId(newProductId);
         setSelectedColorName('');
         setSelectedSize('');
-        clearCanvas();
+        // clearCanvas(); // Removed to avoid clearing canvas before new product loads
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct?.variants?.length > 0) {
             const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
@@ -275,16 +275,18 @@ export default function ProductStudio() {
             if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
             if (defaultColor.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
         }
-    }, [products, clearCanvas]); 
+    }, [products]); // Removed clearCanvas from dependency array
 
     const handleColorChange = useCallback((e) => {
         const newColor = e.target.value;
         setSelectedColorName(newColor);
         setSelectedSize('');
+        // clearCanvas(); // Removed to avoid clearing canvas before new color loads
         const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
         if (newColorVariant?.sizes?.length > 0) { setSelectedSize(newColorVariant.sizes[0].size); }
-        if (!selectedPrintAreaPlacement && newColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(newColorVariant.printAreas[0].placement); }
-    }, [selectedProduct, selectedPrintAreaPlacement]);
+        if (newColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(newColorVariant.printAreas[0].placement); }
+    }, [selectedProduct]); // Removed clearCanvas from dependency array
+
 
     useEffect(() => {
       if (selectedProduct && selectedColorName) {
@@ -322,19 +324,34 @@ export default function ProductStudio() {
                 const productId = params.get('productId');
                 const color = params.get('color');
                 const size = params.get('size');
+
+                let initialProduct = null;
+                let initialColorVariant = null;
+
                 if (productId && fetchedProducts.length > 0) {
-                    setSelectedProductId(productId);
-                    const initialProduct = fetchedProducts.find(p => p._id === productId);
-                    if (initialProduct && color) {
-                        setSelectedColorName(color);
-                        const initialColorVariant = initialProduct.variants.find(v => v.colorName === color);
-                        if (initialColorVariant && size) { setSelectedSize(size); } else if (initialColorVariant?.sizes?.length > 0) { setSelectedSize(initialColorVariant.sizes[0].size); }
-                        if (initialColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement); }
-                    } else if (initialProduct?.variants?.length > 0) {
-                        const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
-                        setSelectedColorName(defaultColor.colorName);
-                        if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
-                        if (defaultColor?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
+                    initialProduct = fetchedProducts.find(p => p._id === productId);
+                } else if (fetchedProducts.length > 0) {
+                    initialProduct = fetchedProducts[0]; // Default to first product if no ID in URL
+                }
+
+                if (initialProduct) {
+                    setSelectedProductId(initialProduct._id);
+                    if (color) {
+                        initialColorVariant = initialProduct.variants.find(v => v.colorName === color);
+                    } else {
+                        initialColorVariant = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
+                    }
+
+                    if (initialColorVariant) {
+                        setSelectedColorName(initialColorVariant.colorName);
+                        if (size) {
+                            setSelectedSize(initialColorVariant.sizes.find(s => s.size === size)?.size || (initialColorVariant.sizes.length > 0 ? initialColorVariant.sizes[0].size : ''));
+                        } else if (initialColorVariant.sizes.length > 0) {
+                            setSelectedSize(initialColorVariant.sizes[0].size);
+                        }
+                        if (initialColorVariant.printAreas.length > 0) {
+                            setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement);
+                        }
                     }
                 }
             })
