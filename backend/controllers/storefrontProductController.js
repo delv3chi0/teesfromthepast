@@ -2,25 +2,18 @@ import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose'; // Keep if mongoose.Types.ObjectId.isValid is used, otherwise can be removed.
 
-// --- RE-INTRODUCED AND MODIFIED: getAllActiveProducts function ---
-// This function is needed by ProductStudio to get products with full variant details.
 const getAllActiveProducts = asyncHandler(async (req, res) => {
     const products = await Product.find({
         isActive: true,
         'variants.0': { $exists: true } // Ensure product has at least one variant
     })
-    // *** UPDATED: Explicitly select all necessary nested variant fields, including mockupImage ***
-    // This ensures imageSet and printAreas are included in the response sent to frontend
     .select('name slug description basePrice tags isActive variants.colorName variants.colorHex variants.podProductId variants.isDefaultDisplay variants.imageSet.url variants.imageSet.altText variants.imageSet.isPrimary variants.sizes.size variants.sizes.sku variants.sizes.inStock variants.sizes.priceModifier variants.sizes.podVariantId variants.printAreas.placement variants.printAreas.widthInches variants.printAreas.heightInches variants.printAreas.mockupImage')
     .lean(); // .lean() makes the query faster by returning plain JavaScript objects
 
     res.json(products);
 });
-// --- END RE-INTRODUCED ---
 
 
-// MODIFIED: getShopData function (remains unchanged from previous correct version)
-// This serves the ShopPage (flat list with defaultImage and basePrice)
 const getShopData = asyncHandler(async (req, res) => {
     const allProducts = await Product.find({
         isActive: true,
