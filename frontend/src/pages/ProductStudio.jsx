@@ -208,7 +208,6 @@ export default function ProductStudio() {
         if (!FCanvas) return;
 
         const updateCanvas = (fabricInstance) => {
-            // --- 1. Determine which mockup image to load ---
             const specificMockup = selectedColorVariant?.printAreas?.find(pa => pa.placement === selectedPrintAreaPlacement)?.mockupImage;
             const fallbackMockup = finalVariant?.imageSet?.find(img => img.isPrimary)?.url || finalVariant?.imageSet?.[0]?.url;
             let mockupSrc = specificMockup || fallbackMockup;
@@ -235,7 +234,6 @@ export default function ProductStudio() {
                   evented: false,
                 });
 
-                // --- 2. Dynamically add the Dotted Print Area Guideline ---
                 if (currentPrintAreaDimensions.widthInches && currentPrintAreaDimensions.heightInches) {
                   const printAreaPxWidth = currentPrintAreaDimensions.widthInches * DPI;
                   const printAreaPxHeight = currentPrintAreaDimensions.heightInches * DPI;
@@ -262,7 +260,6 @@ export default function ProductStudio() {
                 }
                 FCanvas.renderAll();
 
-                // --- 3. Add the selected design if it exists ---
                 if (selectedDesign?.imageDataUrl) {
                     const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
                     if (!existingDesignObject) {
@@ -309,21 +306,17 @@ export default function ProductStudio() {
         .then(res => {
           const fetchedProducts = res.data || [];
           setProducts(fetchedProducts);
-
           const params = new URLSearchParams(reactLocation.search);
           const productId = params.get('productId');
           const color = params.get('color');
           const size = params.get('size');
-
           if (productId && fetchedProducts.length > 0) {
             setSelectedProductId(productId);
             const initialProduct = fetchedProducts.find(p => p._id === productId);
-
             if (initialProduct && color) {
               setSelectedColorName(color);
               const initialColorVariant = initialProduct.variants.find(v => v.colorName === color);
-              if (initialColorVariant && size) { setSelectedSize(size); }
-              else if (initialColorVariant?.sizes?.length > 0) { setSelectedSize(initialColorVariant.sizes[0].size); }
+              if (initialColorVariant && size) { setSelectedSize(size); } else if (initialColorVariant?.sizes?.length > 0) { setSelectedSize(initialColorVariant.sizes[0].size); }
               if (initialColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement); }
             } else if (initialProduct?.variants?.length > 0) {
               const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
@@ -342,169 +335,6 @@ export default function ProductStudio() {
 
     // Effect to sync currentPrintAreaDimensions state
     useEffect(() => {
-      if (selectedProduct && selectedColorName && selectedPrintAreaPlacement) {
-          const variant = selectedProduct.variants.find(v => v.colorName === selectedColorName);
-          const selectedArea = variant?.printAreas?.find(pa => pa.placement === selectedPrintAreaPlacement);
-          if (selectedArea) {
-              setCurrentPrintAreaDimensions({
-                  widthInches: selectedArea.widthInches,
-                  heightInches: selectedArea.heightInches,
-                  mockupImage: selectedArea.mockupImage,
-              });
-          }
-      }
-    }, [selectedProduct, selectedColorName, selectedPrintAreaPlacement]);
-
-    // Effect for design fetching
-    useEffect(() => {
-      if (user) {
-        setLoadingDesigns(true);
-        client.get('/mydesigns').then(res => setDesigns(res.data || [])).finally(() => setLoadingDesigns(false));
-      } else {
-        setDesigns([]);
-        setLoadingDesigns(false);
-      }
-    }, [user, reactLocation, navigate]);
-
-    const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
-
-    // Final checkout logic
-    const handleProceedToCheckout = useCallback(async () => {
-      const { widthInches, heightInches } = currentPrintAreaDimensions;
-      if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)) {
-          toast({
-              title: "Incomplete Customization",
-              description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
-              status: "warning",
-              isClosable: true
-          });
-          return;
-      }
-      
-      const DYNAMIC_PRINT_READY_WIDTH = widthInches * DPI;
-      const DYNAMIC_PRINT_READY_HEIGHT = heightInches * DPI;
-
-      let previewCanvasTemp = new window.fabric.Canvas(null, { width: MOCKUP_PREVIEW_WIDTH, height: MOCKUP_PREVIEW_HEIGHT });
-      if (fabricCanvas.current.backgroundImage) {
-           previewCanvasTemp.setBackgroundImage(fabricCanvas.current.backgroundImage, previewCanvasTemp.renderAll.bind(previewCanvasTemp));
-      }
-      fabricCanvas.current.getObjects().filter(obj => obj.id !== 'printAreaGuideline').forEach(obj => {
-          previewCanvasTemp.add(window.fabric.util.object.clone(obj));
-      });
-      previewCanvasTemp.renderAll();
-      const finalPreviewImage = previewCanvasTemp.toDataURL({ format: 'png', quality: 1.0, multiplier: 1 });
-      previewCanvasTemp.dispose(); 
-
-      const printReadyCanvas = new window.fabric.Canvas(null, { width: DYNAMIC_PRINT_READY_WIDTH, height: DYNAMIC_PRINT_READY_HEIGHT });
-      const printAreaPxWidth = currentPrintAreaDimensions.widthInches * DPI;
-      const printAreaPxHeight = currentPrintAreaDimensions.heightInches * DPI;
-      const previewToPrintScalingFactor = DYNAMIC_PRINT_READY_WIDTH / (printAreaPxWidth * Math.min(MOCKUP_PREVIEW_WIDTH / printAreaPxWidth, MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight));
-      const printAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - (printAreaPxWidth * Math.min(MOCKUP_PREVIEW_WIDTH / printAreaPxWidth, MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight))) / 2;
-      const printAreaTopOnPreview = (MOCKUP_PREVIEW_HEIGHT - (printAreaPxHeight * Math.min(MOCKUP_PREVIEW_WIDTH / printAreaPxWidth, MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight))) / 2;
-      
-      const customizableObjects = fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
-
-      if (customizableObjects.length === 0) {
-          toast({ title: "Error", description: "No design elements found on canvas for print.", status: "error" });
-          return;
-      }
-      
-      customizableObjects.forEach(obj => {
-        const clonedObject = window.fabric.util.object.clone(obj);
-        const originalRelX = obj.left - printAreaLeftOnPreview;
-        const originalRelY = obj.top - printAreaTopOnPreview;
-        
-        clonedObject.set({
-          hasControls: false, hasBorders: false,
-          angle: obj.angle, 
-          scaleX: obj.scaleX * previewToPrintScalingFactor,
-          scaleY: obj.scaleY * previewToPrintScalingFactor,
-          left: originalRelX * previewToPrintScalingFactor,
-          top: originalRelY * previewToPrintScalingFactor,
-          originX: 'center',
-          originY: 'center',
-          fontSize: obj.type === 'i-text' ? obj.fontSize * previewToPrintScalingFactor : undefined,
-        });
-        printReadyCanvas.add(clonedObject);
-      });
-          
-      if (printReadyCanvas.getObjects().length === 0) {
-          toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
-          return;
-      }
-
-      printReadyCanvas.renderAll();
-      const printReadyDesignDataUrl = printReadyCanvas.toDataURL({ format: 'png', quality: 1.0, multiplier: 1 });
-      printReadyCanvas.dispose();
-
-      let cloudinaryPublicUrl = '';
-      try {
-          toast({
-              title: "Uploading design...",
-              description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
-              status: "info", duration: null, isClosable: false, position: "top",
-          });
-          const uploadResponse = await client.post('/upload-print-file', {
-              imageData: printReadyDesignDataUrl,
-              designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
-          });
-          cloudinaryPublicUrl = uploadResponse.data.publicUrl;
-          toast.closeAll();
-          toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
-      } catch (error) {
-          console.error("Error uploading print file to Cloudinary:", error);
-          toast.closeAll();
-          toast({
-              title: "Upload Failed",
-              description: "Could not upload your design for printing. Please try again.",
-              status: "error", isClosable: true,
-          });
-          return;
-      }
-
-      const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
-      const checkoutItem = {
-          designId: selectedDesign?._id || 'custom-design-' + Date.now(),
-          productId: selectedProductId, productName: selectedProduct.name, variantSku: finalVariant.sku,
-          size: finalVariant.size, color: finalVariant.colorName,
-          prompt: selectedDesign?.prompt || "Customized design",
-          imageDataUrl: finalPreviewImage,
-          printReadyDataUrl: cloudinaryPublicUrl,
-          productImage: primaryImage?.url,
-          unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
-      };
-      localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
-      navigate('/checkout');
-    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
-        DPI, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, currentPrintAreaDimensions
-    ]);
-
-    // Handlers for dropdowns - use `useCallback` for consistency and stability
-    const handleProductChange = useCallback((e) => {
-        const newProductId = e.target.value;
-        setSelectedProductId(newProductId);
-        setSelectedColorName('');
-        setSelectedSize('');
-        clearCanvas();
-        const newSelectedProduct = products.find(p => p._id === newProductId);
-        if (newSelectedProduct?.variants?.length > 0) {
-            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
-            setSelectedColorName(defaultColor.colorName);
-            if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
-            if (defaultColor.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
-        }
-    }, [products, clearCanvas]); 
-
-    const handleColorChange = useCallback((e) => {
-        const newColor = e.target.value;
-        setSelectedColorName(newColor);
-        setSelectedSize('');
-        const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
-        if (newColorVariant?.sizes?.length > 0) { setSelectedSize(newColorVariant.sizes[0].size); }
-        if (!selectedPrintAreaPlacement && newColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(newColorVariant.printAreas[0].placement); }
-    }, [selectedProduct, selectedPrintAreaPlacement]);
-
-    useEffect(() => {
       if (selectedProduct && selectedColorName) {
         const variant = selectedProduct.variants.find(v => v.colorName === selectedColorName);
         if (variant && variant.printAreas) {
@@ -516,8 +346,7 @@ export default function ProductStudio() {
               mockupImage: selectedArea.mockupImage,
             });
           } else {
-            // Fallback for cases where a print area is selected but not found (or no placement selected)
-            const defaultArea = variant.printAreas[0] || { widthInches: 12, heightInches: 14 };
+            const defaultArea = variant.printAreas[0] || { widthInches: 12, heightInches: 14, mockupImage: '' };
             setCurrentPrintAreaDimensions({
               widthInches: defaultArea.widthInches,
               heightInches: defaultArea.heightInches,
@@ -532,39 +361,6 @@ export default function ProductStudio() {
     }, [selectedProduct, selectedColorName, selectedPrintAreaPlacement]);
 
     useEffect(() => {
-        setLoading(true);
-        client.get('/storefront/products')
-            .then(res => {
-                const fetchedProducts = res.data || [];
-                setProducts(fetchedProducts);
-                const params = new URLSearchParams(reactLocation.search);
-                const productId = params.get('productId');
-                const color = params.get('color');
-                const size = params.get('size');
-                if (productId && fetchedProducts.length > 0) {
-                    setSelectedProductId(productId);
-                    const initialProduct = fetchedProducts.find(p => p._id === productId);
-                    if (initialProduct && color) {
-                        setSelectedColorName(color);
-                        const initialColorVariant = initialProduct.variants.find(v => v.colorName === color);
-                        if (initialColorVariant && size) { setSelectedSize(size); } else if (initialColorVariant?.sizes?.length > 0) { setSelectedSize(initialColorVariant.sizes[0].size); }
-                        if (initialColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement); }
-                    } else if (initialProduct?.variants?.length > 0) {
-                        const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
-                        setSelectedColorName(defaultColor.colorName);
-                        if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
-                        if (defaultColor?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
-                    }
-                }
-            })
-            .catch(err => {
-                console.error("Failed to fetch products for Product Studio:", err);
-                toast({ title: "Error", description: "Could not load products for customization. Please try again later.", status: "error" });
-            })
-            .finally(() => setLoading(false));
-    }, [reactLocation.search, toast]);
-
-    useEffect(() => {
         if (user) {
             setLoadingDesigns(true);
             client.get('/mydesigns').then(res => setDesigns(res.data || [])).finally(() => setLoadingDesigns(false));
@@ -574,6 +370,7 @@ export default function ProductStudio() {
         }
     }, [user, reactLocation, navigate]);
 
+    // The single, correct declaration of isCustomizeEnabled
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
 
     return (
