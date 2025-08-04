@@ -9,9 +9,11 @@ const getAllActiveProducts = asyncHandler(async (req, res) => {
         isActive: true,
         'variants.0': { $exists: true } // Ensure product has at least one variant
     })
-    // Crucially, select 'variants' so frontend ProductStudio receives them
-    .select('name slug description basePrice tags isActive variants')
-    .lean();
+    // *** UPDATED: Explicitly select all necessary nested variant fields ***
+    // This ensures imageSet and printAreas are included in the response sent to frontend
+    .select('name slug description basePrice tags isActive variants.colorName variants.colorHex variants.podProductId variants.isDefaultDisplay variants.imageSet.url variants.imageSet.altText variants.imageSet.isPrimary variants.sizes.size variants.sizes.sku variants.sizes.inStock variants.sizes.priceModifier variants.sizes.podVariantId variants.printAreas.placement variants.printAreas.widthInches variants.printAreas.heightInches variants.printAreas.mockupImage')
+    .lean(); // .lean() makes the query faster by returning plain JavaScript objects
+
     res.json(products);
 });
 // --- END RE-INTRODUCED ---
