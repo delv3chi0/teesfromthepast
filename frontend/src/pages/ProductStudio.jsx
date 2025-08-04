@@ -151,190 +151,141 @@ export default function ProductStudio() {
         }
     }, [toast]);
 
-    // --- Main Effect Hooks ---
+    const handleProceedToCheckout = useCallback(async () => {
+      const { widthInches, heightInches } = currentPrintAreaDimensions;
+      const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
+      if (!finalVariant || (!hasSelectedDesign && !hasCanvasObjects) || !isCustomizeEnabled) {
+          toast({
+              title: "Incomplete Customization",
+              description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
+              status: "warning",
+              isClosable: true
+          });
+          return;
+      }
+      
+      const DYNAMIC_PRINT_READY_WIDTH = widthInches * DPI;
+      const DYNAMIC_PRINT_READY_HEIGHT = heightInches * DPI;
 
-    // Effect to handle canvas initialization and events
-    useEffect(() => {
-        if (canvasEl.current && !fabricCanvas.current && window.fabric) {
-            const canvasWidth = MOCKUP_PREVIEW_WIDTH;
-            const canvasHeight = MOCKUP_PREVIEW_HEIGHT;
+      let previewCanvasTemp = new window.fabric.Canvas(null, { width: MOCKUP_PREVIEW_WIDTH, height: MOCKUP_PREVIEW_HEIGHT });
+      if (fabricCanvas.current.backgroundImage) {
+           previewCanvasTemp.setBackgroundImage(fabricCanvas.current.backgroundImage, previewCanvasTemp.renderAll.bind(previewCanvasTemp));
+      }
+      fabricCanvas.current.getObjects().filter(obj => obj.id !== 'printAreaGuideline').forEach(obj => {
+          previewCanvasTemp.add(window.fabric.util.object.clone(obj));
+      });
+      previewCanvasTemp.renderAll();
+      const finalPreviewImage = previewCanvasTemp.toDataURL({ format: 'png', quality: 1.0, multiplier: 1 });
+      previewCanvasTemp.dispose(); 
 
-            fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
-                width: canvasWidth,
-                height: canvasHeight,
-                backgroundColor: 'rgba(0,0,0,0)',
-                selection: true,
-            });
+      const printReadyCanvas = new window.fabric.Canvas(null, { width: DYNAMIC_PRINT_READY_WIDTH, height: DYNAMIC_PRINT_READY_HEIGHT });
+      const printAreaPxWidth = currentPrintAreaDimensions.widthInches * DPI;
+      const printAreaPxHeight = currentPrintAreaDimensions.heightInches * DPI;
+      const previewToPrintScalingFactor = DYNAMIC_PRINT_READY_WIDTH / (printAreaPxWidth * Math.min(MOCKUP_PREVIEW_WIDTH / printAreaPxWidth, MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight));
+      const printAreaLeftOnPreview = (MOCKUP_PREVIEW_WIDTH - (printAreaPxWidth * Math.min(MOCKUP_PREVIEW_WIDTH / printAreaPxWidth, MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight))) / 2;
+      const printAreaTopOnPreview = (MOCKUP_PREVIEW_HEIGHT - (printAreaPxHeight * Math.min(MOCKUP_PREVIEW_WIDTH / printAreaPxWidth, MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight))) / 2;
+      
+      const customizableObjects = fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
 
-            const FCanvas = fabricCanvas.current;
-
-            const handleSelectionChange = () => {
-                const userAddedObjects = FCanvas.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
-                setHasCanvasObjects(userAddedObjects.length > 0);
-            };
-
-            FCanvas.on('selection:created', handleSelectionChange);
-            FCanvas.on('selection:updated', handleSelectionChange);
-            FCanvas.on('selection:cleared', handleSelectionChange);
-            FCanvas.on('object:added', handleSelectionChange);
-            FCanvas.on('object:removed', handleSelectionChange);
-
-            const handleKeyDown = (e) => {
-                if (e.key === 'Delete' || e.key === 'Backspace') {
-                    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) { return; }
-                    deleteSelectedObject();
-                }
-            };
-            document.addEventListener('keydown', handleKeyDown);
-
-            return () => {
-                if (fabricCanvas.current) {
-                    FCanvas.off('selection:created', handleSelectionChange);
-                    FCanvas.off('selection:updated', handleSelectionChange);
-                    FCanvas.off('selection:cleared', handleSelectionChange);
-                    FCanvas.off('object:added', handleSelectionChange);
-                    FCanvas.off('object:removed', handleSelectionChange);
-                    FCanvas.dispose();
-                    fabricCanvas.current = null;
-                    document.removeEventListener('keydown', handleKeyDown);
-                }
-            };
-        }
-    }, [deleteSelectedObject]);
-
-    // Effect to dynamically load mockup image, dotted line, and design
-    useEffect(() => {
-        const FCanvas = fabricCanvas.current;
-        if (!FCanvas) return;
-
-        const updateCanvas = (fabricInstance) => {
-            const specificMockup = selectedColorVariant?.printAreas?.find(pa => pa.placement === selectedPrintAreaPlacement)?.mockupImage;
-            const fallbackMockup = finalVariant?.imageSet?.find(img => img.isPrimary)?.url || finalVariant?.imageSet?.[0]?.url;
-            let mockupSrc = specificMockup || fallbackMockup;
-
-            FCanvas.remove(FCanvas.getObjects().find(obj => obj.id === 'printAreaGuideline'));
-
-            if (mockupSrc) {
-              fabricInstance.Image.fromURL(mockupSrc, (img) => {
-                if (!img) return;
-
-                const scaleX = FCanvas.width / img.width;
-                const scaleY = FCanvas.height / img.height;
-                const scale = Math.max(scaleX, scaleY);
-
-                FCanvas.setBackgroundImage(img, FCanvas.renderAll.bind(FCanvas), {
-                  scaleX: scale,
-                  scaleY: scale,
-                  top: FCanvas.height / 2,
-                  left: FCanvas.width / 2,
-                  originX: 'center',
-                  originY: 'center',
-                  crossOrigin: 'anonymous',
-                  selectable: false,
-                  evented: false,
-                });
-
-                if (currentPrintAreaDimensions.widthInches && currentPrintAreaDimensions.heightInches) {
-                  const printAreaPxWidth = currentPrintAreaDimensions.widthInches * DPI;
-                  const printAreaPxHeight = currentPrintAreaDimensions.heightInches * DPI;
-                  const dottedRectScaleFactor = Math.min(FCanvas.width / printAreaPxWidth, FCanvas.height / printAreaPxHeight);
-                  
-                  const printAreaRect = new window.fabric.Rect({
-                    id: 'printAreaGuideline',
-                    left: FCanvas.width / 2,
-                    top: FCanvas.height * 0.40,
-                    width: printAreaPxWidth * dottedRectScaleFactor,
-                    height: printAreaPxHeight * dottedRectScaleFactor,
-                    stroke: 'white',
-                    strokeWidth: 2,
-                    strokeDashArray: [5, 5],
-                    fill: 'transparent',
-                    originX: 'center',
-                    originY: 'center',
-                    selectable: false,
-                    evented: false,
-                    hoverCursor: 'default'
-                  });
-                  FCanvas.add(printAreaRect);
-                  FCanvas.sendToBack(printAreaRect);
-                }
-                FCanvas.renderAll();
-
-                if (selectedDesign?.imageDataUrl) {
-                    const existingDesignObject = FCanvas.getObjects().find(obj => obj.id === `design-${selectedDesign._id}`);
-                    if (!existingDesignObject) {
-                        fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
-                            if (!designImg) return;
-                            designImg.id = `design-${selectedDesign._id}`;
-                            
-                            const printAreaPxWidth = currentPrintAreaDimensions.widthInches * DPI;
-                            const printAreaPxHeight = currentPrintAreaDimensions.heightInches * DPI;
-                            const scaleFactorToFitPrintArea = Math.min(FCanvas.width / printAreaPxWidth, FCanvas.height / printAreaPxHeight);
-
-                            designImg.scale(scaleFactorToFitPrintArea * 0.9);
-                            designImg.set({
-                                left: (FCanvas.width / 2),
-                                top: (FCanvas.height * 0.40),
-                                originX: 'center',
-                                originY: 'center',
-                                hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
-                                cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-                                lockMovementX: false, lockMovementY: false, lockRotation: false,
-                                lockScalingX: false, lockScalingY: false, lockSkewingX: false, lockSkewingY: false,
-                            });
-                            FCanvas.add(designImg);
-                            FCanvas.renderAll();
-                        }, { crossOrigin: 'anonymous' });
-                    }
-                }
-              }, { crossOrigin: 'anonymous' });
-            } else {
-              FCanvas.setBackgroundImage(null, FCanvas.renderAll.bind(FCanvas));
-            }
-        };
+      if (customizableObjects.length === 0) {
+          toast({ title: "Error", description: "No design elements found on canvas for print.", status: "error" });
+          return;
+      }
+      
+      customizableObjects.forEach(obj => {
+        const clonedObject = window.fabric.util.object.clone(obj);
+        const originalRelX = obj.left - printAreaLeftOnPreview;
+        const originalRelY = obj.top - printAreaTopOnPreview;
         
-        const pollForFabric = () => { window.fabric ? updateCanvas(window.fabric) : setTimeout(pollForFabric, 100); };
-        pollForFabric();
+        clonedObject.set({
+          hasControls: false, hasBorders: false,
+          angle: obj.angle, 
+          scaleX: obj.scaleX * previewToPrintScalingFactor,
+          scaleY: obj.scaleY * previewToPrintScalingFactor,
+          left: originalRelX * previewToPrintScalingFactor,
+          top: originalRelY * previewToPrintScalingFactor,
+          originX: 'center',
+          originY: 'center',
+          fontSize: obj.type === 'i-text' ? obj.fontSize * previewToPrintScalingFactor : undefined,
+        });
+        printReadyCanvas.add(clonedObject);
+      });
+          
+      if (printReadyCanvas.getObjects().length === 0) {
+          toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
+          return;
+      }
 
-    }, [finalVariant, selectedPrintAreaPlacement, currentPrintAreaDimensions, selectedDesign, currentMockupType, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, toast]);
+      printReadyCanvas.renderAll();
+      const printReadyDesignDataUrl = printReadyCanvas.toDataURL({ format: 'png', quality: 1.0, multiplier: 1 });
+      printReadyCanvas.dispose();
 
+      let cloudinaryPublicUrl = '';
+      try {
+          toast({
+              title: "Uploading design...",
+              description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
+              status: "info", duration: null, isClosable: false, position: "top",
+          });
+          const uploadResponse = await client.post('/upload-print-file', {
+              imageData: printReadyDesignDataUrl,
+              designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
+          });
+          cloudinaryPublicUrl = uploadResponse.data.publicUrl;
+          toast.closeAll();
+          toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
+      } catch (error) {
+          console.error("Error uploading print file to Cloudinary:", error);
+          toast.closeAll();
+          toast({
+              title: "Upload Failed",
+              description: "Could not upload your design for printing. Please try again.",
+              status: "error", isClosable: true,
+          });
+          return;
+      }
 
-    // Effect for initial data fetching and URL parameter handling
-    useEffect(() => {
-      setLoading(true);
-      client.get('/storefront/products')
-        .then(res => {
-          const fetchedProducts = res.data || [];
-          setProducts(fetchedProducts);
-          const params = new URLSearchParams(reactLocation.search);
-          const productId = params.get('productId');
-          const color = params.get('color');
-          const size = params.get('size');
-          if (productId && fetchedProducts.length > 0) {
-            setSelectedProductId(productId);
-            const initialProduct = fetchedProducts.find(p => p._id === productId);
-            if (initialProduct && color) {
-              setSelectedColorName(color);
-              const initialColorVariant = initialProduct.variants.find(v => v.colorName === color);
-              if (initialColorVariant && size) { setSelectedSize(size); } else if (initialColorVariant?.sizes?.length > 0) { setSelectedSize(initialColorVariant.sizes[0].size); }
-              if (initialColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement); }
-            } else if (initialProduct?.variants?.length > 0) {
-              const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
-              setSelectedProductId(initialProduct._id); // Set product ID for default
-              setSelectedColorName(defaultColor.colorName);
-              if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
-              if (defaultColor?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
-            }
-          }
-        })
-        .catch(err => {
-          console.error("Failed to fetch products for Product Studio:", err);
-          toast({ title: "Error", description: "Could not load products for customization. Please try again later.", status: "error" });
-        })
-        .finally(() => setLoading(false));
-    }, [reactLocation.search, toast]);
+      const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
+      const checkoutItem = {
+          designId: selectedDesign?._id || 'custom-design-' + Date.now(),
+          productId: selectedProductId, productName: selectedProduct.name, variantSku: finalVariant.sku,
+          size: finalVariant.size, color: finalVariant.colorName,
+          prompt: selectedDesign?.prompt || "Customized design",
+          imageDataUrl: finalPreviewImage,
+          printReadyDataUrl: cloudinaryPublicUrl,
+          productImage: primaryImage?.url,
+          unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
+      };
+      localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
+      navigate('/checkout');
+    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
+        DPI, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, currentPrintAreaDimensions
+    ]);
 
-    // Effect to sync currentPrintAreaDimensions state
+    const handleProductChange = useCallback((e) => {
+        const newProductId = e.target.value;
+        setSelectedProductId(newProductId);
+        setSelectedColorName('');
+        setSelectedSize('');
+        clearCanvas();
+        const newSelectedProduct = products.find(p => p._id === newProductId);
+        if (newSelectedProduct?.variants?.length > 0) {
+            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
+            setSelectedColorName(defaultColor.colorName);
+            if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
+            if (defaultColor.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
+        }
+    }, [products, clearCanvas]); 
+
+    const handleColorChange = useCallback((e) => {
+        const newColor = e.target.value;
+        setSelectedColorName(newColor);
+        setSelectedSize('');
+        const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
+        if (newColorVariant?.sizes?.length > 0) { setSelectedSize(newColorVariant.sizes[0].size); }
+        if (!selectedPrintAreaPlacement && newColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(newColorVariant.printAreas[0].placement); }
+    }, [selectedProduct, selectedPrintAreaPlacement]);
+
     useEffect(() => {
       if (selectedProduct && selectedColorName) {
         const variant = selectedProduct.variants.find(v => v.colorName === selectedColorName);
@@ -347,7 +298,6 @@ export default function ProductStudio() {
               mockupImage: selectedArea.mockupImage,
             });
           } else {
-            // Fallback to first print area if selected one is not found or no placement selected
             const defaultArea = variant.printAreas[0] || { widthInches: 12, heightInches: 14, mockupImage: '' };
             setCurrentPrintAreaDimensions({
               widthInches: defaultArea.widthInches,
@@ -363,6 +313,39 @@ export default function ProductStudio() {
     }, [selectedProduct, selectedColorName, selectedPrintAreaPlacement]);
 
     useEffect(() => {
+        setLoading(true);
+        client.get('/storefront/products')
+            .then(res => {
+                const fetchedProducts = res.data || [];
+                setProducts(fetchedProducts);
+                const params = new URLSearchParams(reactLocation.search);
+                const productId = params.get('productId');
+                const color = params.get('color');
+                const size = params.get('size');
+                if (productId && fetchedProducts.length > 0) {
+                    setSelectedProductId(productId);
+                    const initialProduct = fetchedProducts.find(p => p._id === productId);
+                    if (initialProduct && color) {
+                        setSelectedColorName(color);
+                        const initialColorVariant = initialProduct.variants.find(v => v.colorName === color);
+                        if (initialColorVariant && size) { setSelectedSize(size); } else if (initialColorVariant?.sizes?.length > 0) { setSelectedSize(initialColorVariant.sizes[0].size); }
+                        if (initialColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement); }
+                    } else if (initialProduct?.variants?.length > 0) {
+                        const defaultColor = initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
+                        setSelectedColorName(defaultColor.colorName);
+                        if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
+                        if (defaultColor?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Failed to fetch products for Product Studio:", err);
+                toast({ title: "Error", description: "Could not load products for customization. Please try again later.", status: "error" });
+            })
+            .finally(() => setLoading(false));
+    }, [reactLocation.search, toast]);
+
+    useEffect(() => {
         if (user) {
             setLoadingDesigns(true);
             client.get('/mydesigns').then(res => setDesigns(res.data || [])).finally(() => setLoadingDesigns(false));
@@ -371,6 +354,8 @@ export default function ProductStudio() {
             setLoadingDesigns(false);
         }
     }, [user, reactLocation, navigate]);
+
+    const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
 
     return (
         <Flex direction={{ base: 'column', md: 'row' }} minH="100vh" bg="brand.primary">
