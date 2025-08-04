@@ -372,8 +372,6 @@ export default function ProductStudio() {
         }
     }, [user, reactLocation, navigate]);
 
-    const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
-
     return (
         <Flex direction={{ base: 'column', md: 'row' }} minH="100vh" bg="brand.primary">
             {/* Left Column: Design Canvas Area */}
