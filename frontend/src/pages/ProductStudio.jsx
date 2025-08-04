@@ -322,6 +322,7 @@ export default function ProductStudio() {
         }
     }, [user, reactLocation, navigate]);
 
+    // The single, correct declaration of isCustomizeEnabled
     const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
 
     return (
