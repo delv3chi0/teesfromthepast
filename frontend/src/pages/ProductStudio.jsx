@@ -265,7 +265,7 @@ export default function ProductStudio() {
                     if (!existingDesignObject) {
                         fabricInstance.Image.fromURL(selectedDesign.imageDataUrl, (designImg) => {
                             if (!designImg) return;
-                            designImg.id = `design-${selectedDesign._id}`;
+                            designImg.id = `design-${selectedDesign._id`;
                             
                             const printAreaPxWidth = currentPrintAreaDimensions.widthInches * DPI;
                             const printAreaPxHeight = currentPrintAreaDimensions.heightInches * DPI;
