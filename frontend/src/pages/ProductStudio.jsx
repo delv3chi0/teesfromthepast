@@ -39,6 +39,38 @@ const ThemedControlInput = (props) => (
     />
 );
 
+// *** NEW: Frontend map for default mockup images based on color and placement ***
+// You MUST expand this map to include all your colors and placements
+// The paths should match where your images are stored in public/images/mockups/
+const DEFAULT_MOCKUP_IMAGE_MAP = {
+    "Black": {
+        "Full-front": "/images/mockups/tee_black.png",
+        "Full-back": "/images/mockups/tee_black_back.png",
+        "Left-sleeve": "/images/mockups/tee_black_sleeve.png",
+        "Center-chest": "/images/mockups/tee_black.png", // Often same as full-front
+        "Oversized front": "/images/mockups/tee_black.png", // Often same as full-front
+        "Full-back": "/images/mockups/tee_black_back.png",
+        "Sleeve": "/images/mockups/tee_black_sleeve.png",
+    },
+    "White": {
+        "Full-front": "/images/mockups/tee_white.png",
+        "Full-back": "/images/mockups/tee_white_back.png",
+        "Left-sleeve": "/images/mockups/tee_white_sleeve.png",
+        "Center-chest": "/images/mockups/tee_white.png",
+        "Oversized front": "/images/mockups/tee_white.png",
+        "Full-back": "/images/mockups/tee_white_back.png",
+        "Sleeve": "/images/mockups/tee_white_sleeve.png",
+    },
+    // *** ADD MORE COLORS AND THEIR MOCKUP PATHS HERE ***
+    // Example for another color:
+    // "Navy Blue": {
+    //     "Full-front": "/images/mockups/tee_navy.png",
+    //     "Full-back": "/images/mockups/tee_navy_back.png",
+    //     "Left-sleeve": "/images/mockups/tee_navy_sleeve.png",
+    // },
+};
+
+
 export default function ProductStudio() {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -300,6 +332,7 @@ export default function ProductStudio() {
               mockupImage: selectedArea.mockupImage,
             });
           } else {
+            // Fallback to first print area if selected one is not found or no placement selected
             const defaultArea = variant.printAreas[0] || { widthInches: 12, heightInches: 14, mockupImage: '' };
             setCurrentPrintAreaDimensions({
               widthInches: defaultArea.widthInches,
