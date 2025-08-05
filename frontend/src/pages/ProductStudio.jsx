@@ -9,7 +9,7 @@ import {
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaArrowsAltH, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { FaShoppingCart, FaTshirt, FaPalette, FaFont, FaTrash, FaEyeDropper, FaArrowsAltH, FaArrowUp, FaArrowDown, FaCube } from 'react-icons/fa';
 
 // This is a complete overhaul of the ProductStudio component.
 // It features a new layout with a prominent canvas area and a dedicated sidebar for controls.
@@ -46,27 +46,23 @@ const DEFAULT_MOCKUP_IMAGE_MAP = {
     "Black": {
         "Full-front": "/images/mockups/tee_black.png",
         "Full-back": "/images/mockups/tee_black_back.png",
-        "Left-sleeve": "/images/mockups/tee_black_sleeve.png",
+        "Sleeve": "/images/mockups/tee_black_sleeve.png",
         "Center-chest": "/images/mockups/tee_black.png", // Often same as full-front
         "Oversized front": "/images/mockups/tee_black.png", // Often same as full-front
-        "Full-back": "/images/mockups/tee_black_back.png",
-        "Sleeve": "/images/mockups/tee_black_sleeve.png",
     },
     "White": {
         "Full-front": "/images/mockups/tee_white.png",
         "Full-back": "/images/mockups/tee_white_back.png",
-        "Left-sleeve": "/images/mockups/tee_white_sleeve.png",
+        "Sleeve": "/images/mockups/tee_white_sleeve.png",
         "Center-chest": "/images/mockups/tee_white.png",
         "Oversized front": "/images/mockups/tee_white.png",
-        "Full-back": "/images/mockups/tee_white_back.png",
-        "Sleeve": "/images/mockups/tee_white_sleeve.png",
     },
     // *** ADD MORE COLORS AND THEIR MOCKUP PATHS HERE ***
     // Example for another color:
     // "Navy Blue": {
-    //     "Full-front": "/images/mockups/tee_navy.png",
-    //     "Full-back": "/images/mockups/tee_navy_back.png",
-    //     "Left-sleeve": "/images/mockups/tee_navy_sleeve.png",
+    //      "Full-front": "/images/mockups/tee_navy.png",
+    //      "Full-back": "/images/mockups/tee_navy_back.png",
+    //      "Sleeve": "/images/mockups/tee_navy_sleeve.png",
     // },
 };
 
@@ -94,7 +90,7 @@ export default function ProductStudio() {
     const [selectedColorName, setSelectedColorName] = useState('');
     const [selectedSize, setSelectedSize] = useState('');
     const [selectedDesign, setSelectedDesign] = useState(null);
-    const [currentMockupType, setCurrentMockupType] = useState('tee'); // 'tee' or 'man'
+    const [currentMockupType, setCurrentMockupType] = useState('front'); // UPDATED: Default view to 'front'
     const [selectedPrintAreaPlacement, setSelectedPrintAreaPlacement] = useState('');
     const [currentPrintAreaDimensions, setCurrentPrintAreaDimensions] = useState({ widthInches: 0, heightInches: 0, mockupImage: '' });
     const [textInputValue, setTextInputValue] = useState('');
@@ -143,6 +139,35 @@ export default function ProductStudio() {
         setTextInputValue('');
     }, [textInputValue, textColor, fontSize, fontFamily, toast]);
 
+    const addDesignToCanvas = useCallback((design) => {
+        if (!fabricCanvas.current || !design?.imageDataUrl) {
+            toast({ title: "No design to add.", status: "warning", isClosable: true });
+            return;
+        }
+        const activeObjects = fabricCanvas.current.getObjects().filter(obj => obj.id && obj.id.startsWith('design-'));
+        if (activeObjects.length > 0) {
+            toast({ title: "Design already on canvas", description: "You can only place one design at a time. To add a new one, please delete the current one first.", status: "info", isClosable: true });
+            return;
+        }
+        window.fabric.Image.fromURL(design.imageDataUrl, img => {
+            img.set({
+                id: `design-${design._id}`,
+                left: fabricCanvas.current.width / 2,
+                top: fabricCanvas.current.height / 2,
+                originX: 'center',
+                originY: 'center',
+                hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
+                cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
+                scaleX: 0.5,
+                scaleY: 0.5
+            });
+            fabricCanvas.current.add(img);
+            fabricCanvas.current.setActiveObject(img);
+            fabricCanvas.current.renderAll();
+            setSelectedDesign(design);
+        }, { crossOrigin: 'anonymous' });
+    }, [toast]);
+
     const clearCanvas = useCallback(() => {
         if (fabricCanvas.current) {
             const userAddedObjects = fabricCanvas.current.getObjects().filter(obj =>
@@ -163,7 +188,7 @@ export default function ProductStudio() {
                 fabricCanvas.current.discardActiveObject();
                 fabricCanvas.current.renderAll();
                 if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
-                  setSelectedDesign(null);
+                    setSelectedDesign(null);
                 }
             } else {
                 toast({ title: "No deletable object selected", description: "Select custom text or a design on the canvas to delete it. The shirt and print area are not deletable.", status: "info", isClosable: true });
@@ -201,7 +226,7 @@ export default function ProductStudio() {
 
       let previewCanvasTemp = new window.fabric.Canvas(null, { width: MOCKUP_PREVIEW_WIDTH, height: MOCKUP_PREVIEW_HEIGHT });
       if (fabricCanvas.current.backgroundImage) {
-           previewCanvasTemp.setBackgroundImage(fabricCanvas.current.backgroundImage, previewCanvasTemp.renderAll.bind(previewCanvasTemp));
+            previewCanvasTemp.setBackgroundImage(fabricCanvas.current.backgroundImage, previewCanvasTemp.renderAll.bind(previewCanvasTemp));
       }
       fabricCanvas.current.getObjects().filter(obj => obj.id !== 'printAreaGuideline').forEach(obj => {
           previewCanvasTemp.add(window.fabric.util.object.clone(obj));
@@ -277,21 +302,24 @@ export default function ProductStudio() {
           return;
       }
 
+      // We'll need to send the correct mockup URL based on the current view to the checkout page
       const primaryImage = finalVariant.imageSet?.find(img => img.isPrimary) || finalVariant.imageSet?.[0];
       const checkoutItem = {
           designId: selectedDesign?._id || 'custom-design-' + Date.now(),
           productId: selectedProductId, productName: selectedProduct.name, variantSku: finalVariant.sku,
           size: finalVariant.size, color: finalVariant.colorName,
           prompt: selectedDesign?.prompt || "Customized design",
-          imageDataUrl: finalPreviewImage,
+          imageDataUrl: finalPreviewImage, // This is the image with the design overlaid on the mockup
           printReadyDataUrl: cloudinaryPublicUrl,
-          productImage: primaryImage?.url,
-          unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0))
+          productImage: primaryImage?.url, // This should be the default product image, not a specific mockup view
+          unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0)),
+          // We can also store the current view to show in the cart/checkout
+          view: currentMockupType
       };
       localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
       navigate('/checkout');
     }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
-        DPI, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, currentPrintAreaDimensions
+        DPI, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT, currentPrintAreaDimensions, currentMockupType
     ]);
 
     const handleProductChange = useCallback((e) => {
@@ -299,7 +327,6 @@ export default function ProductStudio() {
         setSelectedProductId(newProductId);
         setSelectedColorName('');
         setSelectedSize('');
-        // clearCanvas(); // Removed to avoid clearing canvas before new product loads
         const newSelectedProduct = products.find(p => p._id === newProductId);
         if (newSelectedProduct?.variants?.length > 0) {
             const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
@@ -307,45 +334,134 @@ export default function ProductStudio() {
             if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
             if (defaultColor.printAreas?.length > 0) { setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement); }
         }
-    }, [products]); // Removed clearCanvas from dependency array
+    }, [products]);
 
     const handleColorChange = useCallback((e) => {
         const newColor = e.target.value;
         setSelectedColorName(newColor);
         setSelectedSize('');
-        // clearCanvas(); // Removed to avoid clearing canvas before new color loads
         const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
         if (newColorVariant?.sizes?.length > 0) { setSelectedSize(newColorVariant.sizes[0].size); }
         if (newColorVariant?.printAreas?.length > 0) { setSelectedPrintAreaPlacement(newColorVariant.printAreas[0].placement); }
-    }, [selectedProduct]); // Removed clearCanvas from dependency array
+    }, [selectedProduct]);
 
-
+    // *** UPDATED: useEffect to handle canvas initialization and updates ***
     useEffect(() => {
-      if (selectedProduct && selectedColorName) {
-        const variant = selectedProduct.variants.find(v => v.colorName === selectedColorName);
-        if (variant && variant.printAreas) {
-          const selectedArea = variant.printAreas.find(pa => pa.placement === selectedPrintAreaPlacement);
-          if (selectedArea) {
-            setCurrentPrintAreaDimensions({
-              widthInches: selectedArea.widthInches,
-              heightInches: selectedArea.heightInches,
-              mockupImage: selectedArea.mockupImage,
-            });
-          } else {
-            // Fallback to first print area if selected one is not found or no placement selected
-            const defaultArea = variant.printAreas[0] || { widthInches: 12, heightInches: 14, mockupImage: '' };
-            setCurrentPrintAreaDimensions({
-              widthInches: defaultArea.widthInches,
-              heightInches: defaultArea.heightInches,
-              mockupImage: defaultArea.mockupImage,
-            });
-            if (variant.printAreas[0]) {
-              setSelectedPrintAreaPlacement(variant.printAreas[0].placement);
-            }
-          }
+        if (!window.fabric) {
+            console.error("Fabric.js is not loaded.");
+            return;
         }
-      }
-    }, [selectedProduct, selectedColorName, selectedPrintAreaPlacement]);
+
+        // Initialize canvas
+        if (!fabricCanvas.current) {
+            fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
+                width: MOCKUP_PREVIEW_WIDTH,
+                height: MOCKUP_PREVIEW_HEIGHT,
+                preserveObjectStacking: true,
+            });
+            fabricCanvas.current.on('object:added', () => setHasCanvasObjects(true));
+            fabricCanvas.current.on('object:removed', () => setHasCanvasObjects(fabricCanvas.current.getObjects().length > 0));
+        }
+
+        // --- Core logic to update the canvas ---
+        const updateCanvas = async () => {
+            if (!selectedProduct || !selectedColorVariant || !selectedPrintAreaPlacement) {
+                fabricCanvas.current.clear();
+                return;
+            }
+            
+            const selectedPrintArea = selectedColorVariant.printAreas.find(pa => pa.placement === selectedPrintAreaPlacement);
+            if (!selectedPrintArea) {
+                // If a placement is selected but no area is found, clear canvas and stop.
+                fabricCanvas.current.clear();
+                return;
+            }
+
+            // Get the appropriate mockup URL
+            // First, try to get the URL from the new `imageSet` fields
+            const imageSource = selectedColorVariant.imageSet?.[0];
+            let mockupImageURL = '';
+
+            switch(currentMockupType) {
+              case 'front':
+                mockupImageURL = imageSource?.frontMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Full-front'];
+                break;
+              case 'back':
+                mockupImageURL = imageSource?.backMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Full-back'];
+                break;
+              case 'sleeve':
+                mockupImageURL = imageSource?.sleeveMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Sleeve'];
+                break;
+              default:
+                mockupImageURL = imageSource?.frontMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Full-front'];
+            }
+            
+            if (!mockupImageURL) {
+              console.error(`No mockup URL found for ${selectedColorName} and view ${currentMockupType}`);
+              // Fallback or show error state if no image is available
+              return;
+            }
+            
+            setCurrentPrintAreaDimensions({
+              widthInches: selectedPrintArea.widthInches,
+              heightInches: selectedPrintArea.heightInches,
+              mockupImage: mockupImageURL,
+            });
+
+            // Clear previous canvas content except user-added designs/text
+            const userAddedObjects = fabricCanvas.current.getObjects().filter(obj =>
+              obj.id !== 'printAreaGuideline' && obj.id !== 'teeMockupImage'
+            );
+            fabricCanvas.current.clear();
+            userAddedObjects.forEach(obj => fabricCanvas.current.add(obj));
+            
+            // Load and set the mockup image as the canvas background
+            window.fabric.Image.fromURL(mockupImageURL, (img) => {
+                fabricCanvas.current.setBackgroundImage(img, fabricCanvas.current.renderAll.bind(fabricCanvas.current), {
+                    scaleX: fabricCanvas.current.width / img.width,
+                    scaleY: fabricCanvas.current.height / img.height,
+                });
+                
+                // Add the print area guideline to the canvas
+                const printAreaPxWidth = selectedPrintArea.widthInches * DPI;
+                const printAreaPxHeight = selectedPrintArea.heightInches * DPI;
+
+                // Scale print area to fit on the mockup canvas
+                const canvasScaleX = MOCKUP_PREVIEW_WIDTH / img.width;
+                const canvasScaleY = MOCKUP_PREVIEW_HEIGHT / img.height;
+                const canvasScale = Math.min(canvasScaleX, canvasScaleY);
+
+                const scaledPrintAreaWidth = printAreaPxWidth * (MOCKUP_PREVIEW_WIDTH / printAreaPxWidth);
+                const scaledPrintAreaHeight = printAreaPxHeight * (MOCKUP_PREVIEW_HEIGHT / printAreaPxHeight);
+                
+                const printAreaGuideline = new window.fabric.Rect({
+                    id: 'printAreaGuideline',
+                    left: (fabricCanvas.current.width / 2),
+                    top: (fabricCanvas.current.height / 2),
+                    originX: 'center',
+                    originY: 'center',
+                    width: scaledPrintAreaWidth, // Use scaled dimensions
+                    height: scaledPrintAreaHeight,
+                    fill: '',
+                    stroke: 'rgba(255, 255, 255, 0.7)',
+                    strokeDashArray: [5, 5],
+                    strokeWidth: 2,
+                    selectable: false,
+                    evented: false,
+                    lockMovementX: true,
+                    lockMovementY: true,
+                    lockRotation: true,
+                    lockScalingX: true,
+                    lockScalingY: true,
+                });
+                fabricCanvas.current.add(printAreaGuideline);
+            });
+        };
+
+        updateCanvas();
+
+    }, [selectedProduct, selectedColorVariant, selectedPrintAreaPlacement, currentMockupType, MOCKUP_PREVIEW_WIDTH, MOCKUP_PREVIEW_HEIGHT]);
+
 
     useEffect(() => {
         setLoading(true);
@@ -419,7 +535,14 @@ export default function ProductStudio() {
                             <Text color="whiteAlpha.900">Please select a Product, Color, and Size to begin designing.</Text>
                         </Alert>
                     )}
-
+                    {/* NEW: Mockup View Selector */}
+                    <Flex justifyContent="center" mb={4}>
+                      <HStack spacing={2} p={2} bg="brand.secondary" borderRadius="full">
+                        <Tooltip label="Front View" placement="top"><IconButton icon={<Icon as={FaTshirt} />} onClick={() => setCurrentMockupType('front')} colorScheme={currentMockupType === 'front' ? 'brandAccentYellow' : 'gray'} aria-label="Front View"/></Tooltip>
+                        <Tooltip label="Back View" placement="top"><IconButton icon={<Icon as={FaTshirt} transform="scaleX(-1)" />} onClick={() => setCurrentMockupType('back')} colorScheme={currentMockupType === 'back' ? 'brandAccentYellow' : 'gray'} aria-label="Back View"/></Tooltip>
+                        <Tooltip label="Sleeve View" placement="top"><IconButton icon={<Icon as={FaCube} />} onClick={() => setCurrentMockupType('sleeve')} colorScheme={currentMockupType === 'sleeve' ? 'brandAccentYellow' : 'gray'} aria-label="Sleeve View"/></Tooltip>
+                      </HStack>
+                    </Flex>
                     <Box
                         flexGrow="1"
                         w="100%"
@@ -435,6 +558,10 @@ export default function ProductStudio() {
                     >
                         <canvas ref={canvasEl} style={{ width: '100%', height: '100%' }} />
                     </Box>
+                    <HStack justifyContent="center" spacing={4} mt={4}>
+                      <Tooltip label="Delete selected item" placement="bottom"><Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm">Delete</Button></Tooltip>
+                      <Tooltip label="Center selected item horizontally" placement="bottom"><Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="blue" variant="outline" size="sm">Center</Button></Tooltip>
+                    </HStack>
                 </VStack>
             </Box>
 
@@ -486,7 +613,7 @@ export default function ProductStudio() {
                     </Box>
 
                     {/* Section 2: Choose Your Saved Design */}
-                    <Box bg="brand.secondary" p={5} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200">
+                    <Box bg="brand.secondary" p={5} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
                         <Heading as="h3" size="md" color="brand.textLight" mb={4}>2. Add Your Design</Heading>
                         {loadingDesigns ? <Spinner size="md" color="brand.accentYellow" /> : !designs.length ? (
                             <Text color="brand.textLight" fontSize="sm">You have no saved designs. <ChakraLink as={RouterLink} to="/generate" color="brand.accentYellow" fontWeight="bold">Generate one now!</ChakraLink></Text>
@@ -499,7 +626,7 @@ export default function ProductStudio() {
                                             bg="brand.secondary"
                                             borderWidth="2px"
                                             borderRadius="md"
-                                            onClick={() => setSelectedDesign(design)}
+                                            onClick={() => addDesignToCanvas(design)}
                                             cursor="pointer"
                                             borderColor={selectedDesign?._id === design._id ? "brand.accentYellow" : "transparent"}
                                             transition="all 0.2s ease-in-out"
@@ -574,13 +701,13 @@ export default function ProductStudio() {
                             <ThemedSelect
                                 value={fontFamily}
                                 onChange={(e) => {
-                                    const newFontFamily = e.target.value;
-                                    setFontFamily(newFontFamily);
-                                    const currentActiveObject = fabricCanvas.current.getActiveObject();
-                                    if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
-                                        currentActiveObject.set('fontFamily', newFontFamily);
-                                        fabricCanvas.current.renderAll();
-                                    }
+                                  const newFontFamily = e.target.value;
+                                  setFontFamily(newFontFamily);
+                                  const currentActiveObject = fabricCanvas.current.getActiveObject();
+                                  if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
+                                      currentActiveObject.set('fontFamily', newFontFamily);
+                                      fabricCanvas.current.renderAll();
+                                  }
                                 }}
                                 size="md"
                             >
