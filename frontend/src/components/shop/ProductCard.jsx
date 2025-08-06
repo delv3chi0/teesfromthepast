@@ -1,31 +1,38 @@
 // frontend/src/components/shop/ProductCard.jsx
 
 import React from 'react';
-import { Box, Image, Text, Heading, Skeleton, Icon, Flex } from '@chakra-ui/react';
+import { Box, Image, Text, Heading, Skeleton, Icon, Flex, VStack } from '@chakra-ui/react';
 import { Link as RouterLink } from 'react-router-dom';
-import { FaImage } from 'react-icons/fa'; // Ensure this is installed: npm install react-icons
+import { FaImage } from 'react-icons/fa';
 
 /**
  * ProductCard Component
  * Displays a single product with its image, name, and price.
- * Links to the product detail page using the product slug.
+ * It links to the product detail page using the product slug.
  *
- * @param {object} product - The product object with properties like _id, name, unitPrice, productImage, slug.
+ * @param {object} product - The product object, with properties like _id, name, unitPrice, productImage, and slug.
  */
 const ProductCard = ({ product }) => {
-    // Show skeleton loading state if product is not yet available
+    // Show a skeleton loading state if the product data is not yet available.
+    // This provides a better user experience than showing an empty card.
     if (!product) {
         return (
-            <Box><Skeleton height="220px" borderRadius="lg"/><Skeleton height="20px" mt="4" /><Skeleton height="20px" mt="2" /></Box>
+            <VStack spacing={4} p={4} layerStyle="cardBlue" borderRadius="lg" borderWidth="2px" borderColor="rgba(0,0,0,0.1)" boxShadow="sm">
+                <Skeleton height="220px" width="100%" borderRadius="md" />
+                <Skeleton height="24px" width="80%" />
+                <Skeleton height="20px" width="50%" />
+            </VStack>
         );
     }
 
-    // Use unitPrice from the backend, which is now derived from Printful's retail_price
+    // Get the product data, providing fallbacks for robustness.
+    // The backend now sends `unitPrice` and `productImage`.
     const displayPrice = typeof product.unitPrice === 'number' ? product.unitPrice : 0;
-    // Use productImage from the backend, which is now derived from Printful's thumbnail_url
     const imageUrl = product.productImage || '';
+    const productName = product.name || 'Untitled Product';
+    const productDescription = product.description || 'No description available.';
 
-    // Ensure slug is present for linking
+    // Ensure the slug exists for a valid navigation link.
     const productUrl = product.slug ? `/product/${product.slug}` : '#';
     const isClickable = !!product.slug;
 
@@ -37,15 +44,19 @@ const ProductCard = ({ product }) => {
             borderRadius="lg"
             overflow="hidden"
             transition="all 0.2s ease-in-out"
-            _hover={isClickable ? { shadow: 'lg', transform: 'translateY(-4px)', borderColor: 'brand.accentYellow' } : {}}
+            _hover={isClickable ? {
+                shadow: 'xl',
+                transform: 'translateY(-4px)',
+                borderColor: 'brand.accentYellow'
+            } : {}}
             cursor={isClickable ? 'pointer' : 'not-allowed'}
             display="flex"
             flexDirection="column"
-            // Retain your custom layerStyle and subtle border/shadow
             layerStyle="cardBlue"
             borderColor="rgba(0,0,0,0.1)"
             boxShadow="sm"
             pb="0"
+            height="100%"
         >
             <Box
                 h="220px"
@@ -56,25 +67,26 @@ const ProductCard = ({ product }) => {
                 justifyContent="center"
                 borderBottom="1px solid"
                 borderColor="rgba(0,0,0,0.05)"
+                position="relative" // For the fallback icon to be centered
             >
-                {/* Use your existing Image component setup with fallback */}
                 <Image
                     src={imageUrl}
-                    alt={`Image of ${product.name}`}
-                    objectFit="contain" // Keep objectFit="contain" as per your original
+                    alt={`Image of ${productName}`}
+                    objectFit="contain"
                     w="100%"
                     h="100%"
                     // Use FaImage as a fallback icon if imageUrl is empty or fails to load
-                    fallback={<Icon as={FaImage} boxSize="50px" color="gray.500" />}
-                />
+                    fallbackSrc="https://placehold.co/300x220/383838/A9A9A9?text=Loading..." // Placeholder during image load
+                >
+                    <Icon as={FaImage} boxSize="50px" color="gray.500" position="absolute" />
+                </Image>
             </Box>
             <Box p="4" mt="auto">
-                <Heading as="h3" size="md" fontWeight="bold" noOfLines={1} title={product.name}>
-                    {product.name}
+                <Heading as="h3" size="md" fontWeight="bold" noOfLines={1} title={productName}>
+                    {productName}
                 </Heading>
-                {/* Use description from the product object if available */}
                 <Text fontSize="md" mt={1} noOfLines={2} h="40px" lineHeight="short">
-                    {product.description || "No description available."}
+                    {productDescription}
                 </Text>
                 <Text mt={2} fontSize="2xl" color="brand.textBurnt" fontWeight="extrabold">
                     ${displayPrice.toFixed(2)}

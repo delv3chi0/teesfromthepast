@@ -1,12 +1,10 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
+import { AbortController } from 'node-fetch'; // Import AbortController for timeouts
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
-    // Log the raw product to inspect its structure if needed
-    // console.log("Raw Printful Product for transformation:", JSON.stringify(printfulProduct, null, 2));
-
     if (!printfulProduct || typeof printfulProduct !== 'object') {
         console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
@@ -113,15 +111,21 @@ export const getShopData = async (req, res) => {
         return res.status(500).json({ error: 'Server configuration error: Printful API key missing.' });
     }
 
+    // Set a timeout for the API calls
+    const timeout = 10000; // 10 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     try {
         let listResponse;
-        try { // Added try-catch around the first fetch call
+        try {
             listResponse = await fetch('https://api.printful.com/store/products', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                     'Content-Type': 'application/json',
                 },
+                signal: controller.signal // Apply the timeout signal
             });
             console.log(`[Printful API] List response status: ${listResponse.status}`);
         } catch (fetchError) {
@@ -143,25 +147,26 @@ export const getShopData = async (req, res) => {
 
         const detailedProductPromises = printfulProductList.map(async (product) => {
             let detailResponse;
-            try { // Added try-catch around the second fetch call
+            try {
                 detailResponse = await fetch(`https://api.printful.com/store/products/${product.id}`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                         'Content-Type': 'application/json',
                     },
+                    signal: controller.signal // Apply the timeout signal
                 });
                 console.log(`[Printful API] Detail response status for ${product.id}: ${detailResponse.status}`);
             } catch (fetchError) {
                 console.error(`[Printful API Error] (getShopData - Detail Fetch Failed for ${product.id}):`, fetchError);
-                return null; // Return null for failed fetches
+                return null;
             }
 
 
             if (!detailResponse.ok) {
                 const errorData = await detailResponse.json();
                 console.error(`[Printful API Error] (getShopData - Detail Response Not OK for ${product.id}):`, errorData);
-                return null; // Return null for failed fetches
+                return null;
             }
 
             const detailData = await detailResponse.json();
@@ -181,6 +186,8 @@ export const getShopData = async (req, res) => {
     } catch (error) {
         console.error('[Backend Error] Server error fetching Printful products for shop data:', error);
         res.status(500).json({ error: 'Internal server error.' });
+    } finally {
+        clearTimeout(timeoutId); // Clear the timeout if the request completes
     }
 };
 
@@ -194,15 +201,20 @@ export const getAllActiveProducts = async (req, res) => {
         return res.status(500).json({ error: 'Server configuration error: Printful API key missing.' });
     }
 
+    const timeout = 10000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     try {
         let listResponse;
-        try { // Added try-catch around the first fetch call
+        try {
             listResponse = await fetch('https://api.printful.com/store/products', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                     'Content-Type': 'application/json',
                 },
+                signal: controller.signal
             });
             console.log(`[Printful API] List response status: ${listResponse.status}`);
         } catch (fetchError) {
@@ -222,18 +234,19 @@ export const getAllActiveProducts = async (req, res) => {
 
         const detailedProductPromises = printfulProductList.map(async (product) => {
             let detailResponse;
-            try { // Added try-catch around the second fetch call
+            try {
                 detailResponse = await fetch(`https://api.printful.com/store/products/${product.id}`, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                         'Content-Type': 'application/json',
                     },
+                    signal: controller.signal
                 });
                 console.log(`[Printful API] Detail response status for ${product.id}: ${detailResponse.status}`);
             } catch (fetchError) {
                 console.error(`[Printful API Error] (getAllActiveProducts - Detail Fetch Failed for ${product.id}):`, fetchError);
-                return null; // Return null for failed fetches
+                return null;
             }
 
 
@@ -258,6 +271,8 @@ export const getAllActiveProducts = async (req, res) => {
     } catch (error) {
         console.error('[Backend Error] Server error fetching all active Printful products:', error);
         res.status(500).json({ error: 'Internal server error.' });
+    } finally {
+        clearTimeout(timeoutId);
     }
 };
 
