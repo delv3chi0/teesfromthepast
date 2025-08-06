@@ -7,7 +7,20 @@ const transformPrintfulProduct = (printfulProduct) => {
     // Log the raw product to inspect its structure if needed
     // console.log("Raw Printful Product for transformation:", JSON.stringify(printfulProduct, null, 2));
 
-    // CRITICAL FIX: Explicitly extract sync_product and sync_variants
+    // CRITICAL FIX: Add a very early and robust check for the entire printfulProduct object
+    if (!printfulProduct || typeof printfulProduct !== 'object') {
+        console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
+        return {
+            _id: `error-${Date.now()}`,
+            name: 'Invalid Product (Corrupted Data)',
+            basePrice: 0,
+            variants: [],
+            description: 'This product could not be loaded due to corrupted data.',
+            slug: 'corrupted-product',
+        };
+    }
+
+    // Explicitly extract sync_product and sync_variants
     const productInfo = printfulProduct.sync_product;
     const variantList = printfulProduct.sync_variants;
 
