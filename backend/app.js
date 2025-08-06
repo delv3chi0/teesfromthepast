@@ -46,7 +46,7 @@ const allowedOrigins = [
 const corsOptions = {
     origin: function (origin, callback) {
         // Log the incoming origin for debugging CORS issues
-        console.log(`[CORS Check] Request Origin: ${origin}`); // ADDED THIS LINE
+        console.log(`[CORS Check] Request Origin: ${origin}`);
         // Allow requests with no origin (like mobile apps or curl requests)
         // Or if the origin is in the allowed list
         // Or if the origin is a Vercel deployment subdomain
@@ -95,6 +95,13 @@ app.use('/api', limiter); // Apply rate limiter to all /api routes
 
 // --- Route Definitions ---
 
+// ADDED THIS LOG TO SEE IF REQUESTS REACH THIS POINT
+app.use((req, res, next) => {
+    console.log(`[App.js Middleware] Request received: ${req.method} ${req.originalUrl}`);
+    next();
+});
+
+
 app.get('/', (req, res) => {
     res.send('Tees From The Past Backend API');
 });
@@ -130,3 +137,4 @@ app.use((err, req, res, next) => {
 });
 
 export default app;
+
