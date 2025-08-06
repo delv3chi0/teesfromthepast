@@ -81,12 +81,13 @@ const transformPrintfulProduct = (printfulProduct) => {
     }
 
     return {
-        _id: printfulProduct.id.toString(),
-        name: printfulProduct.name,
+        // FIX: Access printfulProduct.product.id instead of printfulProduct.id
+        _id: printfulProduct.product.id.toString(),
+        name: printfulProduct.product.name, // Also update name access
         basePrice: basePrice,
         variants: finalVariants,
-        description: printfulProduct.name,
-        slug: printfulProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-*|-*$/g, ''),
+        description: printfulProduct.product.name, // Also update description access
+        slug: printfulProduct.product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-*|-*$/g, ''), // Also update slug generation
     };
 };
 
@@ -159,7 +160,7 @@ export const getShopData = async (req, res) => {
 };
 
 export const getAllActiveProducts = async (req, res) => {
-    console.log('[AllActiveProducts Controller] Request received for /api/storefront/products'); // ADDED THIS LINE
+    console.log('[AllActiveProducts Controller] Request received for /api/storefront/products');
 
     const PRINTFUL_API_KEY = process.env.PRINTFUL_API_KEY;
 
