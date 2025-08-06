@@ -25,7 +25,6 @@ const ProductCard = ({ product }) => {
         );
     }
 
-    // Get the product data, providing fallbacks for robustness.
     // The backend now sends `unitPrice` and `productImage`.
     const displayPrice = typeof product.unitPrice === 'number' ? product.unitPrice : 0;
     const imageUrl = product.productImage || '';
