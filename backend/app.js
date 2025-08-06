@@ -25,11 +25,15 @@ import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminDesignRoutes from './routes/adminDesignRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
-import uploadRoutes from './routes/uploadRoutes.js'; // NEW IMPORT FOR CLOUDINARY UPLOADS
+import uploadRoutes from './routes/uploadRoutes.js';
 
 const app = express();
 
 // --- Middleware Configuration ---
+
+// Enable trust proxy for express-rate-limit and other IP-dependent middleware
+// This is crucial when running behind a proxy like Render
+app.set('trust proxy', 1); // ADDED THIS LINE
 
 // Apply essential security headers
 app.use(helmet());
@@ -68,13 +72,13 @@ app.use('/api/stripe', stripeWebhookRoutes);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Sanitize data (NoSQL query injection prevention) - ADDED
+// Sanitize data (NoSQL query injection prevention)
 app.use(mongoSanitize());
 
-// Prevent XSS attacks - ADDED
+// Prevent XSS attacks
 app.use(xss());
 
-// Prevent http param pollution - ADDED
+// Prevent http param pollution
 app.use(hpp());
 
 // Rate limiter to protect API routes from spam/abuse
