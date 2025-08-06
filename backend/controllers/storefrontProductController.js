@@ -7,15 +7,13 @@ const transformPrintfulProduct = (printfulProduct) => {
     // Log the raw product to inspect its structure if needed
     // console.log("Raw Printful Product for transformation:", JSON.stringify(printfulProduct, null, 2));
 
-    // Ensure we have a valid product object to work with
-    // It might be directly the product object, or nested under 'product' key
-    const actualProduct = printfulProduct.product || printfulProduct;
+    // CRITICAL FIX: Explicitly extract sync_product and sync_variants
+    const productInfo = printfulProduct.sync_product;
+    const variantList = printfulProduct.sync_variants;
 
-    // CRITICAL FIX: Add a robust check for actualProduct and its ID at the very beginning
-    // If actualProduct is null/undefined OR if it doesn't have an 'id' OR if 'sync_variants' is missing/invalid,
-    // return a default invalid product to prevent crashes.
-    if (!actualProduct || actualProduct.id === undefined || actualProduct.id === null || !Array.isArray(actualProduct.sync_variants)) {
-        console.warn(`[Printful Transform Warning] Product is missing critical data (id or sync_variants). Raw input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
+    // Robust check for productInfo and variantList
+    if (!productInfo || productInfo.id === undefined || productInfo.id === null || !Array.isArray(variantList)) {
+        console.warn(`[Printful Transform Warning] Product is missing critical data (sync_product.id or sync_variants). Raw input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
             _id: `error-${Date.now()}`, // Generate a unique ID for error products
             name: 'Invalid Product (Missing Data)',
@@ -26,10 +24,10 @@ const transformPrintfulProduct = (printfulProduct) => {
         };
     }
 
-    const firstVariant = actualProduct.sync_variants?.[0];
+    const firstVariant = variantList?.[0]; // Use variantList here
     const basePrice = firstVariant ? parseFloat(firstVariant.retail_price) || 0 : 0;
 
-    const transformedVariants = actualProduct.sync_variants.map(syncVariant => {
+    const transformedVariants = variantList.map(syncVariant => { // Use variantList here
         const colorOption = syncVariant.options?.find(opt => opt.id === 'color');
         const sizeOption = syncVariant.options?.find(opt => opt.id === 'size');
 
@@ -86,12 +84,12 @@ const transformPrintfulProduct = (printfulProduct) => {
     }
 
     return {
-        _id: actualProduct.id.toString(),
-        name: actualProduct.name,
+        _id: productInfo.id.toString(), // Access id from productInfo
+        name: productInfo.name, // Access name from productInfo
         basePrice: basePrice,
         variants: finalVariants,
-        description: actualProduct.name,
-        slug: actualProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-*|-*$/g, ''),
+        description: productInfo.name, // Access name from productInfo
+        slug: productInfo.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-*|-*$/g, ''), // Access name from productInfo
     };
 };
 
@@ -143,7 +141,8 @@ export const getShopData = async (req, res) => {
             }
 
             const detailData = await detailResponse.json();
-            return detailData.result; // This result might be { product: {...} } or just {...}
+            // This result is { sync_product: {...}, sync_variants: [...] }
+            return detailData.result;
         });
 
         const detailedPrintfulProducts = (await Promise.all(detailedProductPromises)).filter(p => p !== null);
