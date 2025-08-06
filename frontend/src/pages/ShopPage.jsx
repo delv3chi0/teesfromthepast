@@ -1,75 +1,37 @@
-// frontend/src/pages/ShopPage.jsx
+// This is a conceptual backend file (e.g., in Node.js)
 
-import React, { useState, useEffect } from 'react';
-import { Box, Heading, VStack, Spinner, Alert, AlertIcon, SimpleGrid, Text } from '@chakra-ui/react';
-import { client } from '../api/client';
-import ProductCard from '../components/shop/ProductCard';
+const express = require('express');
+const router = express.Router();
+const fetch = require('node-fetch'); // or use another HTTP client
 
-/**
- * Shop Page
- * Displays all products in a single, responsive grid, without categories.
- * Now directly expects and processes a flat array of products from the backend.
- */
-const ShopPage = () => {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+// It is crucial to store your API token in an environment variable, not hardcoded.
+const PRINTFUL_API_KEY = "UbgirJGZ8kt35ba8RTBkRe7c7JzFYEUD9LQSz6lz";
 
-    useEffect(() => {
-        setLoading(true);
-        client.get('/storefront/shop-data')
-            .then(res => {
-                // Backend now consistently sends a flat array of products.
-                // The previous `flatMap` logic for handling categories is no longer needed.
-                setProducts(res.data);
-            })
-            .catch((err) => {
-                console.error("Error loading products:", err);
-                setError('Could not load products. Please try again later.');
-            })
-            .finally(() => setLoading(false));
-    }, []);
+router.get('/storefront/shop-data', async (req, res) => {
+  try {
+    const response = await fetch('https://api.printful.com/store/products', {
+      headers: {
+        'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
+      },
+    });
 
-    if (loading) {
-        return (
-            <VStack justifyContent="center" minH="60vh">
-                {/* Removed explicit color prop; Spinner will now use its default from theme.js */}
-                <Spinner size="xl" thickness="4px" />
-                <Text mt={4} fontSize="lg" color="brand.textLight">Loading Collection...</Text>
-            </VStack>
-        );
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Printful API Error:", errorData);
+      return res.status(response.status).json({ error: 'Failed to fetch products from Printful.' });
     }
 
-    if (error) {
-        return (
-            <Alert status="error" bg="red.900" borderRadius="md" p={6} borderWidth="1px" borderColor="red.500">
-                <AlertIcon color="red.300" />
-                <Text color="white">{error}</Text>
-            </Alert>
-        );
-    }
+    const data = await response.json();
+    
+    // Process the data as needed before sending it to the frontend
+    // For example, you might want to extract specific fields or format the data differently.
+    const products = data.result;
 
-    return (
-        <VStack spacing={8} align="stretch" py={8} px={{ base: 4, md: 8 }}>
-            <Heading as="h1" size="2xl" color="brand.textLight" textAlign="center" mb={6}>
-                Our Awesome Collection
-            </Heading>
+    res.json(products);
+  } catch (error) {
+    console.error('Server error fetching Printful products:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
 
-            {products.length === 0 && (
-                <Box textAlign="center" py={10}>
-                    <Text fontSize="xl" color="whiteAlpha.800">No products are currently available. Check back soon!</Text>
-                </Box>
-            )}
-
-            {products.length > 0 && (
-                <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={{ base: 6, md: 8 }}>
-                    {products.map((product) => (
-                        <ProductCard key={product._id} product={product} />
-                    ))}
-                </SimpleGrid>
-            )}
-        </VStack>
-    );
-};
-
-export default ShopPage;
+module.exports = router;
