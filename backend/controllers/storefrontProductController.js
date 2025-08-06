@@ -1,10 +1,14 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-import { AbortController } from 'node-fetch'; // Import AbortController for timeouts
+// The import for AbortController is removed as Node.js provides a native one.
+// import { AbortController } from 'node-fetch'; // This line is no longer needed.
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
+    // Log the raw product to inspect its structure if needed
+    // console.log("Raw Printful Product for transformation:", JSON.stringify(printfulProduct, null, 2));
+
     if (!printfulProduct || typeof printfulProduct !== 'object') {
         console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
@@ -187,7 +191,7 @@ export const getShopData = async (req, res) => {
         console.error('[Backend Error] Server error fetching Printful products for shop data:', error);
         res.status(500).json({ error: 'Internal server error.' });
     } finally {
-        clearTimeout(timeoutId); // Clear the timeout if the request completes
+        clearTimeout(timeoutId);
     }
 };
 
