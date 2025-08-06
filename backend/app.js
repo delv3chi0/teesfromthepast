@@ -33,7 +33,7 @@ const app = express();
 
 // Enable trust proxy for express-rate-limit and other IP-dependent middleware
 // This is crucial when running behind a proxy like Render
-app.set('trust proxy', 1); // ADDED THIS LINE
+app.set('trust proxy', 1);
 
 // Apply essential security headers
 app.use(helmet());
@@ -45,6 +45,8 @@ const allowedOrigins = [
 ];
 const corsOptions = {
     origin: function (origin, callback) {
+        // Log the incoming origin for debugging CORS issues
+        console.log(`[CORS Check] Request Origin: ${origin}`); // ADDED THIS LINE
         // Allow requests with no origin (like mobile apps or curl requests)
         // Or if the origin is in the allowed list
         // Or if the origin is a Vercel deployment subdomain
