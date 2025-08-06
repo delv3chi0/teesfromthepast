@@ -115,7 +115,7 @@ export const getShopData = async (req, res) => {
         }
 
         const data = await response.json();
-        // console.log("Raw Printful data.result from /store/products:", JSON.stringify(data.result, null, 2)); // Log raw data
+        console.log("Raw Printful data.result from /store/products:", JSON.stringify(data.result, null, 2)); // Log raw data
 
         const printfulProducts = data.result || [];
 
