@@ -9,17 +9,19 @@ const transformPrintfulProduct = (printfulProduct) => {
 
     // Ensure we have a valid product object to work with
     // It might be directly the product object, or nested under 'product' key
-    const actualProduct = printfulProduct.product || printfulProduct; // Check if 'product' key exists, otherwise use printfulProduct directly
+    const actualProduct = printfulProduct.product || printfulProduct;
 
-    if (!actualProduct || !Array.isArray(actualProduct.sync_variants)) {
-        console.warn(`[Printful Transform Warning] Product ${actualProduct?.id || 'N/A'} is missing or has invalid 'sync_variants'. Skipping transformation.`);
-        // Return a minimal, valid product structure to prevent crashes
+    // CRITICAL FIX: Add a robust check for actualProduct and its ID at the very beginning
+    // If actualProduct is null/undefined OR if it doesn't have an 'id' OR if 'sync_variants' is missing/invalid,
+    // return a default invalid product to prevent crashes.
+    if (!actualProduct || actualProduct.id === undefined || actualProduct.id === null || !Array.isArray(actualProduct.sync_variants)) {
+        console.warn(`[Printful Transform Warning] Product is missing critical data (id or sync_variants). Raw input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
-            _id: actualProduct?.id?.toString() || `error-${Date.now()}`,
-            name: actualProduct?.name || 'Invalid Product',
+            _id: `error-${Date.now()}`, // Generate a unique ID for error products
+            name: 'Invalid Product (Missing Data)',
             basePrice: 0,
             variants: [],
-            description: 'This product could not be fully loaded due to missing variant data.',
+            description: 'This product could not be fully loaded due to missing or invalid data from Printful.',
             slug: 'invalid-product',
         };
     }
@@ -84,7 +86,6 @@ const transformPrintfulProduct = (printfulProduct) => {
     }
 
     return {
-        // FIX: Safely access id, name, and other properties from actualProduct
         _id: actualProduct.id.toString(),
         name: actualProduct.name,
         basePrice: basePrice,
@@ -142,8 +143,7 @@ export const getShopData = async (req, res) => {
             }
 
             const detailData = await detailResponse.json();
-            // Pass the entire result object, which might contain 'product' key or be the product itself
-            return detailData.result;
+            return detailData.result; // This result might be { product: {...} } or just {...}
         });
 
         const detailedPrintfulProducts = (await Promise.all(detailedProductPromises)).filter(p => p !== null);
