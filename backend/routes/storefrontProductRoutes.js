@@ -1,3 +1,5 @@
+// backend/routes/storefrontProductRoutes.js
+
 import express from 'express';
 import {
     getShopData,
@@ -6,6 +8,8 @@ import {
 } from '../controllers/storefrontProductController.js';
 
 const router = express.Router();
+
+console.log('[Storefront Routes] Router file loaded and active.'); // ADDED THIS LINE
 
 // This route gets all the data needed for the main shop page (flat list for cards)
 // E.g., GET /api/storefront/shop-data
