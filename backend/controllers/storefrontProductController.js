@@ -92,6 +92,8 @@ const transformPrintfulProduct = (printfulProduct) => {
 };
 
 export const getShopData = async (req, res) => {
+    console.log('[ShopData Controller] Request received for /api/storefront/shop-data'); // ADDED THIS LINE
+
     const PRINTFUL_API_KEY = process.env.PRINTFUL_API_KEY;
 
     if (!PRINTFUL_API_KEY) {
@@ -121,7 +123,7 @@ export const getShopData = async (req, res) => {
 
         const transformedProducts = printfulProducts
             .map(transformPrintfulProduct)
-            .filter(product => product.variants.length > 0); // Filter out products that failed transformation or have no variants
+            .filter(product => product.variants.length > 0);
 
         res.json(transformedProducts);
 
@@ -159,7 +161,7 @@ export const getAllActiveProducts = async (req, res) => {
 
         const transformedProducts = printfulProducts
             .map(transformPrintfulProduct)
-            .filter(product => product.variants.length > 0); // Filter out products that failed transformation or have no variants
+            .filter(product => product.variants.length > 0);
 
         res.json(transformedProducts);
 
