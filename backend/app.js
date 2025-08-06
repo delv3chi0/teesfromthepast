@@ -112,7 +112,6 @@ app.use('/api/admin/designs', adminDesignRoutes);
 app.use('/api/admin/', adminProductRoutes); // This route now handles all product CRUD for admin
 app.use('/api', uploadRoutes); // NEW: Mount the upload routes for Cloudinary
 
-// --- Global Error Handler ---
 // This should be the last middleware in your chain
 app.use((err, req, res, next) => {
     console.error('[Backend Log] Global Server Error:', err.message, err.stack ? `\nStack: ${err.stack}` : '');
