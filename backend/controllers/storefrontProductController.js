@@ -1,9 +1,8 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-// Correct way to import AbortController in this environment
-import pkg from 'node-fetch';
-const { AbortController } = pkg;
+// Corrected import to handle CommonJS module and named exports
+const { AbortController } = fetch;
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
