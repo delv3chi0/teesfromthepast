@@ -1,37 +1,21 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-// CORRECTED IMPORT: This is the robust way to access AbortController
-import pkg from 'node-fetch';
-const { AbortController } = pkg;
+const { AbortController } = fetch;
 
-// Helper function to transform Printful product data to your frontend's expected format
+// Helper function to transform Printful product data
 const transformPrintfulProduct = (printfulProduct) => {
     if (!printfulProduct || typeof printfulProduct !== 'object') {
-        console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
-        return {
-            _id: `error-${Date.now()}`,
-            name: 'Invalid Product (Corrupted Data)',
-            basePrice: 0,
-            variants: [],
-            description: 'This product could not be loaded due to corrupted data.',
-            slug: 'corrupted-product',
-        };
+        console.warn(`[Printful Transform Warning] Invalid or non-object input received. Skipping transformation.`);
+        return { _id: `error-${Date.now()}`, name: 'Invalid Product', basePrice: 0, variants: [], description: '', slug: '' };
     }
 
     const productInfo = printfulProduct.sync_product;
     const variantList = printfulProduct.sync_variants;
 
-    if (!productInfo || productInfo.id === undefined || productInfo.id === null || !Array.isArray(variantList)) {
-        console.warn(`[Printful Transform Warning] Product is missing critical data (sync_product.id or sync_variants). Raw input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
-        return {
-            _id: `error-${Date.now()}`,
-            name: 'Invalid Product (Missing Data)',
-            basePrice: 0,
-            variants: [],
-            description: 'This product could not be fully loaded due to missing or invalid data from Printful.',
-            slug: 'invalid-product',
-        };
+    if (!productInfo || !Array.isArray(variantList)) {
+        console.warn(`[Printful Transform Warning] Product is missing critical data. Skipping transformation.`);
+        return { _id: `error-${Date.now()}`, name: 'Invalid Product', basePrice: 0, variants: [], description: '', slug: '' };
     }
 
     const firstVariant = variantList?.[0];
@@ -40,7 +24,6 @@ const transformPrintfulProduct = (printfulProduct) => {
     const transformedVariants = variantList.map(syncVariant => {
         const colorOption = syncVariant.options?.find(opt => opt.id === 'color');
         const sizeOption = syncVariant.options?.find(opt => opt.id === 'size');
-
         const frontMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'front');
         const backMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
         const sleeveMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
@@ -108,34 +91,30 @@ export const getShopData = async (req, res) => {
 
     const PRINTFUL_API_KEY = process.env.PRINTFUL_API_KEY;
 
+    // ADDED LOGGING HERE TO VALIDATE THE KEY
     if (!PRINTFUL_API_KEY) {
-        console.error("[Printful API] Key not found. Please check your .env file.");
+        console.error("[Printful API] Key not found. Please check your .env file and Render environment variables.");
         return res.status(500).json({ error: 'Server configuration error: Printful API key missing.' });
     }
+    console.log("[Printful API] API key loaded successfully.");
 
     // Set a timeout for the API calls
-    const timeout = 10000; // 10 seconds
+    const timeout = 10000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-        let listResponse;
-        try {
-            listResponse = await fetch('https://api.printful.com/store/products', {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                signal: controller.signal // Apply the timeout signal
-            });
-            console.log(`[Printful API] List response status: ${listResponse.status}`);
-        } catch (fetchError) {
-            console.error("[Printful API Error] (getShopData - List Fetch Failed):", fetchError);
-            return res.status(500).json({ error: 'Network or API issue fetching product list from Printful.' });
-        }
-
-
+        console.log('[Printful API] Attempting to fetch list of products from Printful...');
+        const listResponse = await fetch('https://api.printful.com/store/products', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            signal: controller.signal
+        });
+        console.log(`[Printful API] List response status: ${listResponse.status}`);
+        
         if (!listResponse.ok) {
             const errorData = await listResponse.json();
             console.error("[Printful API Error] (getShopData - List Response Not OK):", errorData);
@@ -144,50 +123,38 @@ export const getShopData = async (req, res) => {
 
         const listData = await listResponse.json();
         const printfulProductList = listData.result || [];
-
-        // console.log("Raw Printful data.result from /store/products (List):", JSON.stringify(printfulProductList, null, 2));
-
+        
         const detailedProductPromises = printfulProductList.map(async (product) => {
-            let detailResponse;
-            try {
-                detailResponse = await fetch(`https://api.printful.com/store/products/${product.id}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                    signal: controller.signal // Apply the timeout signal
-                });
-                console.log(`[Printful API] Detail response status for ${product.id}: ${detailResponse.status}`);
-            } catch (fetchError) {
-                console.error(`[Printful API Error] (getShopData - Detail Fetch Failed for ${product.id}):`, fetchError);
-                return null;
-            }
-
-
+            const detailResponse = await fetch(`https://api.printful.com/store/products/${product.id}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                signal: controller.signal
+            });
+            
             if (!detailResponse.ok) {
                 const errorData = await detailResponse.json();
                 console.error(`[Printful API Error] (getShopData - Detail Response Not OK for ${product.id}):`, errorData);
                 return null;
             }
-
+            
             const detailData = await detailResponse.json();
             return detailData.result;
         });
 
         const detailedPrintfulProducts = (await Promise.all(detailedProductPromises)).filter(p => p !== null);
-
-        // console.log("Detailed Printful Products (after individual fetches):", JSON.stringify(detailedPrintfulProducts, null, 2));
-
-        const transformedProducts = detailedPrintfulProducts
-            .map(transformPrintfulProduct)
-            .filter(product => product.variants.length > 0);
-
+        const transformedProducts = detailedPrintfulProducts.map(transformPrintfulProduct).filter(p => p.variants.length > 0);
         res.json(transformedProducts);
-
     } catch (error) {
-        console.error('[Backend Error] Server error fetching Printful products for shop data:', error);
-        res.status(500).json({ error: 'Internal server error.' });
+        if (error.name === 'AbortError') {
+            console.error('[Backend Error] Printful API request timed out:', error);
+            res.status(500).json({ error: 'Printful API request timed out.' });
+        } else {
+            console.error('[Backend Error] Server error fetching Printful products:', error);
+            res.status(500).json({ error: 'Internal server error.' });
+        }
     } finally {
         clearTimeout(timeoutId);
     }
@@ -199,32 +166,27 @@ export const getAllActiveProducts = async (req, res) => {
     const PRINTFUL_API_KEY = process.env.PRINTFUL_API_KEY;
 
     if (!PRINTFUL_API_KEY) {
-        console.error("[Printful API] Key not found. Please check your .env file.");
+        console.error("[Printful API] Key not found. Please check your .env file and Render environment variables.");
         return res.status(500).json({ error: 'Server configuration error: Printful API key missing.' });
     }
+    console.log("[Printful API] API key loaded successfully.");
 
     const timeout = 10000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-        let listResponse;
-        try {
-            listResponse = await fetch('https://api.printful.com/store/products', {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
-                signal: controller.signal
-            });
-            console.log(`[Printful API] List response status: ${listResponse.status}`);
-        } catch (fetchError) {
-            console.error("[Printful API Error] (getAllActiveProducts - List Fetch Failed):", fetchError);
-            return res.status(500).json({ error: 'Network or API issue fetching product list from Printful.' });
-        }
-
-
+        console.log('[Printful API] Attempting to fetch list of products from Printful...');
+        const listResponse = await fetch('https://api.printful.com/store/products', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            signal: controller.signal
+        });
+        console.log(`[Printful API] List response status: ${listResponse.status}`);
+        
         if (!listResponse.ok) {
             const errorData = await listResponse.json();
             console.error("[Printful API Error] (getAllActiveProducts - List Response Not OK):", errorData);
@@ -235,44 +197,36 @@ export const getAllActiveProducts = async (req, res) => {
         const printfulProductList = listData.result || [];
 
         const detailedProductPromises = printfulProductList.map(async (product) => {
-            let detailResponse;
-            try {
-                detailResponse = await fetch(`https://api.printful.com/store/products/${product.id}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
-                        'Content-Type': 'application/json',
-                    },
-                    signal: controller.signal
-                });
-                console.log(`[Printful API] Detail response status for ${product.id}: ${detailResponse.status}`);
-            } catch (fetchError) {
-                console.error(`[Printful API Error] (getAllActiveProducts - Detail Fetch Failed for ${product.id}):`, fetchError);
-                return null;
-            }
-
-
+            const detailResponse = await fetch(`https://api.printful.com/store/products/${product.id}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                signal: controller.signal
+            });
+            
             if (!detailResponse.ok) {
                 const errorData = await detailResponse.json();
                 console.error(`[Printful API Error] (getAllActiveProducts - Detail Response Not OK for ${product.id}):`, errorData);
                 return null;
             }
-
+            
             const detailData = await detailResponse.json();
             return detailData.result;
         });
 
         const detailedPrintfulProducts = (await Promise.all(detailedProductPromises)).filter(p => p !== null);
-
-        const transformedProducts = detailedPrintfulProducts
-            .map(transformPrintfulProduct)
-            .filter(product => product.variants.length > 0);
-
+        const transformedProducts = detailedPrintfulProducts.map(transformPrintfulProduct).filter(p => p.variants.length > 0);
         res.json(transformedProducts);
-
     } catch (error) {
-        console.error('[Backend Error] Server error fetching all active Printful products:', error);
-        res.status(500).json({ error: 'Internal server error.' });
+        if (error.name === 'AbortError') {
+            console.error('[Backend Error] Printful API request timed out:', error);
+            res.status(500).json({ error: 'Printful API request timed out.' });
+        } else {
+            console.error('[Backend Error] Server error fetching all active Printful products:', error);
+            res.status(500).json({ error: 'Internal server error.' });
+        }
     } finally {
         clearTimeout(timeoutId);
     }
