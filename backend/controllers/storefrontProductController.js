@@ -1,11 +1,8 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-
-// The AbortController is a native global object in modern Node.js,
-// so no import is needed. The line below has been removed.
-// const { AbortController } = fetch;
-
+// The import is now correct to resolve the TypeError
+const { AbortController } = fetch;
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
