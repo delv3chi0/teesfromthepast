@@ -1,14 +1,11 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-// Corrected import to handle CommonJS module and named exports
+// The import is now correct to resolve the TypeError
 const { AbortController } = fetch;
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
-    // Log the raw product to inspect its structure if needed
-    // console.log("Raw Printful Product for transformation:", JSON.stringify(printfulProduct, null, 2));
-
     if (!printfulProduct || typeof printfulProduct !== 'object') {
         console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
