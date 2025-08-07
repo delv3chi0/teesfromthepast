@@ -1,21 +1,39 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-const { AbortController } = fetch;
 
-// Helper function to transform Printful product data
+// The AbortController is a native global object in modern Node.js,
+// so no import is needed. The line below has been removed.
+// const { AbortController } = fetch;
+
+
+// Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
     if (!printfulProduct || typeof printfulProduct !== 'object') {
-        console.warn(`[Printful Transform Warning] Invalid or non-object input received. Skipping transformation.`);
-        return { _id: `error-${Date.now()}`, name: 'Invalid Product', basePrice: 0, variants: [], description: '', slug: '' };
+        console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Skipping transformation.`);
+        return {
+            _id: `error-${Date.now()}`,
+            name: 'Invalid Product (Corrupted Data)',
+            basePrice: 0,
+            variants: [],
+            description: 'This product could not be loaded due to corrupted data.',
+            slug: 'corrupted-product',
+        };
     }
 
     const productInfo = printfulProduct.sync_product;
     const variantList = printfulProduct.sync_variants;
 
-    if (!productInfo || !Array.isArray(variantList)) {
-        console.warn(`[Printful Transform Warning] Product is missing critical data. Skipping transformation.`);
-        return { _id: `error-${Date.now()}`, name: 'Invalid Product', basePrice: 0, variants: [], description: '', slug: '' };
+    if (!productInfo || productInfo.id === undefined || productInfo.id === null || !Array.isArray(variantList)) {
+        console.warn(`[Printful Transform Warning] Product is missing critical data (sync_product.id or sync_variants). Raw input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
+        return {
+            _id: `error-${Date.now()}`,
+            name: 'Invalid Product (Missing Data)',
+            basePrice: 0,
+            variants: [],
+            description: 'This product could not be fully loaded due to missing or invalid data from Printful.',
+            slug: 'invalid-product',
+        };
     }
 
     const firstVariant = variantList?.[0];
@@ -24,6 +42,7 @@ const transformPrintfulProduct = (printfulProduct) => {
     const transformedVariants = variantList.map(syncVariant => {
         const colorOption = syncVariant.options?.find(opt => opt.id === 'color');
         const sizeOption = syncVariant.options?.find(opt => opt.id === 'size');
+
         const frontMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'front');
         const backMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
         const sleeveMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
@@ -91,7 +110,6 @@ export const getShopData = async (req, res) => {
 
     const PRINTFUL_API_KEY = process.env.PRINTFUL_API_KEY;
 
-    // ADDED LOGGING HERE TO VALIDATE THE KEY
     if (!PRINTFUL_API_KEY) {
         console.error("[Printful API] Key not found. Please check your .env file and Render environment variables.");
         return res.status(500).json({ error: 'Server configuration error: Printful API key missing.' });
@@ -99,7 +117,7 @@ export const getShopData = async (req, res) => {
     console.log("[Printful API] API key loaded successfully.");
 
     // Set a timeout for the API calls
-    const timeout = 10000;
+    const timeout = 10000; // 10 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -111,7 +129,7 @@ export const getShopData = async (req, res) => {
                 'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-            signal: controller.signal
+            signal: controller.signal // Apply the timeout signal
         });
         console.log(`[Printful API] List response status: ${listResponse.status}`);
         
@@ -131,7 +149,7 @@ export const getShopData = async (req, res) => {
                     'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                     'Content-Type': 'application/json',
                 },
-                signal: controller.signal
+                signal: controller.signal // Apply the timeout signal
             });
             
             if (!detailResponse.ok) {
