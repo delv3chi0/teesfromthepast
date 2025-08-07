@@ -1,13 +1,15 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-// The import is now correct to resolve the TypeError
-const { AbortController } = fetch;
+// AbortController is a global object in Node.js v15+ and later.
+// Importing it from 'node-fetch' is incorrect and causes a TypeError.
+// Therefore, we use the native AbortController without an import.
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
+    // Basic validation to ensure the input is an object
     if (!printfulProduct || typeof printfulProduct !== 'object') {
-        console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Skipping transformation.`);
+        console.warn(`[Printful Transform Warning] Invalid or non-object input received for transformation. Input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
             _id: `error-${Date.now()}`,
             name: 'Invalid Product (Corrupted Data)',
@@ -18,9 +20,11 @@ const transformPrintfulProduct = (printfulProduct) => {
         };
     }
 
+    // Explicitly extract sync_product and sync_variants, which are the main data points
     const productInfo = printfulProduct.sync_product;
     const variantList = printfulProduct.sync_variants;
 
+    // Robust check for critical data fields before attempting transformation
     if (!productInfo || productInfo.id === undefined || productInfo.id === null || !Array.isArray(variantList)) {
         console.warn(`[Printful Transform Warning] Product is missing critical data (sync_product.id or sync_variants). Raw input: ${JSON.stringify(printfulProduct)}. Skipping transformation.`);
         return {
@@ -33,17 +37,19 @@ const transformPrintfulProduct = (printfulProduct) => {
         };
     }
 
+    // Calculate the base price from the first variant to use for price modifiers
     const firstVariant = variantList?.[0];
     const basePrice = firstVariant ? (parseFloat(firstVariant.retail_price) || 0) : 0;
 
+    // Transform Printful variants into the format your frontend expects
     const transformedVariants = variantList.map(syncVariant => {
         const colorOption = syncVariant.options?.find(opt => opt.id === 'color');
         const sizeOption = syncVariant.options?.find(opt => opt.id === 'size');
-
         const frontMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'front');
         const backMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
-        const sleeveMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
+        const sleeveMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'sleeve');
 
+        // Dummy data for print areas as they are not available from this endpoint
         const dummyPrintAreas = [
             { placement: 'Full-front', widthInches: 12, heightInches: 16 },
             { placement: 'Full-back', widthInches: 12, heightInches: 16 },
@@ -67,6 +73,7 @@ const transformPrintfulProduct = (printfulProduct) => {
         };
     });
 
+    // Group variants by color to match your frontend's display logic
     const groupedVariants = {};
     transformedVariants.forEach(variant => {
         if (!groupedVariants[variant.colorName]) {
@@ -126,7 +133,7 @@ export const getShopData = async (req, res) => {
                 'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                 'Content-Type': 'application/json',
             },
-            signal: controller.signal // Apply the timeout signal
+            signal: controller.signal
         });
         console.log(`[Printful API] List response status: ${listResponse.status}`);
         
@@ -146,7 +153,7 @@ export const getShopData = async (req, res) => {
                     'Authorization': `Bearer ${PRINTFUL_API_KEY}`,
                     'Content-Type': 'application/json',
                 },
-                signal: controller.signal // Apply the timeout signal
+                signal: controller.signal
             });
             
             if (!detailResponse.ok) {
