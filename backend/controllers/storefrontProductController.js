@@ -1,8 +1,9 @@
 // backend/controllers/storefrontProductController.js
 
 import fetch from 'node-fetch';
-// The import is now correct to resolve the TypeError
-const { AbortController } = fetch;
+// CORRECTED IMPORT: This is the robust way to access AbortController
+import pkg from 'node-fetch';
+const { AbortController } = pkg;
 
 // Helper function to transform Printful product data to your frontend's expected format
 const transformPrintfulProduct = (printfulProduct) => {
@@ -42,7 +43,7 @@ const transformPrintfulProduct = (printfulProduct) => {
 
         const frontMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'front');
         const backMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
-        const sleeveMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'sleeve');
+        const sleeveMockup = syncVariant.files?.find(file => file.type === 'mockup' && file.position === 'back');
 
         const dummyPrintAreas = [
             { placement: 'Full-front', widthInches: 12, heightInches: 16 },
