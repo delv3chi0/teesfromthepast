@@ -1,5 +1,6 @@
 // backend/app.js
 
+import storefrontRoutes from "./routes/storefrontProductRoutes.js";
 import express from 'express';
 import mongoose from 'mongoose'; // This import is not directly used in app.js, but often in index.js for connection
 import 'dotenv/config';
@@ -124,6 +125,7 @@ app.use('/api/admin/orders', adminOrderRoutes);
 app.use('/api/admin/designs', adminDesignRoutes);
 app.use('/api/admin/', adminProductRoutes); // This route now handles all product CRUD for admin
 app.use('/api', uploadRoutes); // NEW: Mount the upload routes for Cloudinary
+app.use("/storefront", storefrontRoutes);
 
 // This should be the last middleware in your chain
 app.use((err, req, res, next) => {

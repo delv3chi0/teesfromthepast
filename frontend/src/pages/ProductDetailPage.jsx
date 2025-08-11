@@ -1,193 +1,156 @@
-// frontend/src/pages/ProductDetailPage.jsx
-
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-    Box, Heading, Text, VStack, Spinner, Alert, AlertIcon,
-    Grid, GridItem, Image, HStack, Button, Select, Divider, useToast, Icon,
-    Skeleton, SkeletonText, FormControl, FormLabel, Tooltip
+  Box, Image, VStack, HStack, Heading, Text, Button, Badge, SimpleGrid,
+  useColorModeValue, Skeleton
 } from '@chakra-ui/react';
 import { client } from '../api/client';
-import { useAuth } from '../context/AuthProvider';
-import { FaPalette, FaRulerVertical, FaPlus, FaImage } from 'react-icons/fa';
 
-/**
- * Product Detail Page
- * REFRACTORED:
- * - Removed the outer "page card" to align with the main layout's background.
- * - Restyled image viewer, color swatches, and all text for a cohesive dark theme.
- * - Implemented the themed <Select> component for size selection.
- * - Updated the loading skeleton to better match the final dark layout.
- * - REMOVED: `productType` from navigation to `ProductStudio` as categories are no longer used.
- */
+const Placeholder = 'https://placehold.co/800x1000/1a202c/a0aec0?text=No+Image';
 
-// Reusable ThemedSelect for consistency
-const ThemedSelect = (props) => (
-    <Select
-        size="lg"
-        bg="brand.secondary" // Use brand.secondary for dark select background
-        borderColor="whiteAlpha.300"
-        color="brand.textLight" // Ensure text is light on dark background
-        _placeholder={{ color: "brand.textMuted" }} // Muted light placeholder
-        _hover={{ borderColor: "whiteAlpha.400" }}
-        focusBorderColor="brand.accentYellow"
-        {...props}
-    />
-);
+export default function ProductDetailPage() {
+  const { slug } = useParams();
+  const [sp] = useSearchParams();
+  const navigate = useNavigate();
 
-const ProductDetailPage = () => {
-    const { slug } = useParams();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const toast = useToast();
-    const { user } = useAuth();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [color, setColor] = useState(sp.get('color') || '');
+  const [size, setSize] = useState(sp.get('size') || '');
 
-    const [product, setProduct] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    const [selectedColor, setSelectedColor] = useState(null);
-    const [selectedSize, setSelectedSize] = useState('');
-    const [currentDisplayImage, setCurrentDisplayImage] = useState('');
+  const titleColor = useColorModeValue('brand.textLight', 'brand.textDark');
 
-    useEffect(() => {
-        const fetchProduct = async () => {
-            if (!slug) { setError("Product not found."); setLoading(false); return; }
-            setLoading(true); setError('');
-            try {
-                // Backend's getProductBySlug no longer populates category
-                const { data } = await client.get(`/storefront/products/slug/${slug}`);
-                setProduct(data);
-                if (data?.variants?.length > 0) {
-                    const defaultColor = data.variants.find(v => v.isDefaultDisplay) || data.variants[0];
-                    setSelectedColor(defaultColor);
-                    const primaryImage = defaultColor.imageSet?.find(img => img.isPrimary) || defaultColor.imageSet?.[0];
-                    setCurrentDisplayImage(primaryImage?.url);
-                    if (defaultColor.sizes?.length > 0) {
-                        setSelectedSize(defaultColor.sizes[0].size);
-                    }
-                } else {
-                    setError("This product has no available options.");
-                }
-            } catch (err) {
-                setError('Could not find the requested product.');
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProduct();
-    }, [slug]);
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await client.get(`/storefront/product/${slug}`, { signal: ac.signal });
+        setProduct(res.data);
+      } catch (e) {
+        if (!ac.signal.aborted) console.error(e);
+      } finally {
+        if (!ac.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => ac.abort();
+  }, [slug]);
 
-    const handleColorSelect = (colorVariant) => {
-        setSelectedColor(colorVariant);
-        const primaryImage = colorVariant.imageSet.find(img => img.isPrimary) || colorVariant.imageSet[0];
-        setCurrentDisplayImage(primaryImage?.url);
-        setSelectedSize(colorVariant.sizes[0]?.size || '');
-    };
+  const canContinue = useMemo(() => {
+    const needColor = (product?.colors || []).length > 0;
+    const needSize  = (product?.sizes  || []).length > 0;
+    return (!needColor || color) && (!needSize || size);
+  }, [product, color, size]);
 
-    const handleCustomizeClick = () => {
-        if (!selectedColor || !selectedSize) { toast({ title: "Please select a color and size.", status: "warning", isClosable: true }); return; }
-        if (user) {
-            const sizeDetails = selectedColor.sizes.find(s => s.size === selectedSize);
-            if (!sizeDetails || !sizeDetails.sku) { toast({ title: "Error", description: "Selected option is currently unavailable.", status: "error", isClosable: true }); return; }
-            const searchParams = new URLSearchParams({
-                productId: product._id,
-                // REMOVED: productTypeId: product.productType, // No longer needed as categories are removed
-                color: selectedColor.colorName,
-                size: selectedSize,
-            });
-            navigate(`/product-studio?${searchParams.toString()}`);
-        } else {
-            toast({ title: "Please log in to continue", description: "You need to be logged in to customize products.", status: "info", duration: 3000, isClosable: true });
-            navigate('/login', { state: { from: location } });
-        }
-    };
-
-    if (loading) {
-        return (
-            <Grid templateColumns={{ base: "1fr", md: "1fr 1fr" }} gap={{base: 6, md: 10}} p={{base: 2, md: 4}}>
-                <GridItem>
-                    <Skeleton height={{ base: "300px", md: "500px" }} borderRadius="lg" startColor="brand.primary" endColor="brand.secondary" /> {/* Updated skeleton colors */}
-                    <HStack mt={4} spacing={4}>
-                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
-                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
-                        <Skeleton height="60px" width="60px" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
-                    </HStack>
-                </GridItem>
-                <GridItem>
-                    <VStack align="start" spacing={6}>
-                        <SkeletonText noOfLines={1} skeletonHeight="40px" width="80%" startColor="brand.primary" endColor="brand.secondary" />
-                        <SkeletonText noOfLines={1} skeletonHeight="30px" width="40%" startColor="brand.primary" endColor="brand.secondary" />
-                        <SkeletonText noOfLines={6} spacing="4" startColor="brand.primary" endColor="brand.secondary" />
-                        <Skeleton height="60px" width="100%" borderRadius="md" startColor="brand.primary" endColor="brand.secondary" />
-                    </VStack>
-                </GridItem>
-            </Grid>
-        );
+  const priceText = useMemo(() => {
+    const money = (n) => `$${Number(n).toFixed(2)}`;
+    const mi = product?.priceMin, ma = product?.priceMax;
+    if (typeof mi === 'number' && typeof ma === 'number') {
+      return mi === ma ? money(mi) : `${money(mi)} – ${money(ma)}`;
     }
+    if (typeof mi === 'number') return money(mi);
+    if (typeof ma === 'number') return money(ma);
+    return '';
+  }, [product]);
 
-    if (error) return <Alert status="error" bg="red.900" borderRadius="md" p={6} borderWidth="1px" borderColor="red.500"><AlertIcon color="red.300" /><Text color="white">{error}</Text></Alert>;
-    if (!product) return <Text p={8} color="brand.textLight">Product not found.</Text>;
-
-    const currentPrice = (selectedColor?.sizes.find(s => s.size === selectedSize)?.priceModifier || 0) + product.basePrice;
-
+  if (loading) {
     return (
-        <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={{ base: 6, md: 10 }}>
-            <GridItem>
-                <VStack spacing={4} align="stretch" position="sticky" top="8rem">
-                    <Box bg="brand.primary" borderRadius="xl" p={4} display="flex" justifyContent="center" alignItems="center" h={{ base: "300px", md: "500px" }} borderWidth="1px" borderColor="whiteAlpha.200"> {/* Changed bg to brand.primary */}
-                        <Image src={currentDisplayImage} alt="Main product view" maxH="100%" objectFit="contain" fallback={<Icon as={FaImage} boxSize="100px" color="whiteAlpha.400"/>} />
-                    </Box>
-                    <HStack spacing={3} overflowX="auto" py={2}>
-                        {selectedColor?.imageSet?.map((image, index) => (
-                            <Box key={index} boxSize="70px" flexShrink={0} borderWidth="3px" borderColor={image.url === currentDisplayImage ? "brand.accentYellow" : "transparent"} borderRadius="lg" cursor="pointer" onClick={() => setCurrentDisplayImage(image.url)} p="2px" transition="border-color 0.2s ease">
-                                <Image src={image.url} alt={`Thumbnail ${index + 1}`} boxSize="100%" objectFit="cover" borderRadius="md" fallback={<Icon as={FaImage} boxSize="100%" color="whiteAlpha.300"/>} />
-                            </Box>
-                        ))}
-                    </HStack>
-                </VStack>
-            </GridItem>
-            <GridItem>
-                <VStack spacing={6} align="stretch">
-                    <Heading as="h1" size="2xl" color="brand.textLight">{product.name}</Heading>
-                    <Text fontSize="4xl" fontWeight="bold" color="brand.accentYellow">${currentPrice.toFixed(2)}</Text>
-                    <Text fontSize="md" color="whiteAlpha.800" whiteSpace="pre-wrap" lineHeight="tall">{product.description}</Text>
-                    <Divider borderColor="whiteAlpha.300" />
-                    <FormControl>
-                        <FormLabel fontWeight="bold" fontSize="lg" color="brand.textLight"><Icon as={FaPalette} mr={2} verticalAlign="middle" />Color: <Text as="span" fontWeight="normal" color="whiteAlpha.800">{selectedColor?.colorName}</Text></FormLabel>
-                        <HStack spacing={4} wrap="wrap">
-                            {product.variants.map((variant) => (
-                                <Tooltip key={variant.colorName} label={variant.colorName} placement="top" bg="gray.700" color="white" hasArrow>
-                                    <Button onClick={() => handleColorSelect(variant)} height="48px" width="48px" borderRadius="full" p={0} border="3px solid" borderColor={selectedColor?.colorName === variant.colorName ? "brand.accentYellow" : "whiteAlpha.300"} _hover={{ borderColor: selectedColor?.colorName === variant.colorName ? "brand.accentYellow" : "whiteAlpha.600" }} transition="border-color 0.2s ease">
-                                        <Box bg={variant.colorHex} height="36px" width="36px" borderRadius="full" />
-                                    </Button>
-                                </Tooltip>
-                            ))}
-                        </HStack>
-                    </FormControl>
-                    <FormControl>
-                        <FormLabel fontWeight="bold" fontSize="lg" color="brand.textLight"><Icon as={FaRulerVertical} mr={2} verticalAlign="middle" />Size:</FormLabel>
-                        <ThemedSelect placeholder="Select a size" value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} isDisabled={!selectedColor || selectedColor.sizes.length === 0}>
-                            {selectedColor?.sizes.map(s => <option key={s.size} value={s.size}>{s.size}</option>)}
-                        </ThemedSelect>
-                    </FormControl>
-                    <Button
-                        bg="brand.accentOrange"
-                        color="white"
-                        _hover={{ bg: 'brand.accentOrangeHover' }}
-                        size="lg"
-                        w="100%"
-                        mt={4}
-                        py={7}
-                        leftIcon={<FaPlus />}
-                        onClick={handleCustomizeClick}
-                        isDisabled={!selectedSize}
-                    >
-                        Customize This Item
-                    </Button>
-                </VStack>
-            </GridItem>
-        </Grid>
+      <SimpleGrid columns={{ base: 1, md: 2 }} gap={8} p={6}>
+        <Skeleton height="500px" />
+        <VStack align="stretch" spacing={4}>
+          <Skeleton height="32px" />
+          <Skeleton height="80px" />
+          <Skeleton height="40px" />
+        </VStack>
+      </SimpleGrid>
     );
-};
+  }
 
-export default ProductDetailPage;
+  if (!product) {
+    return (
+      <VStack p={10} spacing={4}>
+        <Heading size="lg">Product not found</Heading>
+        <Button onClick={() => navigate('/shop')}>Back to Shop</Button>
+      </VStack>
+    );
+  }
+
+  return (
+    <SimpleGrid columns={{ base: 1, md: 2 }} gap={8} p={6}>
+      <Box rounded="lg" overflow="hidden" bg="blackAlpha.200">
+        <Image
+          src={product.image || Placeholder}
+          alt={product.name}
+          w="100%"
+          h="auto"
+          objectFit="cover"
+        />
+      </Box>
+
+      <VStack align="stretch" spacing={5}>
+        <Heading size="xl" color={titleColor}>{product.name}</Heading>
+        {priceText && <Text fontSize="2xl" fontWeight="bold">{priceText}</Text>}
+        {product.description && <Text opacity={0.9}>{product.description}</Text>}
+
+        {product.colors?.length > 0 && (
+          <Box>
+            <Text fontWeight="medium" mb={2}>Color</Text>
+            <HStack wrap="wrap" spacing={2}>
+              {product.colors.map(c => (
+                <Button
+                  key={c}
+                  variant={color === c ? 'solid' : 'outline'}
+                  onClick={() => setColor(c)}
+                  size="sm"
+                >
+                  {c}
+                </Button>
+              ))}
+            </HStack>
+          </Box>
+        )}
+
+        {product.sizes?.length > 0 && (
+          <Box>
+            <Text fontWeight="medium" mb={2}>Size</Text>
+            <HStack wrap="wrap" spacing={2}>
+              {product.sizes.map(s => (
+                <Button
+                  key={s}
+                  variant={size === s ? 'solid' : 'outline'}
+                  onClick={() => setSize(s)}
+                  size="sm"
+                >
+                  {s}
+                </Button>
+              ))}
+            </HStack>
+          </Box>
+        )}
+
+        <HStack>
+          <Badge colorScheme="purple">{product.variants?.length || 0} variants</Badge>
+        </HStack>
+
+        <Button
+          isDisabled={!canContinue}
+          onClick={() => {
+            const params = new URLSearchParams({
+              productId: product.id,
+              slug: product.slug,
+              ...(color ? { color } : {}),
+              ...(size  ? { size  } : {}),
+            });
+            navigate(`/studio?${params.toString()}`);
+          }}
+          size="lg"
+          colorScheme={canContinue ? 'purple' : 'gray'}
+        >
+          {canContinue ? 'Customize' : 'Select options to continue'}
+        </Button>
+
+        <Button variant="ghost" onClick={() => navigate('/shop')}>Back to Shop</Button>
+      </VStack>
+    </SimpleGrid>
+  );
+}
