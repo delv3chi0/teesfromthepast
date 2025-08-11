@@ -7,8 +7,9 @@ import { Link as ReactRouterLink } from 'react-router-dom';
 import PropTypes from 'prop-types';
 import QuickViewModal from './QuickViewModal';
 
+const placeholder = 'https://placehold.co/600x750/1a202c/a0aec0?text=No+Image';
+
 function pickPrimaryImage(product) {
-  const placeholder = 'https://placehold.co/600x750/1a202c/a0aec0?text=No+Image';
   if (!product || typeof product !== 'object') return placeholder;
   const direct = product.image || product.thumbnail || product.preview;
   if (direct) return direct;
@@ -50,7 +51,12 @@ export default function ProductCard({ product }) {
 
   const img = pickPrimaryImage(product);
   const price = priceText(product);
-  const slug = product.slug || product.handle || String(product._id ?? product.id ?? '');
+  const slug =
+    product.slug ||
+    product.handle ||
+    (product.name ? product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : null);
+
+  const canViewDetails = !!slug;
 
   const colors = previewColors(product);
 
@@ -87,7 +93,10 @@ export default function ProductCard({ product }) {
 
         <VStack align="flex-start" spacing={2} flexGrow={1}>
           <Heading as="h3" size="lg" color={textColor} noOfLines={2}>
-            <LinkOverlay as={ReactRouterLink} to={`/shop/${slug}`} />
+            {/* NOTE: your route is /product/:slug (not /shop/:slug) */}
+            {canViewDetails ? (
+              <LinkOverlay as={ReactRouterLink} to={`/product/${slug}`} />
+            ) : null}
             {product?.name || 'Untitled Product'}
           </Heading>
           <HStack spacing={2}>
@@ -102,12 +111,19 @@ export default function ProductCard({ product }) {
                   <Box w="16px" h="16px" borderRadius="full" bg="gray.500" border="1px solid rgba(255,255,255,0.5)" />
                 </Tooltip>
               ))}
-              { (product?.colors?.length || 0) > colors.length && <Text fontSize="xs">+ more</Text> }
+              {(product?.colors?.length || 0) > colors.length && <Text fontSize="xs">+ more</Text>}
             </HStack>
           )}
 
           <HStack pt={2}>
-            <Button size="sm" as={ReactRouterLink} to={`/shop/${slug}`} variant="outline">
+            <Button
+              size="sm"
+              as={canViewDetails ? ReactRouterLink : undefined}
+              to={canViewDetails ? `/product/${slug}` : undefined}
+              variant="outline"
+              isDisabled={!canViewDetails}
+              title={canViewDetails ? '' : 'Details unavailable'}
+            >
               View details
             </Button>
             <Button size="sm" colorScheme="purple" onClick={onOpen}>

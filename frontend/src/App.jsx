@@ -1,13 +1,11 @@
 import './index.css';
 
 import React from 'react';
-import { Box, VStack, Heading, Text, Button, SimpleGrid, Icon, Image, Link as ChakraLink, ChakraProvider, Spinner } from '@chakra-ui/react';
-import { useNavigate, Link as RouterLink, Routes, Route, Navigate } from 'react-router-dom';
+import { VStack, Heading, Text, Button, SimpleGrid, Icon, Image, ChakraProvider, Spinner } from '@chakra-ui/react';
+import { useNavigate, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
-// Import your theme
 import theme from './theme';
 
-// Import AuthProvider and all page components
 import { AuthProvider, useAuth } from './context/AuthProvider';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
@@ -22,7 +20,7 @@ import ShopPage from './pages/ShopPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import Generate from "./pages/Generate";
 import MyDesigns from './pages/MyDesigns';
-import ProductStudio from './pages/ProductStudio'; // Assuming ProductStudio.jsx is directly in pages/ now
+import ProductStudio from './pages/ProductStudio';
 import VotingPage from './pages/VotingPage';
 import Profile from './pages/Profile';
 import CheckoutPage from './pages/CheckoutPage';
@@ -33,152 +31,113 @@ import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import AdminPage from './pages/AdminPage';
 
-// --- THE FIX: ADD THESE ICONS TO THE IMPORT LIST ---
-import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa'; // <--- THIS LINE IS CRUCIAL AND NOW CORRECTED
-// --- END OF FIX ---
+import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
 
-
-// --- START: HomePage Component Definition ---
+// --- HomePage (unchanged) ---
 const FeatureCard = ({ icon, title, children }) => (
-    <Box
-        layerStyle="cardBlue" // This applies ALL styles from theme.js's layerStyles.cardBlue
-        p={8}
-        borderRadius="xl"
-        borderWidth="1px"
-        borderColor="transparent"
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        textAlign="center"
-        transition="all 0.2s ease-in-out"
-        _hover={{ transform: "translateY(-5px)", boxShadow: "lg", borderColor: "brand.accentYellow" }}
-    >
-        {/* Icon color now inherits from layerStyle="cardBlue" which has '& svg' rule */}
-        <Icon as={icon} w={12} h={12} mb={5} /> 
-
-        {/* Heading and Text colors will inherit from layerStyle="cardBlue" or its internal rules */}
-        <Heading as="h3" size="lg" mb={3}>{title}</Heading>
-        <Text>{children}</Text>
-    </Box>
+  <VStack layerStyle="cardBlue" p={8} borderRadius="xl" borderWidth="1px" borderColor="transparent"
+          transition="all 0.2s ease-in-out" _hover={{ transform: "translateY(-5px)", boxShadow: "lg", borderColor: "brand.accentYellow" }}>
+    <Icon as={icon} w={12} h={12} mb={5} />
+    <Heading as="h3" size="lg" mb={3}>{title}</Heading>
+    <Text>{children}</Text>
+  </VStack>
 );
 
 const HomePage = () => {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
+  return (
+    <VStack spacing={{ base: 16, md: 24 }} py={{base: 8, md: 16}}>
+      <VStack spacing={8} textAlign="center" px={4}>
+        <Image src="/logo.png" alt="Tees From The Past Logo" maxW={{base: "250px", md: "350px"}} mb={4} />
+        <Heading as="h1" size={{base: "xl", md: "2xl"}} fontFamily="Bungee" textTransform="uppercase" color="brand.textLight">
+          Wear Your Imagination
+        </Heading>
+        <Text fontSize={{base: "lg", md: "xl"}} maxW="3xl" color="whiteAlpha.800" lineHeight="tall">
+          Unleash your creativity with our AI image generator…
+        </Text>
+        <Button colorScheme="brandAccentOrange" size="lg" px={12} py={8} mt={4} fontSize={{base: "xl", md: "2xl"}} onClick={() => navigate('/shop')}>
+          Explore The Collection
+        </Button>
+      </VStack>
 
-    return (
-        <VStack spacing={{ base: 16, md: 24 }} py={{base: 8, md: 16}}>
-            {/* Hero Section */}
-            <VStack spacing={8} textAlign="center" px={4}>
-                <Image src="/logo.png" alt="Tees From The Past Logo" maxW={{base: "250px", md: "350px"}} mb={4} />
-                <Heading as="h1" size={{base: "xl", md: "2xl"}} fontFamily="Bungee" textTransform="uppercase" color="brand.textLight">
-                    Wear Your Imagination
-                </Heading>
-                <Text fontSize={{base: "lg", md: "xl"}} maxW="3xl" color="whiteAlpha.800" lineHeight="tall">
-                    Unleash your creativity with our AI image generator, specializing in stunning retro and vintage styles. Bring your unique ideas to life on high-quality, custom apparel.
-                </Text>
-                <Button
-                    colorScheme="brandAccentOrange"
-                    size="lg"
-                    px={12}
-                    py={8}
-                    mt={4}
-                    fontSize={{base: "xl", md: "2xl"}}
-                    onClick={() => navigate('/shop')}
-                >
-                    Explore The Collection
-                </Button>
-            </VStack>
-
-            {/* Features Section */}
-            <VStack spacing={8} w="100%" px={{ base: 4, md: 8 }}>
-                <Heading as="h2" size="xl" color="brand.textLight">Create. Compete. Collect.</Heading>
-                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={10} w="100%" maxW="container.xl">
-                    <FeatureCard icon={FaPaintBrush} title="Create Custom Art">
-                        Use our powerful AI renderer to dial in the perfect retro design. From pixel art to vintage posters, your imagination is the only limit.
-                    </FeatureCard>
-                    <FeatureCard icon={FaTrophy} title="Win The Monthly Contest">
-                        Submit your best designs for a chance to win! Each month, one winning artist and one random voter receive a free shirt featuring the top-voted design.
-                    </FeatureCard>
-                    <FeatureCard icon={FaUserCheck} title="Your Designs, Your Choice">
-                        Keep your creations private or share them with the community. Every design you save is added to your personal collection to use any time you want.
-                    </FeatureCard>
-                </SimpleGrid>
-            </VStack>
-        </VStack>
-    );
+      <VStack spacing={8} w="100%" px={{ base: 4, md: 8 }}>
+        <Heading as="h2" size="xl" color="brand.textLight">Create. Compete. Collect.</Heading>
+        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={10} w="100%" maxW="container.xl">
+          <FeatureCard icon={FaPaintBrush} title="Create Custom Art">Use our powerful AI renderer…</FeatureCard>
+          <FeatureCard icon={FaTrophy} title="Win The Monthly Contest">Submit your best designs…</FeatureCard>
+          <FeatureCard icon={FaUserCheck} title="Your Designs, Your Choice">Keep your creations private…</FeatureCard>
+        </SimpleGrid>
+      </VStack>
+    </VStack>
+  );
 };
-// --- END: HomePage Component Definition ---
 
+// Small helper to log current path (debug)
+const PathLogger = () => {
+  const location = useLocation();
+  React.useEffect(() => {
+    console.log("[Router] at:", location.pathname + location.search);
+  }, [location]);
+  return null;
+};
 
-// AppContent component to handle initial loading based on AuthProvider state
 const AppContent = () => {
-    const { loadingAuth } = useAuth(); // Get loading state from AuthProvider
-
-    if (loadingAuth) {
-        // This is the full-screen loading overlay.
-        // It uses your theme's primary background and text colors.
-        return (
-            <VStack
-                flex="1"
-                justifyContent="center"
-                alignItems="center"
-                minH="100vh" // Take full viewport height
-                w="100vw" // Take full viewport width
-                bg="brand.primary" // Use your main dark background color from the theme
-                position="fixed" // Fixed to cover entire screen
-                top="0"
-                left="0"
-                zIndex="banner" // Ensure it's on top of everything
-            >
-                {/* Spinner color now comes from theme.js component styling */}
-                <Spinner size="xl" thickness="4px" />
-                <Text mt={4} fontSize="lg" color="brand.textLight">Loading Authentication...</Text>
-            </VStack>
-        );
-    }
-
-    // Once authentication is loaded, render your routes
+  const { loadingAuth } = useAuth();
+  if (loadingAuth) {
     return (
-        <Routes>
-            {/* === PUBLIC ROUTES === */}
-            <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
-            <Route path="/shop" element={<MainLayout><ShopPage /></MainLayout>} />
-            <Route path="/product/:slug" element={<MainLayout><ProductDetailPage /></MainLayout>} />
-
-            {/* Auth pages do not use MainLayout */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegistrationPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-
-            {/* Other public pages */}
-            <Route path="/contact" element={<MainLayout><ContactPage /></MainLayout>} />
-            <Route path="/privacy-policy" element={<MainLayout><PrivacyPolicyPage /></MainLayout>} />
-            <Route path="/terms-of-service" element={<MainLayout><TermsOfServicePage /></MainLayout>} />
-
-            {/* === PROTECTED ROUTES (Require Login) === */}
-            <Route path="/generate" element={<PrivateRoute><MainLayout><Generate /></MainLayout></PrivateRoute>} />
-            <Route path="/my-designs" element={<PrivateRoute><MainLayout><MyDesigns /></MainLayout></PrivateRoute>} />
-            <Route path="/product-studio" element={<PrivateRoute><MainLayout><ProductStudio /></MainLayout></PrivateRoute>} />
-            <Route path="/vote-now" element={<PrivateRoute><MainLayout><VotingPage /></MainLayout></PrivateRoute>} />
-            <Route path="/profile" element={<PrivateRoute><MainLayout><Profile /></MainLayout></PrivateRoute>} />
-            <Route path="/checkout" element={<PrivateRoute><MainLayout><CheckoutPage /></MainLayout></PrivateRoute>} />
-            <Route path="/payment-success" element={<PrivateRoute><MainLayout><PaymentSuccessPage /></MainLayout></PrivateRoute>} />
-            <Route path="/my-orders" element={<PrivateRoute><MainLayout><MyOrdersPage /></MainLayout></PrivateRoute>} />
-            <Route path="/admin" element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>} />
-
-            <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+      <VStack flex="1" justifyContent="center" alignItems="center" minH="100vh" w="100vw" bg="brand.primary" position="fixed" top="0" left="0" zIndex="banner">
+        <Spinner size="xl" thickness="4px" />
+        <Text mt={4} fontSize="lg" color="brand.textLight">Loading Authentication...</Text>
+      </VStack>
     );
+  }
+
+  return (
+    <>
+      <PathLogger />
+      <Routes>
+        {/* PUBLIC */}
+        <Route path="/" element={<MainLayout><HomePage /></MainLayout>} />
+        <Route path="/shop" element={<MainLayout><ShopPage /></MainLayout>} />
+        <Route path="/product/:slug" element={<MainLayout><ProductDetailPage /></MainLayout>} />
+
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegistrationPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/contact" element={<MainLayout><ContactPage /></MainLayout>} />
+        <Route path="/privacy-policy" element={<MainLayout><PrivacyPolicyPage /></MainLayout>} />
+        <Route path="/terms-of-service" element={<MainLayout><TermsOfServicePage /></MainLayout>} />
+
+        {/* PROTECTED */}
+        <Route path="/generate" element={<PrivateRoute><MainLayout><Generate /></MainLayout></PrivateRoute>} />
+        <Route path="/my-designs" element={<PrivateRoute><MainLayout><MyDesigns /></MainLayout></PrivateRoute>} />
+        <Route path="/product-studio" element={<PrivateRoute><MainLayout><ProductStudio /></MainLayout></PrivateRoute>} />
+        <Route path="/vote-now" element={<PrivateRoute><MainLayout><VotingPage /></MainLayout></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><MainLayout><Profile /></MainLayout></PrivateRoute>} />
+        <Route path="/checkout" element={<PrivateRoute><MainLayout><CheckoutPage /></MainLayout></PrivateRoute>} />
+        <Route path="/payment-success" element={<PrivateRoute><MainLayout><PaymentSuccessPage /></MainLayout></PrivateRoute>} />
+        <Route path="/my-orders" element={<PrivateRoute><MainLayout><MyOrdersPage /></MainLayout></PrivateRoute>} />
+        <Route path="/admin" element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>} />
+
+        {/* ✅ Aliases so old links still work */}
+        <Route path="/studio" element={<Navigate to="/product-studio" replace />} />
+        <Route path="/shop/:slug" element={<Navigate to="/product/:slug" replace />} />
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
+  );
 };
 
-// Main App component wrapping ChakraProvider and AuthProvider
 export default function App() {
-    return (
-        <ChakraProvider theme={theme}>
-            <AuthProvider>
-                <AppContent /> {/* Render the new AppContent component */}
-            </AuthProvider>
-        </ChakraProvider>
-    );
+  return (
+    <ChakraProvider theme={theme}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ChakraProvider>
+  );
 }
+
