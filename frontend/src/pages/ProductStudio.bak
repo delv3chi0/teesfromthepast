@@ -50,7 +50,6 @@ const DEFAULT_MOCKUP_IMAGE_MAP = {
         "Center-chest": "/images/mockups/tee_white.png",
         "Oversized front": "/images/mockups/tee_white.png",
     },
-    // Add more colors and their mockup paths here
 };
 
 export default function ProductStudio() {
@@ -183,7 +182,7 @@ export default function ProductStudio() {
             });
             return;
         }
-
+        
         const { widthInches, heightInches } = activePrintArea;
         const DYNAMIC_PRINT_READY_WIDTH = widthInches * DPI;
         const DYNAMIC_PRINT_READY_HEIGHT = heightInches * DPI;
@@ -313,7 +312,6 @@ export default function ProductStudio() {
         }
     }, [selectedProduct]);
 
-    // This effect handles the initial data fetch and URL parsing
     useEffect(() => {
         setLoading(true);
         client.get('/storefront/products')
@@ -353,49 +351,50 @@ export default function ProductStudio() {
 
     // This effect handles the canvas initialization and updates
     useEffect(() => {
-        if (!window.fabric) {
-            console.error("Fabric.js is not loaded.");
+        if (!window.fabric || !canvasWrapperRef.current || !canvasEl.current) {
+            console.warn("Fabric.js or canvas refs are not ready.");
             return;
-        }
-        
-        // Setup ResizeObserver to handle responsive canvas sizing
-        let observer;
-        const resizeCanvas = () => {
-          if (canvasWrapperRef.current && fabricCanvas.current) {
-            const { width } = canvasWrapperRef.current.getBoundingClientRect();
-            const height = width / MOCKUP_PREVIEW_ASPECT_RATIO;
-            fabricCanvas.current.setWidth(width);
-            fabricCanvas.current.setHeight(height);
-            setCanvasSize({ width, height });
-          }
-        };
-
-        if (canvasWrapperRef.current) {
-          observer = new ResizeObserver(resizeCanvas);
-          observer.observe(canvasWrapperRef.current);
         }
 
         // Initialize canvas or get existing instance
         if (!fabricCanvas.current) {
-            const { width, height } = canvasWrapperRef.current.getBoundingClientRect();
+            const parentWidth = canvasWrapperRef.current.clientWidth;
+            const parentHeight = parentWidth / MOCKUP_PREVIEW_ASPECT_RATIO;
+            
             fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
-                width: width,
-                height: height,
+                width: parentWidth,
+                height: parentHeight,
                 preserveObjectStacking: true,
             });
             fabricCanvas.current.on('object:added', () => setHasCanvasObjects(true));
             fabricCanvas.current.on('object:removed', () => setHasCanvasObjects(fabricCanvas.current.getObjects().length > 0));
         }
+        
+        // This function will be called to update canvas dimensions
+        const updateCanvasSize = () => {
+            if (canvasWrapperRef.current && fabricCanvas.current) {
+                const parentWidth = canvasWrapperRef.current.clientWidth;
+                const parentHeight = parentWidth / MOCKUP_PREVIEW_ASPECT_RATIO;
+                fabricCanvas.current.setWidth(parentWidth);
+                fabricCanvas.current.setHeight(parentHeight);
+                setCanvasSize({ width: parentWidth, height: parentHeight });
+            }
+        };
+
+        const observer = new ResizeObserver(updateCanvasSize);
+        observer.observe(canvasWrapperRef.current);
+        
+        updateCanvasSize(); // Initial call to set size
 
         return () => {
-          if (observer) {
-            observer.disconnect();
-          }
+            if (observer) {
+                observer.disconnect();
+            }
         };
+
     }, [MOCKUP_PREVIEW_ASPECT_RATIO]);
 
 
-    // This effect updates the canvas contents based on selected product/color/placement
     useEffect(() => {
       if (!fabricCanvas.current || !selectedProduct || !selectedColorVariant || !selectedPrintAreaPlacement) {
           fabricCanvas.current?.clear();
@@ -410,7 +409,6 @@ export default function ProductStudio() {
           return;
       }
 
-      // Set the active print area dimensions to state
       setActivePrintArea(selectedPrintArea);
 
       const imageSource = selectedColorVariant.imageSet?.[0];
@@ -442,26 +440,24 @@ export default function ProductStudio() {
       userAddedObjects.forEach(obj => fabricCanvas.current.add(obj));
 
       window.fabric.Image.fromURL(mockupImageURL, (img) => {
-          // Scale image to fit canvas while maintaining aspect ratio
           const scaleFactor = Math.min(fabricCanvas.current.width / img.width, fabricCanvas.current.height / img.height);
           
           fabricCanvas.current.setBackgroundImage(img, fabricCanvas.current.renderAll.bind(fabricCanvas.current), {
               scaleX: scaleFactor,
               scaleY: scaleFactor,
-              top: fabricCanvas.current.height/2,
-              left: fabricCanvas.current.width/2,
+              top: fabricCanvas.current.height / 2,
+              left: fabricCanvas.current.width / 2,
               originX: 'center',
               originY: 'center'
           });
 
-          // Calculate print area dimensions based on new canvas size and image scale
           const printAreaPxWidth = selectedPrintArea.widthInches * DPI;
           const printAreaPxHeight = selectedPrintArea.heightInches * DPI;
 
-          // Scale print area based on the same scale factor as the background image
           const scaledPrintAreaWidth = printAreaPxWidth * scaleFactor;
           const scaledPrintAreaHeight = printAreaPxHeight * scaleFactor;
 
+          // Reverting to the simple dotted rectangle for now
           const printAreaGuideline = new window.fabric.Rect({
               id: 'printAreaGuideline',
               left: (fabricCanvas.current.width / 2),
@@ -471,7 +467,7 @@ export default function ProductStudio() {
               width: scaledPrintAreaWidth,
               height: scaledPrintAreaHeight,
               fill: '',
-              stroke: 'rgba(255, 255, 255, 0.7)',
+              stroke: 'white',
               strokeDashArray: [5, 5],
               strokeWidth: 2,
               selectable: false,
@@ -486,7 +482,7 @@ export default function ProductStudio() {
           fabricCanvas.current.add(printAreaGuideline);
       }, { crossOrigin: 'anonymous' });
 
-    }, [selectedProduct, selectedColorVariant, selectedPrintAreaPlacement, currentMockupType, canvasSize]);
+    }, [selectedProduct, selectedColorVariant, selectedPrintAreaPlacement, currentMockupType, canvasSize, designs]);
 
 
     useEffect(() => {
@@ -500,49 +496,44 @@ export default function ProductStudio() {
     }, [user, reactLocation, navigate]);
 
     return (
-        <Flex direction={{ base: 'column', md: 'row' }} minH="100vh" bg="brand.primary">
-            {/* Left Column: Design Canvas Area */}
-            <Box flex="1" p={4} maxW={{ base: '100%', md: '60%' }}>
-                <VStack spacing={4} align="stretch" h="100%">
-                    <Heading as="h1" size="2xl" color="brand.textLight" textAlign="center" mb={6}>3. Customize & Preview</Heading>
-                    {!isCustomizeEnabled && (
-                        <Alert status="info" borderRadius="md" maxW="lg" mx="auto" bg="blue.900" borderWidth="1px" borderColor="blue.500">
-                            <AlertIcon color="blue.300" />
-                            <Text color="whiteAlpha.900">Please select a Product, Color, and Size to begin designing.</Text>
-                        </Alert>
-                    )}
-                    {/* Mockup View Selector */}
-                    <Flex justifyContent="center" mb={4}>
-                      <HStack spacing={2} p={2} bg="brand.secondary" borderRadius="full">
-                        <Tooltip label="Front View" placement="top"><IconButton icon={<Icon as={FaTshirt} />} onClick={() => setCurrentMockupType('front')} colorScheme={currentMockupType === 'front' ? 'brandAccentYellow' : 'gray'} aria-label="Front View"/></Tooltip>
-                        <Tooltip label="Back View" placement="top"><IconButton icon={<Icon as={FaTshirt} transform="scaleX(-1)" />} onClick={() => setCurrentMockupType('back')} colorScheme={currentMockupType === 'back' ? 'brandAccentYellow' : 'gray'} aria-label="Back View"/></Tooltip>
-                        <Tooltip label="Sleeve View" placement="top"><IconButton icon={<Icon as={FaCube} />} onClick={() => setCurrentMockupType('sleeve')} colorScheme={currentMockupType === 'sleeve' ? 'brandAccentYellow' : 'gray'} aria-label="Sleeve View"/></Tooltip>
-                      </HStack>
-                    </Flex>
+        <Flex direction={{ base: 'column', lg: 'row' }} minH="100vh" bg="brand.primary">
+            <Box flex="1" p={4} maxW={{ base: '100%', lg: '70%' }} bg="brand.primary" position="relative">
+                <Flex direction="column" alignItems="center" justifyContent="center" h="100%">
                     <Box
-                        ref={canvasWrapperRef}
-                        flexGrow="1"
                         w="100%"
-                        maxW="1000px"
+                        maxW="700px"
                         mx="auto"
-                        bg="brand.primary"
-                        borderRadius="md"
-                        borderWidth="1px"
-                        borderColor="whiteAlpha.300"
-                        overflow="hidden"
                         position="relative"
                     >
-                        <canvas ref={canvasEl} />
+                        <HStack justifyContent="center" mb={4} spacing={2} bg="brand.secondary" p={2} borderRadius="md">
+                            <Tooltip label="Front View" placement="top"><Button onClick={() => setCurrentMockupType('front')} colorScheme={currentMockupType === 'front' ? 'brandAccentYellow' : 'gray'} aria-label="Front View">Front</Button></Tooltip>
+                            <Tooltip label="Back View" placement="top"><Button onClick={() => setCurrentMockupType('back')} colorScheme={currentMockupType === 'back' ? 'brandAccentYellow' : 'gray'} aria-label="Back View">Back</Button></Tooltip>
+                            <Tooltip label="Sleeve View" placement="top"><Button onClick={() => setCurrentMockupType('sleeve')} colorScheme={currentMockupType === 'sleeve' ? 'brandAccentYellow' : 'gray'} aria-label="Sleeve View">Sleeve</Button></Tooltip>
+                        </HStack>
+                        
+                        <Box
+                            ref={canvasWrapperRef}
+                            w="100%"
+                            paddingTop={`${100 / MOCKUP_PREVIEW_ASPECT_RATIO}%`}
+                            bg="brand.secondary"
+                            borderRadius="md"
+                            borderWidth="1px"
+                            borderColor="whiteAlpha.300"
+                            overflow="hidden"
+                            position="relative"
+                        >
+                            <canvas ref={canvasEl} style={{ position: 'absolute', top: 0, left: 0 }} />
+                        </Box>
                     </Box>
-                    <HStack justifyContent="center" spacing={4} mt={4}>
-                      <Tooltip label="Delete selected item" placement="bottom"><Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm">Delete</Button></Tooltip>
-                      <Tooltip label="Center selected item horizontally" placement="bottom"><Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="blue" variant="outline" size="sm">Center</Button></Tooltip>
-                    </HStack>
-                </VStack>
+                </Flex>
+
+                <HStack justifyContent="center" spacing={4} mt={4}>
+                    <Tooltip label="Delete selected item" placement="bottom"><Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm">Delete</Button></Tooltip>
+                    <Tooltip label="Center selected item horizontally" placement="bottom"><Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="blue" variant="outline" size="sm">Center</Button></Tooltip>
+                </HStack>
             </Box>
 
-            {/* Right Column: Controls Sidebar */}
-            <Box flex="1" p={4} bg="brand.paper" borderRadius="xl">
+            <Box flex="1" p={4} maxW={{ base: '100%', lg: '30%' }} bg="brand.paper" borderRadius="xl">
                 <VStack spacing={6} align="stretch">
                     <Heading as="h2" size="xl" color="brand.textLight">Design Controls</Heading>
 

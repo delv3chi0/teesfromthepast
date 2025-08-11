@@ -1,701 +1,552 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
-    Box, Heading, Text, VStack, Select, SimpleGrid, Image, Spinner, Alert,
-    AlertIcon, Divider, useToast, Icon, Button, FormControl, FormLabel, Link as ChakraLink,
-    Flex, Tooltip, AspectRatio, Input, InputGroup, InputRightElement, IconButton,
-    NumberInput, NumberInputField, NumberInputStepper,
-    NumberIncrementStepper, NumberDecrementStepper, HStack
-} from '@chakra-ui/react';
-import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
-import { client } from '../api/client';
-import { useAuth } from '../context/AuthProvider';
-import { FaShoppingCart, FaTshirt, FaTrash, FaEyeDropper, FaArrowsAltH, FaCube } from 'react-icons/fa';
+  Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid, AspectRatio, Image,
+  Tooltip, useToast, Skeleton, NumberInput, NumberInputField, NumberInputStepper,
+  NumberIncrementStepper, NumberDecrementStepper, Input, InputGroup, InputRightElement, Select,
+  Divider, Badge, Slider, SliderTrack, SliderFilledTrack, SliderThumb
+} from "@chakra-ui/react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { client } from "../api/client";
+import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus } from "react-icons/fa";
 
-// Reusable ThemedSelect for consistency
-const ThemedSelect = (props) => (
-    <Select
-        size="lg"
-        bg="brand.secondary"
-        borderColor="whiteAlpha.300"
-        _hover={{ borderColor: "brand.accentYellow" }}
-        focusBorderColor="brand.accentYellow"
-        {...props}
-    />
-);
-
-// Reusable ThemedInput component for customization controls
-const ThemedControlInput = (props) => (
-    <Input
-        size="sm"
-        bg="brand.secondary"
-        borderColor="whiteAlpha.300"
-        _hover={{ borderColor: "brand.accentYellow" }}
-        focusBorderColor="brand.accentYellow"
-        {...props}
-    />
-);
-
-const DEFAULT_MOCKUP_IMAGE_MAP = {
-    "Black": {
-        "Full-front": "/images/mockups/tee_black.png",
-        "Full-back": "/images/mockups/tee_black_back.png",
-        "Sleeve": "/images/mockups/tee_black_sleeve.png",
-        "Center-chest": "/images/mockups/tee_black.png",
-        "Oversized front": "/images/mockups/tee_black.png",
-    },
-    "White": {
-        "Full-front": "/images/mockups/tee_white.png",
-        "Full-back": "/images/mockups/tee_white_back.png",
-        "Sleeve": "/images/mockups/tee_white_sleeve.png",
-        "Center-chest": "/images/mockups/tee_white.png",
-        "Oversized front": "/images/mockups/tee_white.png",
-    },
+// --- constants (approx print areas; tune later per product/variant) ---
+const DPI = 300;
+const PRINT_AREAS = {
+  front: { widthInches: 12, heightInches: 16 },
+  back: { widthInches: 12, heightInches: 16 },
+  sleeve: { widthInches: 3.5, heightInches: 3.5 },
 };
+const ASPECT = 2 / 3; // preview canvas aspect
+
+const Placeholder = "https://placehold.co/800x1000/1a202c/a0aec0?text=No+Image";
+
+function useQuery() {
+  const { search } = useLocation();
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+// collect a decent mockup for a given "view"
+function getMockupUrl(product, view, color) {
+  if (!product) return null;
+  // prefer variant with matching color
+  const v = (product.variants || []).find((x) => !color || x.color === color) || product.variants?.[0];
+
+  const tryFiles = (files=[]) => {
+    const byType = (t) => files.find((f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
+    const f = byType("preview") || byType("mockup") || files[0];
+    return f?.preview_url || f?.url || f?.thumbnail_url || null;
+  };
+
+  const pick = () => {
+    // naive mapping: any file works as preview; over time, store per-view URLs
+    if (v?.image) return v.image;
+    if (v?.imageSet?.[0]?.url) return v.imageSet[0].url;
+    const f = tryFiles(v?.files);
+    if (f) return f;
+    if (product.image) return product.image;
+    if (product.images?.[0]?.url) return product.images[0].url;
+    if (product.images?.[0]) return product.images[0];
+    return null;
+  };
+
+  return pick() || Placeholder;
+}
 
 export default function ProductStudio() {
-    const { user } = useAuth();
-    const navigate = useNavigate();
-    const toast = useToast();
-    const reactLocation = useLocation();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const query = useQuery();
 
-    const DPI = 300;
-    const MOCKUP_PREVIEW_ASPECT_RATIO = 2 / 3;
+  // from /studio?productId=&slug=&color=&size=
+  const slugFromQuery = query.get("slug") || "";
+  const colorFromQuery = query.get("color") || "";
+  const sizeFromQuery = query.get("size") || "";
 
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [designs, setDesigns] = useState([]);
-    const [loadingDesigns, setLoadingDesigns] = useState(true);
-    const [selectedProductId, setSelectedProductId] = useState('');
-    const [selectedColorName, setSelectedColorName] = useState('');
-    const [selectedSize, setSelectedSize] = useState('');
-    const [selectedDesign, setSelectedDesign] = useState(null);
-    const [currentMockupType, setCurrentMockupType] = useState('front');
-    const [selectedPrintAreaPlacement, setSelectedPrintAreaPlacement] = useState('');
-    const [textInputValue, setTextInputValue] = useState('');
-    const [textColor, setTextColor] = useState('#FDF6EE');
-    const [fontSize, setFontSize] = useState(30);
-    const [fontFamily, setFontFamily] = useState('Montserrat');
-    const [hasCanvasObjects, setHasCanvasObjects] = useState(false);
-    const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [product, setProduct] = useState(null);
+  const [view, setView] = useState("front");
+  const [color, setColor] = useState(colorFromQuery);
+  const [size, setSize] = useState(sizeFromQuery);
 
-    const canvasEl = useRef(null);
-    const canvasWrapperRef = useRef(null);
-    const fabricCanvas = useRef(null);
+  // canvas
+  const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
+  const fabricRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
+  const [hasObjects, setHasObjects] = useState(false);
 
-    const selectedProduct = products.find(p => p._id === selectedProductId);
-    const uniqueColorVariants = selectedProduct ? [...new Map(selectedProduct.variants.map(v => [v.colorName, v])).values()] : [];
-    const selectedColorVariant = selectedProduct?.variants.find(v => v.colorName === selectedColorName);
-    const availableSizes = selectedColorVariant?.sizes?.filter(s => s.inStock) || [];
-    const selectedSizeVariant = availableSizes.find(s => s.size === selectedSize);
-    const finalVariant = selectedColorVariant && selectedSizeVariant ? { ...selectedColorVariant, ...selectedSizeVariant } : null;
-    const hasSelectedDesign = selectedDesign !== null;
+  // text tool
+  const [textValue, setTextValue] = useState("");
+  const [textColor, setTextColor] = useState("#ffffff");
+  const [textSize, setTextSize] = useState(36);
 
-    const [activePrintArea, setActivePrintArea] = useState(null);
-    const isCustomizeEnabled = selectedProductId && selectedColorName && selectedSize;
+  // designs library
+  const [designs, setDesigns] = useState([]);
+  const [loadingDesigns, setLoadingDesigns] = useState(true);
+  const [selectedDesignId, setSelectedDesignId] = useState(null);
 
-    const addTextToCanvas = useCallback(() => {
-        if (!fabricCanvas.current || !textInputValue.trim()) {
-            toast({ title: "Please enter text content.", status: "warning", isClosable: true });
-            return;
+  // undo/redo stacks
+  const undoStack = useRef([]);
+  const redoStack = useRef([]);
+
+  // ---- fetch product by slug (preferred) ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!slugFromQuery) return;
+        const res = await client.get(`/storefront/product/${slugFromQuery}`);
+        if (!cancelled) {
+          const p = res.data;
+          setProduct(p);
+          if (!colorFromQuery && p.colors?.length) setColor(p.colors[0]);
+          if (!sizeFromQuery  && p.sizes?.length)  setSize(p.sizes[0]);
         }
-        const textObject = new window.fabric.IText(textInputValue, {
-            left: (fabricCanvas.current.width / 2),
-            top: (fabricCanvas.current.height * 0.40),
-            originX: 'center',
-            originY: 'center',
-            fill: textColor,
-            fontSize: fontSize,
-            fontFamily: fontFamily,
-            hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
-            cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-        });
-        fabricCanvas.current.add(textObject);
-        fabricCanvas.current.setActiveObject(textObject);
-        fabricCanvas.current.renderAll();
-        setTextInputValue('');
-    }, [textInputValue, textColor, fontSize, fontFamily, toast]);
-
-    const addDesignToCanvas = useCallback((design) => {
-        if (!fabricCanvas.current || !design?.imageDataUrl) {
-            toast({ title: "No design to add.", status: "warning", isClosable: true });
-            return;
-        }
-        const activeObjects = fabricCanvas.current.getObjects().filter(obj => obj.id && obj.id.startsWith('design-'));
-        if (activeObjects.length > 0) {
-            toast({ title: "Design already on canvas", description: "You can only place one design at a time. To add a new one, please delete the current one first.", status: "info", isClosable: true });
-            return;
-        }
-        window.fabric.Image.fromURL(design.imageDataUrl, img => {
-            img.set({
-                id: `design-${design._id}`,
-                left: fabricCanvas.current.width / 2,
-                top: fabricCanvas.current.height / 2,
-                originX: 'center',
-                originY: 'center',
-                hasControls: true, hasBorders: true, borderColor: 'brand.accentYellow',
-                cornerColor: 'brand.accentYellow', cornerSize: 8, transparentCorners: false,
-                scaleX: 0.5,
-                scaleY: 0.5
-            });
-            fabricCanvas.current.add(img);
-            fabricCanvas.current.setActiveObject(img);
-            fabricCanvas.current.renderAll();
-            setSelectedDesign(design);
-        }, { crossOrigin: 'anonymous' });
-    }, [toast]);
-
-    const deleteSelectedObject = useCallback(() => {
-        if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject && activeObject.id !== 'printAreaGuideline' && activeObject.id !== 'teeMockupImage') {
-                fabricCanvas.current.remove(activeObject);
-                fabricCanvas.current.discardActiveObject();
-                fabricCanvas.current.renderAll();
-                if (selectedDesign && activeObject.id === `design-${selectedDesign._id}`) {
-                    setSelectedDesign(null);
-                }
-            } else {
-                toast({ title: "No deletable object selected", description: "Select custom text or a design on the canvas to delete it. The shirt and print area are not deletable.", status: "info", isClosable: true });
-            }
-        }
-    }, [selectedDesign, toast]);
-
-    const centerSelectedObject = useCallback(() => {
-        if (fabricCanvas.current) {
-            const activeObject = fabricCanvas.current.getActiveObject();
-            if (activeObject && activeObject.id !== 'printAreaGuideline' && activeObject.id !== 'teeMockupImage') {
-                activeObject.centerH();
-                fabricCanvas.current.renderAll();
-            } else {
-                toast({ title: "No object selected", description: "Select text or a design on the canvas to center it.", status: "info", isClosable: true });
-            }
-        }
-    }, [toast]);
-
-    const handleProceedToCheckout = useCallback(async () => {
-        if (!isCustomizeEnabled || (!hasSelectedDesign && !hasCanvasObjects) || !activePrintArea) {
-            toast({
-                title: "Incomplete Customization",
-                description: "Please select a Product, Color, and Size, AND select a design or add custom text/elements.",
-                status: "warning",
-                isClosable: true
-            });
-            return;
-        }
-        
-        const { widthInches, heightInches } = activePrintArea;
-        const DYNAMIC_PRINT_READY_WIDTH = widthInches * DPI;
-        const DYNAMIC_PRINT_READY_HEIGHT = heightInches * DPI;
-
-        const previewCanvasTemp = new window.fabric.Canvas(null, { width: fabricCanvas.current.width, height: fabricCanvas.current.height });
-        if (fabricCanvas.current.backgroundImage) {
-            previewCanvasTemp.setBackgroundImage(fabricCanvas.current.backgroundImage, previewCanvasTemp.renderAll.bind(previewCanvasTemp));
-        }
-        fabricCanvas.current.getObjects().filter(obj => obj.id !== 'printAreaGuideline').forEach(obj => {
-            previewCanvasTemp.add(window.fabric.util.object.clone(obj));
-        });
-        previewCanvasTemp.renderAll();
-        const finalPreviewImage = previewCanvasTemp.toDataURL({ format: 'png', quality: 1.0, multiplier: 1 });
-        previewCanvasTemp.dispose();
-
-        const printReadyCanvas = new window.fabric.Canvas(null, { width: DYNAMIC_PRINT_READY_WIDTH, height: DYNAMIC_PRINT_READY_HEIGHT });
-        const customizableObjects = fabricCanvas.current.getObjects().filter(obj => obj.type === 'i-text' || (obj.id && obj.id.startsWith('design-')));
-        const printAreaGuideline = fabricCanvas.current.getObjects().find(obj => obj.id === 'printAreaGuideline');
-
-        if (customizableObjects.length === 0) {
-            toast({ title: "Error", description: "No design elements found on canvas for print.", status: "error" });
-            return;
-        }
-
-        if (!printAreaGuideline) {
-            toast({ title: "Error", description: "Print area guideline not found on canvas.", status: "error" });
-            return;
-        }
-
-        const previewToPrintScalingFactor = DYNAMIC_PRINT_READY_WIDTH / printAreaGuideline.width;
-        
-        customizableObjects.forEach(obj => {
-            const clonedObject = window.fabric.util.object.clone(obj);
-            const originalRelX = obj.left - printAreaGuideline.left;
-            const originalRelY = obj.top - printAreaGuideline.top;
-
-            clonedObject.set({
-                hasControls: false, hasBorders: false,
-                angle: obj.angle,
-                scaleX: obj.scaleX * previewToPrintScalingFactor,
-                scaleY: obj.scaleY * previewToPrintScalingFactor,
-                left: (DYNAMIC_PRINT_READY_WIDTH / 2) + originalRelX * previewToPrintScalingFactor,
-                top: (DYNAMIC_PRINT_READY_HEIGHT / 2) + originalRelY * previewToPrintScalingFactor,
-                originX: 'center',
-                originY: 'center',
-                fontSize: obj.type === 'i-text' ? obj.fontSize * previewToPrintScalingFactor : undefined,
-            });
-            printReadyCanvas.add(clonedObject);
-        });
-
-        if (printReadyCanvas.getObjects().length === 0) {
-            toast({ title: "Error", description: "Canvas content disappeared during print generation.", status: "error" });
-            return;
-        }
-
-        printReadyCanvas.renderAll();
-        const printReadyDesignDataUrl = printReadyCanvas.toDataURL({ format: 'png', quality: 1.0, multiplier: 1 });
-        printReadyCanvas.dispose();
-
-        let cloudinaryPublicUrl = '';
-        try {
-            toast({
-                title: "Uploading design...",
-                description: "Preparing your custom design for print. This may take a moment. Please do not close this window.",
-                status: "info", duration: null, isClosable: false, position: "top",
-            });
-            const uploadResponse = await client.post('/upload-print-file', {
-                imageData: printReadyDesignDataUrl,
-                designName: selectedDesign?.prompt || `${selectedProduct.name} Custom Design`,
-            });
-            cloudinaryPublicUrl = uploadResponse.data.publicUrl;
-            toast.closeAll();
-            toast({ title: "Design uploaded!", description: "Your custom design is ready.", status: "success", isClosable: true });
-        } catch (error) {
-            console.error("Error uploading print file to Cloudinary:", error);
-            toast.closeAll();
-            toast({
-                title: "Upload Failed",
-                description: "Could not upload your design for printing. Please try again.",
-                status: "error", isClosable: true,
-            });
-            return;
-        }
-
-        const primaryImage = finalVariant.imageSet?.[0] || {};
-        const checkoutItem = {
-            designId: selectedDesign?._id || 'custom-design-' + Date.now(),
-            productId: selectedProductId, productName: selectedProduct.name, variantSku: finalVariant.sku,
-            size: finalVariant.size, color: finalVariant.colorName,
-            prompt: selectedDesign?.prompt || "Customized design",
-            imageDataUrl: finalPreviewImage,
-            printReadyDataUrl: cloudinaryPublicUrl,
-            productImage: primaryImage.url,
-            unitPrice: (selectedProduct.basePrice + (finalVariant.priceModifier || 0)),
-            view: currentMockupType
-        };
-        localStorage.setItem('itemToCheckout', JSON.stringify(checkoutItem));
-        navigate('/checkout');
-    }, [selectedDesign, finalVariant, selectedProductId, selectedProduct, navigate, toast, hasSelectedDesign, hasCanvasObjects,
-        DPI, activePrintArea, currentMockupType, isCustomizeEnabled
-    ]);
-
-    const handleProductChange = useCallback((e) => {
-        const newProductId = e.target.value;
-        setSelectedProductId(newProductId);
-        setSelectedColorName('');
-        setSelectedSize('');
-        const newSelectedProduct = products.find(p => p._id === newProductId);
-        if (newSelectedProduct?.variants?.length > 0) {
-            const defaultColor = newSelectedProduct.variants.find(v => v.isDefaultDisplay) || newSelectedProduct.variants[0];
-            setSelectedColorName(defaultColor.colorName);
-            if (defaultColor.sizes?.length > 0) { setSelectedSize(defaultColor.sizes[0].size); }
-            if (defaultColor.printAreas?.length > 0) {
-                setSelectedPrintAreaPlacement(defaultColor.printAreas[0].placement);
-            }
-        }
-    }, [products]);
-
-    const handleColorChange = useCallback((e) => {
-        const newColor = e.target.value;
-        setSelectedColorName(newColor);
-        setSelectedSize('');
-        const newColorVariant = selectedProduct?.variants.find(v => v.colorName === newColor);
-        if (newColorVariant?.sizes?.length > 0) { setSelectedSize(newColorVariant.sizes[0].size); }
-        if (newColorVariant?.printAreas?.length > 0) {
-            setSelectedPrintAreaPlacement(newColorVariant.printAreas[0].placement);
-        }
-    }, [selectedProduct]);
-
-    useEffect(() => {
-        setLoading(true);
-        client.get('/storefront/products')
-            .then(res => {
-                const fetchedProducts = res.data || [];
-                setProducts(fetchedProducts);
-                const params = new URLSearchParams(reactLocation.search);
-                const productId = params.get('productId');
-                const color = params.get('color');
-                const size = params.get('size');
-                
-                let initialProduct = null;
-                if (productId) {
-                    initialProduct = fetchedProducts.find(p => p._id === productId);
-                } else if (fetchedProducts.length > 0) {
-                    initialProduct = fetchedProducts[0];
-                }
-
-                if (initialProduct) {
-                    setSelectedProductId(initialProduct._id);
-                    let initialColorVariant = initialProduct.variants.find(v => v.colorName === color) || initialProduct.variants.find(v => v.isDefaultDisplay) || initialProduct.variants[0];
-                    if (initialColorVariant) {
-                        setSelectedColorName(initialColorVariant.colorName);
-                        setSelectedSize(initialColorVariant.sizes.find(s => s.size === size)?.size || (initialColorVariant.sizes.length > 0 ? initialColorVariant.sizes[0].size : ''));
-                        if (initialColorVariant.printAreas.length > 0) {
-                            setSelectedPrintAreaPlacement(initialColorVariant.printAreas[0].placement);
-                        }
-                    }
-                }
-            })
-            .catch(err => {
-                console.error("Failed to fetch products for Product Studio:", err);
-                toast({ title: "Error", description: "Could not load products for customization. Please try again later.", status: "error" });
-            })
-            .finally(() => setLoading(false));
-    }, [reactLocation.search, toast]);
-
-    // This effect handles the canvas initialization and updates
-    useEffect(() => {
-        if (!window.fabric || !canvasWrapperRef.current || !canvasEl.current) {
-            console.warn("Fabric.js or canvas refs are not ready.");
-            return;
-        }
-
-        // Initialize canvas or get existing instance
-        if (!fabricCanvas.current) {
-            const parentWidth = canvasWrapperRef.current.clientWidth;
-            const parentHeight = parentWidth / MOCKUP_PREVIEW_ASPECT_RATIO;
-            
-            fabricCanvas.current = new window.fabric.Canvas(canvasEl.current, {
-                width: parentWidth,
-                height: parentHeight,
-                preserveObjectStacking: true,
-            });
-            fabricCanvas.current.on('object:added', () => setHasCanvasObjects(true));
-            fabricCanvas.current.on('object:removed', () => setHasCanvasObjects(fabricCanvas.current.getObjects().length > 0));
-        }
-        
-        // This function will be called to update canvas dimensions
-        const updateCanvasSize = () => {
-            if (canvasWrapperRef.current && fabricCanvas.current) {
-                const parentWidth = canvasWrapperRef.current.clientWidth;
-                const parentHeight = parentWidth / MOCKUP_PREVIEW_ASPECT_RATIO;
-                fabricCanvas.current.setWidth(parentWidth);
-                fabricCanvas.current.setHeight(parentHeight);
-                setCanvasSize({ width: parentWidth, height: parentHeight });
-            }
-        };
-
-        const observer = new ResizeObserver(updateCanvasSize);
-        observer.observe(canvasWrapperRef.current);
-        
-        updateCanvasSize(); // Initial call to set size
-
-        return () => {
-            if (observer) {
-                observer.disconnect();
-            }
-        };
-
-    }, [MOCKUP_PREVIEW_ASPECT_RATIO]);
-
-
-    useEffect(() => {
-      if (!fabricCanvas.current || !selectedProduct || !selectedColorVariant || !selectedPrintAreaPlacement) {
-          fabricCanvas.current?.clear();
-          setActivePrintArea(null);
-          return;
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Could not load product", status: "error" });
       }
+    })();
+    return () => { cancelled = true; };
+  }, [slugFromQuery, toast]); // eslint-disable-line
 
-      const selectedPrintArea = selectedColorVariant.printAreas.find(pa => pa.placement === selectedPrintAreaPlacement);
-      if (!selectedPrintArea) {
-          fabricCanvas.current.clear();
-          setActivePrintArea(null);
-          return;
+  // ---- fetch saved designs for user ----
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingDesigns(true);
+        const res = await client.get("/mydesigns");
+        if (!cancelled) setDesigns(res.data || []);
+      } catch (e) {
+        // not fatal
+      } finally {
+        if (!cancelled) setLoadingDesigns(false);
       }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
-      setActivePrintArea(selectedPrintArea);
+  // ---- init fabric canvas ----
+  useEffect(() => {
+    if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
-      const imageSource = selectedColorVariant.imageSet?.[0];
-      let mockupImageURL = '';
+    if (!fabricRef.current) {
+      const parentW = wrapRef.current.clientWidth;
+      const parentH = parentW / ASPECT;
 
-      switch(currentMockupType) {
-        case 'front':
-          mockupImageURL = imageSource?.frontMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Full-front'];
-          break;
-        case 'back':
-          mockupImageURL = imageSource?.backMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Full-back'];
-          break;
-        case 'sleeve':
-          mockupImageURL = imageSource?.sleeveMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Sleeve'];
-          break;
-        default:
-          mockupImageURL = imageSource?.frontMockupUrl || DEFAULT_MOCKUP_IMAGE_MAP[selectedColorName]?.['Full-front'];
-      }
+      const fc = new window.fabric.Canvas(canvasRef.current, {
+        width: parentW,
+        height: parentH,
+        preserveObjectStacking: true,
+        selection: true,
+      });
+      fabricRef.current = fc;
 
-      if (!mockupImageURL) {
-        console.error(`No mockup URL found for ${selectedColorName} and view ${currentMockupType}`);
-        return;
-      }
-      
-      const userAddedObjects = fabricCanvas.current.getObjects().filter(obj =>
-        obj.id !== 'printAreaGuideline'
-      );
-      fabricCanvas.current.clear();
-      userAddedObjects.forEach(obj => fabricCanvas.current.add(obj));
+      const onChange = () => setHasObjects(fc.getObjects().filter(o => o.id !== "printArea").length > 0);
+      fc.on("object:added", onChange);
+      fc.on("object:removed", onChange);
+      fc.on("object:modified", onChange);
+    }
 
-      window.fabric.Image.fromURL(mockupImageURL, (img) => {
-          const scaleFactor = Math.min(fabricCanvas.current.width / img.width, fabricCanvas.current.height / img.height);
-          
-          fabricCanvas.current.setBackgroundImage(img, fabricCanvas.current.renderAll.bind(fabricCanvas.current), {
-              scaleX: scaleFactor,
-              scaleY: scaleFactor,
-              top: fabricCanvas.current.height / 2,
-              left: fabricCanvas.current.width / 2,
-              originX: 'center',
-              originY: 'center'
-          });
+    const ro = new ResizeObserver(() => {
+      if (!fabricRef.current) return;
+      const w = wrapRef.current.clientWidth;
+      const h = w / ASPECT;
+      fabricRef.current.setWidth(w);
+      fabricRef.current.setHeight(h);
+      fabricRef.current.requestRenderAll();
+    });
+    ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-          const printAreaPxWidth = selectedPrintArea.widthInches * DPI;
-          const printAreaPxHeight = selectedPrintArea.heightInches * DPI;
+  // ---- helpers: history ----
+  const pushHistory = useCallback(() => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    redoStack.current = [];
+    undoStack.current.push(JSON.stringify(fc.toDatalessJSON(["id"])));
+    if (undoStack.current.length > 50) undoStack.current.shift();
+  }, []);
 
-          const scaledPrintAreaWidth = printAreaPxWidth * scaleFactor;
-          const scaledPrintAreaHeight = printAreaPxHeight * scaleFactor;
+  const applyJSON = (json) => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    fc.loadFromJSON(json, () => fc.renderAll(), (o, obj) => obj);
+  };
 
-          // Reverting to the simple dotted rectangle for now
-          const printAreaGuideline = new window.fabric.Rect({
-              id: 'printAreaGuideline',
-              left: (fabricCanvas.current.width / 2),
-              top: (fabricCanvas.current.height / 2),
-              originX: 'center',
-              originY: 'center',
-              width: scaledPrintAreaWidth,
-              height: scaledPrintAreaHeight,
-              fill: '',
-              stroke: 'white',
-              strokeDashArray: [5, 5],
-              strokeWidth: 2,
-              selectable: false,
-              evented: false,
-              lockMovementX: true,
-              lockMovementY: true,
-              lockRotation: true,
-              lockScalingX: true,
-              lockScalingY: true,
-          });
-          
-          fabricCanvas.current.add(printAreaGuideline);
-      }, { crossOrigin: 'anonymous' });
+  const undo = () => {
+    const fc = fabricRef.current;
+    if (!fc || undoStack.current.length === 0) return;
+    const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
+    redoStack.current.push(curr);
+    const prev = undoStack.current.pop();
+    if (prev) applyJSON(prev);
+  };
 
-    }, [selectedProduct, selectedColorVariant, selectedPrintAreaPlacement, currentMockupType, canvasSize, designs]);
+  const redo = () => {
+    const fc = fabricRef.current;
+    if (!fc || redoStack.current.length === 0) return;
+    const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
+    undoStack.current.push(curr);
+    const nxt = redoStack.current.pop();
+    if (nxt) applyJSON(nxt);
+  };
 
+  // ---- draw mockup + print area ----
+  const refreshBackground = useCallback(() => {
+    const fc = fabricRef.current;
+    if (!fc) return;
 
-    useEffect(() => {
-        if (user) {
-            setLoadingDesigns(true);
-            client.get('/mydesigns').then(res => setDesigns(res.data || [])).finally(() => setLoadingDesigns(false));
-        } else {
-            setDesigns([]);
-            setLoadingDesigns(false);
-        }
-    }, [user, reactLocation, navigate]);
+    const imgUrl = getMockupUrl(product, view, color) || Placeholder;
 
-    return (
-        <Flex direction={{ base: 'column', lg: 'row' }} minH="100vh" bg="brand.primary">
-            <Box flex="1" p={4} maxW={{ base: '100%', lg: '70%' }} bg="brand.primary" position="relative">
-                <Flex direction="column" alignItems="center" justifyContent="center" h="100%">
-                    <Box
-                        w="100%"
-                        maxW="700px"
-                        mx="auto"
-                        position="relative"
-                    >
-                        <HStack justifyContent="center" mb={4} spacing={2} bg="brand.secondary" p={2} borderRadius="md">
-                            <Tooltip label="Front View" placement="top"><Button onClick={() => setCurrentMockupType('front')} colorScheme={currentMockupType === 'front' ? 'brandAccentYellow' : 'gray'} aria-label="Front View">Front</Button></Tooltip>
-                            <Tooltip label="Back View" placement="top"><Button onClick={() => setCurrentMockupType('back')} colorScheme={currentMockupType === 'back' ? 'brandAccentYellow' : 'gray'} aria-label="Back View">Back</Button></Tooltip>
-                            <Tooltip label="Sleeve View" placement="top"><Button onClick={() => setCurrentMockupType('sleeve')} colorScheme={currentMockupType === 'sleeve' ? 'brandAccentYellow' : 'gray'} aria-label="Sleeve View">Sleeve</Button></Tooltip>
-                        </HStack>
-                        
+    // keep user objects
+    const userObjects = fc.getObjects().filter((o) => o.id !== "printArea");
+    fc.clear();
+    userObjects.forEach((o) => fc.add(o));
+
+    window.fabric.Image.fromURL(imgUrl, (img) => {
+      const scale = Math.min(fc.width / img.width, fc.height / img.height);
+      fc.setBackgroundImage(img, fc.renderAll.bind(fc), {
+        scaleX: scale,
+        scaleY: scale,
+        top: fc.height / 2,
+        left: fc.width / 2,
+        originX: "center",
+        originY: "center"
+      });
+
+      const area = PRINT_AREAS[view] || PRINT_AREAS.front;
+      const pxW = area.widthInches * DPI * (scale / 3);   // preview downscale fudge
+      const pxH = area.heightInches * DPI * (scale / 3);
+
+      const rect = new window.fabric.Rect({
+        id: "printArea",
+        left: fc.width / 2,
+        top: fc.height / 2,
+        originX: "center",
+        originY: "center",
+        width: pxW,
+        height: pxH,
+        fill: "",
+        stroke: "white",
+        strokeDashArray: [6, 6],
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+        lockMovementX: true,
+        lockMovementY: true,
+      });
+      fc.add(rect);
+      fc.requestRenderAll();
+    }, { crossOrigin: "anonymous" });
+  }, [product, view, color]);
+
+  useEffect(() => { refreshBackground(); }, [refreshBackground]);
+
+  // ---- object constraints: keep items inside print area ----
+  useEffect(() => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+
+    const constrain = () => {
+      const area = fc.getObjects().find((o) => o.id === "printArea");
+      if (!area) return;
+      const objs = fc.getObjects().filter((o) => o.id !== "printArea");
+      objs.forEach((o) => {
+        const bb = o.getBoundingRect(true, true);
+        const a = area.getBoundingRect(true, true);
+        // nudge inside area
+        if (bb.left < a.left) o.left += (a.left - bb.left);
+        if (bb.top < a.top) o.top += (a.top - bb.top);
+        if (bb.left + bb.width > a.left + a.width) o.left -= (bb.left + bb.width - (a.left + a.width));
+        if (bb.top + bb.height > a.top + a.height) o.top -= (bb.top + bb.height - (a.top + a.height));
+        o.setCoords();
+      });
+      fc.requestRenderAll();
+    };
+
+    fc.on("object:moving", constrain);
+    fc.on("object:scaling", constrain);
+    fc.on("object:rotating", constrain);
+    return () => {
+      fc.off("object:moving", constrain);
+      fc.off("object:scaling", constrain);
+      fc.off("object:rotating", constrain);
+    };
+  }, [view]);
+
+  // ---- tools ----
+  const addText = () => {
+    const fc = fabricRef.current;
+    if (!fc || !textValue.trim()) return toast({ title: "Enter text first", status: "info" });
+    const t = new window.fabric.IText(textValue, {
+      left: fc.width / 2, top: fc.height / 2, originX: "center", originY: "center",
+      fill: textColor, fontSize: textSize
+    });
+    pushHistory();
+    fc.add(t); fc.setActiveObject(t); fc.requestRenderAll();
+    setTextValue("");
+  };
+
+  const addDesign = (design) => {
+    const fc = fabricRef.current;
+    if (!fc || !design?.imageDataUrl) return;
+    window.fabric.Image.fromURL(design.imageDataUrl, (img) => {
+      img.set({
+        left: fc.width / 2,
+        top: fc.height / 2,
+        originX: "center",
+        originY: "center",
+        scaleX: 0.5, scaleY: 0.5
+      });
+      pushHistory();
+      fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
+      setSelectedDesignId(design._id);
+    }, { crossOrigin: "anonymous" });
+  };
+
+  const del = () => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const active = fc.getActiveObject();
+    if (!active || active.id === "printArea") return;
+    pushHistory();
+    fc.remove(active);
+    fc.discardActiveObject();
+    fc.requestRenderAll();
+  };
+
+  const centerH = () => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const o = fc.getActiveObject();
+    if (!o || o.id === "printArea") return;
+    o.centerH();
+    fc.requestRenderAll();
+  };
+
+  const setZoomSafe = (z) => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const clamped = Math.max(0.5, Math.min(2, z));
+    setZoom(clamped);
+    fc.setZoom(clamped);
+    fc.requestRenderAll();
+  };
+
+  // ---- export print-ready + upload ----
+  const makePrintReadyAndUpload = async () => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+
+    const area = fc.getObjects().find((o) => o.id === "printArea");
+    if (!area) return toast({ title: "No print area defined", status: "error" });
+
+    const objs = fc.getObjects().filter((o) => o.id !== "printArea");
+    if (!objs.length) return toast({ title: "Nothing to print", status: "warning" });
+
+    // figure scaling: map preview area => real DPI canvas
+    const areaW = PRINT_AREAS[view]?.widthInches || 12;
+    const areaH = PRINT_AREAS[view]?.heightInches || 16;
+    const outW = Math.round(areaW * DPI);
+    const outH = Math.round(areaH * DPI);
+
+    // clone just user objs relative to area center
+    const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
+    const aBB = area.getBoundingRect(true, true);
+    const scaleFactor = outW / aBB.width;
+
+    objs.forEach((o) => {
+      const clone = window.fabric.util.object.clone(o);
+      const bb = o.getBoundingRect(true, true);
+      const relX = bb.left - aBB.left + bb.width / 2;
+      const relY = bb.top - aBB.top + bb.height / 2;
+
+      clone.originX = "center"; clone.originY = "center";
+      clone.left = relX * scaleFactor;
+      clone.top  = relY * scaleFactor;
+      clone.scaleX = o.scaleX * scaleFactor;
+      clone.scaleY = o.scaleY * scaleFactor;
+
+      if (clone.type === "i-text") clone.fontSize = (o.fontSize || 36) * scaleFactor;
+      tmp.add(clone);
+    });
+    tmp.requestRenderAll();
+
+    const png = tmp.toDataURL({ format: "png", quality: 1, multiplier: 1 });
+    tmp.dispose();
+
+    // preview image of full canvas (for cart thumbnail)
+    const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
+
+    toast({ title: "Uploading design…", status: "info", duration: 3000 });
+    const upload = await client.post("/upload-print-file", {
+      imageData: png,
+      designName: `${product?.name || "Custom"} ${view}`,
+    });
+    const fileUrl = upload.data?.publicUrl;
+
+    if (!fileUrl) return toast({ title: "Upload failed", status: "error" });
+
+    // save to cart-like storage (your checkout page reads this)
+    const checkoutItem = {
+      productId: product?.id || product?._id || "",
+      slug: product?.slug || "",
+      color, size, view,
+      preview: previewPNG,
+      printFileUrl: fileUrl,
+      name: product?.name,
+      unitPrice: product?.priceMin || product?.basePrice || 0
+    };
+    localStorage.setItem("itemToCheckout", JSON.stringify(checkoutItem));
+    navigate("/checkout");
+  };
+
+  // ---- UI ----
+  const sizes = useMemo(() => {
+    const set = new Set();
+    (product?.variants || []).forEach((v) => {
+      if (!color || v.color === color) v.size && set.add(v.size);
+    });
+    return Array.from(set);
+  }, [product, color]);
+
+  const colors = useMemo(() => {
+    const set = new Set();
+    (product?.variants || []).forEach((v) => v.color && set.add(v.color));
+    (product?.colors || []).forEach((c) => set.add(c));
+    return Array.from(set);
+  }, [product]);
+
+  const canProceed = product && (!colors.length || color) && (!sizes.length || size);
+
+  return (
+    <Flex direction={{ base: "column", lg: "row" }} minH="100vh" bg="brand.primary">
+      {/* Canvas side */}
+      <Box flex="1" p={4} maxW={{ base: "100%", lg: "68%" }}>
+        <VStack spacing={3} align="stretch">
+          <HStack justify="space-between">
+            <HStack spacing={2}>
+              <Button size="sm" onClick={() => setView("front")}   variant={view==="front"?"solid":"outline"}>Front</Button>
+              <Button size="sm" onClick={() => setView("back")}    variant={view==="back" ?"solid":"outline"}>Back</Button>
+              <Button size="sm" onClick={() => setView("sleeve")}  variant={view==="sleeve"?"solid":"outline"}>Sleeve</Button>
+            </HStack>
+            <HStack spacing={2}>
+              <Tooltip label="Undo"><Button size="sm" onClick={undo} leftIcon={<Icon as={FaUndo}/>}>Undo</Button></Tooltip>
+              <Tooltip label="Redo"><Button size="sm" onClick={redo} leftIcon={<Icon as={FaRedo}/>}>Redo</Button></Tooltip>
+              <Tooltip label="Zoom out"><Button size="sm" onClick={() => setZoomSafe(zoom-0.1)} leftIcon={<Icon as={FaSearchMinus}/>}> </Button></Tooltip>
+              <Slider aria-label="zoom" value={zoom} min={0.5} max={2} step={0.1} onChange={setZoomSafe} w="150px">
+                <SliderTrack><SliderFilledTrack/></SliderTrack><SliderThumb/>
+              </Slider>
+              <Tooltip label="Zoom in"><Button size="sm" onClick={() => setZoomSafe(zoom+0.1)} leftIcon={<Icon as={FaSearchPlus}/>}> </Button></Tooltip>
+            </HStack>
+          </HStack>
+
+          <Box ref={wrapRef} w="100%" paddingTop={`${100 / ASPECT}%`} bg="brand.secondary" rounded="md" borderWidth="1px" borderColor="whiteAlpha.300" position="relative" overflow="hidden">
+            <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
+          </Box>
+
+          <HStack justify="center" spacing={3}>
+            <Tooltip label="Delete selected">
+              <Button size="sm" onClick={del} leftIcon={<Icon as={FaTrash}/>} colorScheme="red" variant="outline">Delete</Button>
+            </Tooltip>
+            <Tooltip label="Center horizontally">
+              <Button size="sm" onClick={centerH} leftIcon={<Icon as={FaArrowsAltH}/>} variant="outline">Center</Button>
+            </Tooltip>
+          </HStack>
+        </VStack>
+      </Box>
+
+      {/* Controls side */}
+      <Box flex="1" p={4} maxW={{ base: "100%", lg: "32%" }} bg="brand.paper" borderLeftWidth={{ lg: "1px" }} borderColor="whiteAlpha.200">
+        {!product ? (
+          <VStack p={6} spacing={3} align="stretch">
+            <Skeleton height="28px" />
+            <Skeleton height="200px" />
+            <Skeleton height="28px" />
+          </VStack>
+        ) : (
+          <VStack align="stretch" spacing={6}>
+            <Heading size="lg" color="brand.textLight">{product.name}</Heading>
+            <Text color="brand.textLight">{product.description}</Text>
+
+            <Box>
+              <Text mb={2} color="brand.textLight" fontWeight="medium">Color</Text>
+              <HStack wrap="wrap" spacing={2}>
+                {colors.length ? colors.map((c) => (
+                  <Button key={c} size="sm" variant={color===c?"solid":"outline"} onClick={() => setColor(c)}>{c}</Button>
+                )) : <Badge>No color options</Badge>}
+              </HStack>
+            </Box>
+
+            <Box>
+              <Text mb={2} color="brand.textLight" fontWeight="medium">Size</Text>
+              <HStack wrap="wrap" spacing={2}>
+                {sizes.length ? sizes.map((s) => (
+                  <Button key={s} size="sm" variant={size===s?"solid":"outline"} onClick={() => setSize(s)}>{s}</Button>
+                )) : <Badge>No size options</Badge>}
+              </HStack>
+            </Box>
+
+            <Divider borderColor="whiteAlpha.300"/>
+
+            <Box>
+              <Heading size="md" mb={3} color="brand.textLight">Add Text</Heading>
+              <HStack>
+                <Input value={textValue} onChange={(e)=>setTextValue(e.target.value)} placeholder="Your text"/>
+                <Button onClick={addText}>Add</Button>
+              </HStack>
+              <HStack mt={3} spacing={3}>
+                <Input type="color" value={textColor} onChange={(e)=>setTextColor(e.target.value)} w="52px" p={0}/>
+                <NumberInput value={textSize} min={8} max={200} onChange={(v)=>setTextSize(parseInt(v||"36",10))}>
+                  <NumberInputField/>
+                  <NumberInputStepper><NumberIncrementStepper/><NumberDecrementStepper/></NumberInputStepper>
+                </NumberInput>
+              </HStack>
+            </Box>
+
+            <Box>
+              <Heading size="md" mb={3} color="brand.textLight">Saved Designs</Heading>
+              {loadingDesigns ? <Skeleton height="28px"/> : (
+                designs.length ? (
+                  <SimpleGrid columns={{ base: 3 }} spacing={2}>
+                    {designs.map((d)=>(
+                      <Tooltip key={d._id} label={d.prompt || "design"}>
                         <Box
-                            ref={canvasWrapperRef}
-                            w="100%"
-                            paddingTop={`${100 / MOCKUP_PREVIEW_ASPECT_RATIO}%`}
-                            bg="brand.secondary"
-                            borderRadius="md"
-                            borderWidth="1px"
-                            borderColor="whiteAlpha.300"
-                            overflow="hidden"
-                            position="relative"
+                          borderWidth="2px"
+                          borderColor={selectedDesignId===d._id ? "purple.400" : "transparent"}
+                          rounded="md"
+                          overflow="hidden"
+                          cursor="pointer"
+                          onClick={()=>addDesign(d)}
                         >
-                            <canvas ref={canvasEl} style={{ position: 'absolute', top: 0, left: 0 }} />
+                          <AspectRatio ratio={1}><Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover"/></AspectRatio>
                         </Box>
-                    </Box>
-                </Flex>
-
-                <HStack justifyContent="center" spacing={4} mt={4}>
-                    <Tooltip label="Delete selected item" placement="bottom"><Button onClick={deleteSelectedObject} leftIcon={<Icon as={FaTrash} />} colorScheme="red" variant="outline" size="sm">Delete</Button></Tooltip>
-                    <Tooltip label="Center selected item horizontally" placement="bottom"><Button onClick={centerSelectedObject} leftIcon={<Icon as={FaArrowsAltH} />} colorScheme="blue" variant="outline" size="sm">Center</Button></Tooltip>
-                </HStack>
+                      </Tooltip>
+                    ))}
+                  </SimpleGrid>
+                ) : <Text color="brand.textLight" fontSize="sm">No saved designs yet.</Text>
+              )}
             </Box>
 
-            <Box flex="1" p={4} maxW={{ base: '100%', lg: '30%' }} bg="brand.paper" borderRadius="xl">
-                <VStack spacing={6} align="stretch">
-                    <Heading as="h2" size="xl" color="brand.textLight">Design Controls</Heading>
+            <Divider borderColor="whiteAlpha.300"/>
 
-                    {/* Section 1: Choose Your Apparel */}
-                    <Box bg="brand.secondary" p={5} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200">
-                        <Heading as="h3" size="md" color="brand.textLight" mb={4}>1. Choose Apparel</Heading>
-                        {loading ? <Spinner size="md" color="brand.accentYellow" /> :
-                            <VStack spacing={4} align="stretch">
-                                <FormControl><FormLabel color="brand.textLight">Product</FormLabel>
-                                    <ThemedSelect value={selectedProductId} onChange={handleProductChange} placeholder="Select Product">
-                                        {products.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                                    </ThemedSelect>
-                                </FormControl>
-                                <FormControl><FormLabel color="brand.textLight">Color</FormLabel>
-                                    <ThemedSelect value={selectedColorName} onChange={handleColorChange} placeholder="Select Color" isDisabled={!selectedProductId}>
-                                        {uniqueColorVariants.map(c => (
-                                            <option key={c.colorName} value={c.colorName}>{c.colorName}</option>
-                                        ))}
-                                    </ThemedSelect>
-                                </FormControl>
-                                <FormControl><FormLabel color="brand.textLight">Size</FormLabel>
-                                    <ThemedSelect value={selectedSize} onChange={(e) => setSelectedSize(e.target.value)} placeholder="Select Size" isDisabled={!selectedColorName}>
-                                        {availableSizes.map(s => <option key={s.size} value={s.size}>{s.size}</option>)}
-                                    </ThemedSelect>
-                                </FormControl>
-                                {finalVariant?.printAreas?.length > 0 && (
-                                    <FormControl>
-                                        <FormLabel color="brand.textLight">Print Placement</FormLabel>
-                                        <Select
-                                            size="md"
-                                            value={selectedPrintAreaPlacement}
-                                            onChange={(e) => setSelectedPrintAreaPlacement(e.target.value)}
-                                        >
-                                            {finalVariant.printAreas.map(pa => (
-                                                <option key={pa.placement} value={pa.placement}>
-                                                    {`${pa.placement} (${pa.widthInches}"x${pa.heightInches}")`}
-                                                </option>
-                                            ))}
-                                        </Select>
-                                    </FormControl>
-                                )}
-                            </VStack>
-                        }
-                    </Box>
-
-                    {/* Section 2: Choose Your Saved Design */}
-                    <Box bg="brand.secondary" p={5} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
-                        <Heading as="h3" size="md" color="brand.textLight" mb={4}>2. Add Your Design</Heading>
-                        {loadingDesigns ? <Spinner size="md" color="brand.accentYellow" /> : !designs.length ? (
-                            <Text color="brand.textLight" fontSize="sm">You have no saved designs. <ChakraLink as={RouterLink} to="/generate" color="brand.accentYellow" fontWeight="bold">Generate one now!</ChakraLink></Text>
-                        ) : (
-                            <SimpleGrid columns={{ base: 3, lg: 4 }} spacing={2}>
-                                {designs.map(design => (
-                                    <Tooltip key={design._id} label={design.prompt} placement="top" bg="gray.700" color="white" hasArrow>
-                                        <Box
-                                            p={1}
-                                            bg="brand.secondary"
-                                            borderWidth="2px"
-                                            borderRadius="md"
-                                            onClick={() => addDesignToCanvas(design)}
-                                            cursor="pointer"
-                                            borderColor={selectedDesign?._id === design._id ? "brand.accentYellow" : "transparent"}
-                                            transition="all 0.2s ease-in-out"
-                                            _hover={{ borderColor: selectedDesign?._id === design._id ? "brand.accentYellow" : "whiteAlpha.300", transform: 'scale(1.02)' }}
-                                        >
-                                            <AspectRatio ratio={1 / 1}>
-                                                <Image src={design.imageDataUrl} borderRadius="sm" objectFit="cover" alt={design.prompt} />
-                                            </AspectRatio>
-                                        </Box>
-                                    </Tooltip>
-                                ))}
-                            </SimpleGrid>
-                        )}
-                    </Box>
-
-                    {/* Section 3: Add Text Controls */}
-                    <Box bg="brand.secondary" p={5} borderRadius="md" borderWidth="1px" borderColor="whiteAlpha.200" isDisabled={!isCustomizeEnabled}>
-                        <Heading size="md" mb={2} color="brand.textLight">3. Add Text</Heading>
-                        <FormControl isDisabled={!isCustomizeEnabled} mb={3}>
-                            <FormLabel fontSize="sm" color="brand.textLight">Text Content</FormLabel>
-                            <ThemedControlInput
-                                value={textInputValue}
-                                onChange={(e) => setTextInputValue(e.target.value)}
-                                placeholder="Enter text..."
-                            />
-                        </FormControl>
-                        <SimpleGrid columns={2} spacing={3} mb={3}>
-                            <FormControl isDisabled={!isCustomizeEnabled}>
-                                <FormLabel fontSize="sm" color="brand.textLight">Color</FormLabel>
-                                <InputGroup>
-                                    <ThemedControlInput
-                                        type="color"
-                                        value={textColor}
-                                        onChange={(e) => {
-                                            setTextColor(e.target.value);
-                                            const currentActiveObject = fabricCanvas.current.getActiveObject();
-                                            if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
-                                                currentActiveObject.set('fill', e.target.value);
-                                                fabricCanvas.current.renderAll();
-                                            }
-                                        }}
-                                        w="full"
-                                        p={0}
-                                        height="38px"
-                                    />
-                                    <InputRightElement width="3.5rem" pointerEvents="none">
-                                        <Icon as={FaEyeDropper} color="brand.textMuted" />
-                                    </InputRightElement>
-                                </InputGroup>
-                            </FormControl>
-                            <FormControl isDisabled={!isCustomizeEnabled}>
-                                <FormLabel fontSize="sm" color="brand.textLight">Size</FormLabel>
-                                <NumberInput value={fontSize} onChange={(val) => {
-                                  const newSize = parseFloat(val);
-                                  setFontSize(newSize);
-                                  const currentActiveObject = fabricCanvas.current.getActiveObject();
-                                  if (fabricCanvas.current && currentActiveObject && currentActiveObject.type === 'i-text') {
-                                      currentActiveObject.set('fontSize', newSize);
-                                      fabricCanvas.current.renderAll();
-                                  }
-                                }} min={10} max={100} size="md">
-                                    <NumberInputField as={ThemedControlInput} />
-                                    <NumberInputStepper>
-                                        <NumberIncrementStepper />
-                                        <NumberDecrementStepper />
-                                    </NumberInputStepper>
-                                </NumberInput>
-                            </FormControl>
-                        </SimpleGrid>
-                        <Button onClick={addTextToCanvas} leftIcon={<Icon as={FaTshirt} />} colorScheme="brandAccentYellow" size="sm" isDisabled={!textInputValue.trim() || !isCustomizeEnabled}>Add Text</Button>
-                    </Box>
-                </VStack>
-
-                <Divider my={6} borderColor="whiteAlpha.300" />
-
-                {/* Final Price & Checkout */}
-                <VStack spacing={4} mt={4}>
-                    <Text fontSize="xl" fontWeight="medium" color="brand.textLight" textAlign="center">
-                        {selectedProduct && selectedColorVariant && selectedSizeVariant
-                            ? `Your design on a ${selectedSizeVariant.size} ${selectedColorVariant.colorName} ${selectedProduct.name}.`
-                            : "Select an apparel option and a design above to see your creation."
-                        }
-                    </Text>
-                    <Text fontSize="3xl" fontWeight="extrabold" color="brand.accentYellow">
-                        {finalVariant && selectedProduct
-                            ? `$${(selectedProduct.basePrice + (finalVariant.priceModifier || 0)).toFixed(2)}`
-                            : "$0.00"
-                        }
-                    </Text>
-                    <Button
-                        colorScheme="brandAccentOrange"
-                        size="lg"
-                        onClick={handleProceedToCheckout}
-                        leftIcon={<Icon as={FaShoppingCart} />}
-                        isDisabled={!finalVariant || (!hasSelectedDesign && !hasCanvasObjects)}
-                        width="full"
-                        maxW="md"
-                    >
-                        Proceed to Checkout
-                    </Button>
-                </VStack>
-            </Box>
-        </Flex>
-    );
+            <VStack spacing={3}>
+              <Button
+                colorScheme={canProceed && (hasObjects) ? "purple" : "gray"}
+                isDisabled={!canProceed || !hasObjects}
+                onClick={makePrintReadyAndUpload}
+              >
+                Add to cart / Checkout
+              </Button>
+              <Text fontSize="sm" color="brand.textLight" opacity={0.8}>
+                We’ll generate a high-resolution, print-ready PNG for Printful and a preview for your cart.
+              </Text>
+            </VStack>
+          </VStack>
+        )}
+      </Box>
+    </Flex>
+  );
 }
