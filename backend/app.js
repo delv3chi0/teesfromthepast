@@ -32,7 +32,7 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(helmet());
 
-// --- CORS ---
+// --- CORS (robust) ---
 const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
@@ -43,7 +43,7 @@ const corsOptions = {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
-      origin.endsWith("-delv3chios-projects.vercel.app")
+      origin?.endsWith("-delv3chios-projects.vercel.app")
     ) {
       return cb(null, true);
     }
@@ -51,26 +51,20 @@ const corsOptions = {
     return cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  // Allow common headers your frontend / axios sends (browser will lowercase during check)
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "Cache-Control",
-    "Pragma",
-    "Expires",
-    "Accept",
-    "Accept-Language",
-    "Origin",
-    "Referer",
-    "If-None-Match",
-    "If-Modified-Since",
-  ],
-  // if you want the client to read specific response headers:
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  // <<< KEY CHANGE: echo back whatever headers the browser asks for
+  allowedHeaders: (req, cb) => {
+    const reqHeaders = req.header("access-control-request-headers");
+    // log for visibility
+    if (req.method === "OPTIONS") {
+      console.log("[CORS] Preflight for", req.originalUrl, "-> ACRH:", reqHeaders);
+    }
+    cb(null, reqHeaders || "content-type,authorization");
+  },
   exposedHeaders: ["Content-Length", "ETag"],
 };
 app.use(cors(corsOptions));
-// explicit preflight for any path (helps some proxies/CDNs)
+// Explicit preflight handler for all routes
 app.options("*", cors(corsOptions));
 
 // --- Stripe webhook BEFORE body parsing ---
@@ -120,7 +114,7 @@ app.use("/api/admin", adminProductRoutes);
 app.use("/api", uploadRoutes);
 app.use("/api/printful", printfulRoutes);
 
-// Error handler (last)
+// Error handler
 app.use((err, req, res, _next) => {
   console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
   const status = res.statusCode === 200 ? 500 : res.statusCode;
