@@ -4,16 +4,14 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { jwtDecode } from "jwt-decode"; // ← v4 named export
+import { jwtDecode } from "jwt-decode";
 import { client, setAuthHeader, clearAuthHeader } from "../api/client";
 
 const AuthContext = createContext(null);
-
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export function useAuth() { return useContext(AuthContext); }
 
 const TOKEN_KEY = "tftp_token";
 
@@ -22,48 +20,14 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Read token once at startup
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(TOKEN_KEY);
-      if (!stored) {
-        // no token: ensure clean client
-        clearAuthHeader();
-        setLoadingAuth(false);
-        return;
-      }
+  // ---- helpers ----
+  const deriveUser = (decoded) => ({
+    id: decoded?.user?.id || decoded?.id || decoded?.sub || null,
+    email: decoded?.user?.email || decoded?.email || null,
+    name: decoded?.user?.name || decoded?.name || null,
+    role: decoded?.user?.role || decoded?.role || "user",
+  });
 
-      // Validate + decode
-      const decoded = jwtDecode(stored);
-      const nowSec = Math.floor(Date.now() / 1000);
-
-      if (!decoded?.exp || decoded.exp <= nowSec) {
-        // expired
-        localStorage.removeItem(TOKEN_KEY);
-        clearAuthHeader();
-        setLoadingAuth(false);
-        return;
-      }
-
-      // good token
-      setToken(stored);
-      setUser({
-        id: decoded.user?.id || decoded.id || decoded.sub || null,
-        email: decoded.user?.email || decoded.email || null,
-        name: decoded.user?.name || decoded.name || null,
-        role: decoded.user?.role || decoded.role || "user",
-      });
-      setAuthHeader(stored);
-      setLoadingAuth(false);
-    } catch (err) {
-      console.warn("[AuthProvider] Failed to init from token:", err);
-      localStorage.removeItem(TOKEN_KEY);
-      clearAuthHeader();
-      setLoadingAuth(false);
-    }
-  }, []);
-
-  // Helper to programmatically set a new token (after login/refresh)
   const setSession = (newToken) => {
     if (!newToken) {
       localStorage.removeItem(TOKEN_KEY);
@@ -72,20 +36,21 @@ export function AuthProvider({ children }) {
       setUser(null);
       return;
     }
-
     try {
       const decoded = jwtDecode(newToken);
+      if (!decoded?.exp || decoded.exp * 1000 <= Date.now()) {
+        localStorage.removeItem(TOKEN_KEY);
+        clearAuthHeader();
+        setToken(null);
+        setUser(null);
+        return;
+      }
       localStorage.setItem(TOKEN_KEY, newToken);
       setAuthHeader(newToken);
       setToken(newToken);
-      setUser({
-        id: decoded.user?.id || decoded.id || decoded.sub || null,
-        email: decoded.user?.email || decoded.email || null,
-        name: decoded.user?.name || decoded.name || null,
-        role: decoded.user?.role || decoded.role || "user",
-      });
+      setUser(deriveUser(decoded));
     } catch (e) {
-      console.error("[AuthProvider] setSession decode fail:", e);
+      console.warn("[AuthProvider] setSession decode fail:", e);
       localStorage.removeItem(TOKEN_KEY);
       clearAuthHeader();
       setToken(null);
@@ -93,41 +58,101 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Optional: logout API call; even if it fails we clear locally
   const logout = async () => {
-    try {
-      await client.post("/auth/logout").catch(() => {});
-    } finally {
-      setSession(null);
-    }
+    try { await client.post("/auth/logout").catch(() => {}); }
+    finally { setSession(null); }
   };
 
-  // Auto-logout when token is close to exp (best-effort client-side)
+  // ---- boot from storage once ----
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(TOKEN_KEY);
+      if (!stored) {
+        clearAuthHeader();
+        setLoadingAuth(false);
+        return;
+      }
+      const decoded = jwtDecode(stored);
+      if (!decoded?.exp || decoded.exp * 1000 <= Date.now()) {
+        localStorage.removeItem(TOKEN_KEY);
+        clearAuthHeader();
+        setLoadingAuth(false);
+        return;
+      }
+      setToken(stored);
+      setUser(deriveUser(decoded));
+      setAuthHeader(stored);
+    } catch (err) {
+      console.warn("[AuthProvider] init -> bad token, clearing", err);
+      localStorage.removeItem(TOKEN_KEY);
+      clearAuthHeader();
+    } finally {
+      setLoadingAuth(false);
+    }
+  }, []);
+
+  // ---- auto clear just before exp (client-side safety) ----
   useEffect(() => {
     if (!token) return;
-
-    let timeoutId;
+    let id;
     try {
-      const { exp } = jwtDecode(token);
+      const { exp } = jwtDecode(token) || {};
       if (!exp) return;
-
-      const msUntilExp = Math.max(0, exp * 1000 - Date.now());
-      // clear a tiny bit before exp to avoid race
-      timeoutId = setTimeout(() => setSession(null), msUntilExp - 500);
-    } catch {
-      // ignore
-    }
-    return () => clearTimeout(timeoutId);
+      const ms = Math.max(0, exp * 1000 - Date.now() - 500);
+      id = setTimeout(() => setSession(null), ms);
+    } catch {}
+    return () => clearTimeout(id);
   }, [token]);
 
+  // ---- axios interceptor: clears on 401 / invalid token ----
+  const interceptorInstalled = useRef(false);
+  useEffect(() => {
+    if (interceptorInstalled.current) return;
+    interceptorInstalled.current = true;
+
+    const resInterceptor = client.interceptors.response.use(
+      (res) => res,
+      (error) => {
+        const status = error?.response?.status;
+        const msg =
+          error?.response?.data?.message ||
+          error?.response?.data?.error ||
+          "";
+
+        if (
+          status === 401 ||
+          /token/i.test(msg) && /invalid|expired|malformed/i.test(msg)
+        ) {
+          console.warn("[AuthProvider] clearing session due to auth error:", status, msg);
+          setSession(null);
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      client.interceptors.response.eject(resInterceptor);
+    };
+  }, []);
+
+  // ---- cross-tab logout sync ----
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === TOKEN_KEY) {
+        const val = e.newValue;
+        if (!val) {
+          // someone logged out in another tab
+          setSession(null);
+        } else {
+          setSession(val);
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const value = useMemo(
-    () => ({
-      token,
-      user,
-      loadingAuth,
-      setSession, // call with token after successful login/refresh
-      logout,
-    }),
+    () => ({ token, user, loadingAuth, setSession, logout }),
     [token, user, loadingAuth]
   );
 

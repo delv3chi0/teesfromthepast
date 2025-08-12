@@ -9,7 +9,7 @@ import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 import xss from "xss-clean";
 
-// Routes
+// Route imports
 import authRoutes from "./routes/auth.js";
 import generateImageRoutes from "./routes/generateImage.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";
@@ -28,51 +28,51 @@ import printfulRoutes from "./routes/printful.js";
 
 const app = express();
 
-// --- Security / infra ---
+// --- Security / infra middleware ---
 app.set("trust proxy", 1);
 app.use(helmet());
 
-// --- CORS (robust) ---
+// CORS
 const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
 ];
-
 const corsOptions = {
-  origin(origin, cb) {
+  origin(origin, callback) {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
-      origin?.endsWith("-delv3chios-projects.vercel.app")
+      origin.endsWith("-delv3chios-projects.vercel.app")
     ) {
-      return cb(null, true);
+      return callback(null, true);
     }
     console.warn(`[CORS] Blocked origin: ${origin}`);
-    return cb(new Error("Not allowed by CORS"));
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  // <<< KEY CHANGE: echo back whatever headers the browser asks for
-  allowedHeaders: (req, cb) => {
-    const reqHeaders = req.header("access-control-request-headers");
-    // log for visibility
-    if (req.method === "OPTIONS") {
-      console.log("[CORS] Preflight for", req.originalUrl, "-> ACRH:", reqHeaders);
-    }
-    cb(null, reqHeaders || "content-type,authorization");
-  },
+  // 👇 explicitly allow headers that browsers send during preflight
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Cache-Control",
+    "Pragma",
+    "If-None-Match",
+    "X-Requested-With",
+  ],
   exposedHeaders: ["Content-Length", "ETag"],
 };
-app.use(cors(corsOptions));
-// Explicit preflight handler for all routes
+// Preflight first, then CORS
 app.options("*", cors(corsOptions));
+app.use(cors(corsOptions));
 
-// --- Stripe webhook BEFORE body parsing ---
+// Stripe webhook (raw body) — must be BEFORE express.json()
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // Body parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(cookieParser());
 
 // Hardening
 app.use(mongoSanitize());
@@ -85,20 +85,21 @@ const limiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  message: "Too many requests from this IP, please try again after 15 minutes",
 });
 app.use("/api", limiter);
 
-// Debug log
+// Debug
 app.use((req, _res, next) => {
   console.log(`[App] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Health
+// --- Simple health routes ---
 app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
-// API routes
+// --- API routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api", generateImageRoutes);
 app.use("/api/checkout", checkoutRoutes);
@@ -106,17 +107,27 @@ app.use("/api/mydesigns", designRoutes);
 app.use("/api/contest", contestRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/forms", formRoutes);
+
+// Storefront routes
 app.use("/api/storefront", storefrontProductRoutes);
+
+// Admin
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin", adminProductRoutes);
+
+// Uploads & Printful helpers
 app.use("/api", uploadRoutes);
 app.use("/api/printful", printfulRoutes);
 
-// Error handler
+// --- Global error handler ---
 app.use((err, req, res, _next) => {
-  console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
+  console.error(
+    "[Backend Error]",
+    err.message,
+    err.stack ? `\nStack: ${err.stack}` : ""
+  );
   const status = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(status).json({
     message: err.message,
