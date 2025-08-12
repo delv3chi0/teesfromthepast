@@ -15,7 +15,7 @@ import {
 } from "@chakra-ui/react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 
-// Compact color map for swatches (add/tweak as you go)
+// Compact color map for swatches (extend anytime)
 const COLOR_SWATCHES = {
   black: "#000000",
   white: "#FFFFFF",
@@ -42,14 +42,12 @@ const COLOR_SWATCHES = {
   grey: "#8E8E8E",
 };
 
-// try to normalize incoming “Red”, “ROYAL BLUE”, etc.
-function toKey(c) {
-  return String(c || "")
+const toKey = (c) =>
+  String(c || "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ")
     .replace(/[_-]+/g, " ");
-}
 
 function SwatchRow({ colors = [], max = 12 }) {
   const list = useMemo(() => Array.from(new Set(colors)).slice(0, max), [colors, max]);
@@ -80,31 +78,35 @@ function SwatchRow({ colors = [], max = 12 }) {
 
 export default function ProductCard({ product }) {
   const navigate = useNavigate();
-
   if (!product) return null;
 
-  // Safe image pick (primary/first)
+  // Best-effort cover image
   const imageUrl =
     product.images?.find?.((i) => i.isPrimary)?.url ||
     (Array.isArray(product.images) && typeof product.images[0] === "string"
       ? product.images[0]
       : product.images?.[0]?.url) ||
+    product.variants?.[0]?.image ||
+    product.variants?.[0]?.imageSet?.[0]?.url ||
     product.image ||
     "https://placehold.co/800x1000/142F2E/ffffff?text=Mockup";
 
+  const priceMin = product.priceMin ?? product.basePrice ?? product.price ?? 0;
+  const priceMax = product.priceMax ?? priceMin;
   const priceText =
-    product.priceMin && product.priceMax && product.priceMin !== product.priceMax
-      ? `$${product.priceMin.toFixed(2)} - $${product.priceMax.toFixed(2)}`
-      : `$${(product.priceMin || product.price || 0).toFixed(2)}`;
+    priceMin === priceMax
+      ? `$${priceMin.toFixed(2)}`
+      : `$${priceMin.toFixed(2)} - $${priceMax.toFixed(2)}`;
 
   const colors =
-    (product.colors && product.colors.length && product.colors) ||
+    (Array.isArray(product.colors) && product.colors.length && product.colors) ||
     Array.from(
       new Set((product.variants || []).map((v) => v.color).filter(Boolean))
     );
 
-  const goCustomize = () =>
-    navigate(`/product-studio/${encodeURIComponent(product.slug || product.name)}`);
+  const slug = product.slug || (product.name || "product").toLowerCase().replace(/\s+/g, "-");
+
+  const goCustomize = () => navigate(`/product-studio/${encodeURIComponent(slug)}`);
 
   return (
     <VStack
@@ -116,13 +118,14 @@ export default function ProductCard({ product }) {
       borderWidth="1px"
       borderColor="transparent"
       _hover={{ borderColor: "brand.accentYellow" }}
+      transition="all .2s"
     >
       <AspectRatio ratio={3 / 4} bg="blackAlpha.100" borderRadius="md" overflow="hidden">
         <Image src={imageUrl} alt={product.name} objectFit="cover" />
       </AspectRatio>
 
       <VStack align="stretch" spacing={1}>
-        <Heading as="h4" size="sm" color="brand.textLight" mt={1}>
+        <Heading as="h4" size="sm" color="brand.textLight" mt={1} noOfLines={1}>
           {product.name}
         </Heading>
 
@@ -135,7 +138,7 @@ export default function ProductCard({ product }) {
       <HStack justify="space-between" pt={1}>
         <Button
           as={RouterLink}
-          to={`/product/${product.slug || ""}`}
+          to={`/product/${encodeURIComponent(slug)}`}
           variant="outline"
           size="sm"
         >

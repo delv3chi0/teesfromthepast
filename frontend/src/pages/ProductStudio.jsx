@@ -10,7 +10,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
 import { client } from "../api/client";
 
-// ---- Robust import: works whether src/data/mockups.js exports default or named { MOCKUPS }
+// Works whether src/data/mockups.js exports default or named { MOCKUPS }
 import * as MOCKUPS_NS from "../data/mockups.js";
 const MOCKUPS = (MOCKUPS_NS.default || MOCKUPS_NS.MOCKUPS || {});
 
@@ -50,13 +50,52 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
+// --- Cloudinary mockup resolution helpers ---
+const aliasProductSlug = (nameOrSlug = "") => {
+  const s = String(nameOrSlug).toLowerCase();
+  if (s.includes("classic tee")) return "classic-tee";
+  if (s.includes("gildan 5000")) return "classic-tee";
+  // add more aliases as you add products
+  return s.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+};
+
+const normalizeColor = (color = "") => {
+  const c = String(color).toLowerCase().trim();
+  // quick canonical mappings for your uploaded set
+  const map = {
+    "brown savana": "brown-savana",
+    "brown savanna": "brown-savana",
+    "forest green": "forest-green",
+    "military green": "military-green",
+    "tropical blue": "tropical-blue",
+    "royal blue": "royal",
+  };
+  return (map[c] || c).replace(/\s+/g, "-");
+};
+
 function cloudinaryMock(product, view, color) {
-  if (!product?.slug) return null;
-  const key = String(product.slug || "").toLowerCase();
-  const colorKey = String(color || "").toLowerCase().replace(/\s+/g, "-");
+  const preferredKey = (product?.slug && String(product.slug)) || "";
+  const nameFallback = aliasProductSlug(product?.name);
+  const keyCandidates = [preferredKey, nameFallback].filter(Boolean).map(s => s.toLowerCase());
+
   const v = String(view || "front").toLowerCase();
-  const p = MOCKUPS?.[key]?.[colorKey]?.[v];
-  return typeof p === "string" ? p : null;
+  const colorKey = normalizeColor(color);
+
+  for (const key of keyCandidates) {
+    const url = MOCKUPS?.[key]?.[colorKey]?.[v];
+    if (url) return url;
+  }
+
+  // one-time useful debug
+  if (keyCandidates.length && colorKey) {
+    console.debug("[Mockup] No Cloudinary match", {
+      keysTried: keyCandidates,
+      colorKey,
+      view: v,
+      haveForKey: keyCandidates.map(k => Object.keys(MOCKUPS?.[k] || {})),
+    });
+  }
+  return null;
 }
 
 function fallbackMock(product, color) {
