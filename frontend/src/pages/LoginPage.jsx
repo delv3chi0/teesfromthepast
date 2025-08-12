@@ -1,152 +1,97 @@
-import { useState } from 'react';
+// frontend/src/pages/LoginPage.jsx
+import React, { useState } from "react";
 import {
-  Box, // Ensure Box is imported
-  Button,
-  FormControl,
-  FormLabel,
-  Input,
-  VStack, // VStack is still used for internal spacing
-  Heading,
-  Text,
-  useToast,
-  Container,
-  InputGroup,
-  InputRightElement,
-  IconButton,
-  Image,
-  Link as ChakraLink,
-  Center,
-  Flex // Ensure Flex is imported
-} from '@chakra-ui/react';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import { useAuth } from '../context/AuthProvider';
-import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
-import Footer from '../components/Footer.jsx'; // Assuming Footer path is correct
+  Box, Button, FormControl, FormLabel, Input, Heading, VStack, useToast, InputGroup, InputRightElement, IconButton, Text
+} from "@chakra-ui/react";
+import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { useLocation, useNavigate, Link as RouterLink } from "react-router-dom";
+import { client } from "../api/client";
+import { useAuth } from "../context/AuthProvider";
 
-const LoginPage = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+function pickToken(payload) {
+  // Accept a variety of shapes from backend
+  if (!payload) return null;
+  if (typeof payload === "string") return payload;
+  return (
+    payload.token ||
+    payload.accessToken ||
+    payload.jwt ||
+    payload.data?.token ||
+    payload.data?.accessToken ||
+    null
+  );
+}
+
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  const { setSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const toast = useToast();
+  const redirect = new URLSearchParams(location.search).get("redirect") || "/shop";
 
-  const from = location.state?.from?.pathname || '/';
-
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setBusy(true);
     try {
-      await login(email, password);
-      toast({
-        title: 'Login Successful',
-        description: "Welcome back!",
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      navigate(from, { replace: true });
-    } catch (error) {
-      toast({
-        title: 'Login Failed',
-        description: error.response?.data?.message || 'Invalid email or password.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      const res = await client.post("/auth/login", { email, password: pw });
+      const token = pickToken(res.data);
+      if (!token) throw new Error("No token returned from server");
+      setSession(token);
+      toast({ title: "Welcome back!", status: "success", duration: 2000 });
+      navigate(redirect, { replace: true });
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Login failed";
+      toast({ title: "Login Failed", description: msg, status: "error" });
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
   return (
-    <Flex direction="column" minH="100vh" bg="brand.primary">
-      <Container maxW="container.sm" centerContent flex="1" display="flex" flexDirection="column" justifyContent="center" py={{ base: 8, md: 12 }}>
-        <VStack spacing={6} w="100%">
-          <RouterLink to="/">
-            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="100px" mb={4} objectFit="contain" />
-          </RouterLink>
-
-          {/* This Box now explicitly uses the 'cardBlue' layer style from theme.js */}
-          <Box
-            as="form" // Keep as="form" to maintain form semantics
-            onSubmit={handleSubmit}
-            p={{ base: 6, md: 10 }}
-            layerStyle="cardBlue" // <--- CRITICAL CHANGE: Apply the global card style
-            w="100%" // Ensure it takes full width
-          >
-            {/* Inner VStack to maintain spacing between form elements, now inside the Box */}
-            <VStack spacing={6} w="100%">
-              {/* Removed explicit 'color' prop. Will now inherit from 'layerStyle="cardBlue"'. */}
-              <Heading as="h1" size="lg" textAlign="center" fontFamily="heading">
-                Welcome Back
-              </Heading>
-
-              <FormControl isRequired>
-                <FormLabel>Email Address</FormLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  size="lg"
-                />
-              </FormControl>
-
-              <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
-                <InputGroup size="lg">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
+    <VStack minH="80vh" justify="center" px={4}>
+      <Box w="100%" maxW="420px" bg="brand.paper" p={8} rounded="xl" boxShadow="lg">
+        <Heading mb={6} textAlign="center">Welcome back</Heading>
+        <form onSubmit={submit}>
+          <VStack spacing={4} align="stretch">
+            <FormControl isRequired>
+              <FormLabel>Email Address</FormLabel>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Password</FormLabel>
+              <InputGroup>
+                <Input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" />
+                <InputRightElement>
+                  <IconButton
+                    aria-label={show ? "Hide password" : "Show password"}
+                    icon={show ? <ViewOffIcon /> : <ViewIcon />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShow((s) => !s)}
                   />
-                  <InputRightElement>
-                    <IconButton
-                      variant="ghost"
-                      icon={showPassword ? <FaEyeSlash /> : <FaEye />}
-                      onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    />
-                  </InputRightElement>
-                </InputGroup>
-                {/* Text for Forgot Password link - its color is correctly set to brand.accentYellow, which is good contrast */}
-                <Text textAlign="right" mt={2}>
-                    <ChakraLink as={RouterLink} to="/forgot-password" fontSize="sm" color="brand.accentYellow" _hover={{ textDecoration: 'underline' }}>
-                        Forgot Password?
-                    </ChakraLink>
-                </Text>
-              </FormControl>
-
-              <Button
-                type="submit"
-                isLoading={loading}
-                loadingText="Logging In..."
-                colorScheme="brandAccentOrange"
-                width="full"
-                size="lg"
-                fontSize="md"
-              >
-                Log In
-              </Button>
-
-              {/* Removed explicit 'color' prop. Will now inherit from 'layerStyle="cardBlue"'. */}
-              <Text pt={2} textAlign="center">
-                Don't have an account?{' '}
-                <ChakraLink as={RouterLink} to="/register" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
-                  Sign up now
-                </ChakraLink>
-              </Text>
-            </VStack>
-          </Box> {/* End Box */}
-        </VStack>
-      </Container>
-      <Footer /> {/* Assuming Footer is a separate component */}
-    </Flex>
+                </InputRightElement>
+              </InputGroup>
+            </FormControl>
+            <Button type="submit" colorScheme="orange" isLoading={busy}>
+              Log In
+            </Button>
+            <Text fontSize="sm" color="whiteAlpha.700">
+              Don’t have an account?{" "}
+              <RouterLink to="/register" style={{ color: "#F6AD55" }}>
+                Sign up now
+              </RouterLink>
+            </Text>
+          </VStack>
+        </form>
+      </Box>
+    </VStack>
   );
-};
-
-export default LoginPage;
+}

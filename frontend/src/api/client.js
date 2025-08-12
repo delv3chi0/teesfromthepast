@@ -1,19 +1,17 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-// Keep this env name if you're already using it; falls back to Render URL.
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_BASE || // extra fallback if you used this earlier
+  import.meta.env.VITE_API_BASE ||
   "https://teesfromthepast.onrender.com/api";
 
 export const client = axios.create({
   baseURL,
-  withCredentials: true, // backend CORS must have credentials: true (we set that)
-  // Do NOT set Accept/Cache-Control/Pragma here; let axios/browser handle it.
+  withCredentials: true,
 });
 
-// ----- Auth header helpers (used by AuthProvider) -----
+// Helpers used by AuthProvider
 export function setAuthHeader(token) {
   if (token) {
     client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -25,34 +23,18 @@ export function clearAuthHeader() {
   delete client.defaults.headers.common["Authorization"];
 }
 
-// ----- Optional: tiny request/response debug in dev -----
-if (import.meta.env.DEV) {
-  client.interceptors.request.use((config) => {
-    // console.log("[API] →", config.method?.toUpperCase(), config.url);
-    return config;
-  });
-  client.interceptors.response.use(
-    (res) => res,
-    (err) => {
-      // console.warn("[API] ✖", err?.response?.status, err?.config?.url, err?.message);
-      return Promise.reject(err);
-    }
-  );
-}
-
-// ----- Keep the interceptor lean: only sync Authorization if user refreshed -----
-const TOKEN_KEY = "tftp_token"; // matches AuthProvider
+// Safety net: if a page refresh happens before AuthProvider runs,
+// try to attach the token from localStorage.
+const TOKEN_KEYS = ["tftp_token", "token"];
 client.interceptors.request.use((config) => {
-  // If AuthProvider already set default header we’re fine; this is just a safety net
   if (!config.headers?.Authorization) {
-    try {
-      const t = localStorage.getItem(TOKEN_KEY);
+    for (const key of TOKEN_KEYS) {
+      const t = localStorage.getItem(key);
       if (t && t !== "undefined") {
         config.headers = config.headers || {};
         config.headers["Authorization"] = `Bearer ${t}`;
+        break;
       }
-    } catch {
-      // ignore
     }
   }
   return config;
