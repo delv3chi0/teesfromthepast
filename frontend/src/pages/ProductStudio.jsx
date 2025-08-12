@@ -1,94 +1,96 @@
-// frontend/src/pages/ProductStudio.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid,
-  AspectRatio, Image, Tooltip, useToast, Skeleton, NumberInput,
-  NumberInputField, NumberInputStepper, NumberIncrementStepper,
-  NumberDecrementStepper, Input, Divider, Badge, Slider, SliderTrack,
-  SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel
+  Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid, AspectRatio, Image,
+  Tooltip, useToast, Skeleton, NumberInput, NumberInputField, NumberInputStepper,
+  NumberIncrementStepper, NumberDecrementStepper, Input, Divider, Badge, Slider,
+  SliderTrack, SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel
 } from "@chakra-ui/react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
 import { client } from "../api/client";
-// ⬇️ Use *named* import; your mockups.js exports `export const MOCKUPS = {...}`
-import { MOCKUPS } from "../data/mockups";
+import { MOCKUPS } from "../data/mockups"; // <- named export
 
 const DPI = 300;
 const PREVIEW_ASPECT = 2 / 3;
 const PLACEHOLDER = "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Real-world print areas (inches)
-const PRINT_AREAS = {
-  tshirt:  { front: { widthInches: 12, heightInches: 16 }, back: { widthInches: 12, heightInches: 16 }, sleeve: { widthInches: 4, heightInches: 3.5 } },
-  hoodie:  { front: { widthInches: 13, heightInches: 13 }, back: { widthInches: 12, heightInches: 16 } },
-  tote:    { front: { widthInches: 14, heightInches: 16 }, back: { widthInches: 14, heightInches: 16 } },
-  hat:     { front: { widthInches: 4, heightInches: 1.75 } },
-  beanie:  { front: { widthInches: 5, heightInches: 1.75 } },
+// ---- color normalization + mapping for your Cloudinary mockups ----
+const normalize = (s = "") => s.toString().trim().toLowerCase();
+
+const COLOR_TO_KEY = {
+  black: "tee-black",
+  white: "tee-white",
+  maroon: "tee-maroon",
+  red: "tee-red",
+  purple: "tee-purple",
+  royal: "tee-royal",
+  navy: "tee-navy",
+  charcoal: "tee-charcoal",
+  "military green": "tee-military-green",
+  "forest green": "tee-forest-green",
+  lime: "tee-lime",
+  orange: "tee-orange",
+  gold: "tee-gold",
+  azalea: "tee-azalea",
+  "tropical blue": "tee-tropical-blue",
+  "brown savana": "tee-brown-savana",
 };
 
+// Product types → supported views
 const VIEWS_BY_TYPE = {
-  tshirt: ["front", "back", "sleeve"],
+  tshirt: ["front", "back", "left", "right"],
   hoodie: ["front", "back"],
-  tote:   ["front", "back"],
-  hat:    ["front"],
+  tote: ["front", "back"],
+  hat: ["front"],
   beanie: ["front"],
 };
 
 function detectProductType(product) {
-  const raw = product?.type || product?.category || product?.product_type || product?.productType || "";
-  const text = `${raw} ${product?.name || ""}`.toLowerCase();
-  if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
-  if (/(hoodie|sweatshirt)/.test(text))       return "hoodie";
-  if (/(tote|bag)/.test(text))                return "tote";
-  if (/(hat|cap|trucker|snapback)/.test(text))return "hat";
-  if (/(beanie|knit)/.test(text))             return "beanie";
+  const text = `${product?.type || ""} ${product?.category || ""} ${product?.name || ""}`.toLowerCase();
+  if (/(tee|t-shirt|shirt|unisex|classic)/.test(text)) return "tshirt";
+  if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
+  if (/(tote|bag)/.test(text)) return "tote";
+  if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
+  if (/(beanie|knit)/.test(text)) return "beanie";
   return "tshirt";
 }
 
-function normalizeColorKey(name) {
-  if (!name) return "";
-  return String(name).toLowerCase().replace(/\s+/g, "-");
-}
+// Try to pull your Cloudinary mockups first; if not available, fall back to product/variant images.
+function chooseMockupUrl(product, view, color) {
+  const colorNorm = normalize(color);
+  const type = detectProductType(product);
 
-function pickMockupUrl(product, view, color) {
-  if (!product) return PLACEHOLDER;
+  // Classic tee → use Cloudinary MOCKUPS when we can
+  const isClassic = /classic/i.test(product?.name || "") || /classic-tee/.test(product?.slug || "");
+  if (type === "tshirt" && isClassic && MOCKUPS?.["classic-tee"]) {
+    const key = COLOR_TO_KEY[colorNorm];
+    const url = MOCKUPS["classic-tee"]?.[key]?.[view];
+    if (url) return url;
+  }
 
-  // Prefer Cloudinary mapping (from frontend/src/data/mockups.js)
-  const slug = product.slug || (product.name ? product.name.toLowerCase().replace(/\s+/g, "-") : "");
-  const cKey = normalizeColorKey(color);
-  const vKey = (view || "front").toLowerCase();
-  const mapped = MOCKUPS?.[slug]?.[cKey]?.[vKey];
-  if (mapped) return mapped;
-
-  // Fallbacks to Printful/variant images
-  const variants = product.variants || [];
-  const variant =
-    variants.find(v => (v.color === color || v.colorName === color)) ||
+  // Fallbacks based on Printful data
+  const variants = product?.variants || [];
+  const v =
+    variants.find((v) => normalize(v.color) === colorNorm) ||
     variants[0];
 
-  const tryFiles = (files = []) => {
-    const pref = (t) => files.find(f => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
-    const f = pref("preview") || pref("mockup") || files[0];
+  const fromFiles = (files = []) => {
+    const f =
+      files.find((f) => f.preview_url) ||
+      files.find((f) => f.url) ||
+      files.find((f) => f.thumbnail_url);
     return f?.preview_url || f?.url || f?.thumbnail_url || null;
   };
 
-  if (variant?.imageSet?.length) {
-    const primary = variant.imageSet.find(i => i.isPrimary) || variant.imageSet[0];
-    if (primary?.url) return primary.url;
-  }
-  if (variant?.files?.length) {
-    const f = tryFiles(variant.files);
+  if (v?.files?.length) {
+    const f = fromFiles(v.files);
     if (f) return f;
   }
   if (product?.images?.length) {
-    const pimg = product.images.find(i => i.isPrimary) || product.images[0];
-    if (pimg?.url) return pimg.url;
-    if (typeof product.images[0] === "string") return product.images[0];
+    const primary = product.images.find((i) => i.isPrimary) || product.images[0];
+    return primary?.url || (typeof product.images[0] === "string" ? product.images[0] : null);
   }
-  if (variant?.image) return variant.image;
-  if (product?.image)  return product.image;
-
-  return PLACEHOLDER;
+  return v?.image || product?.image || PLACEHOLDER;
 }
 
 function useQuery() {
@@ -103,19 +105,19 @@ export default function ProductStudio() {
   const params = useParams();
 
   const slug = query.get("slug") || params.slug || "";
-  const colorFromQuery = query.get("color") || "";
-  const sizeFromQuery  = query.get("size")  || "";
+  const colorQ = query.get("color") || "";
+  const sizeQ = query.get("size") || "";
 
   const [product, setProduct] = useState(null);
   const productType = useMemo(() => detectProductType(product), [product]);
-  const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
+  const views = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
 
   const [view, setView] = useState("front");
-  const [color, setColor] = useState(colorFromQuery);
-  const [size, setSize] = useState(sizeFromQuery);
+  const [color, setColor] = useState(colorQ);
+  const [size, setSize] = useState(sizeQ);
 
-  const canvasRef = useRef(null);
   const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
   const fabricRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
@@ -131,6 +133,7 @@ export default function ProductStudio() {
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
+  // Load product
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -138,24 +141,25 @@ export default function ProductStudio() {
         if (!slug) return;
         const res = await client.get(`/storefront/product/${slug}`);
         if (cancelled) return;
-
         const p = res.data;
         setProduct(p);
 
-        if (!colorFromQuery) {
-          const colors = new Set();
-          (p?.variants || []).forEach(v => v.color && colors.add(v.color));
-          (p?.colors || []).forEach(c => colors.add(c));
-          const first = Array.from(colors)[0];
+        // seed color/size
+        if (!colorQ) {
+          const set = new Set();
+          (p?.variants || []).forEach((v) => v.color && set.add(normalize(v.color)));
+          (p?.colors || []).forEach((c) => c && set.add(normalize(c)));
+          const first = Array.from(set)[0];
           if (first) setColor(first);
         }
-        if (!sizeFromQuery) {
-          const sizes = new Set();
-          (p?.variants || []).forEach(v => v.size && (!color || v.color === color) && sizes.add(v.size));
-          const firstS = Array.from(sizes)[0];
-          if (firstS) setSize(firstS);
+        if (!sizeQ) {
+          const set = new Set();
+          (p?.variants || []).forEach((v) => v.size && set.add(v.size));
+          const first = Array.from(set)[0];
+          if (first) setSize(first);
         }
-        if (!availableViews.includes(view)) setView(availableViews[0]);
+
+        if (!views.includes(view)) setView(views[0]);
       } catch (e) {
         console.error(e);
         toast({ title: "Could not load product", status: "error" });
@@ -165,6 +169,7 @@ export default function ProductStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
+  // Load my designs (public endpoint is fine)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -181,6 +186,7 @@ export default function ProductStudio() {
     return () => { cancelled = true; };
   }, []);
 
+  // Init fabric + responsive sizing
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
@@ -196,14 +202,14 @@ export default function ProductStudio() {
       fabricRef.current = fc;
 
       const onChange = () =>
-        setHasObjects(fc.getObjects().filter(o => o.id !== "printArea").length > 0);
+        setHasObjects(fc.getObjects().filter((o) => o.id !== "printArea").length > 0);
       fc.on("object:added", onChange);
       fc.on("object:removed", onChange);
       fc.on("object:modified", onChange);
     }
 
     const ro = new ResizeObserver(() => {
-      if (!fabricRef.current) return;
+      if (!fabricRef.current || !wrapRef.current) return;
       const w = wrapRef.current.clientWidth;
       const h = w / PREVIEW_ASPECT;
       fabricRef.current.setWidth(w);
@@ -214,6 +220,7 @@ export default function ProductStudio() {
     return () => ro.disconnect();
   }, []);
 
+  // History helpers
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -225,7 +232,7 @@ export default function ProductStudio() {
   const applyJSON = (json) => {
     const fc = fabricRef.current;
     if (!fc) return;
-    fc.loadFromJSON(json, () => fc.renderAll(), (o, obj) => obj);
+    fc.loadFromJSON(json, () => fc.renderAll(), (_o, obj) => obj);
   };
 
   const undo = () => {
@@ -246,72 +253,108 @@ export default function ProductStudio() {
     if (nxt) applyJSON(nxt);
   };
 
+  // Print areas (inches) by type/view
+  const PRINT_AREAS = {
+    tshirt: {
+      front: { widthInches: 12, heightInches: 16 },
+      back: { widthInches: 12, heightInches: 16 },
+      left: { widthInches: 4, heightInches: 3.5 },  // sleeve
+      right: { widthInches: 4, heightInches: 3.5 }, // sleeve
+    },
+    hoodie: {
+      front: { widthInches: 13, heightInches: 13 },
+      back: { widthInches: 12, heightInches: 16 },
+    },
+    tote: {
+      front: { widthInches: 14, heightInches: 16 },
+      back: { widthInches: 14, heightInches: 16 },
+    },
+    hat: { front: { widthInches: 4, heightInches: 1.75 } },
+    beanie: { front: { widthInches: 5, heightInches: 1.75 } },
+  };
+
+  // Draw mockup background and print area
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
-    if (!fc) return;
+    if (!fc || !product) return;
 
-    const userObjects = fc.getObjects().filter(o => o.id !== "printArea");
+    // keep user objects
+    const userObjects = fc.getObjects().filter((o) => o.id !== "printArea");
     fc.clear();
-    userObjects.forEach(o => fc.add(o));
+    userObjects.forEach((o) => fc.add(o));
 
-    const mockupUrl = pickMockupUrl(product, view, color) || PLACEHOLDER;
+    const mockUrl = chooseMockupUrl(product, view, color) || PLACEHOLDER;
 
-    window.fabric.Image.fromURL(mockupUrl, (img) => {
-      const scale = Math.min(fc.width / img.width, fc.height / img.height);
-      fc.setBackgroundImage(img, fc.renderAll.bind(fc), {
-        scaleX: scale,
-        scaleY: scale,
-        top: fc.height / 2,
-        left: fc.width / 2,
-        originX: "center",
-        originY: "center",
-        selectable: false,
-        evented: false,
-      });
+    window.fabric.Image.fromURL(
+      mockUrl,
+      (img) => {
+        const scale = Math.min(fc.width / img.width, fc.height / img.height);
+        fc.setBackgroundImage(
+          img,
+          fc.renderAll.bind(fc),
+          {
+            scaleX: scale,
+            scaleY: scale,
+            top: fc.height / 2,
+            left: fc.width / 2,
+            originX: "center",
+            originY: "center",
+            selectable: false,
+            evented: false,
+          }
+        );
 
-      const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
-      const pxW = areaDef.widthInches * DPI * (scale / 3);
-      const pxH = areaDef.heightInches * DPI * (scale / 3);
+        const areaDef =
+          PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+        const pxW = areaDef.widthInches * DPI * (scale / 3);
+        const pxH = areaDef.heightInches * DPI * (scale / 3);
 
-      const rect = new window.fabric.Rect({
-        id: "printArea",
-        left: fc.width / 2,
-        top: fc.height / 2,
-        originX: "center",
-        originY: "center",
-        width: pxW,
-        height: pxH,
-        fill: "",
-        stroke: "white",
-        strokeDashArray: [6, 6],
-        strokeWidth: 2,
-        selectable: false,
-        evented: false,
-        lockMovementX: true,
-        lockMovementY: true,
-      });
-      fc.add(rect);
-      fc.requestRenderAll();
-    }, { crossOrigin: "anonymous" });
+        const rect = new window.fabric.Rect({
+          id: "printArea",
+          left: fc.width / 2,
+          top: fc.height / 2,
+          originX: "center",
+          originY: "center",
+          width: pxW,
+          height: pxH,
+          fill: "",
+          stroke: "white",
+          strokeDashArray: [6, 6],
+          strokeWidth: 2,
+          selectable: false,
+          evented: false,
+          lockMovementX: true,
+          lockMovementY: true,
+        });
+        fc.add(rect);
+        fc.requestRenderAll();
+      },
+      { crossOrigin: "anonymous" }
+    );
   }, [product, view, color, productType]);
 
-  useEffect(() => { refreshBackground(); }, [refreshBackground]);
+  useEffect(() => {
+    refreshBackground();
+  }, [refreshBackground]);
 
+  // Constrain objects to print area
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
 
     const constrain = () => {
-      const area = fc.getObjects().find(o => o.id === "printArea");
+      const area = fc.getObjects().find((o) => o.id === "printArea");
       if (!area) return;
-      const objs = fc.getObjects().filter(o => o.id !== "printArea");
+      const objs = fc.getObjects().filter((o) => o.id !== "printArea");
       const a = area.getBoundingRect(true, true);
-      objs.forEach(o => {
+      objs.forEach((o) => {
         const bb = o.getBoundingRect(true, true);
-        if (bb.left < a.left) o.left += (a.left - bb.left);
-        if (bb.top < a.top) o.top += (a.top - bb.top);
-        if (bb.left + bb.width > a.left + a.width) o.left -= (bb.left + bb.width - (a.left + a.width));
-        if (bb.top + bb.height > a.top + a.height) o.top -= (bb.top + bb.height - (a.top + a.height));
+        if (bb.left < a.left) o.left += a.left - bb.left;
+        if (bb.top < a.top) o.top += a.top - bb.top;
+        if (bb.left + bb.width > a.left + a.width)
+          o.left -= bb.left + bb.width - (a.left + a.width);
+        if (bb.top + bb.height > a.top + a.height)
+          o.top -= bb.top + bb.height - (a.top + a.height);
         o.setCoords();
       });
       fc.requestRenderAll();
@@ -327,33 +370,48 @@ export default function ProductStudio() {
     };
   }, [view, productType]);
 
+  // Tools
   const addText = () => {
     const fc = fabricRef.current;
-    if (!fc || !textValue.trim()) return toast({ title: "Enter text first", status: "info" });
+    if (!fc || !textValue.trim())
+      return toast({ title: "Enter text first", status: "info" });
     const t = new window.fabric.IText(textValue, {
-      left: fc.width / 2, top: fc.height / 2, originX: "center", originY: "center",
-      fill: textColor, fontSize: textSize
+      left: fc.width / 2,
+      top: fc.height / 2,
+      originX: "center",
+      originY: "center",
+      fill: textColor,
+      fontSize: textSize,
     });
     pushHistory();
-    fc.add(t); fc.setActiveObject(t); fc.requestRenderAll();
+    fc.add(t);
+    fc.setActiveObject(t);
+    fc.requestRenderAll();
     setTextValue("");
   };
 
   const addDesign = (design) => {
     const fc = fabricRef.current;
     if (!fc || !design?.imageDataUrl) return;
-    window.fabric.Image.fromURL(design.imageDataUrl, (img) => {
-      img.set({
-        left: fc.width / 2,
-        top: fc.height / 2,
-        originX: "center",
-        originY: "center",
-        scaleX: 0.5, scaleY: 0.5
-      });
-      pushHistory();
-      fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
-      setSelectedDesignId(design._id);
-    }, { crossOrigin: "anonymous" });
+    window.fabric.Image.fromURL(
+      design.imageDataUrl,
+      (img) => {
+        img.set({
+          left: fc.width / 2,
+          top: fc.height / 2,
+          originX: "center",
+          originY: "center",
+          scaleX: 0.5,
+          scaleY: 0.5,
+        });
+        pushHistory();
+        fc.add(img);
+        fc.setActiveObject(img);
+        fc.requestRenderAll();
+        setSelectedDesignId(design._id);
+      },
+      { crossOrigin: "anonymous" }
+    );
   };
 
   const del = () => {
@@ -385,37 +443,39 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  const makePrintReadyAndUpload = async () => {
+  // Export print-ready and upload
+  const exportAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
 
-    const area = fc.getObjects().find(o => o.id === "printArea");
-    if (!area) return toast({ title: "No print area defined", status: "error" });
+    const area = fc.getObjects().find((o) => o.id === "printArea");
+    if (!area) return toast({ title: "No print area", status: "error" });
 
-    const objs = fc.getObjects().filter(o => o.id !== "printArea");
+    const objs = fc.getObjects().filter((o) => o.id !== "printArea");
     if (!objs.length) return toast({ title: "Nothing to print", status: "warning" });
 
-    const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+    const areaDef =
+      PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
     const outW = Math.round(areaDef.widthInches * DPI);
     const outH = Math.round(areaDef.heightInches * DPI);
 
     const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
     const aBB = area.getBoundingRect(true, true);
-
     const scaleFactor = outW / aBB.width;
+
     objs.forEach((o) => {
       const clone = window.fabric.util.object.clone(o);
       const bb = o.getBoundingRect(true, true);
       const relX = bb.left - aBB.left + bb.width / 2;
-      const relY = bb.top  - aBB.top  + bb.height / 2;
-
-      clone.originX = "center"; clone.originY = "center";
+      const relY = bb.top - aBB.top + bb.height / 2;
+      clone.originX = "center";
+      clone.originY = "center";
       clone.left = relX * scaleFactor;
-      clone.top  = relY * scaleFactor;
+      clone.top = relY * scaleFactor;
       clone.scaleX = o.scaleX * scaleFactor;
       clone.scaleY = o.scaleY * scaleFactor;
-      if (clone.type === "i-text") clone.fontSize = (o.fontSize || 36) * scaleFactor;
-
+      if (clone.type === "i-text")
+        clone.fontSize = (o.fontSize || 36) * scaleFactor;
       tmp.add(clone);
     });
     tmp.requestRenderAll();
@@ -425,7 +485,7 @@ export default function ProductStudio() {
 
     const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
 
-    toast({ title: "Uploading design…", status: "info", duration: 2500 });
+    toast({ title: "Uploading design…", status: "info", duration: 2000 });
     try {
       const upload = await client.post("/upload-print-file", {
         imageData: png,
@@ -444,7 +504,7 @@ export default function ProductStudio() {
         view,
         preview: previewPNG,
         printFileUrl: fileUrl,
-        productImage: pickMockupUrl(product, view, color),
+        productImage: chooseMockupUrl(product, view, color),
         unitPrice,
       };
       localStorage.setItem("itemToCheckout", JSON.stringify(item));
@@ -455,29 +515,32 @@ export default function ProductStudio() {
     }
   };
 
-  const colors = useMemo(() => {
+  // Options lists
+  const colorOptions = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach(v => v.color && set.add(v.color));
-    (product?.colors || []).forEach(c => set.add(c));
+    (product?.variants || []).forEach((v) => v.color && set.add(normalize(v.color)));
+    (product?.colors || []).forEach((c) => c && set.add(normalize(c)));
     return Array.from(set);
   }, [product]);
 
-  const sizes = useMemo(() => {
+  const sizeOptions = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach(v => {
-      if (!color || v.color === color) v.size && set.add(v.size);
-    });
+    (product?.variants || []).forEach((v) => v.size && set.add(v.size));
     return Array.from(set);
-  }, [product, color]);
+  }, [product]);
 
-  const canProceed = product && (!colors.length || color) && (!sizes.length || size) && hasObjects;
+  const canProceed = product && (!colorOptions.length || color) && (!sizeOptions.length || size) && hasObjects;
 
   const ProductTypeIcon =
-    productType === "tshirt" ? FaTshirt :
-    productType === "hoodie" ? FaTshirt :
-    productType === "hat"    ? FaHatCowboy :
-    productType === "beanie" ? FaHockeyPuck :
-    FaTshirt;
+    productType === "tshirt"
+      ? FaTshirt
+      : productType === "hoodie"
+      ? FaTshirt
+      : productType === "hat"
+      ? FaHatCowboy
+      : productType === "beanie"
+      ? FaHockeyPuck
+      : FaTshirt;
 
   return (
     <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
@@ -512,8 +575,10 @@ export default function ProductStudio() {
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">View</Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {availableViews.map(v => (
-                          <Button key={v} size="sm" variant={view===v?"solid":"outline"} onClick={() => setView(v)}>{v}</Button>
+                        {views.map((v) => (
+                          <Button key={v} size="sm" variant={view === v ? "solid" : "outline"} onClick={() => setView(v)}>
+                            {v}
+                          </Button>
                         ))}
                       </HStack>
                     </Box>
@@ -521,18 +586,44 @@ export default function ProductStudio() {
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">Color</Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {colors.length ? colors.map((c) => (
-                          <Button key={c} size="sm" variant={color===c?"solid":"outline"} onClick={() => setColor(c)}>{c}</Button>
-                        )) : <Badge>No color options</Badge>}
+                        {colorOptions.length ? (
+                          colorOptions.map((c) => {
+                            const label = c;
+                            const active = c === color;
+                            return (
+                              <Button
+                                key={c}
+                                size="xs"
+                                variant={active ? "solid" : "outline"}
+                                onClick={() => setColor(c)}
+                              >
+                                {label}
+                              </Button>
+                            );
+                          })
+                        ) : (
+                          <Badge>No color options</Badge>
+                        )}
                       </HStack>
                     </Box>
 
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">Size</Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {sizes.length ? sizes.map((s) => (
-                          <Button key={s} size="sm" variant={size===s?"solid":"outline"} onClick={() => setSize(s)}>{s}</Button>
-                        )) : <Badge>No size options</Badge>}
+                        {sizeOptions.length ? (
+                          sizeOptions.map((s) => (
+                            <Button
+                              key={s}
+                              size="sm"
+                              variant={size === s ? "solid" : "outline"}
+                              onClick={() => setSize(s)}
+                            >
+                              {s}
+                            </Button>
+                          ))
+                        ) : (
+                          <Badge>No size options</Badge>
+                        )}
                       </HStack>
                     </Box>
 
@@ -540,16 +631,20 @@ export default function ProductStudio() {
 
                     <VStack align="stretch" spacing={3}>
                       <Text color="brand.textLight" fontWeight="medium">Zoom</Text>
-                      <HStack w="full">
+                      <HStack>
                         <Tooltip label="Zoom out">
-                          <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>Out</Button>
+                          <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>
+                            Out
+                          </Button>
                         </Tooltip>
                         <Slider aria-label="zoom" value={zoom} min={0.5} max={2} step={0.1} onChange={setZoomSafe}>
                           <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>
                         <Tooltip label="Zoom in">
-                          <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>In</Button>
+                          <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>
+                            In
+                          </Button>
                         </Tooltip>
                       </HStack>
                     </VStack>
@@ -581,7 +676,9 @@ export default function ProductStudio() {
                         ))}
                       </SimpleGrid>
                     ) : (
-                      <Text color="brand.textLight" fontSize="sm">No saved designs yet. Create one in “Create”.</Text>
+                      <Text color="brand.textLight" fontSize="sm">
+                        No saved designs yet. Create one in “Generate”.
+                      </Text>
                     )}
                   </VStack>
                 </TabPanel>
@@ -591,12 +688,27 @@ export default function ProductStudio() {
                   <VStack align="stretch" spacing={3}>
                     <Text color="brand.textLight" fontWeight="medium">Add Text</Text>
                     <HStack>
-                      <Input value={textValue} onChange={(e) => setTextValue(e.target.value)} placeholder="Your text" />
+                      <Input
+                        value={textValue}
+                        onChange={(e) => setTextValue(e.target.value)}
+                        placeholder="Your text"
+                      />
                       <Button onClick={addText}>Add</Button>
                     </HStack>
                     <HStack mt={2} spacing={3}>
-                      <Input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} w="52px" p={0} />
-                      <NumberInput value={textSize} min={8} max={200} onChange={(v) => setTextSize(parseInt(v || "36", 10))}>
+                      <Input
+                        type="color"
+                        value={textColor}
+                        onChange={(e) => setTextColor(e.target.value)}
+                        w="52px"
+                        p={0}
+                      />
+                      <NumberInput
+                        value={textSize}
+                        min={8}
+                        max={200}
+                        onChange={(v) => setTextSize(parseInt(v || "36", 10))}
+                      >
                         <NumberInputField />
                         <NumberInputStepper>
                           <NumberIncrementStepper />
@@ -615,7 +727,7 @@ export default function ProductStudio() {
               <Button
                 colorScheme={canProceed ? "purple" : "gray"}
                 isDisabled={!canProceed}
-                onClick={makePrintReadyAndUpload}
+                onClick={exportAndUpload}
                 width="full"
               >
                 Add to cart / Checkout
@@ -632,15 +744,23 @@ export default function ProductStudio() {
       <Flex flex="1" direction="column" p={4}>
         <HStack mb={2} color="brand.textLight" justify="space-between">
           <HStack>
-            <Tooltip label="Undo"><Button size="sm" onClick={undo} leftIcon={<FaUndo />}>Undo</Button></Tooltip>
-            <Tooltip label="Redo"><Button size="sm" onClick={redo} leftIcon={<FaRedo />}>Redo</Button></Tooltip>
+            <Tooltip label="Undo">
+              <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>Undo</Button>
+            </Tooltip>
+            <Tooltip label="Redo">
+              <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>Redo</Button>
+            </Tooltip>
           </HStack>
           <HStack>
             <Tooltip label="Delete selected">
-              <Button size="sm" onClick={del} colorScheme="red" variant="outline"><FaTrash /></Button>
+              <Button size="sm" onClick={del} colorScheme="red" variant="outline">
+                <FaTrash />
+              </Button>
             </Tooltip>
             <Tooltip label="Center horizontally">
-              <Button size="sm" onClick={centerH} variant="outline"><FaArrowsAltH /></Button>
+              <Button size="sm" onClick={centerH} variant="outline">
+                <FaArrowsAltH />
+              </Button>
             </Tooltip>
           </HStack>
         </HStack>
