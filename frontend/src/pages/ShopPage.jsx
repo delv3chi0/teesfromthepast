@@ -1,101 +1,68 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState, useMemo } from "react";
 import {
-  Box,
-  Heading,
-  VStack,
-  Spinner,
-  Alert,
-  AlertIcon,
-  SimpleGrid,
-  Text,
-  Button,
-  HStack,
-  useColorModeValue,
-} from '@chakra-ui/react';
-import { client } from '../api/client';
-import ProductCard from '../components/shop/ProductCard';
+  Box, Heading, SimpleGrid, Spinner, Center, Text, useToast,
+} from "@chakra-ui/react";
+import { client } from "../api/client";
+import ProductCard from "../components/shop/ProductCard";
 
-function normalizeProducts(data) {
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.products)) return data.products;
-  if (data?.result?.items && Array.isArray(data.result.items)) return data.result.items;
-  if (Array.isArray(data?.items)) return data.items;
-  return [];
-}
-
-const ShopPage = () => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
-  const [attempt, setAttempt]   = useState(0);
-  const headingColor = useColorModeValue('brand.textLight', 'brand.textDark');
+export default function ShopPage() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   useEffect(() => {
-    const ac = new AbortController();
+    let cancelled = false;
     (async () => {
-      setLoading(true);
-      setError('');
       try {
-        const res = await client.get('/storefront/shop-data', { signal: ac.signal });
-        setProducts(normalizeProducts(res.data));
-      } catch (err) {
-        if (!ac.signal.aborted) {
-          console.error("Error loading products:", err);
-          setError('Could not load products. Please try again.');
-        }
+        setLoading(true);
+        const res = await client.get("/storefront/products");
+        if (!cancelled) setItems(res.data || []);
+      } catch (e) {
+        console.error(e);
+        toast({ title: "Could not load products", status: "error" });
       } finally {
-        if (!ac.signal.aborted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-    return () => ac.abort();
-  }, [attempt]);
+    return () => { cancelled = true; };
+  }, [toast]);
 
-  const gridProducts = useMemo(() => products.filter(Boolean), [products]);
+  const products = useMemo(() => (items || []).map((p) => ({
+    id: p._id || p.id,
+    slug: p.slug || (p.name || "").toLowerCase().replace(/\s+/g, "-"),
+    name: p.name || "Product",
+    description: p.description || "",
+    basePrice: p.basePrice ?? p.priceMin ?? 0,
+    priceMax: p.priceMax ?? null,
+    images: p.images || [],              // [{url}]
+    variants: p.variants || [],          // each: {color, colorName, size, image, imageSet, files}
+  })), [items]);
 
   if (loading) {
     return (
-      <VStack justifyContent="center" minH="60vh" spacing={4}>
+      <Center minH="60vh">
         <Spinner size="xl" thickness="4px" />
-        <Text mt={2} fontSize="lg" color="brand.textLight">Loading Collection…</Text>
-      </VStack>
-    );
-  }
-
-  if (error) {
-    return (
-      <VStack justifyContent="center" minH="60vh" spacing={6}>
-        <Alert status="error" bg="red.900" borderRadius="md" p={6} borderWidth="1px" borderColor="red.500" w="fit-content">
-          <AlertIcon color="red.300" />
-          <Text color="white">{error}</Text>
-        </Alert>
-        <Button onClick={() => setAttempt(a => a + 1)} variant="solid" colorScheme="purple">
-          Retry
-        </Button>
-      </VStack>
+      </Center>
     );
   }
 
   return (
-    <VStack spacing={8} align="stretch" py={8} px={{ base: 4, md: 8 }}>
-      <HStack justify="space-between" align="baseline">
-        <Heading as="h1" size="2xl" color={headingColor}>Our Awesome Collection</Heading>
-      </HStack>
+    <Box maxW="container.xl" mx="auto" px={{ base: 3, md: 6 }} py={{ base: 6, md: 10 }}>
+      <Heading as="h1" size="2xl" mb={8} color="brand.textLight">
+        Our Awesome Collection
+      </Heading>
 
-      {gridProducts.length === 0 ? (
-        <Box textAlign="center" py={10}>
-          <Text fontSize="xl" color="whiteAlpha.800">No products are currently available. Check back soon!</Text>
-          <Button mt={6} onClick={() => setAttempt(a => a + 1)}>Refresh</Button>
-        </Box>
+      {products.length === 0 ? (
+        <Center py={20}>
+          <Text color="brand.textLight">No products yet.</Text>
+        </Center>
       ) : (
-        <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={{ base: 6, md: 8 }}>
-          {gridProducts.map((p) => {
-            const key = String(p._id ?? p.id ?? p.slug ?? Math.random());
-            return <ProductCard key={key} product={p} />;
-          })}
+        <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={{ base: 6, md: 8 }}>
+          {products.map((p) => (
+            <ProductCard key={p.id || p.slug} product={p} />
+          ))}
         </SimpleGrid>
       )}
-    </VStack>
+    </Box>
   );
-};
-
-export default ShopPage;
+}

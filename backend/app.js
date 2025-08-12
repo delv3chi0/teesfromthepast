@@ -27,6 +27,7 @@ import adminDesignRoutes from './routes/adminDesignRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import storefrontProductRoutes from './routes/storefrontProductRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import printfulRoutes from './routes/printful.js';
 
 const app = express();
 
@@ -126,6 +127,7 @@ app.use('/api/admin/designs', adminDesignRoutes);
 app.use('/api/admin/', adminProductRoutes); // This route now handles all product CRUD for admin
 app.use('/api', uploadRoutes); // NEW: Mount the upload routes for Cloudinary
 app.use("/storefront", storefrontRoutes);
+app.use('/api/printful', printfulRoutes);
 
 // This should be the last middleware in your chain
 app.use((err, req, res, next) => {
