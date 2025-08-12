@@ -7,49 +7,48 @@ import {
   SliderTrack, SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel
 } from "@chakra-ui/react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
+import {
+  FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus,
+  FaTshirt, FaHatCowboy, FaHockeyPuck
+} from "react-icons/fa";
 import { client } from "../api/client";
+
+// NEW: prefer your generated Cloudinary/local mapping
+import { MOCKUPS } from "../data/mockups";
+import { colorToSlug } from "../data/colors";
 
 // --------- CONSTANTS ----------
 const DPI = 300;                 // print resolution for exported PNG
 const PREVIEW_ASPECT = 2 / 3;    // canvas aspect ratio for on-screen mockup
-
 const PLACEHOLDER = "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
 // Central map of real-world print areas by “type” & placement.
-// These are strong defaults; you can tweak per product if needed.
 const PRINT_AREAS = {
   tshirt: {
-    // DTG tees (Gildan 5000, B+C 3001, etc.)
-    front: { widthInches: 12, heightInches: 16 },
-    back:  { widthInches: 12, heightInches: 16 },
-    sleeve:{ widthInches: 4,  heightInches: 3.5 },
-    // optional: label/inside/outside could be added later
+    front:  { widthInches: 12, heightInches: 16 },
+    back:   { widthInches: 12, heightInches: 16 },
+    left:   { widthInches: 4,  heightInches: 3.5 }, // sleeve area (left)
+    right:  { widthInches: 4,  heightInches: 3.5 }, // sleeve area (right)
   },
   hoodie: {
-    // Pockets reduce safe area on many hoodies; use square-ish
     front: { widthInches: 13, heightInches: 13 },
     back:  { widthInches: 12, heightInches: 16 },
   },
   tote: {
-    // Common canvas tote print area
     front: { widthInches: 14, heightInches: 16 },
     back:  { widthInches: 14, heightInches: 16 },
   },
   hat: {
-    // Embroidery caps (dad hats, snapbacks)
     front: { widthInches: 4, heightInches: 1.75 },
-    // sides/back vary; keep front for now
   },
   beanie: {
-    // Beanies (embroidery patch area)
     front: { widthInches: 5, heightInches: 1.75 },
   },
 };
 
-// Some product types only support certain “views”
+// Views per type (match your uploaded set)
 const VIEWS_BY_TYPE = {
-  tshirt: ["front", "back", "sleeve"],
+  tshirt: ["front", "back", "left", "right"],
   hoodie: ["front", "back"],
   tote:   ["front", "back"],
   hat:    ["front"],
@@ -57,7 +56,6 @@ const VIEWS_BY_TYPE = {
 };
 
 // Heuristic type detection if backend didn’t classify the product.
-// Prefer a `product.type` (e.g. "tshirt") or `product.category`.
 function detectProductType(product) {
   const raw =
     product?.type ||
@@ -73,38 +71,44 @@ function detectProductType(product) {
   if (/(tote|bag)/.test(text)) return "tote";
   if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
   if (/(beanie|knit)/.test(text)) return "beanie";
-
-  // fallback that works well for most DTG shirts
   return "tshirt";
 }
 
-// Pick a decent mockup image for a given color/view
-function pickMockupUrl(product, view, color) {
+// Prefer mapping from MOCKUPS (Cloudinary or local), otherwise fall back to product/variant imagery
+function pickMockupUrl(product, view, colorName) {
   if (!product) return PLACEHOLDER;
 
-  // Prefer a variant that matches chosen color
+  // 1) Try your generated map first
+  const slug = product.slug || "";
+  const colorSlug = colorToSlug(colorName || "");
+
+  // Your upload run produced keys like "tee-black" in some cases — try multiple options
+  const colorKeys = [colorSlug, `tee-${colorSlug}`, `shirt-${colorSlug}`];
+
+  for (const ck of colorKeys) {
+    const url = MOCKUPS?.[slug]?.[ck]?.[view];
+    if (url) return url;
+  }
+
+  // 2) Fallbacks using product data (variants/files/images)
   const variants = product.variants || [];
   const variant =
-    variants.find(v => (v.color === color || v.colorName === color)) ||
+    variants.find(v => (v.color === colorName || v.colorName === colorName)) ||
     variants[0];
 
-  // Try common places we’ve seen in your transforms:
-  // - variant.imageSet[{url,isPrimary,...}]
-  // - variant.files with {preview_url,url,thumbnail_url}
-  // - product.images
-  const tryFiles = (files = []) => {
-    const pref = (t) => files.find(f => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
-    const f = pref("preview") || pref("mockup") || files[0];
+  const preferFromFiles = (files = []) => {
+    const byType = (t) =>
+      files.find((f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
+    const f = byType("preview") || byType("mockup") || files[0];
     return f?.preview_url || f?.url || f?.thumbnail_url || null;
   };
 
   if (variant?.imageSet?.length) {
-    // If you eventually store view-specific mockups, route here.
     const primary = variant.imageSet.find(i => i.isPrimary) || variant.imageSet[0];
     if (primary?.url) return primary.url;
   }
   if (variant?.files?.length) {
-    const f = tryFiles(variant.files);
+    const f = preferFromFiles(variant.files);
     if (f) return f;
   }
   if (product?.images?.length) {
@@ -118,7 +122,7 @@ function pickMockupUrl(product, view, color) {
   return PLACEHOLDER;
 }
 
-// Nicety: read ?slug=&color=&size= but also support /product/:slug -> “Customize” CTA pushes here with ?slug=...
+// Read URL query params
 function useQuery() {
   const { search } = useLocation();
   return useMemo(() => new URLSearchParams(search), [search]);
@@ -130,7 +134,7 @@ export default function ProductStudio() {
   const query = useQuery();
   const params = useParams();
 
-  // read slug via /product-studio?slug=... OR route param (/product/:slug -> CTA pushes with query)
+  // slug via /product-studio?slug=... OR route param
   const slug = query.get("slug") || params.slug || "";
   const colorFromQuery = query.get("color") || "";
   const sizeFromQuery  = query.get("size")  || "";
@@ -154,7 +158,7 @@ export default function ProductStudio() {
 
   // text tool
   const [textValue, setTextValue] = useState("");
-  const [textColor, setTextColor] = useState("#ffffff");
+  ️const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
 
   // designs
@@ -179,7 +183,6 @@ export default function ProductStudio() {
 
           // seed initial color/size if not provided
           if (!colorFromQuery) {
-            // derive color list from variants/colors
             const colors = new Set();
             (p?.variants || []).forEach(v => v.color && colors.add(v.color));
             (p?.colors || []).forEach(c => colors.add(c));
@@ -193,7 +196,6 @@ export default function ProductStudio() {
             if (firstS) setSize(firstS);
           }
 
-          // reset view if not supported
           if (!availableViews.includes(view)) setView(availableViews[0]);
         }
       } catch (e) {
@@ -315,7 +317,7 @@ export default function ProductStudio() {
 
       // print area for current product type & view
       const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
-      const pxW = areaDef.widthInches * DPI * (scale / 3);   // preview downscale for on-screen
+      const pxW = areaDef.widthInches * DPI * (scale / 3);   // preview downscale
       const pxH = areaDef.heightInches * DPI * (scale / 3);
 
       const rect = new window.fabric.Rect({
@@ -484,7 +486,6 @@ export default function ProductStudio() {
       const fileUrl = upload.data?.publicUrl;
       if (!fileUrl) throw new Error("Upload failed");
 
-      // save to localStorage -> /checkout reads this
       const unitPrice = product?.priceMin || product?.basePrice || 0;
       const item = {
         productId: product?.id || product?._id || "",

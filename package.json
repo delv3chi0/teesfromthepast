@@ -1,0 +1,5 @@
+{
+  "devDependencies": {
+    "cloudinary": "^2.7.0"
+  }
+}
