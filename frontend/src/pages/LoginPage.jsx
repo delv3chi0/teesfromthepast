@@ -1,15 +1,31 @@
 // frontend/src/pages/LoginPage.jsx
 import React, { useState } from "react";
 import {
-  Box, Button, FormControl, FormLabel, Input, Heading, VStack, useToast, InputGroup, InputRightElement, IconButton, Text
+  Box,
+  Button,
+  FormControl,
+  FormLabel,
+  Input,
+  VStack,
+  Heading,
+  Text,
+  useToast,
+  Container,
+  InputGroup,
+  InputRightElement,
+  IconButton,
+  Image,
+  Link as ChakraLink,
+  Flex,
 } from "@chakra-ui/react";
-import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
-import { useLocation, useNavigate, Link as RouterLink } from "react-router-dom";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
+import Footer from "../components/Footer.jsx";
 import { client } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
 
+// Accept a variety of backend shapes for the token
 function pickToken(payload) {
-  // Accept a variety of shapes from backend
   if (!payload) return null;
   if (typeof payload === "string") return payload;
   return (
@@ -24,74 +40,168 @@ function pickToken(payload) {
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [pw, setPw] = useState("");
-  const [show, setShow] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const toast = useToast();
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const { setSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirect = new URLSearchParams(location.search).get("redirect") || "/shop";
+  const toast = useToast();
 
-  const submit = async (e) => {
+  // support both router-state "from" and query param ?redirect=
+  const fromState = location.state?.from?.pathname;
+  const redirectParam = new URLSearchParams(location.search).get("redirect");
+  const redirectTo = redirectParam || fromState || "/";
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setBusy(true);
+    setLoading(true);
     try {
-      const res = await client.post("/auth/login", { email, password: pw });
+      const res = await client.post("/auth/login", { email, password });
       const token = pickToken(res.data);
-      if (!token) throw new Error("No token returned from server");
+      if (!token) throw new Error("Login succeeded but no token was returned.");
       setSession(token);
-      toast({ title: "Welcome back!", status: "success", duration: 2000 });
-      navigate(redirect, { replace: true });
-    } catch (err) {
+
+      toast({
+        title: "Login Successful",
+        description: "Welcome back!",
+        status: "success",
+        duration: 2500,
+        isClosable: true,
+      });
+
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
       const msg =
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        err?.message ||
-        "Login failed";
-      toast({ title: "Login Failed", description: msg, status: "error" });
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "Invalid email or password.";
+      toast({
+        title: "Login Failed",
+        description: msg,
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   };
 
   return (
-    <VStack minH="80vh" justify="center" px={4}>
-      <Box w="100%" maxW="420px" bg="brand.paper" p={8} rounded="xl" boxShadow="lg">
-        <Heading mb={6} textAlign="center">Welcome back</Heading>
-        <form onSubmit={submit}>
-          <VStack spacing={4} align="stretch">
-            <FormControl isRequired>
-              <FormLabel>Email Address</FormLabel>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-            </FormControl>
-            <FormControl isRequired>
-              <FormLabel>Password</FormLabel>
-              <InputGroup>
-                <Input type={show ? "text" : "password"} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" />
-                <InputRightElement>
-                  <IconButton
-                    aria-label={show ? "Hide password" : "Show password"}
-                    icon={show ? <ViewOffIcon /> : <ViewIcon />}
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShow((s) => !s)}
+    <Flex direction="column" minH="100vh" bg="brand.primary">
+      <Container
+        maxW="container.sm"
+        centerContent
+        flex="1"
+        display="flex"
+        flexDirection="column"
+        justifyContent="center"
+        py={{ base: 8, md: 12 }}
+      >
+        <VStack spacing={6} w="100%">
+          {/* Restored logo */}
+          <RouterLink to="/">
+            <Image
+              src="/logo.png"
+              alt="Tees From The Past Logo"
+              maxH={{ base: "70px", md: "100px" }}
+              mb={2}
+              objectFit="contain"
+              // keep aspect ratio and center
+              htmlWidth="auto"
+              htmlHeight="auto"
+            />
+          </RouterLink>
+
+          <Box
+            as="form"
+            onSubmit={handleSubmit}
+            p={{ base: 6, md: 10 }}
+            layerStyle="cardBlue"
+            w="100%"
+          >
+            <VStack spacing={6} w="100%">
+              <Heading as="h1" size="lg" textAlign="center" fontFamily="heading">
+                Welcome Back
+              </Heading>
+
+              <FormControl isRequired>
+                <FormLabel>Email Address</FormLabel>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  size="lg"
+                  autoComplete="email"
+                />
+              </FormControl>
+
+              <FormControl isRequired>
+                <FormLabel>Password</FormLabel>
+                <InputGroup size="lg">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
+                    autoComplete="current-password"
                   />
-                </InputRightElement>
-              </InputGroup>
-            </FormControl>
-            <Button type="submit" colorScheme="orange" isLoading={busy}>
-              Log In
-            </Button>
-            <Text fontSize="sm" color="whiteAlpha.700">
-              Don’t have an account?{" "}
-              <RouterLink to="/register" style={{ color: "#F6AD55" }}>
-                Sign up now
-              </RouterLink>
-            </Text>
-          </VStack>
-        </form>
-      </Box>
-    </VStack>
+                  <InputRightElement>
+                    <IconButton
+                      variant="ghost"
+                      icon={showPassword ? <FaEyeSlash /> : <FaEye />}
+                      onClick={() => setShowPassword((s) => !s)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    />
+                  </InputRightElement>
+                </InputGroup>
+
+                <Text textAlign="right" mt={2}>
+                  <ChakraLink
+                    as={RouterLink}
+                    to="/forgot-password"
+                    fontSize="sm"
+                    color="brand.accentYellow"
+                    _hover={{ textDecoration: "underline" }}
+                  >
+                    Forgot Password?
+                  </ChakraLink>
+                </Text>
+              </FormControl>
+
+              <Button
+                type="submit"
+                isLoading={loading}
+                loadingText="Logging In..."
+                colorScheme="brandAccentOrange"
+                width="full"
+                size="lg"
+                fontSize="md"
+              >
+                Log In
+              </Button>
+
+              <Text pt={2} textAlign="center">
+                Don't have an account?{" "}
+                <ChakraLink
+                  as={RouterLink}
+                  to="/register"
+                  color="brand.accentYellow"
+                  fontWeight="bold"
+                  _hover={{ textDecoration: "underline" }}
+                >
+                  Sign up now
+                </ChakraLink>
+              </Text>
+            </VStack>
+          </Box>
+        </VStack>
+      </Container>
+
+      <Footer />
+    </Flex>
   );
 }
