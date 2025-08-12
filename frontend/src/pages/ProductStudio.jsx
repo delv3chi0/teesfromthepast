@@ -9,53 +9,34 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
 import { client } from "../api/client";
-// Cloudinary mockups mapping (default export created by your script)
-import MOCKUPS from "../data/mockups.js";
+
+// ---- Robust import: works whether src/data/mockups.js exports default or named { MOCKUPS }
+import * as MOCKUPS_NS from "../data/mockups.js";
+const MOCKUPS = (MOCKUPS_NS.default || MOCKUPS_NS.MOCKUPS || {});
 
 const DPI = 300;
 const PREVIEW_ASPECT = 2 / 3;
 const PLACEHOLDER = "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Print areas (defaults)
 const PRINT_AREAS = {
-  tshirt: {
-    front: { widthInches: 12, heightInches: 16 },
-    back: { widthInches: 12, heightInches: 16 },
-    sleeve: { widthInches: 4, heightInches: 3.5 },
-  },
-  hoodie: {
-    front: { widthInches: 13, heightInches: 13 },
-    back: { widthInches: 12, heightInches: 16 },
-  },
-  tote: {
-    front: { widthInches: 14, heightInches: 16 },
-    back: { widthInches: 14, heightInches: 16 },
-  },
-  hat: {
-    front: { widthInches: 4, heightInches: 1.75 },
-  },
-  beanie: {
-    front: { widthInches: 5, heightInches: 1.75 },
-  },
+  tshirt: { front: { widthInches: 12, heightInches: 16 }, back: { widthInches: 12, heightInches: 16 }, sleeve: { widthInches: 4, heightInches: 3.5 } },
+  hoodie: { front: { widthInches: 13, heightInches: 13 }, back: { widthInches: 12, heightInches: 16 } },
+  tote:   { front: { widthInches: 14, heightInches: 16 }, back:  { widthInches: 14, heightInches: 16 } },
+  hat:    { front: { widthInches: 4,  heightInches: 1.75 } },
+  beanie: { front: { widthInches: 5,  heightInches: 1.75 } },
 };
 
 const VIEWS_BY_TYPE = {
   tshirt: ["front", "back", "sleeve"],
   hoodie: ["front", "back"],
-  tote: ["front", "back"],
-  hat: ["front"],
+  tote:   ["front", "back"],
+  hat:    ["front"],
   beanie: ["front"],
 };
 
 function detectProductType(product) {
-  const raw =
-    product?.type ||
-    product?.category ||
-    product?.product_type ||
-    product?.productType ||
-    "";
+  const raw = product?.type || product?.category || product?.product_type || product?.productType || "";
   const text = `${raw} ${product?.name || ""}`.toLowerCase();
-
   if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
   if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
   if (/(tote|bag)/.test(text)) return "tote";
@@ -69,10 +50,9 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
-// Try Cloudinary mockup first, else fallbacks from Printful transform
 function cloudinaryMock(product, view, color) {
   if (!product?.slug) return null;
-  const key = (product.slug || "").toLowerCase(); // e.g., "classic-tee"
+  const key = String(product.slug || "").toLowerCase();
   const colorKey = String(color || "").toLowerCase().replace(/\s+/g, "-");
   const v = String(view || "front").toLowerCase();
   const p = MOCKUPS?.[key]?.[colorKey]?.[v];
@@ -83,11 +63,10 @@ function fallbackMock(product, color) {
   const variants = product?.variants || [];
   const variant = variants.find((v) => v.color === color) || variants[0];
   const tryFiles = (files = []) => {
-    const pref = (t) =>
-      files.find((f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
+    const pref = (t) => files.find((f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
     const f = pref("preview") || pref("mockup") || files[0];
     return f?.preview_url || f?.url || f?.thumbnail_url || null;
-    };
+  };
   if (variant?.imageSet?.length) {
     const primary = variant.imageSet.find((i) => i.isPrimary) || variant.imageSet[0];
     if (primary?.url) return primary.url;
@@ -120,7 +99,6 @@ export default function ProductStudio() {
   const slugViaQuery = query.get("slug") || "";
   const slug = slugViaParam || slugViaQuery;
 
-  // product + list for picker
   const [product, setProduct] = useState(null);
   const [catalog, setCatalog] = useState([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
@@ -128,36 +106,31 @@ export default function ProductStudio() {
   const productType = useMemo(() => detectProductType(product), [product]);
   const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
 
-  // selections
   const [view, setView] = useState("front");
   const [color, setColor] = useState(query.get("color") || "");
   const [size, setSize] = useState(query.get("size") || "");
 
-  // canvas
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const fabricRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
 
-  // text tool
   const [textValue, setTextValue] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
 
-  // designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [selectedDesignId, setSelectedDesignId] = useState(null);
 
-  // history
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
-  // fetch product list (for picker if no slug)
+  // catalog for picker (when no slug)
   useEffect(() => {
     let stop = false;
-    if (slug) return; // only load catalog if we need it
+    if (slug) return;
     (async () => {
       try {
         setLoadingCatalog(true);
@@ -169,26 +142,20 @@ export default function ProductStudio() {
         if (!stop) setLoadingCatalog(false);
       }
     })();
-    return () => {
-      stop = true;
-    };
+    return () => { stop = true; };
   }, [slug]);
 
-  // fetch product when slug exists
+  // load product by slug
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        if (!slug) {
-          setProduct(null);
-          return;
-        }
+        if (!slug) { setProduct(null); return; }
         const res = await client.get(`/storefront/product/${slug}`);
         if (!cancelled) {
           const p = res.data;
           setProduct(p);
 
-          // seed color/size
           const colorsSet = new Set();
           (p?.variants || []).forEach((v) => v.color && colorsSet.add(v.color));
           (p?.colors || []).forEach((c) => colorsSet.add(c));
@@ -196,6 +163,7 @@ export default function ProductStudio() {
             const firstColor = Array.from(colorsSet)[0];
             if (firstColor) setColor(firstColor);
           }
+
           const sizesSet = new Set();
           (p?.variants || []).forEach((v) => {
             if (!color || v.color === color) v.size && sizesSet.add(v.size);
@@ -205,7 +173,6 @@ export default function ProductStudio() {
             if (firstSize) setSize(firstSize);
           }
 
-          // reset view if unsupported
           if (!availableViews.includes(view)) setView(availableViews[0]);
         }
       } catch (e) {
@@ -213,13 +180,11 @@ export default function ProductStudio() {
         toast({ title: "Could not load product", status: "error" });
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // my designs
+  // load my designs
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -227,15 +192,10 @@ export default function ProductStudio() {
         setLoadingDesigns(true);
         const res = await client.get("/mydesigns");
         if (!cancelled) setDesigns(res.data || []);
-      } catch {
-        // ignore
-      } finally {
-        if (!cancelled) setLoadingDesigns(false);
-      }
+      } catch { /* ignore */ }
+      finally { if (!cancelled) setLoadingDesigns(false); }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   // init fabric + resize
@@ -272,7 +232,6 @@ export default function ProductStudio() {
     return () => ro.disconnect();
   }, []);
 
-  // history helpers
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -305,7 +264,6 @@ export default function ProductStudio() {
     if (nxt) applyJSON(nxt);
   };
 
-  // draw background + print area
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc || !product) return;
@@ -320,20 +278,16 @@ export default function ProductStudio() {
       mockupUrl,
       (img) => {
         const scale = Math.min(fc.width / img.width, fc.height / img.height);
-        fc.setBackgroundImage(
-          img,
-          fc.renderAll.bind(fc),
-          {
-            scaleX: scale,
-            scaleY: scale,
-            top: fc.height / 2,
-            left: fc.width / 2,
-            originX: "center",
-            originY: "center",
-            selectable: false,
-            evented: false,
-          }
-        );
+        fc.setBackgroundImage(img, fc.renderAll.bind(fc), {
+          scaleX: scale,
+          scaleY: scale,
+          top: fc.height / 2,
+          left: fc.width / 2,
+          originX: "center",
+          originY: "center",
+          selectable: false,
+          evented: false,
+        });
 
         const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
         const pxW = areaDef.widthInches * DPI * (scale / 3);
@@ -363,15 +317,11 @@ export default function ProductStudio() {
     );
   }, [product, view, color, productType]);
 
-  useEffect(() => {
-    refreshBackground();
-  }, [refreshBackground]);
+  useEffect(() => { refreshBackground(); }, [refreshBackground]);
 
-  // keep objects inside print area
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
-
     const constrain = () => {
       const area = fc.getObjects().find((o) => o.id === "printArea");
       if (!area) return;
@@ -389,7 +339,6 @@ export default function ProductStudio() {
       });
       fc.requestRenderAll();
     };
-
     fc.on("object:moving", constrain);
     fc.on("object:scaling", constrain);
     fc.on("object:rotating", constrain);
@@ -400,48 +349,31 @@ export default function ProductStudio() {
     };
   }, [view, productType]);
 
-  // tools
   const addText = () => {
     const fc = fabricRef.current;
-    if (!fc || !textValue.trim())
-      return toast({ title: "Enter text first", status: "info" });
+    if (!fc || !textValue.trim()) return toast({ title: "Enter text first", status: "info" });
     const t = new window.fabric.IText(textValue, {
-      left: fc.width / 2,
-      top: fc.height / 2,
-      originX: "center",
-      originY: "center",
-      fill: textColor,
-      fontSize: textSize,
+      left: fc.width / 2, top: fc.height / 2, originX: "center", originY: "center",
+      fill: textColor, fontSize: textSize
     });
     pushHistory();
-    fc.add(t);
-    fc.setActiveObject(t);
-    fc.requestRenderAll();
+    fc.add(t); fc.setActiveObject(t); fc.requestRenderAll();
     setTextValue("");
   };
 
   const addDesign = (design) => {
     const fc = fabricRef.current;
     if (!fc || !design?.imageDataUrl) return;
-    window.fabric.Image.fromURL(
-      design.imageDataUrl,
-      (img) => {
-        img.set({
-          left: fc.width / 2,
-          top: fc.height / 2,
-          originX: "center",
-          originY: "center",
-          scaleX: 0.5,
-          scaleY: 0.5,
-        });
-        pushHistory();
-        fc.add(img);
-        fc.setActiveObject(img);
-        fc.requestRenderAll();
-        setSelectedDesignId(design._id);
-      },
-      { crossOrigin: "anonymous" }
-    );
+    window.fabric.Image.fromURL(design.imageDataUrl, (img) => {
+      img.set({
+        left: fc.width / 2, top: fc.height / 2,
+        originX: "center", originY: "center",
+        scaleX: 0.5, scaleY: 0.5
+      });
+      pushHistory();
+      fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
+      setSelectedDesignId(design._id);
+    }, { crossOrigin: "anonymous" });
   };
 
   const del = () => {
@@ -473,7 +405,6 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // export & upload
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -498,12 +429,9 @@ export default function ProductStudio() {
       const relX = bb.left - aBB.left + bb.width / 2;
       const relY = bb.top - aBB.top + bb.height / 2;
 
-      clone.originX = "center";
-      clone.originY = "center";
-      clone.left = relX * scaleFactor;
-      clone.top = relY * scaleFactor;
-      clone.scaleX = o.scaleX * scaleFactor;
-      clone.scaleY = o.scaleY * scaleFactor;
+      clone.originX = "center"; clone.originY = "center";
+      clone.left = relX * scaleFactor; clone.top = relY * scaleFactor;
+      clone.scaleX = o.scaleX * scaleFactor; clone.scaleY = o.scaleY * scaleFactor;
       if (clone.type === "i-text") clone.fontSize = (o.fontSize || 36) * scaleFactor;
 
       tmp.add(clone);
@@ -545,7 +473,6 @@ export default function ProductStudio() {
     }
   };
 
-  // computed lists
   const colors = useMemo(() => {
     const set = new Set();
     (product?.variants || []).forEach((v) => v.color && set.add(v.color));
@@ -563,25 +490,16 @@ export default function ProductStudio() {
 
   const canProceed = product && (!colors.length || color) && (!sizes.length || size) && hasObjects;
 
-  // UI
   const ProductTypeIcon =
-    productType === "tshirt"
-      ? FaTshirt
-      : productType === "hoodie"
-      ? FaTshirt
-      : productType === "hat"
-      ? FaHatCowboy
-      : productType === "beanie"
-      ? FaHockeyPuck
-      : FaTshirt;
+    productType === "tshirt" ? FaTshirt :
+    productType === "hoodie" ? FaTshirt :
+    productType === "hat"    ? FaHatCowboy :
+    productType === "beanie" ? FaHockeyPuck : FaTshirt;
 
-  // If no slug → show a simple picker so page never looks “stuck”
   if (!slug) {
     return (
       <Flex direction="column" minH="70vh" p={6} bg="brand.primary">
-        <Heading size="lg" color="brand.textLight" mb={4}>
-          Choose a product to customize
-        </Heading>
+        <Heading size="lg" color="brand.textLight" mb={4}>Choose a product to customize</Heading>
         {loadingCatalog ? (
           <Skeleton height="36px" />
         ) : (
@@ -607,14 +525,7 @@ export default function ProductStudio() {
 
   return (
     <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
-      {/* Left: Controls */}
-      <Box
-        w={{ base: "100%", xl: "34%" }}
-        borderRightWidth={{ xl: "1px" }}
-        borderColor="whiteAlpha.200"
-        p={4}
-        bg="brand.paper"
-      >
+      <Box w={{ base: "100%", xl: "34%" }} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" p={4} bg="brand.paper">
         {!product ? (
           <VStack p={6} spacing={3} align="stretch">
             <Skeleton height="28px" />
@@ -626,13 +537,9 @@ export default function ProductStudio() {
             <HStack justify="space-between">
               <HStack>
                 <Icon as={ProductTypeIcon} color="brand.accentYellow" />
-                <Heading size="lg" color="brand.textLight">
-                  {product.name}
-                </Heading>
+                <Heading size="lg" color="brand.textLight">{product.name}</Heading>
               </HStack>
-              <Badge variant="outline" colorScheme="yellow" opacity={0.8}>
-                {productType}
-              </Badge>
+              <Badge variant="outline" colorScheme="yellow" opacity={0.8}>{productType}</Badge>
             </HStack>
 
             <Tabs variant="enclosed" colorScheme="yellow">
@@ -642,115 +549,55 @@ export default function ProductStudio() {
                 <Tab>Text</Tab>
               </TabList>
               <TabPanels>
-                {/* Options */}
                 <TabPanel px={0}>
                   <VStack align="stretch" spacing={5}>
                     <Box>
-                      <Text mb={2} color="brand.textLight" fontWeight="medium">
-                        View
-                      </Text>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">View</Text>
                       <HStack wrap="wrap" spacing={2}>
                         {availableViews.map((v) => (
-                          <Button
-                            key={v}
-                            size="sm"
-                            variant={view === v ? "solid" : "outline"}
-                            onClick={() => setView(v)}
-                          >
-                            {v}
-                          </Button>
+                          <Button key={v} size="sm" variant={view===v?"solid":"outline"} onClick={() => setView(v)}>{v}</Button>
                         ))}
                       </HStack>
                     </Box>
 
                     <Box>
-                      <Text mb={2} color="brand.textLight" fontWeight="medium">
-                        Color
-                      </Text>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">Color</Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {colors.length ? (
-                          colors.map((c) => (
-                            <Button
-                              key={c}
-                              size="sm"
-                              variant={color === c ? "solid" : "outline"}
-                              onClick={() => setColor(c)}
-                            >
-                              {c}
-                            </Button>
-                          ))
-                        ) : (
-                          <Badge>No color options</Badge>
-                        )}
+                        {colors.length ? colors.map((c) => (
+                          <Button key={c} size="sm" variant={color===c?"solid":"outline"} onClick={() => setColor(c)}>{c}</Button>
+                        )) : <Badge>No color options</Badge>}
                       </HStack>
                     </Box>
 
                     <Box>
-                      <Text mb={2} color="brand.textLight" fontWeight="medium">
-                        Size
-                      </Text>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">Size</Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {sizes.length ? (
-                          sizes.map((s) => (
-                            <Button
-                              key={s}
-                              size="sm"
-                              variant={size === s ? "solid" : "outline"}
-                              onClick={() => setSize(s)}
-                            >
-                              {s}
-                            </Button>
-                          ))
-                        ) : (
-                          <Badge>No size options</Badge>
-                        )}
+                        {sizes.length ? sizes.map((s) => (
+                          <Button key={s} size="sm" variant={size===s?"solid":"outline"} onClick={() => setSize(s)}>{s}</Button>
+                        )) : <Badge>No size options</Badge>}
                       </HStack>
                     </Box>
 
                     <Divider borderColor="whiteAlpha.300" />
 
                     <VStack align="stretch" spacing={3}>
-                      <Text color="brand.textLight" fontWeight="medium">
-                        Zoom
-                      </Text>
+                      <Text color="brand.textLight" fontWeight="medium">Zoom</Text>
                       <HStack>
                         <Tooltip label="Zoom out">
-                          <Button
-                            size="sm"
-                            onClick={() => setZoomSafe(zoom - 0.1)}
-                            leftIcon={<FaSearchMinus />}
-                          >
-                            Out
-                          </Button>
+                          <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>Out</Button>
                         </Tooltip>
-                        <Slider
-                          aria-label="zoom"
-                          value={zoom}
-                          min={0.5}
-                          max={2}
-                          step={0.1}
-                          onChange={setZoomSafe}
-                        >
-                          <SliderTrack>
-                            <SliderFilledTrack />
-                          </SliderTrack>
+                        <Slider aria-label="zoom" value={zoom} min={0.5} max={2} step={0.1} onChange={setZoomSafe}>
+                          <SliderTrack><SliderFilledTrack /></SliderTrack>
                           <SliderThumb />
                         </Slider>
                         <Tooltip label="Zoom in">
-                          <Button
-                            size="sm"
-                            onClick={() => setZoomSafe(zoom + 0.1)}
-                            leftIcon={<FaSearchPlus />}
-                          >
-                            In
-                          </Button>
+                          <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>In</Button>
                         </Tooltip>
                       </HStack>
                     </VStack>
                   </VStack>
                 </TabPanel>
 
-                {/* Designs */}
                 <TabPanel px={0}>
                   <VStack align="stretch" spacing={3}>
                     {loadingDesigns ? (
@@ -761,68 +608,37 @@ export default function ProductStudio() {
                           <Tooltip key={d._id} label={d.prompt || "design"}>
                             <Box
                               borderWidth="2px"
-                              borderColor={
-                                selectedDesignId === d._id ? "purple.400" : "transparent"
-                              }
+                              borderColor={selectedDesignId === d._id ? "purple.400" : "transparent"}
                               rounded="md"
                               overflow="hidden"
                               cursor="pointer"
                               onClick={() => addDesign(d)}
                             >
                               <AspectRatio ratio={1}>
-                                <Image
-                                  src={d.imageDataUrl}
-                                  alt={d.prompt}
-                                  objectFit="cover"
-                                />
+                                <Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" />
                               </AspectRatio>
                             </Box>
                           </Tooltip>
                         ))}
                       </SimpleGrid>
                     ) : (
-                      <Text color="brand.textLight" fontSize="sm">
-                        No saved designs yet. Create one in “Generate”.
-                      </Text>
+                      <Text color="brand.textLight" fontSize="sm">No saved designs yet. Create one in “Generate”.</Text>
                     )}
                   </VStack>
                 </TabPanel>
 
-                {/* Text */}
                 <TabPanel px={0}>
                   <VStack align="stretch" spacing={3}>
-                    <Text color="brand.textLight" fontWeight="medium">
-                      Add Text
-                    </Text>
+                    <Text color="brand.textLight" fontWeight="medium">Add Text</Text>
                     <HStack>
-                      <Input
-                        value={textValue}
-                        onChange={(e) => setTextValue(e.target.value)}
-                        placeholder="Your text"
-                      />
+                      <Input value={textValue} onChange={(e) => setTextValue(e.target.value)} placeholder="Your text" />
                       <Button onClick={addText}>Add</Button>
                     </HStack>
                     <HStack mt={2} spacing={3}>
-                      <Input
-                        type="color"
-                        value={textColor}
-                        onChange={(e) => setTextColor(e.target.value)}
-                        w="52px"
-                        p={0}
-                      />
-                      <NumberInput
-                        value={textSize}
-                        min={8}
-                        max={200}
-                        onChange={(v) =>
-                          setTextSize(parseInt(v || "36", 10))
-                        }
-                      >
+                      <Input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} w="52px" p={0} />
+                      <NumberInput value={textSize} min={8} max={200} onChange={(v) => setTextSize(parseInt(v || "36", 10))}>
                         <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
+                        <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
                       </NumberInput>
                     </HStack>
                   </VStack>
@@ -849,31 +665,18 @@ export default function ProductStudio() {
         )}
       </Box>
 
-      {/* Right: Canvas */}
       <Flex flex="1" direction="column" p={4}>
         <HStack mb={2} color="brand.textLight" justify="space-between">
           <HStack>
-            <Tooltip label="Undo">
-              <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>
-                Undo
-              </Button>
-            </Tooltip>
-            <Tooltip label="Redo">
-              <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>
-                Redo
-              </Button>
-            </Tooltip>
+            <Tooltip label="Undo"><Button size="sm" onClick={undo} leftIcon={<FaUndo />}>Undo</Button></Tooltip>
+            <Tooltip label="Redo"><Button size="sm" onClick={redo} leftIcon={<FaRedo />}>Redo</Button></Tooltip>
           </HStack>
           <HStack>
             <Tooltip label="Delete selected">
-              <Button size="sm" onClick={del} colorScheme="red" variant="outline">
-                <FaTrash />
-              </Button>
+              <Button size="sm" onClick={del} colorScheme="red" variant="outline"><FaTrash /></Button>
             </Tooltip>
             <Tooltip label="Center horizontally">
-              <Button size="sm" onClick={centerH} variant="outline">
-                <FaArrowsAltH />
-              </Button>
+              <Button size="sm" onClick={centerH} variant="outline"><FaArrowsAltH /></Button>
             </Tooltip>
           </HStack>
         </HStack>
