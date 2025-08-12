@@ -10,7 +10,8 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
 import { client } from "../api/client";
-import MOCKUPS from "../data/mockups";
+// ⬇️ Use *named* import; your mockups.js exports `export const MOCKUPS = {...}`
+import { MOCKUPS } from "../data/mockups";
 
 const DPI = 300;
 const PREVIEW_ASPECT = 2 / 3;
@@ -52,14 +53,14 @@ function normalizeColorKey(name) {
 function pickMockupUrl(product, view, color) {
   if (!product) return PLACEHOLDER;
 
-  // 1) Prefer Cloudinary mapping
+  // Prefer Cloudinary mapping (from frontend/src/data/mockups.js)
   const slug = product.slug || (product.name ? product.name.toLowerCase().replace(/\s+/g, "-") : "");
   const cKey = normalizeColorKey(color);
   const vKey = (view || "front").toLowerCase();
   const mapped = MOCKUPS?.[slug]?.[cKey]?.[vKey];
   if (mapped) return mapped;
 
-  // 2) Fallback: variant/product images
+  // Fallbacks to Printful/variant images
   const variants = product.variants || [];
   const variant =
     variants.find(v => (v.color === color || v.colorName === color)) ||
@@ -130,7 +131,6 @@ export default function ProductStudio() {
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
-  // Load product by slug
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -165,7 +165,6 @@ export default function ProductStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // Load user's saved designs (optional if logged out)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -182,7 +181,6 @@ export default function ProductStudio() {
     return () => { cancelled = true; };
   }, []);
 
-  // Init fabric + responsive resize
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
@@ -197,7 +195,8 @@ export default function ProductStudio() {
       });
       fabricRef.current = fc;
 
-      const onChange = () => setHasObjects(fc.getObjects().filter(o => o.id !== "printArea").length > 0);
+      const onChange = () =>
+        setHasObjects(fc.getObjects().filter(o => o.id !== "printArea").length > 0);
       fc.on("object:added", onChange);
       fc.on("object:removed", onChange);
       fc.on("object:modified", onChange);
@@ -215,7 +214,6 @@ export default function ProductStudio() {
     return () => ro.disconnect();
   }, []);
 
-  // History helpers
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -248,7 +246,6 @@ export default function ProductStudio() {
     if (nxt) applyJSON(nxt);
   };
 
-  // Draw mockup background + dashed print area
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -300,7 +297,6 @@ export default function ProductStudio() {
 
   useEffect(() => { refreshBackground(); }, [refreshBackground]);
 
-  // Constrain objects inside print area
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -331,7 +327,6 @@ export default function ProductStudio() {
     };
   }, [view, productType]);
 
-  // Tools
   const addText = () => {
     const fc = fabricRef.current;
     if (!fc || !textValue.trim()) return toast({ title: "Enter text first", status: "info" });
@@ -390,7 +385,6 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // Export print-ready PNG + upload
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -461,7 +455,6 @@ export default function ProductStudio() {
     }
   };
 
-  // Colors & sizes derived from variants
   const colors = useMemo(() => {
     const set = new Set();
     (product?.variants || []).forEach(v => v.color && set.add(v.color));
