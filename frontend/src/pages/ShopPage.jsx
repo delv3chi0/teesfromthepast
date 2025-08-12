@@ -10,16 +10,15 @@ import {
   Alert,
   AlertIcon,
 } from "@chakra-ui/react";
+import { useNavigate } from "react-router-dom";
 import { client } from "../api/client";
-import ProductCard from "../components/shop/ProductCard";
+import ProductCard from "../components/shop/ProductCard"; // ← use the swatch card
 
 function normalizeProducts(payload) {
-  // Accept: [ ... ] OR { products: [ ... ] } OR { data: { products: [...] } }
   if (Array.isArray(payload)) return payload;
-  if (payload && Array.isArray(payload.products)) return payload.products;
-  if (payload && payload.data && Array.isArray(payload.data.products)) {
+  if (payload?.products && Array.isArray(payload.products)) return payload.products;
+  if (payload?.data?.products && Array.isArray(payload.data.products))
     return payload.data.products;
-  }
   return [];
 }
 
@@ -27,6 +26,7 @@ export default function ShopPage() {
   const [raw, setRaw] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const navigate = useNavigate();
 
   useEffect(() => {
     let alive = true;
@@ -34,29 +34,26 @@ export default function ShopPage() {
       try {
         setLoading(true);
         setErr("");
-        // Your backend exposes both /products and /shop-data; use /products here
+
+        // Try primary endpoint
         const res = await client.get("/storefront/products");
         if (!alive) return;
         setRaw(res.data);
-      } catch (e) {
-        console.error("[ShopPage] fetch failed:", e);
-        if (!alive) return;
-        // Try the alternate endpoint as a seamless fallback
+      } catch (e1) {
+        console.warn("[ShopPage] /products failed, trying /shop-data…", e1?.message);
         try {
           const res2 = await client.get("/storefront/shop-data");
           if (!alive) return;
           setRaw(res2.data);
         } catch (e2) {
-          console.error("[ShopPage] fallback /shop-data failed:", e2);
+          console.error("[ShopPage] both endpoints failed:", e2?.message);
           setErr("Could not load products. Please try again.");
         }
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   const products = useMemo(() => normalizeProducts(raw), [raw]);
@@ -65,9 +62,7 @@ export default function ShopPage() {
     return (
       <VStack minH="60vh" justify="center">
         <Spinner size="xl" thickness="4px" />
-        <Text mt={4} color="brand.textLight">
-          Loading products…
-        </Text>
+        <Text mt={4} color="brand.textLight">Loading products…</Text>
       </VStack>
     );
   }
@@ -92,7 +87,10 @@ export default function ShopPage() {
       ) : (
         <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={8}>
           {products.map((p) => (
-            <ProductCard key={p.id || p._id || p.slug || p.name} product={p} />
+            <ProductCard
+              key={p.id || p._id || p.slug || p.name}
+              product={p}
+            />
           ))}
         </SimpleGrid>
       )}

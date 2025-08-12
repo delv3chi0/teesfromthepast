@@ -9,7 +9,7 @@ import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 import xss from "xss-clean";
 
-// Route imports
+// Routes
 import authRoutes from "./routes/auth.js";
 import generateImageRoutes from "./routes/generateImage.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";
@@ -28,38 +28,55 @@ import printfulRoutes from "./routes/printful.js";
 
 const app = express();
 
-// --- Security / infra middleware ---
-app.set("trust proxy", 1);            // important on Render/Vercel proxies
+// --- Security / infra ---
+app.set("trust proxy", 1);
 app.use(helmet());
 
-// CORS (allow your site + local dev)
+// --- CORS ---
 const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
 ];
+
 const corsOptions = {
-  origin(origin, callback) {
-    // allow no-origin (curl, native apps) and vercel preview subdomains
+  origin(origin, cb) {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
       origin.endsWith("-delv3chios-projects.vercel.app")
     ) {
-      return callback(null, true);
+      return cb(null, true);
     }
     console.warn(`[CORS] Blocked origin: ${origin}`);
-    return callback(new Error("Not allowed by CORS"));
+    return cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  // Allow common headers your frontend / axios sends (browser will lowercase during check)
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Cache-Control",
+    "Pragma",
+    "Expires",
+    "Accept",
+    "Accept-Language",
+    "Origin",
+    "Referer",
+    "If-None-Match",
+    "If-Modified-Since",
+  ],
+  // if you want the client to read specific response headers:
+  exposedHeaders: ["Content-Length", "ETag"],
 };
 app.use(cors(corsOptions));
+// explicit preflight for any path (helps some proxies/CDNs)
+app.options("*", cors(corsOptions));
 
-// Stripe webhook (raw body) — must be BEFORE express.json()
+// --- Stripe webhook BEFORE body parsing ---
 app.use("/api/stripe", stripeWebhookRoutes);
 
-// Body parsers (larger limits for images/base64)
+// Body parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -68,55 +85,44 @@ app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
 
-// Rate limiter on all API
+// Rate limit
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: "Too many requests from this IP, please try again after 15 minutes",
 });
 app.use("/api", limiter);
 
-// Debug log so we can see requests hitting the app
+// Debug log
 app.use((req, _res, next) => {
   console.log(`[App] ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// --- Simple health routes ---
+// Health
 app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
-// --- API routes ---
+// API routes
 app.use("/api/auth", authRoutes);
-app.use("/api", generateImageRoutes);         // e.g., /api/generate
+app.use("/api", generateImageRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/mydesigns", designRoutes);
 app.use("/api/contest", contestRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/forms", formRoutes);
-
-// ✅ Storefront routes (mounted once, correct base)
 app.use("/api/storefront", storefrontProductRoutes);
-
-// Admin
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin", adminProductRoutes);
-
-// Uploads & Printful helpers
 app.use("/api", uploadRoutes);
 app.use("/api/printful", printfulRoutes);
 
-// --- Global error handler (last) ---
+// Error handler (last)
 app.use((err, req, res, _next) => {
-  console.error(
-    "[Backend Error]",
-    err.message,
-    err.stack ? `\nStack: ${err.stack}` : ""
-  );
+  console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
   const status = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(status).json({
     message: err.message,
