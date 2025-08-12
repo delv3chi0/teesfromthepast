@@ -1,189 +1,150 @@
-import React, { useMemo, useState } from "react";
+// frontend/src/components/shop/ProductCard.jsx
+import React, { useMemo } from "react";
 import {
   Box,
   VStack,
   HStack,
-  Image,
   Heading,
   Text,
   Button,
+  AspectRatio,
+  Image,
   Tooltip,
-  Badge,
+  Wrap,
+  WrapItem,
 } from "@chakra-ui/react";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 
-// If you have a central color map already, you can move this there.
+// Compact color map for swatches (add/tweak as you go)
 const COLOR_SWATCHES = {
-  black: "#1a1a1a",
-  white: "#ffffff",
-  maroon: "#6d1d28",
-  red: "#d73a3a",
-  purple: "#6f42c1",
-  royal: "#2b4cce",
-  navy: "#1b2a4a",
-  charcoal: "#4b4f54",
-  "military green": "#445c43",
-  "forest green": "#2e5a3f",
-  lime: "#b7e36a",
-  orange: "#f68026",
-  gold: "#e2b43c",
-  azalea: "#ff8fb1",
-  "tropical blue": "#3bbbd6",
-  "brown savana": "#554236",
-  // add others as needed
+  black: "#000000",
+  white: "#FFFFFF",
+  maroon: "#800000",
+  red: "#D32F2F",
+  royal: "#1E40AF",
+  "royal blue": "#1E40AF",
+  purple: "#6B21A8",
+  charcoal: "#36454F",
+  "military green": "#4B5320",
+  "forest green": "#228B22",
+  lime: "#9CCC65",
+  "tropical blue": "#1CA3EC",
+  navy: "#0B1F44",
+  gold: "#D4AF37",
+  orange: "#F57C00",
+  azalea: "#FF77A9",
+  "brown savana": "#7B5E57",
+  "brown savanna": "#7B5E57",
+  brown: "#6D4C41",
+  sand: "#E0CDA9",
+  ash: "#B2BEB5",
+  sport_grey: "#B5B8B1",
+  grey: "#8E8E8E",
 };
 
-const normalize = (s = "") =>
-  s.toString().trim().toLowerCase().replace(/\s+/g, " ");
+// try to normalize incoming “Red”, “ROYAL BLUE”, etc.
+function toKey(c) {
+  return String(c || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[_-]+/g, " ");
+}
 
-function firstTruthy(...vals) {
-  return vals.find(Boolean);
+function SwatchRow({ colors = [], max = 12 }) {
+  const list = useMemo(() => Array.from(new Set(colors)).slice(0, max), [colors, max]);
+  if (!list.length) return null;
+
+  return (
+    <Wrap spacing="6px" mb={2}>
+      {list.map((c) => {
+        const key = toKey(c);
+        const hex = COLOR_SWATCHES[key] || "#CCCCCC";
+        return (
+          <WrapItem key={c}>
+            <Tooltip label={c}>
+              <Box
+                borderRadius="full"
+                boxSize="12px"
+                borderWidth="1px"
+                borderColor="blackAlpha.600"
+                background={hex}
+              />
+            </Tooltip>
+          </WrapItem>
+        );
+      })}
+    </Wrap>
+  );
 }
 
 export default function ProductCard({ product }) {
   const navigate = useNavigate();
 
-  // Flatten a unique color list from variants and product.colors
-  const colors = useMemo(() => {
-    const set = new Set();
-    (product?.variants || []).forEach((v) => v.color && set.add(normalize(v.color)));
-    (product?.colors || []).forEach((c) => c && set.add(normalize(c)));
-    return Array.from(set);
-  }, [product]);
-
-  const [hoverColor, setHoverColor] = useState(colors[0] || null);
-
-  // Pick any decent image for the card
-  const cardImage = useMemo(() => {
-    // Prefer a variant that matches hoverColor
-    const vMatch =
-      (product?.variants || []).find(
-        (v) => normalize(v.color) === hoverColor
-      ) || (product?.variants || [])[0];
-
-    // Try variant files
-    const fromFiles = (files = []) => {
-      const f =
-        files.find((f) => f.preview_url) ||
-        files.find((f) => f.url) ||
-        files.find((f) => f.thumbnail_url);
-      return f?.preview_url || f?.url || f?.thumbnail_url || null;
-    };
-
-    const vFile = fromFiles(vMatch?.files);
-    if (vFile) return vFile;
-
-    // Try product.images or variant.image
-    return (
-      vMatch?.image ||
-      (product?.images?.find((i) => i.isPrimary)?.url || product?.images?.[0]) ||
-      product?.image ||
-      "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup"
-    );
-  }, [product, hoverColor]);
-
-  const priceText = useMemo(() => {
-    const min = firstTruthy(product?.priceMin, product?.minPrice);
-    const max = firstTruthy(product?.priceMax, product?.maxPrice);
-    if (min && max && +min !== +max) return `$${(+min).toFixed(2)} - $${(+max).toFixed(2)}`;
-    if (min) return `$${(+min).toFixed(2)}`;
-    return product?.price || "";
-  }, [product]);
-
   if (!product) return null;
 
-  const handleCustomize = () => {
-    const url = hoverColor
-      ? `/product-studio?slug=${encodeURIComponent(product.slug)}&color=${encodeURIComponent(
-          hoverColor
-        )}`
-      : `/product-studio?slug=${encodeURIComponent(product.slug)}`;
-    navigate(url);
-  };
+  // Safe image pick (primary/first)
+  const imageUrl =
+    product.images?.find?.((i) => i.isPrimary)?.url ||
+    (Array.isArray(product.images) && typeof product.images[0] === "string"
+      ? product.images[0]
+      : product.images?.[0]?.url) ||
+    product.image ||
+    "https://placehold.co/800x1000/142F2E/ffffff?text=Mockup";
 
-  const handleDetails = () => navigate(`/product/${product.slug}`);
+  const priceText =
+    product.priceMin && product.priceMax && product.priceMin !== product.priceMax
+      ? `$${product.priceMin.toFixed(2)} - $${product.priceMax.toFixed(2)}`
+      : `$${(product.priceMin || product.price || 0).toFixed(2)}`;
+
+  const colors =
+    (product.colors && product.colors.length && product.colors) ||
+    Array.from(
+      new Set((product.variants || []).map((v) => v.color).filter(Boolean))
+    );
+
+  const goCustomize = () =>
+    navigate(`/product-studio/${encodeURIComponent(product.slug || product.name)}`);
 
   return (
-    <Box
-      bg="brand.paper"
+    <VStack
+      layerStyle="cardBlue"
+      p={4}
+      spacing={3}
+      align="stretch"
       borderRadius="xl"
       borderWidth="1px"
-      borderColor="whiteAlpha.200"
-      overflow="hidden"
-      _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-      transition="all 0.2s ease"
+      borderColor="transparent"
+      _hover={{ borderColor: "brand.accentYellow" }}
     >
-      <Box bg="brand.primary" p={4}>
-        <Image
-          src={cardImage}
-          alt={product?.name}
-          w="100%"
-          h="360px"
-          objectFit="contain"
-          draggable={false}
-        />
-      </Box>
+      <AspectRatio ratio={3 / 4} bg="blackAlpha.100" borderRadius="md" overflow="hidden">
+        <Image src={imageUrl} alt={product.name} objectFit="cover" />
+      </AspectRatio>
 
-      <VStack align="stretch" spacing={2} p={4}>
-        <Heading
-          as="h3"
-          size="sm"
-          color="brand.textLight"
-          textTransform="uppercase"
-          letterSpacing="1px"
-        >
-          {product?.name}
+      <VStack align="stretch" spacing={1}>
+        <Heading as="h4" size="sm" color="brand.textLight" mt={1}>
+          {product.name}
         </Heading>
 
-        {/* Color dots */}
-        {colors?.length ? (
-          <HStack spacing={2} wrap="wrap">
-            {colors.slice(0, 10).map((c) => {
-              const hex = COLOR_SWATCHES[c] || "#777";
-              const active = c === hoverColor;
-              return (
-                <Tooltip key={c} label={c}>
-                  <Box
-                    as="button"
-                    onMouseEnter={() => setHoverColor(c)}
-                    onFocus={() => setHoverColor(c)}
-                    onClick={() => setHoverColor(c)}
-                    aria-label={c}
-                    w="16px"
-                    h="16px"
-                    borderRadius="full"
-                    bg={hex}
-                    border={active ? "2px solid #f6e05e" : "1px solid #2d3748"}
-                    boxShadow={active ? "0 0 0 2px rgba(246,224,94,.35)" : "none"}
-                  />
-                </Tooltip>
-              );
-            })}
-            {colors.length > 10 && (
-              <Badge colorScheme="yellow">+{colors.length - 10} more</Badge>
-            )}
-          </HStack>
-        ) : (
-          <Text fontSize="xs" color="whiteAlpha.600">
-            One color
-          </Text>
-        )}
+        {/* Color swatches */}
+        <SwatchRow colors={colors} />
 
-        {priceText && (
-          <Text fontSize="sm" color="whiteAlpha.900" fontWeight="semibold">
-            {priceText}
-          </Text>
-        )}
-
-        <HStack pt={2}>
-          <Button size="sm" variant="outline" onClick={handleDetails}>
-            View details
-          </Button>
-          <Button size="sm" colorScheme="yellow" onClick={handleCustomize}>
-            Customize
-          </Button>
-        </HStack>
+        <Text fontSize="sm" color="whiteAlpha.800">{priceText}</Text>
       </VStack>
-    </Box>
+
+      <HStack justify="space-between" pt={1}>
+        <Button
+          as={RouterLink}
+          to={`/product/${product.slug || ""}`}
+          variant="outline"
+          size="sm"
+        >
+          View details
+        </Button>
+        <Button size="sm" colorScheme="yellow" onClick={goCustomize}>
+          Customize
+        </Button>
+      </HStack>
+    </VStack>
   );
 }

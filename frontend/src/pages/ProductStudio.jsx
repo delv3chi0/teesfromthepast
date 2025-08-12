@@ -1,44 +1,46 @@
+// frontend/src/pages/ProductStudio.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid, AspectRatio, Image,
   Tooltip, useToast, Skeleton, NumberInput, NumberInputField, NumberInputStepper,
   NumberIncrementStepper, NumberDecrementStepper, Input, Divider, Badge, Slider,
-  SliderTrack, SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel
+  SliderTrack, SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel, Select
 } from "@chakra-ui/react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
 import { client } from "../api/client";
-import { MOCKUPS } from "../data/mockups"; // <- named export
+// Cloudinary mockups mapping (default export created by your script)
+import MOCKUPS from "../data/mockups.js";
 
 const DPI = 300;
 const PREVIEW_ASPECT = 2 / 3;
 const PLACEHOLDER = "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// ---- color normalization + mapping for your Cloudinary mockups ----
-const normalize = (s = "") => s.toString().trim().toLowerCase();
-
-const COLOR_TO_KEY = {
-  black: "tee-black",
-  white: "tee-white",
-  maroon: "tee-maroon",
-  red: "tee-red",
-  purple: "tee-purple",
-  royal: "tee-royal",
-  navy: "tee-navy",
-  charcoal: "tee-charcoal",
-  "military green": "tee-military-green",
-  "forest green": "tee-forest-green",
-  lime: "tee-lime",
-  orange: "tee-orange",
-  gold: "tee-gold",
-  azalea: "tee-azalea",
-  "tropical blue": "tee-tropical-blue",
-  "brown savana": "tee-brown-savana",
+// Print areas (defaults)
+const PRINT_AREAS = {
+  tshirt: {
+    front: { widthInches: 12, heightInches: 16 },
+    back: { widthInches: 12, heightInches: 16 },
+    sleeve: { widthInches: 4, heightInches: 3.5 },
+  },
+  hoodie: {
+    front: { widthInches: 13, heightInches: 13 },
+    back: { widthInches: 12, heightInches: 16 },
+  },
+  tote: {
+    front: { widthInches: 14, heightInches: 16 },
+    back: { widthInches: 14, heightInches: 16 },
+  },
+  hat: {
+    front: { widthInches: 4, heightInches: 1.75 },
+  },
+  beanie: {
+    front: { widthInches: 5, heightInches: 1.75 },
+  },
 };
 
-// Product types → supported views
 const VIEWS_BY_TYPE = {
-  tshirt: ["front", "back", "left", "right"],
+  tshirt: ["front", "back", "sleeve"],
   hoodie: ["front", "back"],
   tote: ["front", "back"],
   hat: ["front"],
@@ -46,8 +48,15 @@ const VIEWS_BY_TYPE = {
 };
 
 function detectProductType(product) {
-  const text = `${product?.type || ""} ${product?.category || ""} ${product?.name || ""}`.toLowerCase();
-  if (/(tee|t-shirt|shirt|unisex|classic)/.test(text)) return "tshirt";
+  const raw =
+    product?.type ||
+    product?.category ||
+    product?.product_type ||
+    product?.productType ||
+    "";
+  const text = `${raw} ${product?.name || ""}`.toLowerCase();
+
+  if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
   if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
   if (/(tote|bag)/.test(text)) return "tote";
   if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
@@ -55,121 +64,162 @@ function detectProductType(product) {
   return "tshirt";
 }
 
-// Try to pull your Cloudinary mockups first; if not available, fall back to product/variant images.
-function chooseMockupUrl(product, view, color) {
-  const colorNorm = normalize(color);
-  const type = detectProductType(product);
-
-  // Classic tee → use Cloudinary MOCKUPS when we can
-  const isClassic = /classic/i.test(product?.name || "") || /classic-tee/.test(product?.slug || "");
-  if (type === "tshirt" && isClassic && MOCKUPS?.["classic-tee"]) {
-    const key = COLOR_TO_KEY[colorNorm];
-    const url = MOCKUPS["classic-tee"]?.[key]?.[view];
-    if (url) return url;
-  }
-
-  // Fallbacks based on Printful data
-  const variants = product?.variants || [];
-  const v =
-    variants.find((v) => normalize(v.color) === colorNorm) ||
-    variants[0];
-
-  const fromFiles = (files = []) => {
-    const f =
-      files.find((f) => f.preview_url) ||
-      files.find((f) => f.url) ||
-      files.find((f) => f.thumbnail_url);
-    return f?.preview_url || f?.url || f?.thumbnail_url || null;
-  };
-
-  if (v?.files?.length) {
-    const f = fromFiles(v.files);
-    if (f) return f;
-  }
-  if (product?.images?.length) {
-    const primary = product.images.find((i) => i.isPrimary) || product.images[0];
-    return primary?.url || (typeof product.images[0] === "string" ? product.images[0] : null);
-  }
-  return v?.image || product?.image || PLACEHOLDER;
-}
-
 function useQuery() {
   const { search } = useLocation();
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
+// Try Cloudinary mockup first, else fallbacks from Printful transform
+function cloudinaryMock(product, view, color) {
+  if (!product?.slug) return null;
+  const key = (product.slug || "").toLowerCase(); // e.g., "classic-tee"
+  const colorKey = String(color || "").toLowerCase().replace(/\s+/g, "-");
+  const v = String(view || "front").toLowerCase();
+  const p = MOCKUPS?.[key]?.[colorKey]?.[v];
+  return typeof p === "string" ? p : null;
+}
+
+function fallbackMock(product, color) {
+  const variants = product?.variants || [];
+  const variant = variants.find((v) => v.color === color) || variants[0];
+  const tryFiles = (files = []) => {
+    const pref = (t) =>
+      files.find((f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
+    const f = pref("preview") || pref("mockup") || files[0];
+    return f?.preview_url || f?.url || f?.thumbnail_url || null;
+    };
+  if (variant?.imageSet?.length) {
+    const primary = variant.imageSet.find((i) => i.isPrimary) || variant.imageSet[0];
+    if (primary?.url) return primary.url;
+  }
+  if (variant?.files?.length) {
+    const f = tryFiles(variant.files);
+    if (f) return f;
+  }
+  if (product?.images?.length) {
+    const pimg = product.images.find((i) => i.isPrimary) || product.images[0];
+    if (pimg?.url) return pimg.url;
+    if (typeof product.images[0] === "string") return product.images[0];
+  }
+  if (variant?.image) return variant.image;
+  if (product?.image) return product.image;
+  return null;
+}
+
+function pickMockupUrl(product, view, color) {
+  return cloudinaryMock(product, view, color) || fallbackMock(product, color) || PLACEHOLDER;
+}
+
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
-  const query = useQuery();
   const params = useParams();
+  const query = useQuery();
 
-  const slug = query.get("slug") || params.slug || "";
-  const colorQ = query.get("color") || "";
-  const sizeQ = query.get("size") || "";
+  const slugViaParam = params.slug || "";
+  const slugViaQuery = query.get("slug") || "";
+  const slug = slugViaParam || slugViaQuery;
 
+  // product + list for picker
   const [product, setProduct] = useState(null);
+  const [catalog, setCatalog] = useState([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+
   const productType = useMemo(() => detectProductType(product), [product]);
-  const views = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
+  const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
 
+  // selections
   const [view, setView] = useState("front");
-  const [color, setColor] = useState(colorQ);
-  const [size, setSize] = useState(sizeQ);
+  const [color, setColor] = useState(query.get("color") || "");
+  const [size, setSize] = useState(query.get("size") || "");
 
-  const wrapRef = useRef(null);
+  // canvas
   const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
   const fabricRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
 
+  // text tool
   const [textValue, setTextValue] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
 
+  // designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [selectedDesignId, setSelectedDesignId] = useState(null);
 
+  // history
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
-  // Load product
+  // fetch product list (for picker if no slug)
+  useEffect(() => {
+    let stop = false;
+    if (slug) return; // only load catalog if we need it
+    (async () => {
+      try {
+        setLoadingCatalog(true);
+        const res = await client.get("/storefront/shop-data");
+        if (!stop) setCatalog(res.data?.products || []);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!stop) setLoadingCatalog(false);
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [slug]);
+
+  // fetch product when slug exists
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        if (!slug) return;
+        if (!slug) {
+          setProduct(null);
+          return;
+        }
         const res = await client.get(`/storefront/product/${slug}`);
-        if (cancelled) return;
-        const p = res.data;
-        setProduct(p);
+        if (!cancelled) {
+          const p = res.data;
+          setProduct(p);
 
-        // seed color/size
-        if (!colorQ) {
-          const set = new Set();
-          (p?.variants || []).forEach((v) => v.color && set.add(normalize(v.color)));
-          (p?.colors || []).forEach((c) => c && set.add(normalize(c)));
-          const first = Array.from(set)[0];
-          if (first) setColor(first);
-        }
-        if (!sizeQ) {
-          const set = new Set();
-          (p?.variants || []).forEach((v) => v.size && set.add(v.size));
-          const first = Array.from(set)[0];
-          if (first) setSize(first);
-        }
+          // seed color/size
+          const colorsSet = new Set();
+          (p?.variants || []).forEach((v) => v.color && colorsSet.add(v.color));
+          (p?.colors || []).forEach((c) => colorsSet.add(c));
+          if (!color) {
+            const firstColor = Array.from(colorsSet)[0];
+            if (firstColor) setColor(firstColor);
+          }
+          const sizesSet = new Set();
+          (p?.variants || []).forEach((v) => {
+            if (!color || v.color === color) v.size && sizesSet.add(v.size);
+          });
+          if (!size) {
+            const firstSize = Array.from(sizesSet)[0];
+            if (firstSize) setSize(firstSize);
+          }
 
-        if (!views.includes(view)) setView(views[0]);
+          // reset view if unsupported
+          if (!availableViews.includes(view)) setView(availableViews[0]);
+        }
       } catch (e) {
         console.error(e);
         toast({ title: "Could not load product", status: "error" });
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // Load my designs (public endpoint is fine)
+  // my designs
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -183,10 +233,12 @@ export default function ProductStudio() {
         if (!cancelled) setLoadingDesigns(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Init fabric + responsive sizing
+  // init fabric + resize
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
@@ -209,7 +261,7 @@ export default function ProductStudio() {
     }
 
     const ro = new ResizeObserver(() => {
-      if (!fabricRef.current || !wrapRef.current) return;
+      if (!fabricRef.current) return;
       const w = wrapRef.current.clientWidth;
       const h = w / PREVIEW_ASPECT;
       fabricRef.current.setWidth(w);
@@ -220,7 +272,7 @@ export default function ProductStudio() {
     return () => ro.disconnect();
   }, []);
 
-  // History helpers
+  // history helpers
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -253,40 +305,19 @@ export default function ProductStudio() {
     if (nxt) applyJSON(nxt);
   };
 
-  // Print areas (inches) by type/view
-  const PRINT_AREAS = {
-    tshirt: {
-      front: { widthInches: 12, heightInches: 16 },
-      back: { widthInches: 12, heightInches: 16 },
-      left: { widthInches: 4, heightInches: 3.5 },  // sleeve
-      right: { widthInches: 4, heightInches: 3.5 }, // sleeve
-    },
-    hoodie: {
-      front: { widthInches: 13, heightInches: 13 },
-      back: { widthInches: 12, heightInches: 16 },
-    },
-    tote: {
-      front: { widthInches: 14, heightInches: 16 },
-      back: { widthInches: 14, heightInches: 16 },
-    },
-    hat: { front: { widthInches: 4, heightInches: 1.75 } },
-    beanie: { front: { widthInches: 5, heightInches: 1.75 } },
-  };
-
-  // Draw mockup background and print area
+  // draw background + print area
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc || !product) return;
 
-    // keep user objects
     const userObjects = fc.getObjects().filter((o) => o.id !== "printArea");
     fc.clear();
     userObjects.forEach((o) => fc.add(o));
 
-    const mockUrl = chooseMockupUrl(product, view, color) || PLACEHOLDER;
+    const mockupUrl = pickMockupUrl(product, view, color) || PLACEHOLDER;
 
     window.fabric.Image.fromURL(
-      mockUrl,
+      mockupUrl,
       (img) => {
         const scale = Math.min(fc.width / img.width, fc.height / img.height);
         fc.setBackgroundImage(
@@ -304,8 +335,7 @@ export default function ProductStudio() {
           }
         );
 
-        const areaDef =
-          PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+        const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
         const pxW = areaDef.widthInches * DPI * (scale / 3);
         const pxH = areaDef.heightInches * DPI * (scale / 3);
 
@@ -337,7 +367,7 @@ export default function ProductStudio() {
     refreshBackground();
   }, [refreshBackground]);
 
-  // Constrain objects to print area
+  // keep objects inside print area
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -370,7 +400,7 @@ export default function ProductStudio() {
     };
   }, [view, productType]);
 
-  // Tools
+  // tools
   const addText = () => {
     const fc = fabricRef.current;
     if (!fc || !textValue.trim())
@@ -443,19 +473,18 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // Export print-ready and upload
-  const exportAndUpload = async () => {
+  // export & upload
+  const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
 
     const area = fc.getObjects().find((o) => o.id === "printArea");
-    if (!area) return toast({ title: "No print area", status: "error" });
+    if (!area) return toast({ title: "No print area defined", status: "error" });
 
     const objs = fc.getObjects().filter((o) => o.id !== "printArea");
     if (!objs.length) return toast({ title: "Nothing to print", status: "warning" });
 
-    const areaDef =
-      PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+    const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
     const outW = Math.round(areaDef.widthInches * DPI);
     const outH = Math.round(areaDef.heightInches * DPI);
 
@@ -468,14 +497,15 @@ export default function ProductStudio() {
       const bb = o.getBoundingRect(true, true);
       const relX = bb.left - aBB.left + bb.width / 2;
       const relY = bb.top - aBB.top + bb.height / 2;
+
       clone.originX = "center";
       clone.originY = "center";
       clone.left = relX * scaleFactor;
       clone.top = relY * scaleFactor;
       clone.scaleX = o.scaleX * scaleFactor;
       clone.scaleY = o.scaleY * scaleFactor;
-      if (clone.type === "i-text")
-        clone.fontSize = (o.fontSize || 36) * scaleFactor;
+      if (clone.type === "i-text") clone.fontSize = (o.fontSize || 36) * scaleFactor;
+
       tmp.add(clone);
     });
     tmp.requestRenderAll();
@@ -485,7 +515,7 @@ export default function ProductStudio() {
 
     const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
 
-    toast({ title: "Uploading design…", status: "info", duration: 2000 });
+    toast({ title: "Uploading design…", status: "info", duration: 2500 });
     try {
       const upload = await client.post("/upload-print-file", {
         imageData: png,
@@ -497,14 +527,14 @@ export default function ProductStudio() {
       const unitPrice = product?.priceMin || product?.basePrice || 0;
       const item = {
         productId: product?.id || product?._id || "",
-        slug: product?.slug || slug,
+        slug: product?.slug || "",
         name: product?.name,
         color,
         size,
         view,
         preview: previewPNG,
         printFileUrl: fileUrl,
-        productImage: chooseMockupUrl(product, view, color),
+        productImage: pickMockupUrl(product, view, color),
         unitPrice,
       };
       localStorage.setItem("itemToCheckout", JSON.stringify(item));
@@ -515,22 +545,25 @@ export default function ProductStudio() {
     }
   };
 
-  // Options lists
-  const colorOptions = useMemo(() => {
+  // computed lists
+  const colors = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach((v) => v.color && set.add(normalize(v.color)));
-    (product?.colors || []).forEach((c) => c && set.add(normalize(c)));
+    (product?.variants || []).forEach((v) => v.color && set.add(v.color));
+    (product?.colors || []).forEach((c) => set.add(c));
     return Array.from(set);
   }, [product]);
 
-  const sizeOptions = useMemo(() => {
+  const sizes = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach((v) => v.size && set.add(v.size));
+    (product?.variants || []).forEach((v) => {
+      if (!color || v.color === color) v.size && set.add(v.size);
+    });
     return Array.from(set);
-  }, [product]);
+  }, [product, color]);
 
-  const canProceed = product && (!colorOptions.length || color) && (!sizeOptions.length || size) && hasObjects;
+  const canProceed = product && (!colors.length || color) && (!sizes.length || size) && hasObjects;
 
+  // UI
   const ProductTypeIcon =
     productType === "tshirt"
       ? FaTshirt
@@ -542,10 +575,46 @@ export default function ProductStudio() {
       ? FaHockeyPuck
       : FaTshirt;
 
+  // If no slug → show a simple picker so page never looks “stuck”
+  if (!slug) {
+    return (
+      <Flex direction="column" minH="70vh" p={6} bg="brand.primary">
+        <Heading size="lg" color="brand.textLight" mb={4}>
+          Choose a product to customize
+        </Heading>
+        {loadingCatalog ? (
+          <Skeleton height="36px" />
+        ) : (
+          <HStack maxW="lg" align="center">
+            <Select
+              placeholder="Select a product"
+              onChange={(e) => {
+                const chosen = e.target.value;
+                if (chosen) navigate(`/product-studio/${encodeURIComponent(chosen)}`);
+              }}
+            >
+              {(catalog || []).map((p) => (
+                <option key={p.slug || p.name} value={p.slug || p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          </HStack>
+        )}
+      </Flex>
+    );
+  }
+
   return (
     <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
       {/* Left: Controls */}
-      <Box w={{ base: "100%", xl: "34%" }} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" p={4} bg="brand.paper">
+      <Box
+        w={{ base: "100%", xl: "34%" }}
+        borderRightWidth={{ xl: "1px" }}
+        borderColor="whiteAlpha.200"
+        p={4}
+        bg="brand.paper"
+      >
         {!product ? (
           <VStack p={6} spacing={3} align="stretch">
             <Skeleton height="28px" />
@@ -557,9 +626,13 @@ export default function ProductStudio() {
             <HStack justify="space-between">
               <HStack>
                 <Icon as={ProductTypeIcon} color="brand.accentYellow" />
-                <Heading size="lg" color="brand.textLight">{product.name}</Heading>
+                <Heading size="lg" color="brand.textLight">
+                  {product.name}
+                </Heading>
               </HStack>
-              <Badge variant="outline" colorScheme="yellow" opacity={0.8}>{productType}</Badge>
+              <Badge variant="outline" colorScheme="yellow" opacity={0.8}>
+                {productType}
+              </Badge>
             </HStack>
 
             <Tabs variant="enclosed" colorScheme="yellow">
@@ -573,10 +646,17 @@ export default function ProductStudio() {
                 <TabPanel px={0}>
                   <VStack align="stretch" spacing={5}>
                     <Box>
-                      <Text mb={2} color="brand.textLight" fontWeight="medium">View</Text>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">
+                        View
+                      </Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {views.map((v) => (
-                          <Button key={v} size="sm" variant={view === v ? "solid" : "outline"} onClick={() => setView(v)}>
+                        {availableViews.map((v) => (
+                          <Button
+                            key={v}
+                            size="sm"
+                            variant={view === v ? "solid" : "outline"}
+                            onClick={() => setView(v)}
+                          >
                             {v}
                           </Button>
                         ))}
@@ -584,23 +664,21 @@ export default function ProductStudio() {
                     </Box>
 
                     <Box>
-                      <Text mb={2} color="brand.textLight" fontWeight="medium">Color</Text>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">
+                        Color
+                      </Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {colorOptions.length ? (
-                          colorOptions.map((c) => {
-                            const label = c;
-                            const active = c === color;
-                            return (
-                              <Button
-                                key={c}
-                                size="xs"
-                                variant={active ? "solid" : "outline"}
-                                onClick={() => setColor(c)}
-                              >
-                                {label}
-                              </Button>
-                            );
-                          })
+                        {colors.length ? (
+                          colors.map((c) => (
+                            <Button
+                              key={c}
+                              size="sm"
+                              variant={color === c ? "solid" : "outline"}
+                              onClick={() => setColor(c)}
+                            >
+                              {c}
+                            </Button>
+                          ))
                         ) : (
                           <Badge>No color options</Badge>
                         )}
@@ -608,10 +686,12 @@ export default function ProductStudio() {
                     </Box>
 
                     <Box>
-                      <Text mb={2} color="brand.textLight" fontWeight="medium">Size</Text>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">
+                        Size
+                      </Text>
                       <HStack wrap="wrap" spacing={2}>
-                        {sizeOptions.length ? (
-                          sizeOptions.map((s) => (
+                        {sizes.length ? (
+                          sizes.map((s) => (
                             <Button
                               key={s}
                               size="sm"
@@ -630,19 +710,38 @@ export default function ProductStudio() {
                     <Divider borderColor="whiteAlpha.300" />
 
                     <VStack align="stretch" spacing={3}>
-                      <Text color="brand.textLight" fontWeight="medium">Zoom</Text>
+                      <Text color="brand.textLight" fontWeight="medium">
+                        Zoom
+                      </Text>
                       <HStack>
                         <Tooltip label="Zoom out">
-                          <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>
+                          <Button
+                            size="sm"
+                            onClick={() => setZoomSafe(zoom - 0.1)}
+                            leftIcon={<FaSearchMinus />}
+                          >
                             Out
                           </Button>
                         </Tooltip>
-                        <Slider aria-label="zoom" value={zoom} min={0.5} max={2} step={0.1} onChange={setZoomSafe}>
-                          <SliderTrack><SliderFilledTrack /></SliderTrack>
+                        <Slider
+                          aria-label="zoom"
+                          value={zoom}
+                          min={0.5}
+                          max={2}
+                          step={0.1}
+                          onChange={setZoomSafe}
+                        >
+                          <SliderTrack>
+                            <SliderFilledTrack />
+                          </SliderTrack>
                           <SliderThumb />
                         </Slider>
                         <Tooltip label="Zoom in">
-                          <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>
+                          <Button
+                            size="sm"
+                            onClick={() => setZoomSafe(zoom + 0.1)}
+                            leftIcon={<FaSearchPlus />}
+                          >
                             In
                           </Button>
                         </Tooltip>
@@ -662,14 +761,20 @@ export default function ProductStudio() {
                           <Tooltip key={d._id} label={d.prompt || "design"}>
                             <Box
                               borderWidth="2px"
-                              borderColor={selectedDesignId === d._id ? "purple.400" : "transparent"}
+                              borderColor={
+                                selectedDesignId === d._id ? "purple.400" : "transparent"
+                              }
                               rounded="md"
                               overflow="hidden"
                               cursor="pointer"
                               onClick={() => addDesign(d)}
                             >
                               <AspectRatio ratio={1}>
-                                <Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" />
+                                <Image
+                                  src={d.imageDataUrl}
+                                  alt={d.prompt}
+                                  objectFit="cover"
+                                />
                               </AspectRatio>
                             </Box>
                           </Tooltip>
@@ -686,7 +791,9 @@ export default function ProductStudio() {
                 {/* Text */}
                 <TabPanel px={0}>
                   <VStack align="stretch" spacing={3}>
-                    <Text color="brand.textLight" fontWeight="medium">Add Text</Text>
+                    <Text color="brand.textLight" fontWeight="medium">
+                      Add Text
+                    </Text>
                     <HStack>
                       <Input
                         value={textValue}
@@ -707,7 +814,9 @@ export default function ProductStudio() {
                         value={textSize}
                         min={8}
                         max={200}
-                        onChange={(v) => setTextSize(parseInt(v || "36", 10))}
+                        onChange={(v) =>
+                          setTextSize(parseInt(v || "36", 10))
+                        }
                       >
                         <NumberInputField />
                         <NumberInputStepper>
@@ -727,7 +836,7 @@ export default function ProductStudio() {
               <Button
                 colorScheme={canProceed ? "purple" : "gray"}
                 isDisabled={!canProceed}
-                onClick={exportAndUpload}
+                onClick={makePrintReadyAndUpload}
                 width="full"
               >
                 Add to cart / Checkout
@@ -745,10 +854,14 @@ export default function ProductStudio() {
         <HStack mb={2} color="brand.textLight" justify="space-between">
           <HStack>
             <Tooltip label="Undo">
-              <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>Undo</Button>
+              <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>
+                Undo
+              </Button>
             </Tooltip>
             <Tooltip label="Redo">
-              <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>Redo</Button>
+              <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>
+                Redo
+              </Button>
             </Tooltip>
           </HStack>
           <HStack>
