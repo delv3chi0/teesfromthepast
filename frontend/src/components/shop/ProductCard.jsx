@@ -1,62 +1,61 @@
-import {
-  Box, VStack, HStack, Image, Text, Button, Tooltip
-} from "@chakra-ui/react";
-import { Link as RouterLink } from "react-router-dom";
-import { PRINTFUL_COLOR_HEX } from "../../data/colors";
+// frontend/src/components/ProductCard.jsx
+import React from "react";
+import { Box, VStack, Heading, Text, Button, Image, HStack } from "@chakra-ui/react";
+import { useNavigate } from "react-router-dom";
+import ColorDots from "./ColorDots";
 
 export default function ProductCard({ product }) {
-  if (!product) return null;
+  const navigate = useNavigate();
 
-  const priceText =
-    product.priceMin === product.priceMax
-      ? `$${product.priceMin.toFixed(2)}`
-      : `$${product.priceMin.toFixed(2)} – $${product.priceMax.toFixed(2)}`;
+  const colors = Array.from(new Set([
+    ...(product.colors || []),
+    ...(product.variants || []).map(v => v.color).filter(Boolean),
+  ]));
+
+  const priceMin = Number(product.priceMin || product.basePrice || product.price || 0);
+  const priceMax = Number(product.priceMax || priceMin);
+  const priceText = priceMin !== priceMax
+    ? `$${priceMin.toFixed(2)} - $${priceMax.toFixed(2)}`
+    : `$${priceMin.toFixed(2)}`;
+
+  const primaryImg =
+    product.cardImage ||
+    product.image ||
+    (product.images?.find(i => i.isPrimary)?.url) ||
+    product.images?.[0] ||
+    "https://placehold.co/800x1000?text=Mockup";
 
   return (
-    <Box layerStyle="cardBlue" p={4} borderRadius="lg">
-      <Box bg="brand.secondary" borderRadius="md" overflow="hidden" mb={3}>
-        <Image
-          src={product.primaryImage || product.images?.[0] || "https://placehold.co/800x1000"}
-          alt={product.name}
-          w="100%"
-          h="320px"
-          objectFit="cover"
-        />
-      </Box>
+    <Box bg="brand.primaryLight" borderRadius="lg" p={4}>
+      <Image
+        src={primaryImg}
+        alt={product.name}
+        borderRadius="md"
+        mb={3}
+        w="100%"
+        objectFit="cover"
+      />
 
-      <VStack align="stretch" spacing={2}>
-        <HStack spacing={1} wrap="wrap">
-          {(product.colors || []).map((name) => {
-            const hex = PRINTFUL_COLOR_HEX[name] || "#999";
-            return (
-              <Tooltip key={name} label={name} hasArrow>
-                <Box
-                  w="14px"
-                  h="14px"
-                  borderRadius="50%"
-                  border="1px solid rgba(255,255,255,0.35)"
-                  bg={hex}
-                />
-              </Tooltip>
-            );
-          })}
-        </HStack>
+      <VStack align="start" spacing={2}>
+        <Heading size="sm" color="brand.textLight">{product.name}</Heading>
 
-        <Text fontWeight="bold" color="brand.textLight" mt={1} textTransform="uppercase">
-          {product.name}
-        </Text>
+        {/* Color dots */}
+        <ColorDots colors={colors} max={12} />
 
         <Text fontSize="sm" color="whiteAlpha.800">{priceText}</Text>
 
-        <HStack pt={2}>
-          <Button as={RouterLink} to={`/product/${product.slug}`} size="sm" variant="outline">
+        <HStack>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate(`/product/${product.slug}`)}
+          >
             View details
           </Button>
           <Button
-            as={RouterLink}
-            to={`/product-studio?slug=${product.slug}`}
             size="sm"
             colorScheme="yellow"
+            onClick={() => navigate(`/product-studio?slug=${encodeURIComponent(product.slug)}`)}
           >
             Customize
           </Button>

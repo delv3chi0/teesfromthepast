@@ -1,105 +1,73 @@
 // frontend/src/pages/ProductStudio.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid, AspectRatio, Image,
-  Tooltip, useToast, Skeleton, NumberInput, NumberInputField, NumberInputStepper,
-  NumberIncrementStepper, NumberDecrementStepper, Input, Divider, Badge, Slider,
-  SliderTrack, SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel
+  Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid,
+  AspectRatio, Image, Tooltip, useToast, Skeleton, NumberInput,
+  NumberInputField, NumberInputStepper, NumberIncrementStepper,
+  NumberDecrementStepper, Input, Divider, Badge, Slider, SliderTrack,
+  SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel
 } from "@chakra-ui/react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import {
-  FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus,
-  FaTshirt, FaHatCowboy, FaHockeyPuck
-} from "react-icons/fa";
+import { FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus, FaTshirt, FaHatCowboy, FaHockeyPuck } from "react-icons/fa";
 import { client } from "../api/client";
+import MOCKUPS from "../data/mockups";
 
-// NEW: prefer your generated Cloudinary/local mapping
-import { MOCKUPS } from "../data/mockups";
-import { colorToSlug } from "../data/colors";
-
-// --------- CONSTANTS ----------
-const DPI = 300;                 // print resolution for exported PNG
-const PREVIEW_ASPECT = 2 / 3;    // canvas aspect ratio for on-screen mockup
+const DPI = 300;
+const PREVIEW_ASPECT = 2 / 3;
 const PLACEHOLDER = "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Central map of real-world print areas by “type” & placement.
+// Real-world print areas (inches)
 const PRINT_AREAS = {
-  tshirt: {
-    front:  { widthInches: 12, heightInches: 16 },
-    back:   { widthInches: 12, heightInches: 16 },
-    left:   { widthInches: 4,  heightInches: 3.5 }, // sleeve area (left)
-    right:  { widthInches: 4,  heightInches: 3.5 }, // sleeve area (right)
-  },
-  hoodie: {
-    front: { widthInches: 13, heightInches: 13 },
-    back:  { widthInches: 12, heightInches: 16 },
-  },
-  tote: {
-    front: { widthInches: 14, heightInches: 16 },
-    back:  { widthInches: 14, heightInches: 16 },
-  },
-  hat: {
-    front: { widthInches: 4, heightInches: 1.75 },
-  },
-  beanie: {
-    front: { widthInches: 5, heightInches: 1.75 },
-  },
+  tshirt:  { front: { widthInches: 12, heightInches: 16 }, back: { widthInches: 12, heightInches: 16 }, sleeve: { widthInches: 4, heightInches: 3.5 } },
+  hoodie:  { front: { widthInches: 13, heightInches: 13 }, back: { widthInches: 12, heightInches: 16 } },
+  tote:    { front: { widthInches: 14, heightInches: 16 }, back: { widthInches: 14, heightInches: 16 } },
+  hat:     { front: { widthInches: 4, heightInches: 1.75 } },
+  beanie:  { front: { widthInches: 5, heightInches: 1.75 } },
 };
 
-// Views per type (match your uploaded set)
 const VIEWS_BY_TYPE = {
-  tshirt: ["front", "back", "left", "right"],
+  tshirt: ["front", "back", "sleeve"],
   hoodie: ["front", "back"],
   tote:   ["front", "back"],
   hat:    ["front"],
   beanie: ["front"],
 };
 
-// Heuristic type detection if backend didn’t classify the product.
 function detectProductType(product) {
-  const raw =
-    product?.type ||
-    product?.category ||
-    product?.product_type ||
-    product?.productType ||
-    "";
-
+  const raw = product?.type || product?.category || product?.product_type || product?.productType || "";
   const text = `${raw} ${product?.name || ""}`.toLowerCase();
-
   if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
-  if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
-  if (/(tote|bag)/.test(text)) return "tote";
-  if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
-  if (/(beanie|knit)/.test(text)) return "beanie";
+  if (/(hoodie|sweatshirt)/.test(text))       return "hoodie";
+  if (/(tote|bag)/.test(text))                return "tote";
+  if (/(hat|cap|trucker|snapback)/.test(text))return "hat";
+  if (/(beanie|knit)/.test(text))             return "beanie";
   return "tshirt";
 }
 
-// Prefer mapping from MOCKUPS (Cloudinary or local), otherwise fall back to product/variant imagery
-function pickMockupUrl(product, view, colorName) {
+function normalizeColorKey(name) {
+  if (!name) return "";
+  return String(name).toLowerCase().replace(/\s+/g, "-");
+}
+
+function pickMockupUrl(product, view, color) {
   if (!product) return PLACEHOLDER;
 
-  // 1) Try your generated map first
-  const slug = product.slug || "";
-  const colorSlug = colorToSlug(colorName || "");
+  // 1) Prefer Cloudinary mapping
+  const slug = product.slug || (product.name ? product.name.toLowerCase().replace(/\s+/g, "-") : "");
+  const cKey = normalizeColorKey(color);
+  const vKey = (view || "front").toLowerCase();
+  const mapped = MOCKUPS?.[slug]?.[cKey]?.[vKey];
+  if (mapped) return mapped;
 
-  // Your upload run produced keys like "tee-black" in some cases — try multiple options
-  const colorKeys = [colorSlug, `tee-${colorSlug}`, `shirt-${colorSlug}`];
-
-  for (const ck of colorKeys) {
-    const url = MOCKUPS?.[slug]?.[ck]?.[view];
-    if (url) return url;
-  }
-
-  // 2) Fallbacks using product data (variants/files/images)
+  // 2) Fallback: variant/product images
   const variants = product.variants || [];
   const variant =
-    variants.find(v => (v.color === colorName || v.colorName === colorName)) ||
+    variants.find(v => (v.color === color || v.colorName === color)) ||
     variants[0];
 
-  const preferFromFiles = (files = []) => {
-    const byType = (t) =>
-      files.find((f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
-    const f = byType("preview") || byType("mockup") || files[0];
+  const tryFiles = (files = []) => {
+    const pref = (t) => files.find(f => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
+    const f = pref("preview") || pref("mockup") || files[0];
     return f?.preview_url || f?.url || f?.thumbnail_url || null;
   };
 
@@ -108,7 +76,7 @@ function pickMockupUrl(product, view, colorName) {
     if (primary?.url) return primary.url;
   }
   if (variant?.files?.length) {
-    const f = preferFromFiles(variant.files);
+    const f = tryFiles(variant.files);
     if (f) return f;
   }
   if (product?.images?.length) {
@@ -117,12 +85,11 @@ function pickMockupUrl(product, view, colorName) {
     if (typeof product.images[0] === "string") return product.images[0];
   }
   if (variant?.image) return variant.image;
-  if (product?.image) return product.image;
+  if (product?.image)  return product.image;
 
   return PLACEHOLDER;
 }
 
-// Read URL query params
 function useQuery() {
   const { search } = useLocation();
   return useMemo(() => new URLSearchParams(search), [search]);
@@ -134,70 +101,61 @@ export default function ProductStudio() {
   const query = useQuery();
   const params = useParams();
 
-  // slug via /product-studio?slug=... OR route param
   const slug = query.get("slug") || params.slug || "";
   const colorFromQuery = query.get("color") || "";
   const sizeFromQuery  = query.get("size")  || "";
 
-  // product, type, views
   const [product, setProduct] = useState(null);
   const productType = useMemo(() => detectProductType(product), [product]);
   const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
 
-  // selections
   const [view, setView] = useState("front");
   const [color, setColor] = useState(colorFromQuery);
   const [size, setSize] = useState(sizeFromQuery);
 
-  // canvas + state
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const fabricRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
 
-  // text tool
   const [textValue, setTextValue] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
 
-  // designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [selectedDesignId, setSelectedDesignId] = useState(null);
 
-  // history
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
-  // ----- fetch product by slug -----
+  // Load product by slug
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (!slug) return;
         const res = await client.get(`/storefront/product/${slug}`);
-        if (!cancelled) {
-          const p = res.data;
-          setProduct(p);
+        if (cancelled) return;
 
-          // seed initial color/size if not provided
-          if (!colorFromQuery) {
-            const colors = new Set();
-            (p?.variants || []).forEach(v => v.color && colors.add(v.color));
-            (p?.colors || []).forEach(c => colors.add(c));
-            const first = Array.from(colors)[0];
-            if (first) setColor(first);
-          }
-          if (!sizeFromQuery) {
-            const sizes = new Set();
-            (p?.variants || []).forEach(v => v.size && (!color || v.color === color) && sizes.add(v.size));
-            const firstS = Array.from(sizes)[0];
-            if (firstS) setSize(firstS);
-          }
+        const p = res.data;
+        setProduct(p);
 
-          if (!availableViews.includes(view)) setView(availableViews[0]);
+        if (!colorFromQuery) {
+          const colors = new Set();
+          (p?.variants || []).forEach(v => v.color && colors.add(v.color));
+          (p?.colors || []).forEach(c => colors.add(c));
+          const first = Array.from(colors)[0];
+          if (first) setColor(first);
         }
+        if (!sizeFromQuery) {
+          const sizes = new Set();
+          (p?.variants || []).forEach(v => v.size && (!color || v.color === color) && sizes.add(v.size));
+          const firstS = Array.from(sizes)[0];
+          if (firstS) setSize(firstS);
+        }
+        if (!availableViews.includes(view)) setView(availableViews[0]);
       } catch (e) {
         console.error(e);
         toast({ title: "Could not load product", status: "error" });
@@ -207,7 +165,7 @@ export default function ProductStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // ----- fetch My Designs -----
+  // Load user's saved designs (optional if logged out)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -224,7 +182,7 @@ export default function ProductStudio() {
     return () => { cancelled = true; };
   }, []);
 
-  // ----- init fabric canvas & resize handling -----
+  // Init fabric + responsive resize
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
@@ -257,7 +215,7 @@ export default function ProductStudio() {
     return () => ro.disconnect();
   }, []);
 
-  // ----- helpers: history -----
+  // History helpers
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -290,12 +248,11 @@ export default function ProductStudio() {
     if (nxt) applyJSON(nxt);
   };
 
-  // ----- draw background & print area -----
+  // Draw mockup background + dashed print area
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
 
-    // keep user objects (remove previous printArea)
     const userObjects = fc.getObjects().filter(o => o.id !== "printArea");
     fc.clear();
     userObjects.forEach(o => fc.add(o));
@@ -315,9 +272,8 @@ export default function ProductStudio() {
         evented: false,
       });
 
-      // print area for current product type & view
       const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
-      const pxW = areaDef.widthInches * DPI * (scale / 3);   // preview downscale
+      const pxW = areaDef.widthInches * DPI * (scale / 3);
       const pxH = areaDef.heightInches * DPI * (scale / 3);
 
       const rect = new window.fabric.Rect({
@@ -344,7 +300,7 @@ export default function ProductStudio() {
 
   useEffect(() => { refreshBackground(); }, [refreshBackground]);
 
-  // ----- constrain objects to the print area -----
+  // Constrain objects inside print area
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -375,7 +331,7 @@ export default function ProductStudio() {
     };
   }, [view, productType]);
 
-  // ----- tools -----
+  // Tools
   const addText = () => {
     const fc = fabricRef.current;
     if (!fc || !textValue.trim()) return toast({ title: "Enter text first", status: "info" });
@@ -434,7 +390,7 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // ----- export print-ready + upload -----
+  // Export print-ready PNG + upload
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -445,12 +401,10 @@ export default function ProductStudio() {
     const objs = fc.getObjects().filter(o => o.id !== "printArea");
     if (!objs.length) return toast({ title: "Nothing to print", status: "warning" });
 
-    // real output dimensions (DPI x inches)
     const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
     const outW = Math.round(areaDef.widthInches * DPI);
     const outH = Math.round(areaDef.heightInches * DPI);
 
-    // map preview->print coordinates relative to area bounding box
     const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
     const aBB = area.getBoundingRect(true, true);
 
@@ -507,7 +461,7 @@ export default function ProductStudio() {
     }
   };
 
-  // ----- computed color/size arrays -----
+  // Colors & sizes derived from variants
   const colors = useMemo(() => {
     const set = new Set();
     (product?.variants || []).forEach(v => v.color && set.add(v.color));
@@ -525,12 +479,12 @@ export default function ProductStudio() {
 
   const canProceed = product && (!colors.length || color) && (!sizes.length || size) && hasObjects;
 
-  // ----- UI -----
-  const ProductTypeIcon = productType === "tshirt" ? FaTshirt
-                        : productType === "hoodie" ? FaTshirt
-                        : productType === "hat"    ? FaHatCowboy
-                        : productType === "beanie" ? FaHockeyPuck
-                        : FaTshirt;
+  const ProductTypeIcon =
+    productType === "tshirt" ? FaTshirt :
+    productType === "hoodie" ? FaTshirt :
+    productType === "hat"    ? FaHatCowboy :
+    productType === "beanie" ? FaHockeyPuck :
+    FaTshirt;
 
   return (
     <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
@@ -593,7 +547,7 @@ export default function ProductStudio() {
 
                     <VStack align="stretch" spacing={3}>
                       <Text color="brand.textLight" fontWeight="medium">Zoom</Text>
-                      <HStack>
+                      <HStack w="full">
                         <Tooltip label="Zoom out">
                           <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>Out</Button>
                         </Tooltip>
@@ -634,7 +588,7 @@ export default function ProductStudio() {
                         ))}
                       </SimpleGrid>
                     ) : (
-                      <Text color="brand.textLight" fontSize="sm">No saved designs yet. Create one in “Generate”.</Text>
+                      <Text color="brand.textLight" fontSize="sm">No saved designs yet. Create one in “Create”.</Text>
                     )}
                   </VStack>
                 </TabPanel>
@@ -651,7 +605,10 @@ export default function ProductStudio() {
                       <Input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} w="52px" p={0} />
                       <NumberInput value={textSize} min={8} max={200} onChange={(v) => setTextSize(parseInt(v || "36", 10))}>
                         <NumberInputField />
-                        <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
+                        <NumberInputStepper>
+                          <NumberIncrementStepper />
+                          <NumberDecrementStepper />
+                        </NumberInputStepper>
                       </NumberInput>
                     </HStack>
                   </VStack>
