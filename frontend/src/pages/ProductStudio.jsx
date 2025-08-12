@@ -158,7 +158,7 @@ export default function ProductStudio() {
 
   // text tool
   const [textValue, setTextValue] = useState("");
-  ️const [textColor, setTextColor] = useState("#ffffff");
+  const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
 
   // designs
