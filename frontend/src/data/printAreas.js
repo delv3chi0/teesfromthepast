@@ -1,20 +1,17 @@
 // frontend/src/data/printAreas.js
-//
-// Print area configuration per product *type* and view.
-// All values are RELATIVE (0..1) so they scale correctly with any mockup size.
-// top/left are the position of the print-area rectangle's TOP-LEFT corner
-// within the mockup image bounds, expressed as a fraction of mockup width/height.
-// width/height are also fractions of mockup width/height.
+// All values are RELATIVE (0..1) to the mockup image bounds
+// after it is fitted to height and pinned to the top.
+// top/left = top-left corner of the print area, width/height are fractions.
 
 const AREAS = {
   tshirt: {
-    // Typical 12x16" on a 1:1 mockup box
+    // 12x16-ish centered chest/back; sleeves mirrored
     front:  { top: 0.22, left: 0.28, width: 0.44, height: 0.52 },
     back:   { top: 0.22, left: 0.28, width: 0.44, height: 0.52 },
-    sleeve: { top: 0.37, left: 0.63, width: 0.18, height: 0.14 }, // right sleeve
+    left:   { top: 0.37, left: 0.19, width: 0.18, height: 0.14 }, // left sleeve
+    right:  { top: 0.37, left: 0.63, width: 0.18, height: 0.14 }, // right sleeve
   },
   hoodie: {
-    // Square-ish chest for front, full rectangle for back
     front: { top: 0.26, left: 0.32, width: 0.36, height: 0.36 },
     back:  { top: 0.20, left: 0.27, width: 0.46, height: 0.54 },
   },
@@ -30,9 +27,14 @@ const AREAS = {
   },
 };
 
-// Physical print sizes (used for export DPI target)
+// Physical output sizes in inches for export@300DPI
 export const PRINT_SIZE_IN = {
-  tshirt: { front: { w: 12, h: 16 }, back: { w: 12, h: 16 }, sleeve: { w: 4, h: 3.5 } },
+  tshirt: {
+    front: { w: 12, h: 16 },
+    back:  { w: 12, h: 16 },
+    left:  { w: 4,  h: 3.5 },
+    right: { w: 4,  h: 3.5 },
+  },
   hoodie: { front: { w: 13, h: 13 }, back: { w: 12, h: 16 } },
   tote:   { front: { w: 14, h: 16 }, back: { w: 14, h: 16 } },
   hat:    { front: { w: 4,  h: 1.75 } },
