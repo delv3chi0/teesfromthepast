@@ -17,7 +17,7 @@ import {
   IconButton,
   SimpleGrid,
   AspectRatio,
-  Image as ChakraImage, // alias to avoid shadowing window.Image
+  Image as ChakraImage,
   Tooltip,
   useToast,
   Skeleton,
@@ -57,12 +57,12 @@ import {
   FaEyeSlash,
   FaLock,
   FaLockOpen,
-  FaRotateRight,
+  FaRedoAlt, // <-- use this instead of FaRotateRight
 } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
 
-// Try to tolerate different exports from ../data/mockups.js
+// tolerate different exports from ../data/mockups.js
 import * as MOCKUPS_MOD from "../data/mockups.js";
 const MOCKUPS = (MOCKUPS_MOD?.default ?? MOCKUPS_MOD?.MOCKUPS ?? {});
 
@@ -70,7 +70,7 @@ const MOCKUPS = (MOCKUPS_MOD?.default ?? MOCKUPS_MOD?.MOCKUPS ?? {});
 // Constants & helpers
 // ------------------------------
 const DPI = 300;
-const WORK_ASPECT = 3 / 4; // 3:4 canvas
+const WORK_ASPECT = 3 / 4;
 const PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
@@ -142,7 +142,7 @@ const PRINT_SPECS = {
   },
 };
 
-// Color swatches: black first, white last, rainbow-ish in between
+// Color swatches and order
 const COLOR_HEX = {
   black: "#000000",
   white: "#FFFFFF",
@@ -228,6 +228,9 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
+// ------------------------------
+// Component
+// ------------------------------
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -504,7 +507,6 @@ export default function ProductStudio() {
       );
     };
 
-    // Use window.Image to avoid conflicts with Chakra's Image import
     const testImg = new window.Image();
     testImg.crossOrigin = "anonymous";
     testImg.onload = () => addImg(url);
@@ -1198,7 +1200,7 @@ export default function ProductStudio() {
                 <IconButton
                   aria-label="Rotate"
                   size="sm"
-                  icon={<FaRotateRight />}
+                  icon={<FaRedoAlt />}  // <- updated icon
                   onClick={rotate90}
                 />
               </Tooltip>
@@ -1254,10 +1256,7 @@ export default function ProductStudio() {
 
               <canvas
                 ref={canvasRef}
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                }}
+                style={{ position: "absolute", inset: 0 }}
               />
             </Box>
           </Box>
