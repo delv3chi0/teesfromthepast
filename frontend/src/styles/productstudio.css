@@ -1,0 +1,77 @@
+/* frontend/src/styles/productstudio.css */
+
+/* Keep the right panel stable and the mockup pinned to the top */
+.stage-wrap {
+  position: sticky;
+  top: 0;
+  padding: 8px;
+  height: calc(100vh - 0px);
+  display: flex;
+  align-items: flex-start; /* keep stage at the very top */
+  justify-content: center;
+  background: var(--chakra-colors-brand-secondary, #0b1f2b);
+  border-left: 1px solid rgba(255,255,255,0.12);
+}
+
+.stage-frame {
+  position: relative;
+  /* size will be controlled by JS – we just ensure there’s a frame */
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0d1f33;
+}
+
+.stage-canvas {
+  display: block;
+  position: relative;
+}
+
+/* Subtle crosshair to aid centering (turned on/off via state) */
+.stage-crosshair {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px) center/1px 100% no-repeat,
+    linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px) center/100% 1px no-repeat;
+}
+
+/* Rulers */
+.ruler-horizontal {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 28px;
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(255,255,255,0.18),
+      rgba(255,255,255,0.18) 1px,
+      transparent 1px,
+      transparent 10px
+    );
+  border-bottom: 1px solid rgba(255,255,255,0.25);
+}
+
+.ruler-vertical {
+  position: absolute;
+  left: 0;
+  top: 28px;
+  bottom: 0;
+  width: 28px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.18),
+      rgba(255,255,255,0.18) 1px,
+      transparent 1px,
+      transparent 10px
+    );
+  border-right: 1px solid rgba(255,255,255,0.25);
+}
+
+/* Root container minor tweaks */
+.studio-root {
+  overflow: hidden;
+}

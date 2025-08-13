@@ -1,280 +1,195 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+// frontend/src/pages/ProductStudio.jsx
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Box,
-  Flex,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  Icon,
-  SimpleGrid,
-  AspectRatio,
-  Image,
-  Tooltip,
-  useToast,
-  Skeleton,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper,
-  Input,
-  Divider,
-  Badge,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
-  Switch,
+  Box, Flex, VStack, HStack, Heading, Text, Button, Icon, SimpleGrid, AspectRatio, Image,
+  Tooltip, useToast, Skeleton, NumberInput, NumberInputField, NumberInputStepper,
+  NumberIncrementStepper, NumberDecrementStepper, Input, Divider, Badge, Slider,
+  SliderTrack, SliderFilledTrack, SliderThumb, Tabs, TabList, TabPanels, Tab, TabPanel,
+  Tag, TagLabel
 } from "@chakra-ui/react";
 import {
-  FaTrash,
-  FaArrowsAltH,
-  FaUndo,
-  FaRedo,
-  FaSearchMinus,
-  FaSearchPlus,
-  FaTshirt,
-  FaHatCowboy,
-  FaHockeyPuck,
-  FaLayerGroup,
-  FaChevronUp,
-  FaChevronDown,
-  FaEye,
-  FaEyeSlash,
-  FaLock,
-  FaLockOpen,
+  FaTrash, FaArrowsAltH, FaUndo, FaRedo, FaSearchMinus, FaSearchPlus,
+  FaTshirt, FaHatCowboy, FaHockeyPuck, FaEye, FaEyeSlash, FaLock, FaLockOpen, FaSyncAlt
 } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
-import styles from "./ProductStudio.module.css";
 
-/** MOCKUPS import (works whether your generator exported default or named) */
+// styles for rulers, guides, sticky layout
+import "../styles/productstudio.css";
+
+// Cloudinary mockups map — tolerate either default or named export
 import * as MOCKUPS_MOD from "../data/mockups.js";
-const MOCKUPS = (MOCKUPS_MOD?.default ?? MOCKUPS_MOD?.MOCKUPS ?? {});
+const MOCKUPS = (MOCKUPS_MOD?.default || MOCKUPS_MOD?.MOCKUPS || {});
 
-/** ------------------------------
- *  CONSTANTS / META
- *  ------------------------------ */
+// ------------------------------
+// Constants & helpers
+// ------------------------------
 const DPI = 300;
-/* Canvas aspect (visual working area). 3:4 keeps tees natural */
-const PREVIEW_ASPECT = 3 / 4;
-const PLACEHOLDER =
-  "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
+const PREVIEW_ASPECT = 2 / 3; // keep the stage consistently tall and fixed
+const PLACEHOLDER = "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-/** Calibrated print rectangles (percentages of the mockup image) */
-const PRINT_META = {
+// “visual alignment” for the preview overlay (percentages of canvas size, tuned per view)
+const PREVIEW_LAYOUT = {
   tshirt: {
-    front: { x: 0.27, y: 0.18, w: 0.46, h: 0.53 },
-    back: { x: 0.27, y: 0.20, w: 0.46, h: 0.53 },
-    sleeve: { x: 0.65, y: 0.35, w: 0.18, h: 0.16 },
+    front:  { widthFrac: 0.42, heightFrac: 0.56, topFrac: 0.28 },
+    back:   { widthFrac: 0.42, heightFrac: 0.56, topFrac: 0.28 },
+    sleeve: { widthFrac: 0.28, heightFrac: 0.24, topFrac: 0.18 },
   },
   hoodie: {
-    front: { x: 0.28, y: 0.23, w: 0.44, h: 0.48 },
-    back: { x: 0.28, y: 0.22, w: 0.44, h: 0.52 },
+    front:  { widthFrac: 0.40, heightFrac: 0.48, topFrac: 0.24 },
+    back:   { widthFrac: 0.40, heightFrac: 0.56, topFrac: 0.26 },
   },
-  tote: {
-    front: { x: 0.30, y: 0.22, w: 0.40, h: 0.50 },
-    back: { x: 0.30, y: 0.22, w: 0.40, h: 0.50 },
+  tote:   {
+    front:  { widthFrac: 0.44, heightFrac: 0.52, topFrac: 0.30 },
+    back:   { widthFrac: 0.44, heightFrac: 0.52, topFrac: 0.30 },
   },
-  hat: {
-    front: { x: 0.40, y: 0.38, w: 0.20, h: 0.12 },
-  },
-  beanie: {
-    front: { x: 0.34, y: 0.42, w: 0.32, h: 0.14 },
-  },
+  hat:    { front: { widthFrac: 0.26, heightFrac: 0.12, topFrac: 0.20 } },
+  beanie: { front: { widthFrac: 0.30, heightFrac: 0.14, topFrac: 0.22 } },
 };
 
-/** Color swatches + hex (normalize keys to lower).  */
-const COLOR_HEX = {
-  black: "#000000",
-  maroon: "#7f1d1d",
-  red: "#dc2626",
-  orange: "#f97316",
-  gold: "#facc15",
-  lime: "#84cc16",
-  green: "#22c55e",
-  "forest green": "#166534",
-  teal: "#14b8a6",
-  "tropical blue": "#1ca3ec",
-  blue: "#2563eb",
-  "royal blue": "#1E40AF",
-  purple: "#7c3aed",
-  pink: "#ec4899",
-  white: "#ffffff",
-  charcoal: "#36454F",
-  ash: "#b2beb5",
-  grey: "#8e8e8e",
-  sport_grey: "#B5B8B1",
-  azalea: "#FF77A9",
-  "brown savanna": "#7B5E57",
-  brown: "#6D4C41",
-  sand: "#E0CDA9",
-  navy: "#0B1F44",
-  "military green": "#4B5320",
+// real-world print sizes (inches) used for export
+const PRINT_AREAS = {
+  tshirt: { front: { widthInches: 12, heightInches: 16 }, back: { widthInches: 12, heightInches: 16 }, sleeve: { widthInches: 4, heightInches: 3.5 } },
+  hoodie: { front: { widthInches: 13, heightInches: 13 }, back: { widthInches: 12, heightInches: 16 } },
+  tote:   { front: { widthInches: 14, heightInches: 16 }, back: { widthInches: 14, heightInches: 16 } },
+  hat:    { front: { widthInches: 4,  heightInches: 1.75 } },
+  beanie: { front: { widthInches: 5,  heightInches: 1.75 } },
 };
 
-/** Show swatches in this order: black → rainbow → white → extras */
-const SWATCH_ORDER = [
-  "black",
-  "maroon",
-  "red",
-  "orange",
-  "gold",
-  "lime",
-  "green",
-  "teal",
-  "tropical blue",
-  "blue",
-  "royal blue",
-  "purple",
-  "pink",
-  "white",
+const VIEWS_BY_TYPE = {
+  tshirt: ["front", "back", "sleeve"],
+  hoodie: ["front", "back"],
+  tote:   ["front", "back"],
+  hat:    ["front"],
+  beanie: ["front"],
+};
+
+const RAINBOW_ORDER = [
+  "black","charcoal","navy","royal","tropical blue","purple","maroon","red","orange","gold","lime","military green","brown savana","brown","sand","ash","sport_grey","grey","white"
 ];
+const SWATCH_HEX = {
+  black:"#000", white:"#fff", maroon:"#800000", red:"#d32f2f", royal:"#1e40af", "royal blue":"#1e40af",
+  purple:"#6b21a8", charcoal:"#36454f", "military green":"#4b5320", "forest green":"#228b22", lime:"#9ccc65",
+  "tropical blue":"#1ca3ec", navy:"#0b1f44", gold:"#d4af37", orange:"#f57c00", azalea:"#ff77a9",
+  "brown savana":"#7b5e57", "brown savanna":"#7b5e57", brown:"#6d4c41", sand:"#e0cda9", ash:"#b2beb5",
+  sport_grey:"#b5b8b1", grey:"#8e8e8e",
+};
 
-/** Utils */
-const norm = (s) =>
-  String(s || "").trim().toLowerCase().replace(/\s+/g, " ").replace(/[_-]+/g, " ");
-const normColorKey = (s) => norm(s);
-const normSlug = (p) => norm(p?.slug || p?.name || "");
+// normalize keys
+const norm = (s) => String(s || "").trim().toLowerCase();
+const normSlug  = (p) => norm(p?.slug || p?.name || "");
+const normColor = (c) => norm(c).replace(/\s+/g," ").replace(/[_-]+/g," ");
 
+// pick product type by text
 function detectProductType(product) {
-  const t = `${product?.type || ""} ${product?.category || ""} ${product?.name || ""}`.toLowerCase();
-  if (/(tee|t-shirt|shirt|unisex)/.test(t)) return "tshirt";
-  if (/(hoodie|sweatshirt)/.test(t)) return "hoodie";
-  if (/(tote|bag)/.test(t)) return "tote";
-  if (/(hat|cap|trucker|snapback)/.test(t)) return "hat";
-  if (/(beanie|knit)/.test(t)) return "beanie";
+  const text = `${product?.type || product?.category || ""} ${product?.name || ""}`.toLowerCase();
+  if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
+  if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
+  if (/(tote|bag)/.test(text)) return "tote";
+  if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
+  if (/(beanie|knit)/.test(text)) return "beanie";
   return "tshirt";
 }
 
+// query helper
 function useQuery() {
   const { search } = useLocation();
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
 function ProductTypeBadgeIcon({ type }) {
-  const Cmp =
-    type === "tshirt"
-      ? FaTshirt
-      : type === "hoodie"
-      ? FaTshirt
-      : type === "hat"
-      ? FaHatCowboy
-      : type === "beanie"
-      ? FaHockeyPuck
-      : FaTshirt;
-  return <Icon as={Cmp} color="brand.accentYellow" />;
+  const IconCmp = type === "tshirt" ? FaTshirt
+                : type === "hoodie" ? FaTshirt
+                : type === "hat"    ? FaHatCowboy
+                : type === "beanie" ? FaHockeyPuck
+                : FaTshirt;
+  return <Icon as={IconCmp} color="brand.accentYellow" />;
 }
 
-/** ---------------------------------------------------
- *  MAIN
- *  --------------------------------------------------- */
+// ---------------------------------
+// Main Component
+// ---------------------------------
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
-  const params = useParams();
   const query = useQuery();
+  const params = useParams();
 
-  const slugParam = query.get("slug") || params.slug || "";
+  const slugParam  = query.get("slug") || params.slug || "";
   const colorParam = query.get("color") || "";
-  const sizeParam = query.get("size") || "";
+  const sizeParam  = query.get("size")  || "";
 
   const [product, setProduct] = useState(null);
   const productType = useMemo(() => detectProductType(product), [product]);
-  const availableViews = useMemo(() => {
-    const map = {
-      tshirt: ["front", "back", "sleeve"],
-      hoodie: ["front", "back"],
-      tote: ["front", "back"],
-      hat: ["front"],
-      beanie: ["front"],
-    };
-    return map[productType] || ["front"];
-  }, [productType]);
+  const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
 
   const [view, setView] = useState("front");
+  const [color, setColor] = useState(colorParam);
+  const [size, setSize] = useState(sizeParam);
 
-  /** Defaults */
-  const [color, setColor] = useState(colorParam || "black");
-  const [size, setSize] = useState(sizeParam || "");
-
-  /** canvas state */
-  const wrapRef = useRef(null);
+  // stage & fabric
+  const stageRef = useRef(null);       // wrapper that controls exact stage height (sticky)
   const canvasRef = useRef(null);
   const fabricRef = useRef(null);
-  const topRulerRef = useRef(null);
-  const leftRulerRef = useRef(null);
 
+  // UI state
   const [zoom, setZoom] = useState(1);
-  const [showGrid, setShowGrid] = useState(true);
+  const [hasObjects, setHasObjects] = useState(false);
+  const [showGuides, setShowGuides] = useState(true);
   const [showRulers, setShowRulers] = useState(true);
-  const [mockupOpacity, setMockupOpacity] = useState(1);
+  const [lockPrintArea, setLockPrintArea] = useState(true);
 
-  /** text + designs */
+  // Text tool
   const [textValue, setTextValue] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
+
+  // Designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
+  const [selectedDesignId, setSelectedDesignId] = useState(null);
 
-  /** layers */
+  // Layers (with thumbnails)
   const [layers, setLayers] = useState([]);
 
-  /** history */
+  // Undo/Redo
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
-  /** --------- Data fetch --------- */
+  // ------------------------------
+  // Data fetch
+  // ------------------------------
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (!slugParam) return;
-        const res = await client.get(
-          `/storefront/product/${encodeURIComponent(slugParam)}`
-        );
-        if (cancelled) return;
+        const res = await client.get(`/storefront/product/${encodeURIComponent(slugParam)}`);
+        if (!cancelled) {
+          const p = res.data;
+          setProduct(p);
 
-        const p = res.data;
-        setProduct(p);
+          // default color/size (prefer black if present)
+          const colorSet = new Set();
+          (p?.variants || []).forEach(v => v.color && colorSet.add(v.color));
+          (p?.colors || []).forEach(c => colorSet.add(c));
+          const sorted = sortColors([...colorSet]);
+          const firstColor = sorted.find(c => normColor(c) === "black") || sorted[0];
+          if (!colorParam && firstColor) setColor(firstColor);
 
-        // default color = black, but fall back to first color if black doesn't exist
-        const colorSet = new Set();
-        (p?.variants || []).forEach((v) => v.color && colorSet.add(norm(v.color)));
-        (p?.colors || []).forEach((c) => colorSet.add(norm(c)));
-        const normalized = [...colorSet];
-        const hasBlack = normalized.includes("black");
-        setColor(hasBlack ? "black" : normalized[0] || "black");
+          const sizeSet = new Set();
+          (p?.variants || []).forEach(v => v.size && sizeSet.add(v.size));
+          const firstS = [...sizeSet][0];
+          if (!sizeParam && firstS) setSize(firstS);
 
-        // default size (first available)
-        const sizeSet = new Set();
-        (p?.variants || []).forEach((v) => v.size && sizeSet.add(v.size));
-        setSize(sizeSet.size ? [...sizeSet][0] : "");
-
-        setView((v) =>
-          (availableViews || []).includes(v) ? v : (availableViews || ["front"])[0]
-        );
+          if (!availableViews.includes(view)) setView(availableViews[0]);
+        }
       } catch (e) {
         console.error(e);
         toast({ title: "Could not load product", status: "error" });
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugParam]);
 
@@ -285,399 +200,329 @@ export default function ProductStudio() {
         setLoadingDesigns(true);
         const res = await client.get("/mydesigns");
         if (!cancelled) setDesigns(res.data || []);
-      } catch (_e) {
+      } catch {
         // ignore
       } finally {
         if (!cancelled) setLoadingDesigns(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  /** --------- Canvas init / resize --------- */
+  // ------------------------------
+  // Fabric init + exact stage sizing
+  // ------------------------------
   useEffect(() => {
-    if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
-
-    const w = wrapRef.current.clientWidth;
-    const h = wrapRef.current.clientHeight;
+    if (!window.fabric || !canvasRef.current || !stageRef.current) return;
 
     if (!fabricRef.current) {
+      const dims = getStageDims();
       const fc = new window.fabric.Canvas(canvasRef.current, {
-        width: w,
-        height: h,
+        width: dims.w,
+        height: dims.h,
         preserveObjectStacking: true,
         selection: true,
       });
       fabricRef.current = fc;
 
-      // Grid background
-      const drawGrid = () => {
-        const spacing = 24 * zoom;
-        const grid = new window.fabric.StaticCanvas(null, {
-          width: fc.width,
-          height: fc.height,
-        });
-        const lines = [];
-        for (let i = 0; i < fc.width; i += spacing) {
-          lines.push(
-            new window.fabric.Line([i, 0, i, fc.height], {
-              stroke: "rgba(255,255,255,0.06)",
-              selectable: false,
-              evented: false,
-            })
-          );
-        }
-        for (let j = 0; j < fc.height; j += spacing) {
-          lines.push(
-            new window.fabric.Line([0, j, fc.width, j], {
-              stroke: "rgba(255,255,255,0.06)",
-              selectable: false,
-              evented: false,
-            })
-          );
-        }
-        lines.forEach((l) => grid.add(l));
-        grid.renderAll();
-
-        fc.setOverlayImage(
-          showGrid ? grid.toDataURL({ format: "png" }) : null,
-          fc.renderAll.bind(fc)
-        );
+      const onChange = () => {
+        const has = fc.getObjects().filter(o => o.id !== "printArea").length > 0;
+        setHasObjects(has);
+        updateLayers();
       };
+      fc.on("object:added", onChange);
+      fc.on("object:removed", onChange);
+      fc.on("object:modified", onChange);
+      fc.on("selection:created", onChange);
+      fc.on("selection:updated", onChange);
+      fc.on("selection:cleared", onChange);
+    }
 
-      drawGrid();
-
-      // Track object changes for Layers + history
-      const syncLayers = () => {
-        const L = fc
-          .getObjects()
-          .filter((o) => o.id !== "printArea")
-          .map((o, idx) => ({
-            id: o.__uid || idx,
-            type: o.type === "i-text" ? "TEXT" : "IMAGE",
-            visible: o.visible !== false,
-            locked: o.lockMovementX && o.lockMovementY,
-            ref: o,
-          }));
-        setLayers(L);
-      };
-
-      const onAny = () => syncLayers();
-      fc.on("object:added", onAny);
-      fc.on("object:removed", onAny);
-      fc.on("object:modified", onAny);
-      fc.on("selection:created", onAny);
-      fc.on("selection:updated", onAny);
-
-      // rulers
-      drawRulers();
-
-      const ro = new ResizeObserver(() => {
-        fc.setWidth(wrapRef.current.clientWidth);
-        fc.setHeight(wrapRef.current.clientHeight);
-        drawGrid();
-        refreshBackground();
-        drawRulers();
-        fc.requestRenderAll();
-      });
-      ro.observe(wrapRef.current);
-
-      return () => ro.disconnect();
-    } else {
+    const ro = new ResizeObserver(() => {
+      if (!fabricRef.current) return;
+      const { w, h } = getStageDims();
       fabricRef.current.setWidth(w);
       fabricRef.current.setHeight(h);
       fabricRef.current.requestRenderAll();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wrapRef.current]);
+      // redraw background/printArea on resize
+      refreshBackground();
+    });
+    ro.observe(stageRef.current);
+    return () => ro.disconnect();
 
-  /** rulers drawing */
-  const drawRulers = useCallback(() => {
-    if (!showRulers) return;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function getStageDims() {
+    // The sticky stage keeps a consistent height based on viewport
+    // Reserve some space for rulers if visible
+    const parent = stageRef.current?.parentElement;
+    const parentW = parent ? parent.clientWidth : 900;
+    const baseH = Math.min(window.innerHeight - 160, Math.round(parentW / PREVIEW_ASPECT));
+    const h = Math.max(540, baseH);
+    const w = Math.round(h * PREVIEW_ASPECT);
+    return { w, h };
+  }
+
+  // ------------------------------
+  // Helpers: history & layers
+  // ------------------------------
+  const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
+    redoStack.current = [];
+    undoStack.current.push(JSON.stringify(fc.toDatalessJSON(["id", "name", "lockMovementX", "lockMovementY"])));
+    if (undoStack.current.length > 80) undoStack.current.shift();
+  }, []);
 
-    /** top ruler */
-    if (topRulerRef.current) {
-      const ctx = topRulerRef.current.getContext("2d");
-      topRulerRef.current.width = topRulerRef.current.clientWidth;
-      topRulerRef.current.height = topRulerRef.current.clientHeight;
-      const w = topRulerRef.current.width;
-      const h = topRulerRef.current.height;
+  const applyJSON = (json) => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    fc.loadFromJSON(json, () => {
+      fc.renderAll();
+      updateLayers();
+    });
+  };
 
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.font = "10px sans-serif";
+  const undo = () => {
+    const fc = fabricRef.current;
+    if (!fc || undoStack.current.length === 0) return;
+    const curr = JSON.stringify(fc.toDatalessJSON(["id","name"]));
+    redoStack.current.push(curr);
+    const prev = undoStack.current.pop();
+    if (prev) applyJSON(prev);
+  };
 
-      const step = 50 * zoom; // 50px step
-      for (let x = 0, i = 0; x <= w; x += step, i += 1) {
-        const isMajor = i % 2 === 0;
-        ctx.beginPath();
-        ctx.moveTo(x + 0.5, h);
-        ctx.lineTo(x + 0.5, isMajor ? 0 : h - 8);
-        ctx.strokeStyle = "rgba(255,255,255,0.35)";
-        ctx.stroke();
-        if (isMajor) {
-          ctx.fillText(String(Math.round(x)), x + 2, 10);
-        }
-      }
-    }
+  const redo = () => {
+    const fc = fabricRef.current;
+    if (!fc || redoStack.current.length === 0) return;
+    const curr = JSON.stringify(fc.toDatalessJSON(["id","name"]));
+    undoStack.current.push(curr);
+    const nxt = redoStack.current.pop();
+    if (nxt) applyJSON(nxt);
+  };
 
-    /** left ruler */
-    if (leftRulerRef.current) {
-      const ctx = leftRulerRef.current.getContext("2d");
-      leftRulerRef.current.width = leftRulerRef.current.clientWidth;
-      leftRulerRef.current.height = leftRulerRef.current.clientHeight;
-      const w = leftRulerRef.current.width;
-      const h = leftRulerRef.current.height;
+  function cloneToThumb(obj, size = 64) {
+    const tmp = new window.fabric.Canvas(null, { width: size, height: size });
+    const clone = window.fabric.util.object.clone(obj);
+    // center in square
+    clone.originX = "center"; clone.originY = "center";
+    clone.scaleX = clone.scaleX * 0.5;
+    clone.scaleY = clone.scaleY * 0.5;
+    clone.left = size / 2; clone.top = size / 2;
+    tmp.add(clone);
+    tmp.requestRenderAll();
+    const url = tmp.toDataURL({ format: "png", quality: 0.9 });
+    tmp.dispose();
+    return url;
+  }
 
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = "rgba(255,255,255,0.7)";
-      ctx.font = "10px sans-serif";
+  function updateLayers() {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const list = fc.getObjects()
+      .filter(o => o.id !== "printArea")
+      .map((o, idx) => {
+        const kind = o.type === "i-text" ? "Text" : (o.type === "image" ? "Image" : o.type);
+        let thumb = "";
+        try { thumb = cloneToThumb(o, 64); } catch {}
+        return { id: idx, kind, visible: o.visible !== false, lock: o.lockMovementX && o.lockMovementY, ref: o, thumb };
+      }).reverse(); // top-most first
+    setLayers(list);
+  }
 
-      const step = 50 * zoom;
-      for (let y = 0, i = 0; y <= h; y += step, i += 1) {
-        const isMajor = i % 2 === 0;
-        ctx.beginPath();
-        ctx.moveTo(w, y + 0.5);
-        ctx.lineTo(isMajor ? 0 : 8, y + 0.5);
-        ctx.strokeStyle = "rgba(255,255,255,0.35)";
-        ctx.stroke();
-        if (isMajor) {
-          ctx.save();
-          ctx.translate(2, y + 10);
-          ctx.rotate(-Math.PI / 2);
-          ctx.fillText(String(Math.round(y)), 0, 0);
-          ctx.restore();
-        }
-      }
-    }
-  }, [showRulers, zoom]);
-
-  /** --------------- Background mockup + print area --------------- */
-  const pickMockupUrl = (prod, v, c) => {
-    const slugKey = normSlug(prod) || norm(slugParam);
-    const colorKey = normColorKey(c);
-    const bySlug = MOCKUPS?.[slugKey]?.[colorKey]?.[v];
+  // ------------------------------
+  // MOCKUP PICKING (Cloudinary first)
+  // ------------------------------
+  function pickMockupUrl(product, view, color) {
+    const slugKey = normSlug(product) || norm(slugParam);
+    const colorKey = normColor(color).replace(/\s+/g, "-");
+    const bySlug = MOCKUPS?.[slugKey]?.[colorKey]?.[view];
     if (bySlug) return bySlug;
 
-    // fallbacks through variant/files/images
-    const variants = prod?.variants || [];
-    const variant =
-      variants.find((vv) => norm(vv.color || vv.colorName) === colorKey) ||
-      variants[0];
+    // Fallbacks
+    const variants = product?.variants || [];
+    const variant = variants.find(v => (norm(v.color) === norm(color) || norm(v.colorName) === norm(color))) || variants[0];
 
     const tryFiles = (files = []) => {
-      const pref = (t) =>
-        files.find(
-          (f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url)
-        );
+      const pref = (t) => files.find(f => f?.type === t && (f.preview_url || f.url || f.thumbnail_url));
       const f = pref("preview") || pref("mockup") || files[0];
       return f?.preview_url || f?.url || f?.thumbnail_url || null;
     };
 
     if (variant?.imageSet?.length) {
-      const primary =
-        variant.imageSet.find((i) => i.isPrimary) || variant.imageSet[0];
+      const primary = variant.imageSet.find(i => i.isPrimary) || variant.imageSet[0];
       if (primary?.url) return primary.url;
     }
     if (variant?.files?.length) {
       const f = tryFiles(variant.files);
       if (f) return f;
     }
-    if (prod?.images?.length) {
-      const pimg = prod.images.find((i) => i.isPrimary) || prod.images[0];
+    if (product?.images?.length) {
+      const pimg = product.images.find(i => i.isPrimary) || product.images[0];
       if (pimg?.url) return pimg.url;
-      if (typeof prod.images[0] === "string") return prod.images[0];
+      if (typeof product.images[0] === "string") return product.images[0];
     }
     if (variant?.image) return variant.image;
-    if (prod?.image) return prod.image;
+    if (product?.image) return product.image;
 
     return PLACEHOLDER;
-  };
+  }
 
+  // ------------------------------
+  // Background + print area
+  // ------------------------------
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
-    if (!fc || !product) return;
+    if (!fc) return;
 
-    const mockupUrl = pickMockupUrl(product, view, color) || PLACEHOLDER;
-
-    // Keep existing user objects
-    const userObjects = fc.getObjects().filter((o) => o.id !== "printArea");
+    // Keep user objects; nuke previous background/printArea
+    const keep = fc.getObjects().filter(o => o.id !== "printArea");
     fc.clear();
-    userObjects.forEach((o) => fc.add(o));
+    keep.forEach(o => fc.add(o));
 
-    window.fabric.Image.fromURL(
-      mockupUrl,
-      (img) => {
-        // Fill width, stick to TOP CENTER
-        const scale = fc.width / img.width;
-        const bgW = img.width * scale;
-        const bgH = img.height * scale;
+    // Set background mockup centered at TOP, scaled to stage width
+    const mockupUrl = pickMockupUrl(product, view, color) || PLACEHOLDER;
+    window.fabric.Image.fromURL(mockupUrl, (img) => {
+      // scale by width to fill horizontally; then anchor at top-center
+      const scale = fc.width / img.width;
+      const scaledH = img.height * scale;
 
-        img.set({
-          originX: "center",
-          originY: "top",
-          left: fc.width / 2,
-          top: 0,
-          scaleX: scale,
-          scaleY: scale,
-          selectable: false,
-          evented: false,
-          opacity: mockupOpacity,
-        });
+      fc.setBackgroundImage(img, fc.renderAll.bind(fc), {
+        scaleX: scale,
+        scaleY: scale,
+        left: fc.width / 2,
+        top: 0,
+        originX: "center",
+        originY: "top",
+        selectable: false,
+        evented: false,
+      });
 
-        fc.setBackgroundImage(img, fc.renderAll.bind(fc));
+      // Visual preview print area sizing & position (outlined)
+      const layout = PREVIEW_LAYOUT[productType]?.[view] || PREVIEW_LAYOUT.tshirt.front;
+      const pxW = fc.width * layout.widthFrac;
+      const pxH = fc.height * layout.heightFrac;
+      const top = fc.height * layout.topFrac;
 
-        // Draw print area using calibrated percentages
-        const meta = PRINT_META[productType]?.[view];
-        const rect =
-          meta ||
-          PRINT_META.tshirt.front; // safe fallback for uncalibrated view
+      const rect = new window.fabric.Rect({
+        id: "printArea",
+        left: fc.width / 2,
+        top,
+        originX: "center",
+        originY: "top",
+        width: pxW,
+        height: pxH,
+        fill: "rgba(255,255,255,0.02)",
+        stroke: "rgba(255,255,255,0.9)",
+        strokeDashArray: [8, 6],
+        strokeWidth: 2,
+        selectable: false,
+        evented: false,
+        lockMovementX: true,
+        lockMovementY: true,
+        excludeFromExport: true, // we only export user art
+      });
 
-        const px = rect.x * bgW;
-        const py = rect.y * bgH;
-        const pw = rect.w * bgW;
-        const ph = rect.h * bgH;
-
-        // Create dashed overlay rectangle
-        const pa = new window.fabric.Rect({
-          id: "printArea",
-          left: px + (fc.width - bgW) / 2, // because bg is centered
-          top: py,
-          width: pw,
-          height: ph,
-          originX: "left",
-          originY: "top",
-          fill: "",
-          stroke: "rgba(255,255,255,0.9)",
-          strokeDashArray: [6, 6],
-          strokeWidth: 2,
-          selectable: false,
-          evented: false,
-          lockMovementX: true,
-          lockMovementY: true,
-        });
-
-        fc.add(pa);
-        fc.requestRenderAll();
-        drawRulers();
-      },
-      { crossOrigin: "anonymous" }
-    );
-  }, [product, view, color, productType, mockupOpacity, drawRulers]);
+      fc.add(rect);
+      fc.sendToBack(rect);
+      fc.requestRenderAll();
+      updateLayers();
+    }, { crossOrigin: "anonymous" });
+  }, [product, view, color, productType, slugParam]);
 
   useEffect(() => {
     if (product) refreshBackground();
   }, [product, refreshBackground, view, color]);
 
-  /** keep objects inside print area */
+  // ------------------------------
+  // Constrain to print area + guides
+  // ------------------------------
   useEffect(() => {
-    const fc = fabricRef.current;
-    if (!fc) return;
+    const fc = fabricRef.current; if (!fc) return;
 
     const constrain = () => {
-      const area = fc.getObjects().find((o) => o.id === "printArea");
+      const area = fc.getObjects().find(o => o.id === "printArea");
       if (!area) return;
       const a = area.getBoundingRect(true, true);
-      const objs = fc.getObjects().filter((o) => o.id !== "printArea");
-
-      objs.forEach((o) => {
+      const objs = fc.getObjects().filter(o => o.id !== "printArea");
+      objs.forEach(o => {
         const bb = o.getBoundingRect(true, true);
-        if (bb.left < a.left) o.left += a.left - bb.left;
-        if (bb.top < a.top) o.top += a.top - bb.top;
-        if (bb.left + bb.width > a.left + a.width)
-          o.left -= bb.left + bb.width - (a.left + a.width);
-        if (bb.top + bb.height > a.top + a.height)
-          o.top -= bb.top + bb.height - (a.top + a.height);
+        if (bb.left < a.left) o.left += (a.left - bb.left);
+        if (bb.top < a.top) o.top += (a.top - bb.top);
+        if (bb.left + bb.width > a.left + a.width) o.left -= (bb.left + bb.width - (a.left + a.width));
+        if (bb.top + bb.height > a.top + a.height) o.top -= (bb.top + bb.height - (a.top + a.height));
         o.setCoords();
       });
+      fc.requestRenderAll();
+    };
+
+    const snapGuides = () => {
+      if (!showGuides) return;
+      const o = fc.getActiveObject(); if (!o) return;
+      const area = fc.getObjects().find(x => x.id === "printArea"); if (!area) return;
+
+      const a = area.getBoundingRect(true, true);
+      const oB = o.getBoundingRect(true, true);
+      const cx = oB.left + oB.width/2;
+      const cy = oB.top + oB.height/2;
+      const ax = a.left + a.width/2;
+      const ay = a.top + a.height/2;
+
+      // Soft snap (10px)
+      const eps = 10;
+      if (Math.abs(cx - ax) < eps) { o.left += (ax - cx); o.setCoords(); }
+      if (Math.abs(cy - ay) < eps) { o.top  += (ay - cy); o.setCoords(); }
+
       fc.requestRenderAll();
     };
 
     fc.on("object:moving", constrain);
     fc.on("object:scaling", constrain);
     fc.on("object:rotating", constrain);
+    fc.on("object:moving", snapGuides);
     return () => {
       fc.off("object:moving", constrain);
       fc.off("object:scaling", constrain);
       fc.off("object:rotating", constrain);
+      fc.off("object:moving", snapGuides);
     };
-  }, [view, productType]);
+  }, [view, productType, showGuides]);
 
-  /** history helpers */
-  const pushHistory = useCallback(() => {
-    const fc = fabricRef.current;
-    if (!fc) return;
-    redoStack.current = [];
-    undoStack.current.push(JSON.stringify(fc.toDatalessJSON(["id"])));
-    if (undoStack.current.length > 50) undoStack.current.shift();
-  }, []);
-  const applyJSON = (json) => {
-    const fc = fabricRef.current;
-    if (!fc) return;
-    fc.loadFromJSON(json, () => fc.renderAll());
-  };
-  const undo = () => {
-    const fc = fabricRef.current;
-    if (!fc || undoStack.current.length === 0) return;
-    const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
-    redoStack.current.push(curr);
-    const prev = undoStack.current.pop();
-    if (prev) applyJSON(prev);
-  };
-  const redo = () => {
-    const fc = fabricRef.current;
-    if (!fc || redoStack.current.length === 0) return;
-    const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
-    undoStack.current.push(curr);
-    const nxt = redoStack.current.pop();
-    if (nxt) applyJSON(nxt);
-  };
-
-  /** actions */
+  // ------------------------------
+  // Tools
+  // ------------------------------
   const addText = () => {
     const fc = fabricRef.current;
-    if (!fc || !textValue.trim())
-      return toast({ title: "Enter text first", status: "info" });
+    if (!fc || !textValue.trim()) return toast({ title: "Enter text first", status: "info" });
     const t = new window.fabric.IText(textValue, {
-      left: fc.width / 2,
-      top: fc.height / 3,
-      originX: "center",
-      originY: "center",
-      fill: textColor,
-      fontSize: textSize,
+      left: fc.width / 2, top: fc.height * 0.35, originX: "center", originY: "center",
+      fill: textColor, fontSize: textSize
     });
     pushHistory();
-    fc.add(t);
-    fc.setActiveObject(t);
-    fc.requestRenderAll();
+    fc.add(t); fc.setActiveObject(t); fc.requestRenderAll();
+    updateLayers();
     setTextValue("");
   };
+
   const addDesign = (design) => {
     const fc = fabricRef.current;
     if (!fc || !design?.imageDataUrl) return;
-    window.fabric.Image.fromURL(
-      design.imageDataUrl,
-      (img) => {
-        img.set({
-          left: fc.width / 2,
-          top: fc.height / 2.5,
-          originX: "center",
-          originY: "center",
-          scaleX: 0.6,
-          scaleY: 0.6,
-        });
-        pushHistory();
-        fc.add(img);
-        fc.setActiveObject(img);
-        fc.requestRenderAll();
-      },
-      { crossOrigin: "anonymous" }
-    );
+    window.fabric.Image.fromURL(design.imageDataUrl, (img) => {
+      img.set({
+        left: fc.width / 2,
+        top: fc.height * 0.35,
+        originX: "center",
+        originY: "center",
+        scaleX: 0.5, scaleY: 0.5
+      });
+      pushHistory();
+      fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
+      updateLayers();
+      setSelectedDesignId(design._id);
+    }, { crossOrigin: "anonymous" });
   };
+
   const del = () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -687,7 +532,9 @@ export default function ProductStudio() {
     fc.remove(active);
     fc.discardActiveObject();
     fc.requestRenderAll();
+    updateLayers();
   };
+
   const centerH = () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -696,145 +543,63 @@ export default function ProductStudio() {
     o.centerH();
     fc.requestRenderAll();
   };
+
+  const rotate90 = () => {
+    const fc = fabricRef.current; if (!fc) return;
+    const o = fc.getActiveObject(); if (!o || o.id === "printArea") return;
+    o.rotate(((o.angle || 0) + 90) % 360);
+    o.setCoords();
+    fc.requestRenderAll();
+  };
+
   const setZoomSafe = (z) => {
-    const fc = fabricRef.current;
-    if (!fc) return;
+    const fc = fabricRef.current; if (!fc) return;
     const clamped = Math.max(0.5, Math.min(2, z));
     setZoom(clamped);
     fc.setZoom(clamped);
-    drawRulers();
     fc.requestRenderAll();
   };
 
-  /** Layers panel helpers */
-  const toggleLayerVisibility = (layerIdx) => {
-    const fc = fabricRef.current;
-    if (!fc) return;
-    const userObjs = fc.getObjects().filter((o) => o.id !== "printArea");
-    const tgt = userObjs[layerIdx];
-    if (!tgt) return;
-    tgt.visible = !tgt.visible;
-    fc.requestRenderAll();
-    setLayers((L) =>
-      L.map((l, i) => (i === layerIdx ? { ...l, visible: tgt.visible } : l))
-    );
-  };
-  const lockToggle = (layerIdx) => {
-    const fc = fabricRef.current;
-    if (!fc) return;
-    const userObjs = fc.getObjects().filter((o) => o.id !== "printArea");
-    const tgt = userObjs[layerIdx];
-    if (!tgt) return;
-    const locked = !(tgt.lockMovementX && tgt.lockMovementY);
-    tgt.lockMovementX = tgt.lockMovementY = locked;
-    tgt.selectable = !locked;
-    fc.requestRenderAll();
-    setLayers((L) =>
-      L.map((l, i) => (i === layerIdx ? { ...l, locked } : l))
-    );
-  };
-  const moveLayer = (layerIdx, dir) => {
-    const fc = fabricRef.current;
-    if (!fc) return;
-    const userObjs = fc.getObjects().filter((o) => o.id !== "printArea");
-    const tgt = userObjs[layerIdx];
-    if (!tgt) return;
-    const delta = dir === "up" ? -1 : 1;
-    const newIndex = layerIdx + delta;
-    if (newIndex < 0 || newIndex >= userObjs.length) return;
-    fc.moveTo(tgt, newIndex + 1); // +1 because printArea sits at 0
-    fc.requestRenderAll();
-    // rebuild layers list
-    const rebuilt = fc
-      .getObjects()
-      .filter((o) => o.id !== "printArea")
-      .map((o, idx) => ({
-        id: o.__uid || idx,
-        type: o.type === "i-text" ? "TEXT" : "IMAGE",
-        visible: o.visible !== false,
-        locked: o.lockMovementX && o.lockMovementY,
-        ref: o,
-      }));
-    setLayers(rebuilt);
-  };
-
-  /** Available colors/sizes (ordered swatches) */
-  const colorOptions = useMemo(() => {
-    const set = new Set();
-    (product?.variants || []).forEach((v) => v.color && set.add(norm(v.color)));
-    (product?.colors || []).forEach((c) => set.add(norm(c)));
-    const list = [...set];
-
-    // sort using SWATCH_ORDER priority, then alpha
-    const priority = Object.fromEntries(SWATCH_ORDER.map((c, i) => [c, i]));
-    list.sort((a, b) => {
-      const pa = priority[a] ?? 999;
-      const pb = priority[b] ?? 999;
-      return pa === pb ? a.localeCompare(b) : pa - pb;
-    });
-    return list;
-  }, [product]);
-
-  const sizeOptions = useMemo(() => {
-    const set = new Set();
-    (product?.variants || []).forEach(
-      (v) => (!color || norm(v.color) === norm(color)) && v.size && set.add(v.size)
-    );
-    return [...set];
-  }, [product, color]);
-
-  const canProceed =
-    product && (!colorOptions.length || color) && (!sizeOptions.length || size);
-
-  /** Export print-ready, upload, and proceed to checkout */
+  // ------------------------------
+  // Export at print size (DPI) + upload
+  // ------------------------------
   const makePrintReadyAndUpload = async () => {
-    const fc = fabricRef.current;
-    if (!fc) return;
+    const fc = fabricRef.current; if (!fc) return;
 
-    const area = fc.getObjects().find((o) => o.id === "printArea");
-    if (!area)
-      return toast({ title: "No print area defined", status: "error" });
+    const area = fc.getObjects().find(o => o.id === "printArea");
+    if (!area) return toast({ title: "No print area defined", status: "error" });
 
-    const objs = fc.getObjects().filter((o) => o.id !== "printArea");
-    if (!objs.length)
-      return toast({ title: "Nothing to print", status: "warning" });
+    const objs = fc.getObjects().filter(o => o.id !== "printArea");
+    if (!objs.length) return toast({ title: "Nothing to print", status: "warning" });
 
-    // Output size from calibrated meta (in inches)
-    const areaDef =
-      PRINT_META[productType]?.[view] || PRINT_META.tshirt.front;
-    const outW = Math.round(areaDef.w * fc.width * (DPI / (fc.width / 12))); // approx scaling
-    const outH = Math.round(areaDef.h * fc.height * (DPI / (fc.height / 16)));
+    const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+    const outW = Math.round(areaDef.widthInches * DPI);
+    const outH = Math.round(areaDef.heightInches * DPI);
 
-    // Safer: compute based on PA rect pixels → inches (assume 300 dpi @ mockup scale)
+    const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
     const aBB = area.getBoundingRect(true, true);
-    const pxPerIn = (DPI / 300) * (aBB.width / (areaDef.w * fc.width)); // coarse normalization
-    const targetW = Math.max(600, Math.round(aBB.width * (DPI / 72))); // ensure decent size
-
-    const tmp = new window.fabric.Canvas(null, {
-      width: Math.round(aBB.width * (DPI / 2.4)),
-      height: Math.round(aBB.height * (DPI / 2.4)),
-    });
+    const scaleFactor = outW / aBB.width;
 
     objs.forEach((o) => {
       const clone = window.fabric.util.object.clone(o);
       const bb = o.getBoundingRect(true, true);
-      clone.originX = "left";
-      clone.originY = "top";
-      clone.left = (bb.left - aBB.left) * (DPI / 2.4);
-      clone.top = (bb.top - aBB.top) * (DPI / 2.4);
-      clone.scaleX = o.scaleX * (DPI / 2.4);
-      clone.scaleY = o.scaleY * (DPI / 2.4);
-      if (clone.type === "i-text")
-        clone.fontSize = (o.fontSize || 36) * (DPI / 2.4);
+      const relX = bb.left - aBB.left + bb.width / 2;
+      const relY = bb.top  - aBB.top  + bb.height / 2;
+
+      clone.originX = "center"; clone.originY = "center";
+      clone.left = relX * scaleFactor; clone.top = relY * scaleFactor;
+      clone.scaleX = o.scaleX * scaleFactor; clone.scaleY = o.scaleY * scaleFactor;
+      if (clone.type === "i-text") clone.fontSize = (o.fontSize || 36) * scaleFactor;
+
       tmp.add(clone);
     });
     tmp.requestRenderAll();
 
-    const png = tmp.toDataURL({ format: "png", quality: 1 });
+    const png = tmp.toDataURL({ format: "png", quality: 1, multiplier: 1 });
     tmp.dispose();
     const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
 
-    toast({ title: "Uploading design…", status: "info", duration: 2000 });
+    toast({ title: "Uploading design…", status: "info", duration: 2500 });
     try {
       const upload = await client.post("/upload-print-file", {
         imageData: png,
@@ -847,10 +612,7 @@ export default function ProductStudio() {
       const item = {
         productId: product?.id || product?._id || "",
         slug: product?.slug || slugParam,
-        name: product?.name,
-        color,
-        size,
-        view,
+        name: product?.name, color, size, view,
         preview: previewPNG,
         printFileUrl: fileUrl,
         productImage: pickMockupUrl(product, view, color),
@@ -864,448 +626,283 @@ export default function ProductStudio() {
     }
   };
 
-  /** UI bits */
-  const ColorDot = ({ c }) => {
-    const hex = COLOR_HEX[c] || "#ccc";
-    const active = norm(c) === norm(color);
+  // ------------------------------
+  // Color & size lists
+  // ------------------------------
+  const colors = useMemo(() => {
+    const set = new Set();
+    (product?.variants || []).forEach(v => v.color && set.add(v.color));
+    (product?.colors || []).forEach(c => set.add(c));
+    return sortColors([...set]);
+  }, [product]);
+
+  const sizes = useMemo(() => {
+    const set = new Set();
+    (product?.variants || []).forEach(v => { if (!color || norm(v.color) === norm(color)) v.size && set.add(v.size); });
+    return [...set];
+  }, [product, color]);
+
+  const canProceed = product && (!colors.length || color) && (!sizes.length || size) && hasObjects;
+
+  // sort helper
+  function sortColors(list) {
+    const score = (c) => {
+      const k = normColor(c);
+      const idx = RAINBOW_ORDER.indexOf(k);
+      return idx >= 0 ? idx : 999 + k.charCodeAt(0);
+    };
+    return [...list].sort((a,b) => score(a) - score(b));
+  }
+
+  // swatch render
+  function Swatch({ name, isActive, onClick }) {
+    const key = normColor(name);
+    const hex = SWATCH_HEX[key] || "#ccc";
     return (
-      <Tooltip label={c}>
+      <Tooltip label={name}>
         <Box
-          as="button"
-          onClick={() => setColor(c)}
-          aria-label={c}
+          onClick={onClick}
+          cursor="pointer"
           borderRadius="full"
-          boxSize="14px"
-          borderWidth={active ? "2px" : "1px"}
-          borderColor={active ? "yellow.400" : "blackAlpha.600"}
+          boxSize="18px"
+          borderWidth={isActive ? "3px" : "1px"}
+          borderColor={isActive ? "yellow.400" : "blackAlpha.700"}
           background={hex}
+          title={name}
         />
       </Tooltip>
     );
-  };
+  }
 
+  // ------------------------------
+  // UI
+  // ------------------------------
   return (
-    <div className={styles.root}>
-      {/* Left Panel */}
-      <Box className={styles.leftPanel}>
-        <VStack align="stretch" spacing={4} layerStyle="cardBlue" p={4} rounded="md">
-          <HStack justify="space-between">
-            <HStack>
-              <ProductTypeBadgeIcon type={productType} />
-              <Heading size="md" color="brand.textLight">
-                {product?.name || "Product"}
-              </Heading>
+    <Flex className="studio-root" direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
+      {/* Left: Controls */}
+      <Box w={{ base: "100%", xl: "36%" }} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" p={4} bg="brand.paper">
+        {!product ? (
+          <VStack p={6} spacing={3} align="stretch">
+            <Skeleton height="28px" />
+            <Skeleton height="200px" />
+            <Skeleton height="28px" />
+          </VStack>
+        ) : (
+          <VStack align="stretch" spacing={6}>
+            <HStack justify="space-between">
+              <HStack>
+                <ProductTypeBadgeIcon type={productType} />
+                <Heading size="lg" color="brand.textLight">{product.name}</Heading>
+              </HStack>
+              <Badge variant="outline" colorScheme="yellow" opacity={0.8}>{productType}</Badge>
             </HStack>
-            <Badge variant="outline" colorScheme="yellow" opacity={0.8}>
-              {productType}
-            </Badge>
-          </HStack>
 
-          <Tabs variant="enclosed" colorScheme="yellow" size="sm">
-            <TabList>
-              <Tab>Options</Tab>
-              <Tab>Designs</Tab>
-              <Tab>Text</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel px={0}>
-                <VStack align="stretch" spacing={4}>
-                  <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
-                      View
-                    </Text>
-                    <HStack wrap="wrap" spacing={2}>
-                      {availableViews.map((v) => (
-                        <Button
-                          key={v}
-                          size="xs"
-                          variant={view === v ? "solid" : "outline"}
-                          onClick={() => setView(v)}
-                        >
-                          {v}
-                        </Button>
-                      ))}
+            <Tabs variant="enclosed" colorScheme="yellow">
+              <TabList overflowX="auto">
+                <Tab>Options</Tab>
+                <Tab>Designs</Tab>
+                <Tab>Text</Tab>
+                <Tab>Layers</Tab>
+              </TabList>
+              <TabPanels>
+                {/* Options */}
+                <TabPanel px={0}>
+                  <VStack align="stretch" spacing={5}>
+                    <Box>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">View</Text>
+                      <HStack wrap="wrap" spacing={2}>
+                        {availableViews.map(v => (
+                          <Button key={v} size="sm" variant={view===v?"solid":"outline"} onClick={() => setView(v)}>{v}</Button>
+                        ))}
+                      </HStack>
+                    </Box>
+
+                    <Box>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">Color</Text>
+                      <HStack wrap="wrap" spacing={2}>
+                        {colors.length ? colors.map((c) => (
+                          <Swatch key={c} name={c} isActive={normColor(color)===normColor(c)} onClick={() => setColor(c)} />
+                        )) : <Badge>No color options</Badge>}
+                      </HStack>
+                    </Box>
+
+                    <Box>
+                      <Text mb={2} color="brand.textLight" fontWeight="medium">Size</Text>
+                      <HStack wrap="wrap" spacing={2}>
+                        {sizes.length ? sizes.map((s) => (
+                          <Button key={s} size="sm" variant={size===s?"solid":"outline"} onClick={() => setSize(s)}>{s}</Button>
+                        )) : <Badge>No size options</Badge>}
+                      </HStack>
+                    </Box>
+
+                    <Divider borderColor="whiteAlpha.300" />
+
+                    <VStack align="stretch" spacing={3}>
+                      <Text color="brand.textLight" fontWeight="medium">Zoom</Text>
+                      <HStack>
+                        <Tooltip label="Zoom out">
+                          <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>Out</Button>
+                        </Tooltip>
+                        <Slider aria-label="zoom" value={zoom} min={0.5} max={2} step={0.1} onChange={setZoomSafe}>
+                          <SliderTrack><SliderFilledTrack /></SliderTrack>
+                          <SliderThumb />
+                        </Slider>
+                        <Tooltip label="Zoom in">
+                          <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>In</Button>
+                        </Tooltip>
+                      </HStack>
+                    </VStack>
+
+                    <HStack spacing={2}>
+                      <Button size="sm" variant="outline" leftIcon={showRulers ? <FaEyeSlash/> : <FaEye/>} onClick={() => setShowRulers(v => !v)}>
+                        {showRulers ? "Hide rulers" : "Show rulers"}
+                      </Button>
+                      <Button size="sm" variant="outline" leftIcon={showGuides ? <FaEyeSlash/> : <FaEye/>} onClick={() => setShowGuides(v => !v)}>
+                        {showGuides ? "Hide guides" : "Show guides"}
+                      </Button>
+                      <Button size="sm" variant="outline" leftIcon={lockPrintArea ? <FaLock/> : <FaLockOpen/>} onClick={() => setLockPrintArea(v => !v)}>
+                        {lockPrintArea ? "Lock area" : "Unlock area"}
+                      </Button>
                     </HStack>
-                  </Box>
+                  </VStack>
+                </TabPanel>
 
-                  <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
-                      Color
-                    </Text>
-                    <HStack spacing={2} wrap="wrap">
-                      {colorOptions.length ? (
-                        colorOptions.map((c) => <ColorDot key={c} c={c} />)
-                      ) : (
-                        <Badge>No color options</Badge>
-                      )}
-                    </HStack>
-                  </Box>
+                {/* Designs */}
+                <TabPanel px={0}>
+                  <VStack align="stretch" spacing={3}>
+                    {loadingDesigns ? (
+                      <Skeleton height="28px" />
+                    ) : designs.length ? (
+                      <SimpleGrid columns={{ base: 3 }} spacing={2}>
+                        {designs.map((d) => (
+                          <Tooltip key={d._id} label={d.prompt || "design"}>
+                            <Box
+                              borderWidth="2px"
+                              borderColor={selectedDesignId === d._id ? "purple.400" : "transparent"}
+                              rounded="md"
+                              overflow="hidden"
+                              cursor="pointer"
+                              onClick={() => addDesign(d)}
+                            >
+                              <AspectRatio ratio={1}>
+                                <Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" />
+                              </AspectRatio>
+                            </Box>
+                          </Tooltip>
+                        ))}
+                      </SimpleGrid>
+                    ) : (
+                      <Text color="brand.textLight" fontSize="sm">No saved designs yet. Create one in “Generate”.</Text>
+                    )}
+                  </VStack>
+                </TabPanel>
 
-                  <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
-                      Size
-                    </Text>
-                    <HStack wrap="wrap" spacing={2}>
-                      {sizeOptions.length ? (
-                        sizeOptions.map((s) => (
-                          <Button
-                            key={s}
-                            size="xs"
-                            variant={size === s ? "solid" : "outline"}
-                            onClick={() => setSize(s)}
-                          >
-                            {s}
-                          </Button>
-                        ))
-                      ) : (
-                        <Badge>No size options</Badge>
-                      )}
-                    </HStack>
-                  </Box>
-
-                  <Divider borderColor="whiteAlpha.300" />
-
-                  <VStack align="stretch" spacing={2}>
-                    <Text color="brand.textLight" fontWeight="medium">
-                      Canvas zoom
-                    </Text>
+                {/* Text */}
+                <TabPanel px={0}>
+                  <VStack align="stretch" spacing={3}>
+                    <Text color="brand.textLight" fontWeight="medium">Add Text</Text>
                     <HStack>
-                      <Tooltip label="Zoom out">
-                        <Button
-                          size="xs"
-                          onClick={() => setZoomSafe(zoom - 0.1)}
-                          leftIcon={<FaSearchMinus />}
-                        >
-                          Out
-                        </Button>
-                      </Tooltip>
-                      <Slider
-                        aria-label="zoom"
-                        value={zoom}
-                        min={0.5}
-                        max={2}
-                        step={0.1}
-                        onChange={setZoomSafe}
-                      >
-                        <SliderTrack>
-                          <SliderFilledTrack />
-                        </SliderTrack>
-                        <SliderThumb />
-                      </Slider>
-                      <Tooltip label="Zoom in">
-                        <Button
-                          size="xs"
-                          onClick={() => setZoomSafe(zoom + 0.1)}
-                          leftIcon={<FaSearchPlus />}
-                        >
-                          In
-                        </Button>
-                      </Tooltip>
+                      <Input value={textValue} onChange={(e) => setTextValue(e.target.value)} placeholder="Your text" />
+                      <Button onClick={addText}>Add</Button>
+                    </HStack>
+                    <HStack mt={2} spacing={3}>
+                      <Input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} w="52px" p={0} />
+                      <NumberInput value={textSize} min={8} max={200} onChange={(v) => setTextSize(parseInt(v || "36", 10))}>
+                        <NumberInputField />
+                        <NumberInputStepper><NumberIncrementStepper /><NumberDecrementStepper /></NumberInputStepper>
+                      </NumberInput>
                     </HStack>
                   </VStack>
+                </TabPanel>
 
-                  <HStack>
-                    <Switch
-                      size="sm"
-                      isChecked={showGrid}
-                      onChange={(e) => {
-                        setShowGrid(e.target.checked);
-                        const fc = fabricRef.current;
-                        if (fc) {
-                          // re-trigger overlay grid draw
-                          fc.setOverlayImage(null, () => {
-                            const spacing = 24 * zoom;
-                            const grid = new window.fabric.StaticCanvas(null, {
-                              width: fc.width,
-                              height: fc.height,
-                            });
-                            if (e.target.checked) {
-                              for (let i = 0; i < fc.width; i += spacing) {
-                                grid.add(
-                                  new window.fabric.Line([i, 0, i, fc.height], {
-                                    stroke: "rgba(255,255,255,0.06)",
-                                  })
-                                );
-                              }
-                              for (let j = 0; j < fc.height; j += spacing) {
-                                grid.add(
-                                  new window.fabric.Line([0, j, fc.width, j], {
-                                    stroke: "rgba(255,255,255,0.06)",
-                                  })
-                                );
-                              }
-                            }
-                            grid.renderAll();
-                            fc.setOverlayImage(
-                              e.target.checked
-                                ? grid.toDataURL({ format: "png" })
-                                : null,
-                              fc.renderAll.bind(fc)
-                            );
-                          });
-                        }
-                      }}
-                    />
-                    <Text fontSize="sm">Grid</Text>
-
-                    <Switch
-                      size="sm"
-                      isChecked={showRulers}
-                      onChange={(e) => {
-                        setShowRulers(e.target.checked);
-                        drawRulers();
-                      }}
-                      ml={4}
-                    />
-                    <Text fontSize="sm">Rulers</Text>
-                  </HStack>
-
-                  <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
-                      Mockup opacity
-                    </Text>
-                    <Slider
-                      value={mockupOpacity}
-                      min={0.2}
-                      max={1}
-                      step={0.05}
-                      onChange={(v) => {
-                        setMockupOpacity(v);
-                        refreshBackground();
-                      }}
-                    >
-                      <SliderTrack>
-                        <SliderFilledTrack />
-                      </SliderTrack>
-                      <SliderThumb />
-                    </Slider>
-                  </Box>
-
-                  <Button
-                    colorScheme="yellow"
-                    isDisabled={!canProceed}
-                    onClick={makePrintReadyAndUpload}
-                  >
-                    Add to cart / Checkout
-                  </Button>
-                  <Text fontSize="xs" color="whiteAlpha.700">
-                    We export a true print file at 300 DPI sized to the current
-                    placement.
-                  </Text>
-                </VStack>
-              </TabPanel>
-
-              <TabPanel px={0}>
-                {loadingDesigns ? (
-                  <VStack align="stretch">
-                    <Skeleton height="28px" />
-                    <Skeleton height="28px" />
-                  </VStack>
-                ) : designs.length ? (
-                  <SimpleGrid columns={{ base: 3 }} spacing={2}>
-                    {designs.map((d) => (
-                      <Tooltip key={d._id} label={d.prompt || "design"}>
-                        <Box
-                          borderWidth="2px"
-                          borderColor="transparent"
-                          rounded="md"
-                          overflow="hidden"
-                          cursor="pointer"
-                          _hover={{ borderColor: "purple.400" }}
-                          onClick={() => addDesign(d)}
-                        >
-                          <AspectRatio ratio={1}>
-                            <Image
-                              src={d.imageDataUrl}
-                              alt={d.prompt}
-                              objectFit="cover"
-                            />
-                          </AspectRatio>
-                        </Box>
-                      </Tooltip>
+                {/* Layers */}
+                <TabPanel px={0}>
+                  <VStack align="stretch" spacing={2}>
+                    {layers.length === 0 && <Text color="brand.textLight" fontSize="sm">No layers yet.</Text>}
+                    {layers.map((layer, i) => (
+                      <HStack key={i} justify="space-between" p={2} borderWidth="1px" borderColor="whiteAlpha.300" rounded="md">
+                        <HStack>
+                          <Image src={layer.thumb} alt={layer.kind} boxSize="28px" borderRadius="sm" />
+                          <Tag variant="subtle" colorScheme="purple"><TagLabel>{layer.kind}</TagLabel></Tag>
+                        </HStack>
+                        <HStack>
+                          <Button size="xs" variant="outline" onClick={() => {
+                            layer.ref.visible = !layer.ref.visible;
+                            layer.ref.canvas?.requestRenderAll();
+                            updateLayers();
+                          }}>{layer.ref.visible ? "Hide" : "Show"}</Button>
+                          <Button size="xs" variant="outline" onClick={() => {
+                            const v = !(layer.ref.lockMovementX && layer.ref.lockMovementY);
+                            layer.ref.lockMovementX = v; layer.ref.lockMovementY = v;
+                            layer.ref.hasControls = !v;
+                            layer.ref.canvas?.requestRenderAll();
+                            updateLayers();
+                          }}>{(layer.ref.lockMovementX && layer.ref.lockMovementY) ? "Unlock" : "Lock"}</Button>
+                          <Button size="xs" variant="outline" onClick={() => {
+                            layer.ref.bringToFront();
+                            layer.ref.canvas?.requestRenderAll();
+                            updateLayers();
+                          }}>Front</Button>
+                          <Button size="xs" variant="outline" onClick={() => {
+                            layer.ref.sendToBack();
+                            layer.ref.canvas?.requestRenderAll();
+                            updateLayers();
+                          }}>Back</Button>
+                        </HStack>
+                      </HStack>
                     ))}
-                  </SimpleGrid>
-                ) : (
-                  <Text color="brand.textLight" fontSize="sm">
-                    No saved designs yet. Create one in “Create”.
-                  </Text>
-                )}
-              </TabPanel>
+                  </VStack>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
 
-              <TabPanel px={0}>
-                <VStack align="stretch" spacing={3}>
-                  <Text color="brand.textLight" fontWeight="medium">
-                    Add Text
-                  </Text>
-                  <HStack>
-                    <Input
-                      value={textValue}
-                      onChange={(e) => setTextValue(e.target.value)}
-                      placeholder="Your text"
-                    />
-                    <Button onClick={addText}>Add</Button>
-                  </HStack>
-                  <HStack mt={2} spacing={3}>
-                    <Input
-                      type="color"
-                      value={textColor}
-                      onChange={(e) => setTextColor(e.target.value)}
-                      w="52px"
-                      p={0}
-                    />
-                    <NumberInput
-                      value={textSize}
-                      min={8}
-                      max={200}
-                      onChange={(v) =>
-                        setTextSize(parseInt(v || "36", 10))
-                      }
-                    >
-                      <NumberInputField />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
-                  </HStack>
-                </VStack>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </VStack>
+            <Divider borderColor="whiteAlpha.300" />
+            <VStack spacing={3}>
+              <Button colorScheme={canProceed ? "purple" : "gray"} isDisabled={!canProceed} onClick={makePrintReadyAndUpload} width="full">
+                Add to cart / Checkout
+              </Button>
+              <Text fontSize="xs" color="whiteAlpha.700" textAlign="center">
+                We’ll generate a high-res PNG ({DPI} DPI) sized to the selected placement.
+              </Text>
+            </VStack>
+          </VStack>
+        )}
       </Box>
 
-      {/* Canvas Column */}
-      <Box className={styles.canvasCol} position="relative">
-        <div
-          className={styles.canvasViewport}
-          style={
-            showRulers
-              ? { "--stage-left": "22px", "--stage-top": "22px" }
-              : undefined
-          }
-        >
-          {/* rulers */}
-          {showRulers && (
-            <>
-              <canvas ref={topRulerRef} className={styles.rulerTop} />
-              <canvas ref={leftRulerRef} className={styles.rulerLeft} />
-            </>
-          )}
+      {/* Right: Sticky Stage with rulers */}
+      <Flex flex="1" direction="column" p={0} position="relative">
+        {showRulers && (
+          <>
+            <div className="ruler-horizontal" />
+            <div className="ruler-vertical" />
+          </>
+        )}
 
-          {/* top-right toolbar */}
-          <HStack className={styles.stageToolbar}>
-            <Tooltip label="Undo">
-              <Button size="xs" onClick={undo} leftIcon={<FaUndo />}>
-                Undo
-              </Button>
-            </Tooltip>
-            <Tooltip label="Redo">
-              <Button size="xs" onClick={redo} leftIcon={<FaRedo />}>
-                Redo
-              </Button>
-            </Tooltip>
-            <Tooltip label="Center horizontally">
-              <Button size="xs" onClick={centerH} leftIcon={<FaArrowsAltH />}>
-                Center
-              </Button>
+        <HStack p={3} color="brand.textLight" justify="space-between">
+          <HStack>
+            <Tooltip label="Undo"><Button size="sm" onClick={undo} leftIcon={<FaUndo />}>Undo</Button></Tooltip>
+            <Tooltip label="Redo"><Button size="sm" onClick={redo} leftIcon={<FaRedo />}>Redo</Button></Tooltip>
+          </HStack>
+          <HStack>
+            <Tooltip label="Rotate 90°">
+              <Button size="sm" onClick={rotate90} variant="outline"><FaSyncAlt/></Button>
             </Tooltip>
             <Tooltip label="Delete selected">
-              <Button
-                size="xs"
-                onClick={del}
-                colorScheme="red"
-                variant="outline"
-              >
-                <FaTrash />
-              </Button>
+              <Button size="sm" onClick={del} colorScheme="red" variant="outline"><FaTrash /></Button>
+            </Tooltip>
+            <Tooltip label="Center horizontally">
+              <Button size="sm" onClick={centerH} variant="outline"><FaArrowsAltH /></Button>
             </Tooltip>
           </HStack>
+        </HStack>
 
-          {/* stage */}
-          <div className={styles.stageInset}>
-            <canvas ref={canvasRef} className={styles.fabricCanvas} />
-          </div>
-        </div>
-      </Box>
-
-      {/* Right Panel – Layers */}
-      <Box className={styles.rightPanel}>
-        <VStack align="stretch" spacing={3} layerStyle="cardBlue" p={4} rounded="md">
-          <HStack>
-            <FaLayerGroup />
-            <Heading size="sm">Layers</Heading>
-          </HStack>
-          {layers.length === 0 ? (
-            <Text fontSize="sm" color="whiteAlpha.700">
-              No layers yet. Add an image or text.
-            </Text>
-          ) : (
-            <VStack align="stretch" spacing={2}>
-              {layers
-                .map((l, i) => ({ ...l, idx: i }))
-                .reverse() /* top-most first */
-                .map((l) => (
-                  <HStack
-                    key={l.id}
-                    justify="space-between"
-                    borderWidth="1px"
-                    borderColor="whiteAlpha.300"
-                    rounded="md"
-                    px={2}
-                    py={1}
-                  >
-                    <HStack>
-                      <Badge>{l.type}</Badge>
-                    </HStack>
-                    <HStack>
-                      <Tooltip label={l.visible ? "Hide" : "Show"}>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() =>
-                            toggleLayerVisibility(layers.length - 1 - l.idx)
-                          }
-                        >
-                          {l.visible ? <FaEye /> : <FaEyeSlash />}
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label={l.locked ? "Unlock" : "Lock"}>
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => lockToggle(layers.length - 1 - l.idx)}
-                        >
-                          {l.locked ? <FaLock /> : <FaLockOpen />}
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label="Bring forward">
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => moveLayer(layers.length - 1 - l.idx, "up")}
-                        >
-                          <FaChevronUp />
-                        </Button>
-                      </Tooltip>
-                      <Tooltip label="Send backward">
-                        <Button
-                          size="xs"
-                          variant="ghost"
-                          onClick={() =>
-                            moveLayer(layers.length - 1 - l.idx, "down")
-                          }
-                        >
-                          <FaChevronDown />
-                        </Button>
-                      </Tooltip>
-                    </HStack>
-                  </HStack>
-                ))}
-            </VStack>
-          )}
-        </VStack>
-      </Box>
-    </div>
+        <Box className="stage-wrap">
+          <Box className="stage-frame" ref={stageRef}>
+            <canvas ref={canvasRef} className="stage-canvas" />
+            {showGuides && <div className="stage-crosshair" />}
+          </Box>
+        </Box>
+      </Flex>
+    </Flex>
   );
 }
