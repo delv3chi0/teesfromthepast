@@ -1,3 +1,5 @@
+// ProductStudio.jsx — uses central mockupsRegistry.js for image URLs
+
 import React, {
   useCallback,
   useEffect,
@@ -57,21 +59,19 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
 
-// Optional mockups mapping; we gracefully handle if it doesn't export default
-import * as MOCKUPS_MOD from "../data/mockups.js";
-const MOCKUPS =
-  (MOCKUPS_MOD && (MOCKUPS_MOD.default || MOCKUPS_MOD.MOCKUPS)) || {};
+// NEW: central image registry
+import {
+  getMockupUrl,
+  listColors,
+  resolveColor,
+  MOCKUPS_PLACEHOLDER,
+} from "../data/mockupsRegistry";
 
-// ---------------------------------------------------------------------------
-// Constants & helpers
 // ---------------------------------------------------------------------------
 
 const DPI = 300;
 const CANVAS_ASPECT = 3 / 4;
-const PLACEHOLDER =
-  "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Print areas (inches) and top-chest inset (inches)
 const PRINT_AREAS = {
   tshirt: {
     front: { w: 12, h: 16, topInsetIn: 3.0 },
@@ -106,16 +106,23 @@ function detectProductType(product) {
   return "tshirt";
 }
 
-const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, "-");
-const normSlug = (p) => norm(p?.slug || p?.name || "");
-const toKey = (c) =>
-  String(c || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[_-]+/g, " ");
+const norm = (s) => String(s || "").trim().toLowerCase();
+function ProductTypeBadgeIcon({ type }) {
+  const IconCmp =
+    type === "tshirt" ? FaTshirt :
+    type === "hoodie" ? FaTshirt :
+    type === "hat"    ? FaHatCowboy :
+    type === "beanie" ? FaHockeyPuck :
+    FaTshirt;
+  return <Icon as={IconCmp} color="brand.accentYellow" />;
+}
 
-// Color swatches (same palette as your ProductCard.jsx)
+function useQuery() {
+  const { search } = useLocation();
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+// Same color palette you showed in ProductCard
 const COLOR_SWATCHES = {
   black: "#000000",
   white: "#FFFFFF",
@@ -141,70 +148,6 @@ const COLOR_SWATCHES = {
   sport_grey: "#B5B8B1",
   grey: "#8E8E8E",
 };
-
-const SWATCH_ORDER = [
-  "black","maroon","red","royal","royal blue","purple","charcoal","navy",
-  "military green","forest green","lime","tropical blue","gold","orange","azalea",
-  "brown","brown savana","brown savanna","sand","ash","sport_grey","grey","white",
-];
-
-// Map store color → folder color (exactly your `public/mockups/classic-tee` tree)
-const COLOR_TO_FOLDER = {
-  black: "black",
-  maroon: "maroon",
-  red: "red",
-  orange: "orange",
-  lime: "lime",
-  purple: "purple",
-  charcoal: "charcoal",
-  white: "white",
-  royal: "royal",
-  "royal blue": "royal",
-  "tropical blue": "tropical-blue",
-  "military green": "military-green",
-  "brown savana": "brown-savana",
-  "brown savanna": "brown-savana",
-};
-
-function folderForColor(c) {
-  const key = toKey(c);
-  return COLOR_TO_FOLDER[key] || key.replace(/\s+/g, "-");
-}
-
-function ProductTypeBadgeIcon({ type }) {
-  const IconCmp =
-    type === "tshirt" ? FaTshirt :
-    type === "hoodie" ? FaTshirt :
-    type === "hat"    ? FaHatCowboy :
-    type === "beanie" ? FaHockeyPuck :
-    FaTshirt;
-  return <Icon as={IconCmp} color="brand.accentYellow" />;
-}
-
-function useQuery() {
-  const { search } = useLocation();
-  return useMemo(() => new URLSearchParams(search), [search]);
-}
-
-// Try an image URL and resolve if it loads
-function probe(url) {
-  return new Promise((res, rej) => {
-    const im = new Image();
-    im.crossOrigin = "anonymous";
-    im.onload = () => res(url);
-    im.onerror = () => rej(new Error("404"));
-    im.src = url;
-  });
-}
-async function firstOk(urls) {
-  for (const u of urls) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      return await probe(u);
-    } catch { /* next */ }
-  }
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 
@@ -244,11 +187,10 @@ export default function ProductStudio() {
   const guideVRef = useRef(null);
   const guideHRef = useRef(null);
 
-  // My designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
 
-  // --------------------- Data fetch ---------------------
+  // ---- data ----
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -259,14 +201,13 @@ export default function ProductStudio() {
         const p = res.data;
         setProduct(p);
 
-        // Default color (prefer black)
-        const set = new Set();
-        (p?.variants || []).forEach(v => v.color && set.add(toKey(v.color)));
-        (p?.colors || []).forEach(c => c && set.add(toKey(c)));
-        const arr = [...set];
-        if (!colorParam && arr.length) setColor(arr.includes("black") ? "black" : arr[0]);
+        // default color from registry if available
+        const regColors = listColors(norm(p?.slug || slugParam));
+        if (regColors.length && !colorParam) {
+          setColor(resolveColor(p?.slug || slugParam, "black") || regColors[0]);
+        }
 
-        // Default size
+        // default size
         if (!sizeParam) {
           const sset = new Set();
           (p?.variants || []).forEach(v => v.size && sset.add(v.size));
@@ -277,7 +218,7 @@ export default function ProductStudio() {
         if (!availableViews.includes(view)) setView(availableViews[0]);
       } catch (e) {
         console.error(e);
-        toast({ title: "Could not load product", status: "error" });
+        setProduct({ name: params.slug, slug: params.slug }); // still allow design
       }
     })();
     return () => { cancelled = true; };
@@ -291,13 +232,14 @@ export default function ProductStudio() {
         setLoadingDesigns(true);
         const res = await client.get("/mydesigns");
         if (!cancelled) setDesigns(res.data || []);
-      } catch { /* ignore */ }
-      finally { if (!cancelled) setLoadingDesigns(false); }
+      } catch {} finally {
+        if (!cancelled) setLoadingDesigns(false);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // --------------------- Fabric init ---------------------
+  // ---- fabric init ----
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
@@ -320,35 +262,18 @@ export default function ProductStudio() {
         );
         tick();
       };
-
       fc.on("object:added", onChange);
       fc.on("object:removed", onChange);
       fc.on("object:modified", onChange);
 
-      // Keyboard shortcuts
+      // keyboard shortcuts
       const onKey = (e) => {
         const active = fc.getActiveObject();
-
-        // zoom
-        if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) {
-          e.preventDefault(); setZoomSafe(zoom + 0.1); return;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key === "-") {
-          e.preventDefault(); setZoomSafe(zoom - 0.1); return;
-        }
-        // show/hide grid
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") {
-          setShowGrid((v) => !v); refreshBackground(); return;
-        }
-        // show/hide mockup
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") {
-          setMockupVisible((v) => !v); refreshBackground(); return;
-        }
-        // auto fit
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") {
-          autoFit(); return;
-        }
-
+        if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) { e.preventDefault(); setZoomSafe(zoom + 0.1); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key === "-") { e.preventDefault(); setZoomSafe(zoom - 0.1); return; }
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") { setShowGrid((v)=>!v); refreshBackground(); return; }
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") { setMockupVisible((v)=>!v); refreshBackground(); return; }
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") { autoFit(); return; }
         if (!active) return;
         const step = e.shiftKey ? 5 : 1;
         if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); del(); return; }
@@ -377,44 +302,7 @@ export default function ProductStudio() {
     }
   }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --------------------- Mockups ---------------------
-
-  function cloudinarySimple(folderColor, viewKey) {
-    return `https://res.cloudinary.com/dqvsdvjis/image/upload/mockups/classic-tee/tee-${folderColor}/${viewKey}.png`;
-  }
-  function cloudinaryNested(folderColor, viewKey) {
-    return `https://res.cloudinary.com/dqvsdvjis/image/upload/mockups/classic-tee/tee-${folderColor}/mockups/classic-tee/tee-${folderColor}/${viewKey}.png`;
-  }
-  function localPublic(folderColor, viewKey) {
-    return `/mockups/classic-tee/tee-${folderColor}/${viewKey}.png`;
-  }
-
-  async function pickWorkingMockupUrl(product, view, color) {
-    const slugKey = normSlug(product) || norm(slugParam);
-    const viewKey = (view || "front").toLowerCase();
-    const folderColor = folderForColor(color);
-
-    // try local first (your repo tree), then cloudinary fallbacks, then mapping/product, then placeholder
-    const fromMap = MOCKUPS?.[slugKey]?.[folderColor]?.[viewKey] || null;
-    const candidates = [
-      localPublic(folderColor, viewKey),
-      cloudinarySimple(folderColor, viewKey),
-      cloudinaryNested(folderColor, viewKey),
-      fromMap,
-      product?.images?.find?.((i) => i.isPrimary)?.url ||
-        (Array.isArray(product?.images) && typeof product.images[0] === "string"
-          ? product.images[0]
-          : product?.images?.[0]?.url),
-      product?.variants?.[0]?.image ||
-        product?.variants?.[0]?.imageSet?.[0]?.url ||
-        product?.image,
-      PLACEHOLDER,
-    ].filter(Boolean);
-
-    const ok = await firstOk(candidates);
-    return ok || PLACEHOLDER;
-  }
-
+  // ---- mockups via registry ----
   const makeGridOverlay = useCallback((fc) => {
     const size = 32;
     const svg = `
@@ -431,18 +319,18 @@ export default function ProductStudio() {
 
   const refreshBackground = useCallback(async () => {
     const fc = fabricRef.current;
-    if (!fc || !product) return;
+    if (!fc) return;
 
     const keep = fc.getObjects().filter(o => o.id !== "printArea" && o.id !== "gridOverlay" && o.id !== "guide");
     fc.clear();
     keep.forEach(o => fc.add(o));
 
-    const url = await pickWorkingMockupUrl(product, view, color);
+    const slug = product?.slug || slugParam || "classic-tee";
+    const url = await getMockupUrl({ slug, color, view });
 
     window.fabric.Image.fromURL(
-      url,
+      url || MOCKUPS_PLACEHOLDER,
       (img) => {
-        // Fit by height; center horizontally
         const scale = fc.height / img.height;
         img.set({
           top: 0,
@@ -457,7 +345,6 @@ export default function ProductStudio() {
         });
         fc.setBackgroundImage(img, fc.renderAll.bind(fc));
 
-        // Grid overlay
         const gridDataUrl = makeGridOverlay(fc);
         window.fabric.Image.fromURL(
           gridDataUrl,
@@ -477,7 +364,6 @@ export default function ProductStudio() {
           { crossOrigin: "anonymous" }
         );
 
-        // Print area in px (screen mapping uses same mockup scale /3 for comfort)
         const areaDef = PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
         const pxW = areaDef.w * DPI * (scale / 3);
         const pxH = areaDef.h * DPI * (scale / 3);
@@ -504,7 +390,7 @@ export default function ProductStudio() {
         });
         fc.add(rect);
 
-        // Clip to print area
+        // clip to print area
         const clipRect = new window.fabric.Rect({
           left, top, width: pxW, height: pxH,
           absolutePositioned: true,
@@ -519,14 +405,11 @@ export default function ProductStudio() {
       },
       { crossOrigin: "anonymous" }
     );
-  }, [product, view, color, mockupOpacity, mockupVisible, showGrid, makeGridOverlay, productType]);
+  }, [product, slugParam, color, view, mockupOpacity, mockupVisible, showGrid, makeGridOverlay, productType]);
 
-  useEffect(() => {
-    if (!product || !fabricRef.current) return;
-    refreshBackground();
-  }, [product, refreshBackground]);
+  useEffect(() => { refreshBackground(); }, [refreshBackground]);
 
-  // Smart guides + clamp + warning
+  // ---- guides/snap/clamp/warn ----
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -556,7 +439,7 @@ export default function ProductStudio() {
 
       const bb = o.getBoundingRect(true,true);
 
-      // snap to center
+      // center snap
       const cx = a.left + a.width/2;
       const cy = a.top + a.height/2;
       const ocx = bb.left + bb.width/2;
@@ -566,7 +449,7 @@ export default function ProductStudio() {
       if (Math.abs(ocx - cx) < SNAP) { o.left += cx - ocx; snapV = true; }
       if (Math.abs(ocy - cy) < SNAP) { o.top  += cy - ocy; snapH = true; }
 
-      // snap to edges
+      // edge snap
       const edges = [
         { d: bb.left - a.left, axis: "v", line: a.left },
         { d: bb.left + bb.width - (a.left + a.width), axis: "v", line: a.left + a.width },
@@ -623,20 +506,17 @@ export default function ProductStudio() {
     };
   }, [toast]);
 
-  // --------------------- Actions ---------------------
-
+  // ---- actions (same as before) ----
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current; if (!fc) return;
     redoStack.current = [];
     undoStack.current.push(JSON.stringify(fc.toDatalessJSON(["id"])));
     if (undoStack.current.length > 60) undoStack.current.shift();
   }, []);
-
   const applyJSON = (json) => {
     const fc = fabricRef.current; if (!fc) return;
     fc.loadFromJSON(json, () => fc.renderAll(), (_o,obj) => obj);
   };
-
   const undo = () => {
     const fc = fabricRef.current; if (!fc || undoStack.current.length===0) return;
     const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
@@ -651,7 +531,6 @@ export default function ProductStudio() {
     const nxt = redoStack.current.pop();
     if (nxt) applyJSON(nxt);
   };
-
   const setZoomSafe = (z) => {
     const fc = fabricRef.current; if (!fc) return;
     const clamped = Math.max(0.75, Math.min(2, z));
@@ -742,7 +621,6 @@ export default function ProductStudio() {
     o.setCoords(); fc.requestRenderAll();
   };
 
-  // Export print file (300 DPI)
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current; if (!fc) return;
 
@@ -769,7 +647,7 @@ export default function ProductStudio() {
       clone.originX = "center"; clone.originY = "center";
       clone.left = relX * scaleFactor; clone.top = relY * scaleFactor;
       clone.scaleX = o.scaleX * scaleFactor; clone.scaleY = o.scaleY * scaleFactor;
-      clone.clipPath = null; // no clip in export
+      clone.clipPath = null;
       if (clone.type === "i-text") clone.fontSize = (o.fontSize || 36) * scaleFactor;
 
       tmp.add(clone);
@@ -790,13 +668,15 @@ export default function ProductStudio() {
       if (!fileUrl) throw new Error("Upload failed");
 
       const unitPrice = product?.priceMin || product?.basePrice || 0;
+      const slug = product?.slug || slugParam;
+      const prodImage = await getMockupUrl({ slug, color, view });
       const item = {
         productId: product?.id || product?._id || "",
-        slug: product?.slug || slugParam,
+        slug,
         name: product?.name, color, size, view,
         preview: previewPNG,
         printFileUrl: fileUrl,
-        productImage: await pickWorkingMockupUrl(product, view, color),
+        productImage: prodImage,
         unitPrice,
       };
       localStorage.setItem("itemToCheckout", JSON.stringify(item));
@@ -807,32 +687,16 @@ export default function ProductStudio() {
     }
   };
 
-  // --------------------- Derived UI ---------------------
-
-  const colorOptions = useMemo(() => {
-    const set = new Set();
-    (product?.variants || []).forEach(v => v.color && set.add(toKey(v.color)));
-    (product?.colors || []).forEach(c => c && set.add(toKey(c)));
-    const arr = [...set];
-    arr.sort((a, b) => {
-      const ia = SWATCH_ORDER.indexOf(a), ib = SWATCH_ORDER.indexOf(b);
-      if (ia !== -1 && ib !== -1) return ia - ib;
-      if (ia !== -1) return -1;
-      if (ib !== -1) return 1;
-      return a.localeCompare(b);
-    });
-    return arr;
-  }, [product]);
-
+  // ---- derived ui ----
+  const registryColors = useMemo(() => listColors(norm(product?.slug || slugParam)), [product, slugParam]);
   const sizes = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach(v => (!color || toKey(v.color) === toKey(color)) && v.size && set.add(v.size));
+    (product?.variants || []).forEach(v => (!color || v.color) && v.size && set.add(v.size));
     return [...set];
   }, [product, color]);
 
-  const canProceed = product && (!colorOptions.length || color) && (!sizes.length || size) && hasObjects;
+  const canProceed = product && (!registryColors.length || color) && (!sizes.length || size) && hasObjects;
 
-  // --------------------- Layers helpers ---------------------
   const layerList = () => {
     const fc = fabricRef.current; if (!fc) return [];
     return fc.getObjects()
@@ -850,11 +714,10 @@ export default function ProductStudio() {
   const bringFwd     = (it) => { const fc=fabricRef.current; fc.bringForward(it.obj); fc.requestRenderAll(); setLayerTick(t=>t+1); };
   const sendBack     = (it) => { const fc=fabricRef.current; fc.sendBackwards(it.obj); fc.requestRenderAll(); setLayerTick(t=>t+1); };
 
-  // --------------------- UI ---------------------
-
+  // ---- UI ----
   return (
     <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
-      {/* Left rail */}
+      {/* LEFT */}
       <Box w={{ base: "100%", xl: "320px" }} p={4} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" bg="brand.paper">
         <VStack align="stretch" spacing={4}>
           <HStack>
@@ -875,7 +738,6 @@ export default function ProductStudio() {
             </TabList>
 
             <TabPanels>
-              {/* Options */}
               <TabPanel>
                 <VStack align="stretch" spacing={3}>
                   {/* View */}
@@ -888,14 +750,14 @@ export default function ProductStudio() {
                     </HStack>
                   </Box>
 
-                  {/* Color */}
+                  {/* Colors from registry */}
                   <Box>
                     <Text mb={2} color="brand.textLight" fontWeight="medium">Color</Text>
                     <HStack wrap="wrap" spacing={2}>
-                      {colorOptions.length ? (
-                        colorOptions.map((c) => {
+                      {registryColors.length ? (
+                        registryColors.map((c) => {
                           const hex = COLOR_SWATCHES[c] || "#CCCCCC";
-                          const selected = toKey(color) === c;
+                          const selected = norm(color) === norm(c);
                           return (
                             <Tooltip key={c} label={c}>
                               <Button
@@ -914,12 +776,12 @@ export default function ProductStudio() {
                           );
                         })
                       ) : (
-                        <Badge>No color options</Badge>
+                        <Badge>No colors in registry</Badge>
                       )}
                     </HStack>
                   </Box>
 
-                  {/* Size */}
+                  {/* Sizes */}
                   <Box>
                     <Text mb={2} color="brand.textLight" fontWeight="medium">Size</Text>
                     <HStack wrap="wrap" spacing={2}>
@@ -990,7 +852,7 @@ export default function ProductStudio() {
                 </VStack>
               </TabPanel>
 
-              {/* Designs (now includes Upload) */}
+              {/* Designs + Upload */}
               <TabPanel>
                 <VStack align="stretch" spacing={3}>
                   <HStack>
@@ -1034,9 +896,7 @@ export default function ProductStudio() {
                   <Button onClick={addText} size="sm" colorScheme="teal" leftIcon={<FaRedoAlt />}>
                     Add Text
                   </Button>
-                  <Text fontSize="sm" color="whiteAlpha.800">
-                    Use Fabric controls on the canvas to edit the text.
-                  </Text>
+                  <Text fontSize="sm" color="whiteAlpha.800">Use Fabric controls on the canvas to edit the text.</Text>
                 </VStack>
               </TabPanel>
             </TabPanels>
@@ -1044,7 +904,7 @@ export default function ProductStudio() {
         </VStack>
       </Box>
 
-      {/* Canvas column */}
+      {/* CANVAS */}
       <Flex flex="1" direction="column" p={4}>
         <Box
           ref={wrapRef}
@@ -1064,7 +924,7 @@ export default function ProductStudio() {
         </Box>
       </Flex>
 
-      {/* Layers */}
+      {/* LAYERS */}
       <Box display={{ base: "none", xl: "block" }} w="260px" p={4} borderLeftWidth="1px" borderColor="whiteAlpha.200" bg="brand.paper">
         <Heading size="sm" color="brand.textLight" mb={2}>Layers</Heading>
         <VStack align="stretch" spacing={1} key={layerTick}>
@@ -1086,9 +946,7 @@ export default function ProductStudio() {
             </HStack>
           ))}
           {!layerList().length && (
-            <Text color="whiteAlpha.700" fontSize="xs" px={2} py={3}>
-              Add an image or text to get started.
-            </Text>
+            <Text color="whiteAlpha.700" fontSize="xs" px={2} py={3}>Add an image or text to get started.</Text>
           )}
         </VStack>
       </Box>
