@@ -1,19 +1,10 @@
-// frontend/src/components/shop/ProductCard.jsx
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  VStack,
-  HStack,
-  Heading,
-  Text,
-  Button,
-  AspectRatio,
-  Image,
-  Tooltip,
-  Wrap,
-  WrapItem,
+  Box, VStack, HStack, Heading, Text, Button,
+  AspectRatio, Image, Tooltip, Wrap, WrapItem,
 } from "@chakra-ui/react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { getPrimaryImage, listColors } from "../../data/mockupsRegistry";
 
 // Compact color map for swatches (extend anytime)
 const COLOR_SWATCHES = {
@@ -78,19 +69,18 @@ function SwatchRow({ colors = [], max = 12 }) {
 
 export default function ProductCard({ product }) {
   const navigate = useNavigate();
+  const [cover, setCover] = useState(null);
+
   if (!product) return null;
 
-  // Best-effort cover image
-  const imageUrl =
-    product.images?.find?.((i) => i.isPrimary)?.url ||
-    (Array.isArray(product.images) && typeof product.images[0] === "string"
-      ? product.images[0]
-      : product.images?.[0]?.url) ||
-    product.variants?.[0]?.image ||
-    product.variants?.[0]?.imageSet?.[0]?.url ||
-    product.image ||
-    "https://placehold.co/800x1000/142F2E/ffffff?text=Mockup";
+  const slug =
+    product.slug ||
+    (product.name || "product").toLowerCase().replace(/\s+/g, "-");
 
+  // Colors from the registry (keeps swatches aligned with available mockups)
+  const registryColors = useMemo(() => listColors(slug), [slug]);
+
+  // Price text
   const priceMin = product.priceMin ?? product.basePrice ?? product.price ?? 0;
   const priceMax = product.priceMax ?? priceMin;
   const priceText =
@@ -98,13 +88,25 @@ export default function ProductCard({ product }) {
       ? `$${priceMin.toFixed(2)}`
       : `$${priceMin.toFixed(2)} - $${priceMax.toFixed(2)}`;
 
-  const colors =
-    (Array.isArray(product.colors) && product.colors.length && product.colors) ||
-    Array.from(
-      new Set((product.variants || []).map((v) => v.color).filter(Boolean))
-    );
-
-  const slug = product.slug || (product.name || "product").toLowerCase().replace(/\s+/g, "-");
+  // Load primary image via the same registry the studio uses
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const url =
+        (await getPrimaryImage({ slug })) ||
+        // ultimate fallback to product fields just in case
+        product.images?.find?.((i) => i.isPrimary)?.url ||
+        (Array.isArray(product.images) && typeof product.images[0] === "string"
+          ? product.images[0]
+          : product.images?.[0]?.url) ||
+        product.variants?.[0]?.image ||
+        product.variants?.[0]?.imageSet?.[0]?.url ||
+        product.image ||
+        "https://placehold.co/800x1000/142F2E/ffffff?text=Mockup";
+      if (mounted) setCover(url);
+    })();
+    return () => { mounted = false; };
+  }, [slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const goCustomize = () => navigate(`/product-studio/${encodeURIComponent(slug)}`);
 
@@ -121,7 +123,7 @@ export default function ProductCard({ product }) {
       transition="all .2s"
     >
       <AspectRatio ratio={3 / 4} bg="blackAlpha.100" borderRadius="md" overflow="hidden">
-        <Image src={imageUrl} alt={product.name} objectFit="cover" />
+        <Image src={cover || "https://placehold.co/800x1000/142F2E/ffffff?text=Mockup"} alt={product.name} objectFit="cover" />
       </AspectRatio>
 
       <VStack align="stretch" spacing={1}>
@@ -130,7 +132,7 @@ export default function ProductCard({ product }) {
         </Heading>
 
         {/* Color swatches */}
-        <SwatchRow colors={colors} />
+        <SwatchRow colors={registryColors.length ? registryColors : (product.colors || [])} />
 
         <Text fontSize="sm" color="whiteAlpha.800">{priceText}</Text>
       </VStack>
