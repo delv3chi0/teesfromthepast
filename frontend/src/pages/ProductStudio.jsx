@@ -17,7 +17,7 @@ import {
   IconButton,
   SimpleGrid,
   AspectRatio,
-  Image,
+  Image as ChakraImage, // alias to avoid shadowing window.Image
   Tooltip,
   useToast,
   Skeleton,
@@ -63,9 +63,8 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
 
 // Try to tolerate different exports from ../data/mockups.js
-// (No build break if it doesn't have a default)
 import * as MOCKUPS_MOD from "../data/mockups.js";
-const MOCKUPS = (MOCKUPS_MOD?.default ?? MOCKUPS_MOD?.MOCKUPS ?? {}) as any;
+const MOCKUPS = (MOCKUPS_MOD?.default ?? MOCKUPS_MOD?.MOCKUPS ?? {});
 
 // ------------------------------
 // Constants & helpers
@@ -75,7 +74,6 @@ const WORK_ASPECT = 3 / 4; // 3:4 canvas
 const PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Product-type detection
 function detectProductType(product) {
   const text = `${product?.type || product?.category || ""} ${product?.name || ""}`.toLowerCase();
   if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
@@ -94,14 +92,11 @@ const VIEWS_BY_TYPE = {
   beanie: ["front"],
 };
 
-// Normalizers for lookup
 const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, "-");
 const normColor = (c) => norm(c).replace(/[^a-z0-9-]/g, "");
 const normSlug = (p) => norm(p?.slug || p?.name || "");
 
-// Placement guidance (relative to canvas size; tuned visually)
-// These control where the dashed print area sits *on the preview*.
-// Export uses the exact size from PRINT_SPECS below.
+// Visual placement on preview (export uses PRINT_SPECS)
 const PLACEMENTS = {
   tshirt: {
     front: { x: 0.5, y: 0.43, w: 0.42, h: 0.50 },
@@ -147,14 +142,14 @@ const PRINT_SPECS = {
   },
 };
 
-// World-class color swatch mapping + ordered "rainbow" with black first, white last
+// Color swatches: black first, white last, rainbow-ish in between
 const COLOR_HEX = {
   black: "#000000",
   white: "#FFFFFF",
   maroon: "#800000",
   red: "#D32F2F",
   orange: "#F57C00",
-  gold: "#FFD54F", // yellow-ish
+  gold: "#FFD54F",
   lime: "#9CCC65",
   green: "#228B22",
   "military green": "#4B5320",
@@ -180,7 +175,7 @@ const COLOR_ORDER = [
   "black",
   "red",
   "orange",
-  "gold", // yellow
+  "gold",
   "lime",
   "green",
   "tropical blue",
@@ -206,7 +201,6 @@ const colorIndex = (name) => {
   return i >= 0 ? i : 999;
 };
 
-// Icon for product badge
 function ProductTypeBadgeIcon({ type }) {
   const IconCmp =
     type === "tshirt"
@@ -218,7 +212,15 @@ function ProductTypeBadgeIcon({ type }) {
       : type === "beanie"
       ? FaHockeyPuck
       : FaTshirt;
-  return <IconButton aria-label={type} icon={<IconCmp />} size="xs" variant="ghost" color="brand.accentYellow" />;
+  return (
+    <IconButton
+      aria-label={type}
+      icon={<IconCmp />}
+      size="xs"
+      variant="ghost"
+      color="brand.accentYellow"
+    />
+  );
 }
 
 function useQuery() {
@@ -226,9 +228,6 @@ function useQuery() {
   return useMemo(() => new URLSearchParams(search), [search]);
 }
 
-// ------------------------------
-// Component
-// ------------------------------
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -241,72 +240,64 @@ export default function ProductStudio() {
 
   const [product, setProduct] = useState(null);
   const productType = useMemo(() => detectProductType(product), [product]);
-  const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
+  const availableViews = useMemo(
+    () => VIEWS_BY_TYPE[productType] || ["front"],
+    [productType]
+  );
 
-  // UI selections
   const [view, setView] = useState("front");
   const [color, setColor] = useState(colorParam);
   const [size, setSize] = useState(sizeParam);
 
-  // Canvas refs
   const canvasRef = useRef(null);
   const wrapRef = useRef(null);
   const fabricRef = useRef(null);
 
-  // UI state
   const [zoom, setZoom] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
   const [gridOn, setGridOn] = useState(true);
   const [rulersOn, setRulersOn] = useState(true);
   const [mockupOpacity, setMockupOpacity] = useState(0.98);
 
-  // Text tool
   const [textValue, setTextValue] = useState("");
   const [textColor, setTextColor] = useState("#ffffff");
   const [textSize, setTextSize] = useState(36);
 
-  // Designs & layers
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
   const [layers, setLayers] = useState([]);
   const [selectedLayerId, setSelectedLayerId] = useState(null);
 
-  // Histories
   const undoStack = useRef([]);
   const redoStack = useRef([]);
 
-  // Responsive widths
-  const showSidebars = useBreakpointValue({ base: false, md: true });
   const panelW = useBreakpointValue({ base: "100%", xl: "320px" });
   const layersW = useBreakpointValue({ base: "100%", xl: "260px" });
 
-  // ------------------------------
-  // Data fetch: product & defaults
-  // ------------------------------
+  // Fetch product & defaults
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (!slugParam) return;
-        const res = await client.get(`/storefront/product/${encodeURIComponent(slugParam)}`);
+        const res = await client.get(
+          `/storefront/product/${encodeURIComponent(slugParam)}`
+        );
         if (cancelled) return;
 
         const p = res.data;
         setProduct(p);
 
-        // compute available colors from product/variants
         const colorSet = new Set();
         (p?.variants || []).forEach((v) => v.color && colorSet.add(String(v.color)));
         (p?.colors || []).forEach((c) => colorSet.add(String(c)));
-
-        // default color: black if available, else first
         const list = [...colorSet].sort((a, b) => colorIndex(a) - colorIndex(b));
         if (!colorParam) {
-          const preferred = list.find((c) => String(c).toLowerCase() === "black") || list[0];
+          const preferred =
+            list.find((c) => String(c).toLowerCase() === "black") || list[0];
           if (preferred) setColor(preferred);
         }
 
-        // default size: first available
         if (!sizeParam) {
           const sizes = new Set();
           (p?.variants || []).forEach((v) => v.size && sizes.add(String(v.size)));
@@ -326,7 +317,7 @@ export default function ProductStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugParam]);
 
-  // Designs
+  // Fetch designs
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -345,13 +336,10 @@ export default function ProductStudio() {
     };
   }, []);
 
-  // ------------------------------
-  // Fabric setup
-  // ------------------------------
+  // Fabric init
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
-    // init once
     if (!fabricRef.current) {
       const parentW = wrapRef.current.clientWidth;
       const parentH = parentW / WORK_ASPECT;
@@ -368,7 +356,6 @@ export default function ProductStudio() {
         const objs = fc.getObjects().filter((o) => o.id !== "printArea");
         setHasObjects(objs.length > 0);
 
-        // layers (top-most last)
         const layersList = objs.map((o, idx) => ({
           id: o.__uid || (o.__uid = `${Date.now()}-${Math.random()}`),
           type: o.type,
@@ -386,7 +373,6 @@ export default function ProductStudio() {
       fc.on("selection:updated", updateFlags);
       fc.on("selection:cleared", updateFlags);
 
-      // resize observer to keep preview centered/contained
       const ro = new ResizeObserver(() => {
         if (!fabricRef.current) return;
         const w = wrapRef.current.clientWidth;
@@ -394,29 +380,23 @@ export default function ProductStudio() {
         fabricRef.current.setWidth(w);
         fabricRef.current.setHeight(h);
         fabricRef.current.requestRenderAll();
-        // re-lay print area in new size
         layPrintArea();
       });
       ro.observe(wrapRef.current);
-      // cleanup
       return () => ro.disconnect();
     }
   }, []);
 
-  // ------------------------------
-  // Background mockup + print area
-  // ------------------------------
+  // Background & print area
   const pickMockupUrl = useCallback(
     (prod, v, c) => {
       if (!prod) return PLACEHOLDER;
       const slugKey = normSlug(prod) || norm(slugParam);
       const colorKey = normColor(c);
 
-      // 1) Cloudinary mapping (fast/cleanest)
       const bySlug = MOCKUPS?.[slugKey]?.[colorKey]?.[v];
       if (bySlug) return bySlug;
 
-      // 2) Variant / files / product images fallbacks
       const variants = prod?.variants || [];
       const variant =
         variants.find((x) => x.color === c || x.colorName === c) || variants[0];
@@ -452,19 +432,16 @@ export default function ProductStudio() {
     [slugParam]
   );
 
-  // place/refresh mockup + dashed print area (centered)
   const layPrintArea = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
 
-    // remove existing print area, preserve user objects
     const userObjects = fc.getObjects().filter((o) => o.id !== "printArea");
     fc.clear();
     userObjects.forEach((o) => fc.add(o));
 
     const place =
-      PLACEMENTS?.[productType]?.[view] ||
-      PLACEMENTS.tshirt.front; // sane default
+      PLACEMENTS?.[productType]?.[view] || PLACEMENTS.tshirt.front;
 
     const rect = new window.fabric.Rect({
       id: "printArea",
@@ -494,7 +471,6 @@ export default function ProductStudio() {
     const fc = fabricRef.current;
     if (!fc) return;
 
-    // prepare & add print area (first, at back)
     layPrintArea();
 
     const url = pickMockupUrl(product, view, color) || PLACEHOLDER;
@@ -503,7 +479,6 @@ export default function ProductStudio() {
       window.fabric.Image.fromURL(
         src,
         (img) => {
-          // contain-fit inside canvas
           const scale = Math.min(fc.width / img.width, fc.height / img.height);
           img.set({
             left: fc.width / 2,
@@ -520,31 +495,27 @@ export default function ProductStudio() {
           fc.add(img);
           fc.sendToBack(img);
 
-          // keep dashed rect above mockup
           const pa = fc.getObjects().find((o) => o.id === "printArea");
           if (pa) fc.bringToFront(pa);
 
           fc.requestRenderAll();
         },
-        { crossOrigin: "anonymous" } // CORS-safe for canvas
+        { crossOrigin: "anonymous" }
       );
     };
 
-    // If remote host blocks CORS, fall back to placeholder silently.
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => addImg(url);
-    img.onerror = () => addImg(PLACEHOLDER);
-    img.src = url;
+    // Use window.Image to avoid conflicts with Chakra's Image import
+    const testImg = new window.Image();
+    testImg.crossOrigin = "anonymous";
+    testImg.onload = () => addImg(url);
+    testImg.onerror = () => addImg(PLACEHOLDER);
+    testImg.src = url;
   }, [product, view, color, mockupOpacity, layPrintArea, pickMockupUrl]);
 
   useEffect(() => {
     if (product && fabricRef.current) refreshBackground();
   }, [product, refreshBackground, view, color]);
 
-  // ------------------------------
-  // History & utilities
-  // ------------------------------
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -585,14 +556,15 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // keep objects within print area
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
     const constrain = () => {
       const area = fc.getObjects().find((o) => o.id === "printArea");
       if (!area) return;
-      const objs = fc.getObjects().filter((o) => o.id !== "printArea" && o.id !== "mockupBg");
+      const objs = fc
+        .getObjects()
+        .filter((o) => o.id !== "printArea" && o.id !== "mockupBg");
       const a = area.getBoundingRect(true, true);
       objs.forEach((o) => {
         const bb = o.getBoundingRect(true, true);
@@ -616,9 +588,6 @@ export default function ProductStudio() {
     };
   }, [view, productType]);
 
-  // ------------------------------
-  // Add content
-  // ------------------------------
   const addText = () => {
     const fc = fabricRef.current;
     if (!fc || !textValue.trim())
@@ -661,7 +630,6 @@ export default function ProductStudio() {
     );
   };
 
-  // Toolbar actions
   const del = () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -690,7 +658,6 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // Layer helpers
   const activateLayer = (id) => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -749,7 +716,6 @@ export default function ProductStudio() {
       .find((o) => o.__uid === id);
     if (!obj) return;
     fc.sendBackwards(obj);
-    // ensure it never goes behind mockupBg/printArea
     const bg = fc.getObjects().find((o) => o.id === "mockupBg");
     const pa = fc.getObjects().find((o) => o.id === "printArea");
     if (bg) fc.sendToBack(bg);
@@ -769,9 +735,6 @@ export default function ProductStudio() {
     fc.requestRenderAll();
   };
 
-  // ------------------------------
-  // Export → upload → checkout
-  // ------------------------------
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
@@ -792,7 +755,7 @@ export default function ProductStudio() {
 
     const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
     const aBB = area.getBoundingRect(true, true);
-    const scaleFactor = outW / aBB.width; // canvas px → print px
+    const scaleFactor = outW / aBB.width;
 
     objs.forEach((o) => {
       const clone = window.fabric.util.object.clone(o);
@@ -813,11 +776,9 @@ export default function ProductStudio() {
     });
     tmp.requestRenderAll();
 
-    // Clean PNG with transparency; mockup is NOT included
     const png = tmp.toDataURL({ format: "png", quality: 1, multiplier: 1 });
     tmp.dispose();
 
-    // preview for cart
     const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
 
     toast({ title: "Uploading design…", status: "info", duration: 2500 });
@@ -850,9 +811,6 @@ export default function ProductStudio() {
     }
   };
 
-  // ------------------------------
-  // Derived color/size lists
-  // ------------------------------
   const colors = useMemo(() => {
     const set = new Set();
     (product?.variants || []).forEach((v) => v.color && set.add(v.color));
@@ -871,13 +829,15 @@ export default function ProductStudio() {
   const canProceed =
     product && (!colors.length || color) && (!sizes.length || size) && hasObjects;
 
-  // ------------------------------
-  // UI – Panels & Canvas
-  // ------------------------------
   return (
     <Flex direction="column" minH="100vh" bg="brand.primary">
       <Box px={{ base: 3, md: 6 }} pt={4}>
-        <Image src="/logo.png" alt="Tees From The Past" h="36px" objectFit="contain" />
+        <ChakraImage
+          src="/logo.png"
+          alt="Tees From The Past"
+          h="36px"
+          objectFit="contain"
+        />
       </Box>
 
       <Flex
@@ -889,7 +849,7 @@ export default function ProductStudio() {
         direction={{ base: "column", xl: "row" }}
         align="stretch"
       >
-        {/* LEFT: Panels (Options / Designs / Text) */}
+        {/* LEFT: Panels */}
         <Box
           w={{ base: "100%", xl: panelW }}
           bg="brand.paper"
@@ -899,7 +859,13 @@ export default function ProductStudio() {
           overflow="hidden"
         >
           <VStack align="stretch" spacing={0}>
-            <HStack px={4} py={3} justify="space-between" borderBottomWidth="1px" borderColor="whiteAlpha.200">
+            <HStack
+              px={4}
+              py={3}
+              justify="space-between"
+              borderBottomWidth="1px"
+              borderColor="whiteAlpha.200"
+            >
               <HStack>
                 <ProductTypeBadgeIcon type={productType} />
                 <Heading size="md" color="brand.textLight" fontFamily="Bungee">
@@ -919,10 +885,8 @@ export default function ProductStudio() {
               </TabList>
 
               <TabPanels>
-                {/* Options */}
                 <TabPanel>
                   <VStack align="stretch" spacing={5}>
-                    {/* View */}
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">
                         View
@@ -941,7 +905,6 @@ export default function ProductStudio() {
                       </HStack>
                     </Box>
 
-                    {/* Color (dots) */}
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">
                         Color
@@ -961,9 +924,15 @@ export default function ProductStudio() {
                                   h="18px"
                                   rounded="full"
                                   borderWidth={selected ? "2px" : "1px"}
-                                  borderColor={selected ? "yellow.300" : "blackAlpha.600"}
+                                  borderColor={
+                                    selected ? "yellow.300" : "blackAlpha.600"
+                                  }
                                   background={hex}
-                                  boxShadow={selected ? "0 0 0 2px rgba(234,179,8,.35)" : "none"}
+                                  boxShadow={
+                                    selected
+                                      ? "0 0 0 2px rgba(234,179,8,.35)"
+                                      : "none"
+                                  }
                                 />
                               </Tooltip>
                             );
@@ -974,7 +943,6 @@ export default function ProductStudio() {
                       </HStack>
                     </Box>
 
-                    {/* Size */}
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">
                         Size
@@ -997,7 +965,6 @@ export default function ProductStudio() {
                       </HStack>
                     </Box>
 
-                    {/* Zoom */}
                     <Box>
                       <Text mb={2} color="brand.textLight" fontWeight="medium">
                         Canvas zoom
@@ -1035,13 +1002,18 @@ export default function ProductStudio() {
                       </HStack>
                     </Box>
 
-                    {/* Grid / Rulers / Mockup opacity */}
                     <Box>
                       <HStack spacing={4} mb={2}>
-                        <Checkbox isChecked={gridOn} onChange={(e) => setGridOn(e.target.checked)}>
+                        <Checkbox
+                          isChecked={gridOn}
+                          onChange={(e) => setGridOn(e.target.checked)}
+                        >
                           Grid
                         </Checkbox>
-                        <Checkbox isChecked={rulersOn} onChange={(e) => setRulersOn(e.target.checked)}>
+                        <Checkbox
+                          isChecked={rulersOn}
+                          onChange={(e) => setRulersOn(e.target.checked)}
+                        >
                           Rulers
                         </Checkbox>
                       </HStack>
@@ -1074,14 +1046,18 @@ export default function ProductStudio() {
                       >
                         Add to cart / Checkout
                       </Button>
-                      <Text fontSize="xs" color="whiteAlpha.700" textAlign="center">
-                        We export a true print file at {DPI} DPI for the current placement.
+                      <Text
+                        fontSize="xs"
+                        color="whiteAlpha.700"
+                        textAlign="center"
+                      >
+                        We export a true print file at {DPI} DPI for the current
+                        placement.
                       </Text>
                     </VStack>
                   </VStack>
                 </TabPanel>
 
-                {/* Designs */}
                 <TabPanel>
                   <VStack align="stretch" spacing={3}>
                     {loadingDesigns ? (
@@ -1103,7 +1079,11 @@ export default function ProductStudio() {
                               onClick={() => addDesign(d)}
                             >
                               <AspectRatio ratio={1}>
-                                <Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" />
+                                <ChakraImage
+                                  src={d.imageDataUrl}
+                                  alt={d.prompt}
+                                  objectFit="cover"
+                                />
                               </AspectRatio>
                             </Box>
                           </Tooltip>
@@ -1117,7 +1097,6 @@ export default function ProductStudio() {
                   </VStack>
                 </TabPanel>
 
-                {/* Text */}
                 <TabPanel>
                   <VStack align="stretch" spacing={3}>
                     <Text color="brand.textLight" fontWeight="medium">
@@ -1171,7 +1150,6 @@ export default function ProductStudio() {
           overflow="hidden"
           minH={{ base: "60vh", xl: "auto" }}
         >
-          {/* Toolbar */}
           <HStack
             spacing={2}
             px={3}
@@ -1183,35 +1161,63 @@ export default function ProductStudio() {
           >
             <HStack>
               <Tooltip label="Undo">
-                <IconButton aria-label="Undo" size="sm" icon={<FaUndo />} onClick={undo} />
+                <IconButton
+                  aria-label="Undo"
+                  size="sm"
+                  icon={<FaUndo />}
+                  onClick={undo}
+                />
               </Tooltip>
               <Tooltip label="Redo">
-                <IconButton aria-label="Redo" size="sm" icon={<FaRedo />} onClick={redo} />
+                <IconButton
+                  aria-label="Redo"
+                  size="sm"
+                  icon={<FaRedo />}
+                  onClick={redo}
+                />
               </Tooltip>
             </HStack>
             <HStack>
               <Tooltip label="Delete">
-                <IconButton aria-label="Delete" size="sm" icon={<FaTrash />} onClick={del} />
+                <IconButton
+                  aria-label="Delete"
+                  size="sm"
+                  icon={<FaTrash />}
+                  onClick={del}
+                />
               </Tooltip>
               <Tooltip label="Center horizontally">
-                <IconButton aria-label="Center" size="sm" icon={<FaArrowsAltH />} onClick={centerH} />
+                <IconButton
+                  aria-label="Center"
+                  size="sm"
+                  icon={<FaArrowsAltH />}
+                  onClick={centerH}
+                />
               </Tooltip>
               <Tooltip label="Rotate 90°">
-                <IconButton aria-label="Rotate" size="sm" icon={<FaRotateRight />} onClick={rotate90} />
+                <IconButton
+                  aria-label="Rotate"
+                  size="sm"
+                  icon={<FaRotateRight />}
+                  onClick={rotate90}
+                />
               </Tooltip>
             </HStack>
           </HStack>
 
-          {/* Canvas region (kept centered, consistent aspect) */}
-          <Box flex="1" overflow="auto" display="grid" placeItems="center" p={{ base: 2, md: 4 }}>
+          <Box
+            flex="1"
+            overflow="auto"
+            display="grid"
+            placeItems="center"
+            p={{ base: 2, md: 4 }}
+          >
             <Box
               ref={wrapRef}
               position="relative"
               width={{ base: "100%", md: "min(100%, 800px)" }}
-              // Keep a 3:4 preview box with absolute canvas inside
               style={{ paddingTop: `${100 / WORK_ASPECT}%` }}
             >
-              {/* rulers */}
               {rulersOn && (
                 <>
                   <Box
@@ -1235,7 +1241,6 @@ export default function ProductStudio() {
                 </>
               )}
 
-              {/* grid overlay (soft) */}
               {gridOn && (
                 <Box
                   position="absolute"
@@ -1269,23 +1274,34 @@ export default function ProductStudio() {
           minH={{ base: "200px", xl: "auto" }}
         >
           <VStack align="stretch" spacing={0} h="100%">
-            <Box px={4} py={3} borderBottomWidth="1px" borderColor="whiteAlpha.200">
+            <Box
+              px={4}
+              py={3}
+              borderBottomWidth="1px"
+              borderColor="whiteAlpha.200"
+            >
               <Heading size="sm" color="brand.textLight" fontFamily="Bungee">
                 Layers
               </Heading>
               <Text fontSize="xs" color="whiteAlpha.700">
-                Use the canvas or list to select. Tap the eyeball to toggle visibility.
+                Use the canvas or list to select. Tap the eyeball to toggle
+                visibility.
               </Text>
             </Box>
 
-            <VStack align="stretch" spacing={0} maxH={{ base: "240px", xl: "calc(100vh - 240px)" }} overflowY="auto">
+            <VStack
+              align="stretch"
+              spacing={0}
+              maxH={{ base: "240px", xl: "calc(100vh - 240px)" }}
+              overflowY="auto"
+            >
               {layers.length === 0 && (
                 <Text px={4} py={3} fontSize="sm" color="whiteAlpha.700">
                   No layers yet. Add an image or text.
                 </Text>
               )}
               {layers
-                .map((L, i) => (
+                .map((L) => (
                   <HStack
                     key={L.id}
                     px={3}
@@ -1299,7 +1315,9 @@ export default function ProductStudio() {
                     justify="space-between"
                   >
                     <HStack>
-                      <Badge colorScheme={L.type === "i-text" ? "purple" : "blue"}>{L.type === "i-text" ? "TEXT" : "IMAGE"}</Badge>
+                      <Badge colorScheme={L.type === "i-text" ? "purple" : "blue"}>
+                        {L.type === "i-text" ? "TEXT" : "IMAGE"}
+                      </Badge>
                     </HStack>
                     <HStack>
                       <Tooltip label={L.visible ? "Hide" : "Show"}>
