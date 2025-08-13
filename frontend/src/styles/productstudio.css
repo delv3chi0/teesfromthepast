@@ -1,77 +1,155 @@
 /* frontend/src/styles/productstudio.css */
 
-/* Keep the right panel stable and the mockup pinned to the top */
-.stage-wrap {
-  position: sticky;
-  top: 0;
-  padding: 8px;
-  height: calc(100vh - 0px);
-  display: flex;
-  align-items: flex-start; /* keep stage at the very top */
-  justify-content: center;
-  background: var(--chakra-colors-brand-secondary, #0b1f2b);
-  border-left: 1px solid rgba(255,255,255,0.12);
+.ps-root {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 290px 1fr 280px;
+  column-gap: 16px;
+  padding: 16px;
 }
 
-.stage-frame {
-  position: relative;
-  /* size will be controlled by JS – we just ensure there’s a frame */
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+/* Left panel */
+.ps-left {
+  background: rgba(17, 24, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 10px;
-  overflow: hidden;
-  background: #0d1f33;
+  padding: 12px;
+  height: calc(100vh - 32px);
+  overflow: auto;
 }
 
-.stage-canvas {
-  display: block;
+/* Center canvas area */
+.ps-center {
   position: relative;
-}
-
-/* Subtle crosshair to aid centering (turned on/off via state) */
-.stage-crosshair {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(to right, rgba(255,255,255,0.12) 1px, transparent 1px) center/1px 100% no-repeat,
-    linear-gradient(to bottom, rgba(255,255,255,0.12) 1px, transparent 1px) center/100% 1px no-repeat;
+  min-height: calc(100vh - 32px);
+  background: transparent;
 }
 
 /* Rulers */
-.ruler-horizontal {
-  position: sticky;
+.ps-ruler-top {
+  position: absolute;
+  left: 20px;
   top: 0;
-  z-index: 2;
-  height: 28px;
-  background:
-    repeating-linear-gradient(
-      to right,
-      rgba(255,255,255,0.18),
-      rgba(255,255,255,0.18) 1px,
-      transparent 1px,
-      transparent 10px
-    );
-  border-bottom: 1px solid rgba(255,255,255,0.25);
+  height: 20px;
+  z-index: 3;
 }
-
-.ruler-vertical {
+.ps-ruler-left {
   position: absolute;
   left: 0;
-  top: 28px;
-  bottom: 0;
-  width: 28px;
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      rgba(255,255,255,0.18),
-      rgba(255,255,255,0.18) 1px,
-      transparent 1px,
-      transparent 10px
-    );
-  border-right: 1px solid rgba(255,255,255,0.25);
+  top: 20px;
+  width: 20px;
+  z-index: 3;
+  background: transparent;
 }
 
-/* Root container minor tweaks */
-.studio-root {
+/* Canvas wrapper: fixed aspect, top aligned */
+.ps-canvas-wrap {
+  position: absolute;
+  left: 20px;   /* leave space for left ruler */
+  top: 20px;    /* leave space for top ruler */
+  right: 0;
+  bottom: 0;
+  /* maintain ~2:3 aspect by using max height based on width */
+  display: flex;
+  align-items: flex-start; /* TOP aligned */
+  justify-content: center;
   overflow: hidden;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.ps-canvas {
+  display: block;
+}
+
+/* Optional grid overlay (CSS, lightweight) */
+.ps-grid::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 50px 50px;
+  z-index: 2;
+  border-radius: 6px;
+}
+
+/* Right panel (layers) */
+.ps-right {
+  background: rgba(17, 24, 39, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  height: calc(100vh - 32px);
+  overflow: auto;
+  transition: width 150ms ease, transform 150ms ease;
+  width: 280px;
+}
+.ps-right.collapsed {
+  width: 40px;
+}
+.ps-right.collapsed .ps-layers,
+.ps-right.collapsed h2,
+.ps-right.collapsed .chakra-heading,
+.ps-right.collapsed .ps-layer {
+  display: none;
+}
+
+/* Layers list */
+.ps-layer {
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ps-layer.active {
+  background: rgba(250, 204, 21, 0.12); /* yellow-400/12% */
+}
+.ps-layer .ps-layer-label {
+  color: rgba(255,255,255,0.9);
+  font-size: 12px;
+}
+
+/* Small UI helpers */
+.ps-label {
+  color: rgba(255,255,255,0.85);
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.ps-range {
+  width: 100%;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .ps-root {
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+  .ps-left,
+  .ps-right {
+    height: auto;
+    max-height: 50vh;
+  }
+  .ps-right {
+    order: 3;
+    width: 100%;
+  }
+  .ps-center {
+    order: 2;
+    min-height: 70vh;
+  }
+  .ps-canvas-wrap {
+    left: 0;
+    top: 0;
+    padding: 8px;
+  }
+  .ps-ruler-top,
+  .ps-ruler-left {
+    display: none; /* space-saving on mobile */
+  }
 }
