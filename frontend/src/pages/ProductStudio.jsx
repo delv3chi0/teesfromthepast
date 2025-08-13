@@ -1,4 +1,3 @@
-// frontend/src/pages/ProductStudio.jsx
 import React, {
   useCallback,
   useEffect,
@@ -32,7 +31,6 @@ import {
   Tab,
   TabPanel,
   Switch,
-  IconButton,
 } from "@chakra-ui/react";
 import {
   FaTrash,
@@ -44,11 +42,12 @@ import {
   FaTshirt,
   FaHatCowboy,
   FaHockeyPuck,
+  FaRedoAlt,
 } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
 
-// Robust mockups import; supports default or named export
+// Optional mockups mapping; graceful if no default
 import * as MOCKUPS_MOD from "../data/mockups.js";
 const MOCKUPS =
   (MOCKUPS_MOD && (MOCKUPS_MOD.default || MOCKUPS_MOD.MOCKUPS)) || {};
@@ -58,57 +57,45 @@ const MOCKUPS =
 // ---------------------------------------------------------------------------
 
 const DPI = 300;
-const CANVAS_ASPECT = 3 / 4; // tall/portrait stage
+const CANVAS_ASPECT = 3 / 4; // tall
 const PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Export sizes in INCHES (true print size)
-const PRINT_SIZE_IN = {
+// Physical print presets (inches)
+const PRINT_AREAS = {
   tshirt: {
-    front: { w: 12, h: 16 },
-    back: { w: 12, h: 16 },
-    left: { w: 4, h: 3.5 },
-    right: { w: 4, h: 3.5 },
-  },
-  hoodie: { front: { w: 12, h: 14 }, back: { w: 12, h: 16 } },
-  tote: { front: { w: 14, h: 16 }, back: { w: 14, h: 16 } },
-  hat: { front: { w: 4, h: 1.75 } },
-  beanie: { front: { w: 5, h: 1.75 } },
-};
-
-// RELATIVE chest/sleeve areas (stick to the mockup no matter the canvas size)
-const REL_AREAS = {
-  tshirt: {
-    // tuned for typical centered tee mockup
-    front: { top: 0.22, left: 0.28, width: 0.44, height: 0.52 },
-    back: { top: 0.22, left: 0.28, width: 0.44, height: 0.52 },
-    left: { top: 0.37, left: 0.19, width: 0.18, height: 0.14 }, // left sleeve
-    right: { top: 0.37, left: 0.63, width: 0.18, height: 0.14 }, // right sleeve
+    front: { w: 12, h: 16, topInsetIn: 3.0 },
+    back: { w: 12, h: 16, topInsetIn: 4.0 },
+    sleeve: { w: 4, h: 3.5, topInsetIn: 2.0 },
   },
   hoodie: {
-    front: { top: 0.26, left: 0.32, width: 0.36, height: 0.36 },
-    back: { top: 0.20, left: 0.27, width: 0.46, height: 0.54 },
+    front: { w: 12, h: 14, topInsetIn: 3.0 },
+    back: { w: 12, h: 16, topInsetIn: 4.0 },
   },
   tote: {
-    front: { top: 0.30, left: 0.25, width: 0.50, height: 0.55 },
-    back: { top: 0.30, left: 0.25, width: 0.50, height: 0.55 },
+    front: { w: 14, h: 16, topInsetIn: 4.0 },
+    back: { w: 14, h: 16, topInsetIn: 4.0 },
   },
-  hat: {
-    front: { top: 0.40, left: 0.38, width: 0.24, height: 0.10 },
-  },
-  beanie: {
-    front: { top: 0.48, left: 0.34, width: 0.32, height: 0.12 },
-  },
+  hat: { front: { w: 4, h: 1.75, topInsetIn: 1.5 } },
+  beanie: { front: { w: 5, h: 1.75, topInsetIn: 1.2 } },
 };
 
 const VIEWS_BY_TYPE = {
-  // IMPORTANT: match your Cloudinary files (front/back/left/right)
   tshirt: ["front", "back", "left", "right"],
   hoodie: ["front", "back"],
   tote: ["front", "back"],
   hat: ["front"],
   beanie: ["front"],
 };
+
+const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, "-");
+const normSlug = (p) => norm(p?.slug || p?.name || "");
+const toKey = (c) =>
+  String(c || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 
 function detectProductType(product) {
   const text = `${product?.type || product?.category || ""} ${
@@ -122,16 +109,21 @@ function detectProductType(product) {
   return "tshirt";
 }
 
-// Normalizers for mockup map
-const norm = (s) =>
-  String(s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-");
-const normColor = (c) => norm(c).replace(/[^a-z0-9-]/g, "");
-const normSlug = (p) => norm(p?.slug || p?.name || "");
+function ProductTypeBadgeIcon({ type }) {
+  const IconCmp =
+    type === "tshirt"
+      ? FaTshirt
+      : type === "hoodie"
+      ? FaTshirt
+      : type === "hat"
+      ? FaHatCowboy
+      : type === "beanie"
+      ? FaHockeyPuck
+      : FaTshirt;
+  return <Icon as={IconCmp} color="brand.accentYellow" />;
+}
 
-// Swatches
+// Swatches (ordered)
 const COLOR_SWATCHES = {
   black: "#000000",
   maroon: "#800000",
@@ -143,10 +135,8 @@ const COLOR_SWATCHES = {
   green: "#2E7D32",
   "military green": "#4B5320",
   "forest green": "#228B22",
-  tropical: "#1CA3EC",
   "tropical blue": "#1CA3EC",
   cyan: "#00BCD4",
-  royal: "#1E40AF",
   "royal blue": "#1E40AF",
   blue: "#1565C0",
   purple: "#6B21A8",
@@ -157,12 +147,7 @@ const COLOR_SWATCHES = {
   gray: "#8E8E8E",
   white: "#FFFFFF",
 };
-const toKey = (c) =>
-  String(c || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ");
+
 const SWATCH_ORDER = [
   "black",
   "maroon",
@@ -185,23 +170,6 @@ const SWATCH_ORDER = [
   "grey",
   "white",
 ];
-
-// Badge icon
-function ProductTypeBadgeIcon({ type }) {
-  const IconCmp =
-    type === "tshirt"
-      ? FaTshirt
-      : type === "hoodie"
-      ? FaTshirt
-      : type === "hat"
-      ? FaHatCowboy
-      : type === "beanie"
-      ? FaHockeyPuck
-      : FaTshirt;
-  return <Icon as={IconCmp} color="brand.accentYellow" />;
-}
-
-// ---------------------------------------------------------------------------
 
 function useQuery() {
   const { search } = useLocation();
@@ -228,23 +196,24 @@ export default function ProductStudio() {
   );
 
   const [view, setView] = useState("front");
-  const [color, setColor] = useState(colorParam);
-  const [size, setSize] = useState(sizeParam);
+  const [color, setColor] = useState(colorParam || "black");
+  const [size, setSize] = useState(sizeParam || "");
 
-  const [mockupOpacity, setMockupOpacity] = useState(1);
-  const [showGrid, setShowGrid] = useState(true);
-
-  const canvasRef = useRef(null);
   const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
   const fabricRef = useRef(null);
-  const overlayGridImgRef = useRef(null);
+  const clipRef = useRef(null); // clip rect (shared)
   const [zoom, setZoom] = useState(1);
+  const [showGrid, setShowGrid] = useState(true);
+  const [mockupVisible, setMockupVisible] = useState(true);
+  const [mockupOpacity, setMockupOpacity] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
 
   const undoStack = useRef([]);
   const redoStack = useRef([]);
+  const warnedRef = useRef(false);
 
-  // Designs (your saved)
+  // Designs tab
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
 
@@ -261,22 +230,21 @@ export default function ProductStudio() {
         const p = res.data;
         setProduct(p);
 
-        // pick default color: black first if available
+        // default color: prefer black
         const colorSet = new Set();
         (p?.variants || []).forEach((v) => v.color && colorSet.add(v.color));
         (p?.colors || []).forEach((c) => colorSet.add(c));
-        const normalized = [...colorSet].map(toKey);
-        const hasBlack = normalized.includes("black");
         if (!colorParam) {
-          setColor(hasBlack ? "black" : colorSet.values().next().value || "");
+          const arr = [...colorSet].map(toKey);
+          setColor(arr.includes("black") ? "black" : arr[0] || "black");
         }
 
         // default size
         if (!sizeParam) {
-          const sizeSet = new Set();
-          (p?.variants || []).forEach((v) => v.size && sizeSet.add(v.size));
-          const firstS = sizeSet.values().next().value;
-          if (firstS) setSize(firstS);
+          const s = new Set();
+          (p?.variants || []).forEach((v) => v.size && s.add(v.size));
+          const first = [...s][0];
+          if (first) setSize(first);
         }
 
         if (!availableViews.includes(view)) setView(availableViews[0]);
@@ -325,40 +293,121 @@ export default function ProductStudio() {
       });
       fabricRef.current = fc;
 
+      // Track if anything user-added exists
       const onChange = () =>
         setHasObjects(
-          fc
-            .getObjects()
-            .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay")
-            .length > 0
+          fc.getObjects().some(
+            (o) => o.id !== "printArea" && o.id !== "gridOverlay"
+          )
         );
       fc.on("object:added", onChange);
       fc.on("object:removed", onChange);
       fc.on("object:modified", onChange);
-    }
 
-    const ro = new ResizeObserver(() => {
-      if (!fabricRef.current) return;
-      const w = wrapRef.current.clientWidth;
-      const h = w / CANVAS_ASPECT;
-      fabricRef.current.setWidth(w);
-      fabricRef.current.setHeight(h);
-      refreshBackground(); // keep pinned after resize
-    });
-    ro.observe(wrapRef.current);
-    return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      // Keyboard shortcuts
+      const onKey = (e) => {
+        const active = fc.getActiveObject();
+        // Zoom
+        if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) {
+          e.preventDefault();
+          setZoomSafe(zoom + 0.1);
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "-") {
+          e.preventDefault();
+          setZoomSafe(zoom - 0.1);
+          return;
+        }
+        // Grid toggle
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") {
+          setShowGrid((v) => !v);
+          refreshBackground();
+          return;
+        }
+        // Mockup toggle
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") {
+          setMockupVisible((v) => !v);
+          refreshBackground();
+          return;
+        }
+        if (!active) return;
+
+        const step = e.shiftKey ? 5 : 1;
+        let moved = false;
+        if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          del();
+          return;
+        }
+        if (e.key === "ArrowLeft") {
+          active.left -= step;
+          moved = true;
+        }
+        if (e.key === "ArrowRight") {
+          active.left += step;
+          moved = true;
+        }
+        if (e.key === "ArrowUp") {
+          active.top -= step;
+          moved = true;
+        }
+        if (e.key === "ArrowDown") {
+          active.top += step;
+          moved = true;
+        }
+        if (e.key === "Escape") {
+          fc.discardActiveObject();
+          fc.requestRenderAll();
+          return;
+        }
+        if (moved) {
+          active.setCoords();
+          fc.requestRenderAll();
+        }
+      };
+      window.addEventListener("keydown", onKey);
+
+      const ro = new ResizeObserver(() => {
+        if (!fabricRef.current) return;
+        const w = wrapRef.current.clientWidth;
+        const h = w / CANVAS_ASPECT;
+        fabricRef.current.setWidth(w);
+        fabricRef.current.setHeight(h);
+        refreshBackground(); // keep aligned after resize
+      });
+      ro.observe(wrapRef.current);
+
+      return () => {
+        window.removeEventListener("keydown", onKey);
+        ro.disconnect();
+      };
+    }
+  }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --------------------- Mockup helpers ---------------------
 
-  // Cloudinary/MOCKUPS-first, then variants/images, else placeholder
+  // Prefer Cloudinary for classic-tee; fallback to MOCKUPS mapping, then product pics.
+  function cloudinaryClassicUrl(colorKey, viewKey) {
+    // No version so Cloudinary can serve latest
+    // Folder shape: mockups/classic-tee/tee-<color>/<view>.png
+    return `https://res.cloudinary.com/dqvsdvjis/image/upload/mockups/classic-tee/tee-${colorKey}/${viewKey}.png`;
+  }
+
   function pickMockupUrl(product, view, color) {
     const slugKey = normSlug(product) || norm(slugParam);
-    const colorKey = normColor(color);
-    const fromMap = MOCKUPS?.[slugKey]?.[colorKey]?.[view];
-    if (fromMap) return fromMap;
+    const colorKey = toKey(color).replace(/\s+/g, "-");
+    const viewKey = (view || "front").toLowerCase();
 
+    // 1) Cloudinary for classic tee
+    if (slugKey.includes("classic-tee")) {
+      return cloudinaryClassicUrl(colorKey, viewKey);
+    }
+
+    // 2) Optional mapping file
+    const bySlug = MOCKUPS?.[slugKey]?.[colorKey]?.[viewKey];
+    if (bySlug) return bySlug;
+
+    // 3) Fallbacks from product data
     const variants = product?.variants || [];
     const variant =
       variants.find((v) => toKey(v.color) === toKey(color)) || variants[0];
@@ -373,8 +422,7 @@ export default function ProductStudio() {
     };
 
     if (variant?.imageSet?.length) {
-      const primary =
-        variant.imageSet.find((i) => i.isPrimary) || variant.imageSet[0];
+      const primary = variant.imageSet.find((i) => i.isPrimary) || variant.imageSet[0];
       if (primary?.url) return primary.url;
     }
     if (variant?.files?.length) {
@@ -393,7 +441,7 @@ export default function ProductStudio() {
   }
 
   const makeGridOverlay = useCallback((fc) => {
-    const size = 32; // px grid
+    const size = 32; // px
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${fc.width}" height="${fc.height}">
         <defs>
@@ -406,110 +454,113 @@ export default function ProductStudio() {
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }, []);
 
-  // Compute mockup bounds after we fit-to-height & center horizontally
-  function getMockupBounds(fc, img) {
-    const scale = fc.height / img.height; // fit by height
-    const w = img.width * scale;
-    const h = fc.height; // scaled height == canvas height
-    const left = fc.width / 2 - w / 2;
-    const top = 0;
-    return { scale, left, top, w, h };
-  }
-
-  // Draw chest/sleeve rectangle using REL_AREAS (relative)
-  function drawPrintArea(fc, bounds) {
-    // remove old
-    const old = fc.getObjects().find((o) => o.id === "printArea");
-    if (old) fc.remove(old);
-
-    const rel =
-      REL_AREAS[productType]?.[view] || REL_AREAS.tshirt.front;
-
-    const left = bounds.left + rel.left * bounds.w;
-    const top = bounds.top + rel.top * bounds.h;
-    const w = rel.width * bounds.w;
-    const h = rel.height * bounds.h;
-
-    const rect = new window.fabric.Rect({
-      id: "printArea",
-      left: left + w / 2,
-      top,
-      width: w,
-      height: h,
-      originX: "center",
-      originY: "top",
-      fill: "",
-      stroke: "white",
-      strokeDashArray: [6, 6],
-      strokeWidth: 2,
-      selectable: false,
-      evented: false,
-      excludeFromExport: true,
-    });
-    fc.add(rect);
-  }
-
+  // Recompute background + print area and refresh object clipPaths
   const refreshBackground = useCallback(() => {
     const fc = fabricRef.current;
     if (!fc || !product) return;
 
-    // keep user objects, strip guides
-    const userObjects = fc
+    // Preserve user objects
+    const userObjs = fc
       .getObjects()
       .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay");
     fc.clear();
-    userObjects.forEach((o) => fc.add(o));
+    userObjs.forEach((o) => fc.add(o));
 
+    // Mockup image
     const url = pickMockupUrl(product, view, color) || PLACEHOLDER;
 
     window.fabric.Image.fromURL(
       url,
       (img) => {
-        // Fit to height & center horizontally
+        // Fill by height, centered horizontally at top
         const scale = fc.height / img.height;
         img.set({
-          opacity: mockupOpacity,
-          scaleX: scale,
-          scaleY: scale,
           top: 0,
           left: fc.width / 2,
           originX: "center",
           originY: "top",
+          scaleX: scale,
+          scaleY: scale,
           selectable: false,
           evented: false,
+          opacity: mockupVisible ? mockupOpacity : 0,
         });
+        fc.setBackgroundImage(img, fc.renderAll.bind(fc));
 
-        fc.setBackgroundImage(img, () => {
-          // Grid overlay (optional)
-          const gridDataUrl = makeGridOverlay(fc);
-          window.fabric.Image.fromURL(
-            gridDataUrl,
-            (gridImg) => {
-              gridImg.set({
-                id: "gridOverlay",
-                selectable: false,
-                evented: false,
-                opacity: showGrid ? 1 : 0,
-                top: 0,
-                left: 0,
-                originX: "left",
-                originY: "top",
-              });
-              overlayGridImgRef.current = gridImg;
-              fc.setOverlayImage(gridImg, () => {
-                // Add chest/sleeve rect
-                const bounds = getMockupBounds(fc, img);
-                drawPrintArea(fc, bounds);
-                fc.renderAll();
-              });
-            },
-            { crossOrigin: "anonymous" }
-          );
+        // Grid overlay
+        const gridDataUrl = makeGridOverlay(fc);
+        window.fabric.Image.fromURL(
+          gridDataUrl,
+          (gridImg) => {
+            gridImg.set({
+              id: "gridOverlay",
+              selectable: false,
+              evented: false,
+              opacity: showGrid ? 1 : 0,
+              top: 0,
+              left: 0,
+              originX: "left",
+              originY: "top",
+              scaleX: 1,
+              scaleY: 1,
+            });
+            fc.setOverlayImage(gridImg, fc.renderAll.bind(fc));
+          },
+          { crossOrigin: "anonymous" }
+        );
+
+        // PRINT AREA — convert inches -> on-screen px using mockup scale
+        const areaDef =
+          PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+
+        // We anchor to mockup top (img.top) and center horizontally
+        const pxW = areaDef.w * DPI * (scale / 3);
+        const pxH = areaDef.h * DPI * (scale / 3);
+        const topInsetPx = areaDef.topInsetIn * DPI * (scale / 3);
+
+        const centerX = fc.width / 2;
+        const rectTop = img.top + topInsetPx;
+
+        const rect = new window.fabric.Rect({
+          id: "printArea",
+          left: centerX - pxW / 2,
+          top: rectTop,
+          width: pxW,
+          height: pxH,
+          originX: "left",
+          originY: "top",
+          fill: "",
+          stroke: "#FFFFFF",
+          strokeDashArray: [6, 6],
+          strokeWidth: 2,
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
         });
+        fc.add(rect);
+
+        // Shared clipPath so content outside is hidden
+        const clipRect = new window.fabric.Rect({
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          absolutePositioned: true,
+          originX: "left",
+          originY: "top",
+        });
+        clipRef.current = clipRect;
+
+        // Apply clipPath to existing user objects
+        fc.getObjects()
+          .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay")
+          .forEach((o) => (o.clipPath = clipRect));
+
+        fc.requestRenderAll();
       },
       { crossOrigin: "anonymous" }
     );
-  }, [product, view, color, mockupOpacity, showGrid, makeGridOverlay, productType]);
+  }, [product, view, color, mockupOpacity, mockupVisible, showGrid, makeGridOverlay, productType]);
 
   // (Re)draw when inputs change
   useEffect(() => {
@@ -517,51 +568,61 @@ export default function ProductStudio() {
     refreshBackground();
   }, [product, refreshBackground]);
 
-  // Constrain user objects inside print area (with light snapping)
+  // Clamp & warn while moving/scaling/rotating; content is also clipped
   useEffect(() => {
     const fc = fabricRef.current;
     if (!fc) return;
-    const SNAP = 8;
 
-    const constrain = () => {
+    const checkBounds = () => {
       const area = fc.getObjects().find((o) => o.id === "printArea");
       if (!area) return;
       const a = area.getBoundingRect(true, true);
       const objs = fc
         .getObjects()
         .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay");
+
       objs.forEach((o) => {
         const bb = o.getBoundingRect(true, true);
 
-        // clamp inside
+        // Nudge back inside (hard clamp)
         if (bb.left < a.left) o.left += a.left - bb.left;
         if (bb.top < a.top) o.top += a.top - bb.top;
         if (bb.left + bb.width > a.left + a.width)
           o.left -= bb.left + bb.width - (a.left + a.width);
         if (bb.top + bb.height > a.top + a.height)
           o.top -= bb.top + bb.height - (a.top + a.height);
-
-        // snap to center lines
-        const cx = a.left + a.width / 2;
-        const cy = a.top + a.height / 2;
-        const ocx = bb.left + bb.width / 2;
-        const ocy = bb.top + bb.height / 2;
-        if (Math.abs(ocx - cx) < SNAP) o.left += cx - ocx;
-        if (Math.abs(ocy - cy) < SNAP) o.top += cy - ocy;
-
         o.setCoords();
+
+        // Soft warn once per drag session if outside (even though clipped)
+        const overflow =
+          bb.left < a.left ||
+          bb.top < a.top ||
+          bb.left + bb.width > a.left + a.width ||
+          bb.top + bb.height > a.top + a.height;
+
+        if (overflow && !warnedRef.current) {
+          warnedRef.current = true;
+          toast({
+            title: "Part of your design is outside the print area",
+            status: "warning",
+            duration: 1800,
+          });
+          setTimeout(() => (warnedRef.current = false), 1200);
+        }
       });
+
       fc.requestRenderAll();
     };
-    fc.on("object:moving", constrain);
-    fc.on("object:scaling", constrain);
-    fc.on("object:rotating", constrain);
+
+    fc.on("object:moving", checkBounds);
+    fc.on("object:scaling", checkBounds);
+    fc.on("object:rotating", checkBounds);
     return () => {
-      fc.off("object:moving", constrain);
-      fc.off("object:scaling", constrain);
-      fc.off("object:rotating", constrain);
+      fc.off("object:moving", checkBounds);
+      fc.off("object:scaling", checkBounds);
+      fc.off("object:rotating", checkBounds);
     };
-  }, [view, productType]);
+  }, [view, productType, toast]);
 
   // --------------------- Editing actions ---------------------
 
@@ -607,16 +668,17 @@ export default function ProductStudio() {
 
   const addText = () => {
     const fc = fabricRef.current;
-    const textValue = prompt("Enter text");
-    if (!fc || !textValue || !textValue.trim()) return;
-    const t = new window.fabric.IText(textValue.trim(), {
+    if (!fc) return;
+    const t = new window.fabric.IText("Your text", {
       left: fc.width / 2,
       top: fc.height / 2,
       originX: "center",
       originY: "center",
       fill: "#ffffff",
-      fontSize: 36,
+      fontSize: 42,
     });
+    // ensure clipping to print area
+    if (clipRef.current) t.clipPath = clipRef.current;
     pushHistory();
     fc.add(t);
     fc.setActiveObject(t);
@@ -637,6 +699,7 @@ export default function ProductStudio() {
           scaleX: 0.5,
           scaleY: 0.5,
         });
+        if (clipRef.current) img.clipPath = clipRef.current;
         pushHistory();
         fc.add(img);
         fc.setActiveObject(img);
@@ -663,17 +726,22 @@ export default function ProductStudio() {
     if (!fc) return;
     const o = fc.getActiveObject();
     if (!o || o.id === "printArea" || o.id === "gridOverlay") return;
-    o.centerH();
+    const area = fc.getObjects().find((x) => x.id === "printArea");
+    if (!area) return;
+    const a = area.getBoundingRect(true, true);
+    const bb = o.getBoundingRect(true, true);
+    o.left += a.left + a.width / 2 - (bb.left + bb.width / 2);
+    o.setCoords();
     fc.requestRenderAll();
   };
 
+  // Export at final DPI
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current;
     if (!fc) return;
 
     const area = fc.getObjects().find((o) => o.id === "printArea");
-    if (!area)
-      return toast({ title: "No print area defined", status: "error" });
+    if (!area) return toast({ title: "No print area defined", status: "error" });
 
     const objs = fc
       .getObjects()
@@ -681,11 +749,10 @@ export default function ProductStudio() {
     if (!objs.length)
       return toast({ title: "Nothing to print", status: "warning" });
 
-    // out size in pixels at DPI
-    const size =
-      PRINT_SIZE_IN[productType]?.[view] || PRINT_SIZE_IN.tshirt.front;
-    const outW = Math.round(size.w * DPI);
-    const outH = Math.round(size.h * DPI);
+    const areaDef =
+      PRINT_AREAS[productType]?.[view] || PRINT_AREAS.tshirt.front;
+    const outW = Math.round(areaDef.w * DPI);
+    const outH = Math.round(areaDef.h * DPI);
 
     const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
     const aBB = area.getBoundingRect(true, true);
@@ -704,8 +771,9 @@ export default function ProductStudio() {
       clone.scaleX = o.scaleX * scaleFactor;
       clone.scaleY = o.scaleY * scaleFactor;
       if (clone.type === "i-text")
-        clone.fontSize = (o.fontSize || 36) * scaleFactor;
+        clone.fontSize = (o.fontSize || 42) * scaleFactor;
 
+      // In export canvas we don't set a clipPath; we already cropped by coords
       tmp.add(clone);
     });
     tmp.requestRenderAll();
@@ -750,7 +818,6 @@ export default function ProductStudio() {
     const set = new Set();
     (product?.variants || []).forEach((v) => v.color && set.add(toKey(v.color)));
     (product?.colors || []).forEach((c) => c && set.add(toKey(c)));
-    // order by SWATCH_ORDER then fallback alpha
     const arr = [...set];
     arr.sort((a, b) => {
       const ia = SWATCH_ORDER.indexOf(a);
@@ -780,11 +847,7 @@ export default function ProductStudio() {
   // --------------------- UI ---------------------
 
   return (
-    <Flex
-      direction={{ base: "column", xl: "row" }}
-      minH="100vh"
-      bg="brand.primary"
-    >
+    <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
       {/* Left rail */}
       <Box
         w={{ base: "100%", xl: "300px" }}
@@ -816,14 +879,14 @@ export default function ProductStudio() {
                 <VStack align="stretch" spacing={3}>
                   {/* View */}
                   <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
+                    <Text mb={1} color="brand.textLight" fontWeight="medium">
                       View
                     </Text>
                     <HStack wrap="wrap" spacing={2}>
                       {availableViews.map((v) => (
                         <Button
                           key={v}
-                          size="sm"
+                          size="xs"
                           variant={view === v ? "solid" : "outline"}
                           onClick={() => setView(v)}
                         >
@@ -835,7 +898,7 @@ export default function ProductStudio() {
 
                   {/* Colors */}
                   <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
+                    <Text mb={1} color="brand.textLight" fontWeight="medium">
                       Color
                     </Text>
                     <HStack wrap="wrap" spacing={2}>
@@ -852,9 +915,7 @@ export default function ProductStudio() {
                                 borderRadius="full"
                                 borderWidth="2px"
                                 borderColor={
-                                  toKey(color) === c
-                                    ? "yellow.400"
-                                    : "whiteAlpha.500"
+                                  toKey(color) === c ? "yellow.400" : "whiteAlpha.500"
                                 }
                                 _hover={{ borderColor: "yellow.300" }}
                               >
@@ -877,7 +938,7 @@ export default function ProductStudio() {
 
                   {/* Sizes */}
                   <Box>
-                    <Text mb={2} color="brand.textLight" fontWeight="medium">
+                    <Text mb={1} color="brand.textLight" fontWeight="medium">
                       Size
                     </Text>
                     <HStack wrap="wrap" spacing={2}>
@@ -885,7 +946,7 @@ export default function ProductStudio() {
                         sizes.map((s) => (
                           <Button
                             key={s}
-                            size="sm"
+                            size="xs"
                             variant={size === s ? "solid" : "outline"}
                             onClick={() => setSize(s)}
                           >
@@ -898,40 +959,27 @@ export default function ProductStudio() {
                     </HStack>
                   </Box>
 
-                  {/* Zoom + grid + opacity */}
+                  {/* Zoom + grid + mockup */}
                   <VStack align="stretch" spacing={3}>
                     <Text color="brand.textLight" fontWeight="medium">
                       Zoom
                     </Text>
                     <HStack>
-                      <Tooltip label="Zoom out">
-                        <IconButton
-                          size="sm"
-                          onClick={() => setZoomSafe(zoom - 0.1)}
-                          icon={<FaSearchMinus />}
-                          aria-label="zoom out"
-                        />
+                      <Tooltip label="Zoom out (Ctrl/Cmd -)">
+                        <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>
+                          Out
+                        </Button>
                       </Tooltip>
-                      <Slider
-                        aria-label="zoom"
-                        value={zoom}
-                        min={0.75}
-                        max={2}
-                        step={0.1}
-                        onChange={setZoomSafe}
-                      >
+                      <Slider aria-label="zoom" value={zoom} min={0.75} max={2} step={0.1} onChange={setZoomSafe}>
                         <SliderTrack>
                           <SliderFilledTrack />
                         </SliderTrack>
                         <SliderThumb />
                       </Slider>
-                      <Tooltip label="Zoom in">
-                        <IconButton
-                          size="sm"
-                          onClick={() => setZoomSafe(zoom + 0.1)}
-                          icon={<FaSearchPlus />}
-                          aria-label="zoom in"
-                        />
+                      <Tooltip label="Zoom in (Ctrl/Cmd +)">
+                        <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>
+                          In
+                        </Button>
                       </Tooltip>
                     </HStack>
 
@@ -943,10 +991,21 @@ export default function ProductStudio() {
                           refreshBackground();
                         }}
                       />
-                      <Text color="brand.textLight">Show grid</Text>
+                      <Text color="brand.textLight">Show grid (G)</Text>
                     </HStack>
 
-                    <Box>
+                    <HStack>
+                      <Switch
+                        isChecked={mockupVisible}
+                        onChange={(e) => {
+                          setMockupVisible(e.target.checked);
+                          refreshBackground();
+                        }}
+                      />
+                      <Text color="brand.textLight">Show mockup (M)</Text>
+                    </HStack>
+
+                    <Box opacity={mockupVisible ? 1 : 0.4}>
                       <Text color="brand.textLight" fontWeight="medium" mb={1}>
                         Mockup opacity
                       </Text>
@@ -968,17 +1027,49 @@ export default function ProductStudio() {
                   </VStack>
 
                   <Divider borderColor="whiteAlpha.300" />
-                  <Button
-                    colorScheme={canProceed ? "yellow" : "gray"}
-                    isDisabled={!canProceed}
-                    onClick={makePrintReadyAndUpload}
-                  >
-                    Add to cart / Checkout
-                  </Button>
-                  <Text fontSize="xs" color="whiteAlpha.700">
-                    We export a true print file at {DPI} DPI sized to the
-                    selected placement.
-                  </Text>
+
+                  <VStack spacing={3} align="stretch">
+                    <Button
+                      colorScheme={canProceed ? "yellow" : "gray"}
+                      isDisabled={!canProceed}
+                      onClick={makePrintReadyAndUpload}
+                    >
+                      Add to cart / Checkout
+                    </Button>
+
+                    <HStack>
+                      <Tooltip label="Undo">
+                        <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>
+                          Undo
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label="Redo">
+                        <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>
+                          Redo
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label="Delete selected (Del/Backspace)">
+                        <Button size="sm" onClick={del} colorScheme="red" variant="outline">
+                          <FaTrash />
+                        </Button>
+                      </Tooltip>
+                      <Tooltip label="Center horizontally">
+                        <Button size="sm" onClick={centerH} variant="outline">
+                          <FaArrowsAltH />
+                        </Button>
+                      </Tooltip>
+                    </HStack>
+
+                    <HStack>
+                      <Button size="sm" onClick={addText} leftIcon={<FaRedoAlt />}>
+                        Add text
+                      </Button>
+                    </HStack>
+
+                    <Text fontSize="xs" color="whiteAlpha.700">
+                      We export a true print file at {DPI} DPI sized to the selected placement.
+                    </Text>
+                  </VStack>
                 </VStack>
               </TabPanel>
 
@@ -1001,11 +1092,7 @@ export default function ProductStudio() {
                             onClick={() => addDesign(d)}
                           >
                             <AspectRatio ratio={1}>
-                              <Image
-                                src={d.imageDataUrl}
-                                alt={d.prompt}
-                                objectFit="cover"
-                              />
+                              <Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" />
                             </AspectRatio>
                           </Box>
                         </Tooltip>
@@ -1013,7 +1100,7 @@ export default function ProductStudio() {
                     </SimpleGrid>
                   ) : (
                     <Text color="whiteAlpha.800" fontSize="sm">
-                      No saved designs yet.
+                      No saved designs yet. Create one in “Generate”.
                     </Text>
                   )}
                 </VStack>
@@ -1026,41 +1113,12 @@ export default function ProductStudio() {
                     Add Text
                   </Button>
                   <Text fontSize="sm" color="whiteAlpha.800">
-                    Use the canvas handles to move/resize/rotate your text.
+                    Use Fabric handles on the canvas to edit text. Arrows to nudge (Shift = 5px).
                   </Text>
                 </VStack>
               </TabPanel>
             </TabPanels>
           </Tabs>
-
-          {/* Quick actions */}
-          <HStack pt={1}>
-            <Tooltip label="Undo">
-              <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>
-                Undo
-              </Button>
-            </Tooltip>
-            <Tooltip label="Redo">
-              <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>
-                Redo
-              </Button>
-            </Tooltip>
-            <Tooltip label="Delete selected">
-              <Button
-                size="sm"
-                onClick={del}
-                colorScheme="red"
-                variant="outline"
-              >
-                <FaTrash />
-              </Button>
-            </Tooltip>
-            <Tooltip label="Center horizontally">
-              <Button size="sm" onClick={centerH} variant="outline">
-                <FaArrowsAltH />
-              </Button>
-            </Tooltip>
-          </HStack>
         </VStack>
       </Box>
 
@@ -1084,7 +1142,7 @@ export default function ProductStudio() {
         </Box>
       </Flex>
 
-      {/* Layers rail (simple for now) */}
+      {/* Right rail (placeholder) */}
       <Box
         display={{ base: "none", xl: "block" }}
         w="260px"
@@ -1097,8 +1155,7 @@ export default function ProductStudio() {
           Layers
         </Heading>
         <Text color="whiteAlpha.700" fontSize="sm">
-          Click a layer on the canvas to select it. (Advanced layer controls
-          coming soon.)
+          Click objects on the canvas to select. (Advanced layer list coming next.)
         </Text>
       </Box>
     </Flex>
