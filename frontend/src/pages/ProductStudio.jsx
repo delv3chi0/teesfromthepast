@@ -14,132 +14,202 @@ import {
   Heading,
   Text,
   Button,
-  IconButton,
+  Icon,
+  SimpleGrid,
+  AspectRatio,
+  Image,
   Tooltip,
+  useToast,
+  Divider,
+  Badge,
+  Slider,
+  SliderTrack,
+  SliderFilledTrack,
+  SliderThumb,
   Tabs,
   TabList,
   TabPanels,
   Tab,
   TabPanel,
-  SimpleGrid,
-  AspectRatio,
-  Image,
-  useToast,
-  Divider,
-  Badge,
   Switch,
+  IconButton,
 } from "@chakra-ui/react";
 import {
-  FaUndo,
-  FaRedo,
   FaTrash,
   FaArrowsAltH,
-  FaLock,
-  FaLockOpen,
-  FaEye,
-  FaEyeSlash,
-  FaChevronLeft,
-  FaChevronRight,
-  FaChevronUp,
-  FaChevronDown,
+  FaUndo,
+  FaRedo,
   FaSearchMinus,
   FaSearchPlus,
+  FaTshirt,
+  FaHatCowboy,
+  FaHockeyPuck,
 } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
-import "../styles/productstudio.css";
 
-// Optional mockups mapping (default or named export)
+// Robust mockups import; supports default or named export
 import * as MOCKUPS_MOD from "../data/mockups.js";
-const MOCKUPS = (MOCKUPS_MOD?.default ?? MOCKUPS_MOD?.MOCKUPS ?? {});
+const MOCKUPS =
+  (MOCKUPS_MOD && (MOCKUPS_MOD.default || MOCKUPS_MOD.MOCKUPS)) || {};
 
-// Relative areas + physical sizes for export
-import AREAS, { PRINT_SIZE_IN } from "../data/printAreas.js";
+// ---------------------------------------------------------------------------
+// Constants & helpers
+// ---------------------------------------------------------------------------
 
-// -----------------------------
-// Constants
-// -----------------------------
-const DPI = 300;             // print export DPI
-const CANVAS_ASPECT = 2 / 3; // tall stage
+const DPI = 300;
+const CANVAS_ASPECT = 3 / 4; // tall/portrait stage
 const PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Your local public path (served by dev server / production)
-// You already have: /public/mockups/classic-tee/...
-const LOCAL_MOCKUP_BASE = "/mockups/classic-tee";
+// Export sizes in INCHES (true print size)
+const PRINT_SIZE_IN = {
+  tshirt: {
+    front: { w: 12, h: 16 },
+    back: { w: 12, h: 16 },
+    left: { w: 4, h: 3.5 },
+    right: { w: 4, h: 3.5 },
+  },
+  hoodie: { front: { w: 12, h: 14 }, back: { w: 12, h: 16 } },
+  tote: { front: { w: 14, h: 16 }, back: { w: 14, h: 16 } },
+  hat: { front: { w: 4, h: 1.75 } },
+  beanie: { front: { w: 5, h: 1.75 } },
+};
 
-const COLOR_ORDER = [
-  "black", "maroon", "red", "orange", "gold", "lime",
-  "tropical blue", "royal", "purple", "charcoal", "ash", "sport_grey", "white"
-];
-const COLOR_SWATCHES = {
-  black: "#000000",
-  maroon: "#800000",
-  red: "#D32F2F",
-  orange: "#F57C00",
-  gold: "#D4AF37",
-  lime: "#9CCC65",
-  "tropical blue": "#1CA3EC",
-  royal: "#1E40AF",
-  purple: "#6B21A8",
-  charcoal: "#36454F",
-  ash: "#B2BEB5",
-  sport_grey: "#B5B8B1",
-  white: "#FFFFFF",
+// RELATIVE chest/sleeve areas (stick to the mockup no matter the canvas size)
+const REL_AREAS = {
+  tshirt: {
+    // tuned for typical centered tee mockup
+    front: { top: 0.22, left: 0.28, width: 0.44, height: 0.52 },
+    back: { top: 0.22, left: 0.28, width: 0.44, height: 0.52 },
+    left: { top: 0.37, left: 0.19, width: 0.18, height: 0.14 }, // left sleeve
+    right: { top: 0.37, left: 0.63, width: 0.18, height: 0.14 }, // right sleeve
+  },
+  hoodie: {
+    front: { top: 0.26, left: 0.32, width: 0.36, height: 0.36 },
+    back: { top: 0.20, left: 0.27, width: 0.46, height: 0.54 },
+  },
+  tote: {
+    front: { top: 0.30, left: 0.25, width: 0.50, height: 0.55 },
+    back: { top: 0.30, left: 0.25, width: 0.50, height: 0.55 },
+  },
+  hat: {
+    front: { top: 0.40, left: 0.38, width: 0.24, height: 0.10 },
+  },
+  beanie: {
+    front: { top: 0.48, left: 0.34, width: 0.32, height: 0.12 },
+  },
 };
 
 const VIEWS_BY_TYPE = {
-  tshirt: ["front", "back", "left", "right"], // sleeve views added
+  // IMPORTANT: match your Cloudinary files (front/back/left/right)
+  tshirt: ["front", "back", "left", "right"],
   hoodie: ["front", "back"],
-  tote:   ["front", "back"],
-  hat:    ["front"],
+  tote: ["front", "back"],
+  hat: ["front"],
   beanie: ["front"],
 };
 
-// -----------------------------
-// Helpers
-// -----------------------------
-const norm = (s) => String(s || "").trim().toLowerCase();
-const normSlug = (p) => norm(p?.slug || p?.name || "").replace(/\s+/g, "-");
-const normColorKey = (c) => norm(c).replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-
-const colorAliases = {
-  "royal blue": "royal",
-  tropical: "tropical blue",
-  gray: "ash", // map gray-ish to a known key if needed
-};
-const toFolderColor = (c) => {
-  const key = normColorKey(c);
-  const alias = colorAliases[key] || key;
-  return alias.replace(/\s+/g, "-"); // "military green" -> "military-green"
-};
-
-const useQuery = () => {
-  const { search } = useLocation();
-  return useMemo(() => new URLSearchParams(search), [search]);
-};
-
-const detectProductType = (product) => {
-  const text = `${product?.type || product?.category || ""} ${product?.name || ""}`.toLowerCase();
+function detectProductType(product) {
+  const text = `${product?.type || product?.category || ""} ${
+    product?.name || ""
+  }`.toLowerCase();
   if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
   if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
   if (/(tote|bag)/.test(text)) return "tote";
   if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
   if (/(beanie|knit)/.test(text)) return "beanie";
   return "tshirt";
-};
-
-function ProductTypeBadgeIcon({ type }) {
-  return (
-    <Badge colorScheme="yellow" variant="outline" borderRadius="sm" ml={2}>
-      {String(type || "").toUpperCase()}
-    </Badge>
-  );
 }
 
-// -----------------------------
-// Component
-// -----------------------------
+// Normalizers for mockup map
+const norm = (s) =>
+  String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+const normColor = (c) => norm(c).replace(/[^a-z0-9-]/g, "");
+const normSlug = (p) => norm(p?.slug || p?.name || "");
+
+// Swatches
+const COLOR_SWATCHES = {
+  black: "#000000",
+  maroon: "#800000",
+  red: "#D32F2F",
+  orange: "#F57C00",
+  gold: "#D4AF37",
+  yellow: "#FFC107",
+  lime: "#9CCC65",
+  green: "#2E7D32",
+  "military green": "#4B5320",
+  "forest green": "#228B22",
+  tropical: "#1CA3EC",
+  "tropical blue": "#1CA3EC",
+  cyan: "#00BCD4",
+  royal: "#1E40AF",
+  "royal blue": "#1E40AF",
+  blue: "#1565C0",
+  purple: "#6B21A8",
+  pink: "#EC407A",
+  azalea: "#FF77A9",
+  charcoal: "#36454F",
+  grey: "#8E8E8E",
+  gray: "#8E8E8E",
+  white: "#FFFFFF",
+};
+const toKey = (c) =>
+  String(c || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+const SWATCH_ORDER = [
+  "black",
+  "maroon",
+  "red",
+  "orange",
+  "gold",
+  "yellow",
+  "lime",
+  "green",
+  "military green",
+  "forest green",
+  "tropical blue",
+  "cyan",
+  "royal blue",
+  "blue",
+  "purple",
+  "pink",
+  "azalea",
+  "charcoal",
+  "grey",
+  "white",
+];
+
+// Badge icon
+function ProductTypeBadgeIcon({ type }) {
+  const IconCmp =
+    type === "tshirt"
+      ? FaTshirt
+      : type === "hoodie"
+      ? FaTshirt
+      : type === "hat"
+      ? FaHatCowboy
+      : type === "beanie"
+      ? FaHockeyPuck
+      : FaTshirt;
+  return <Icon as={IconCmp} color="brand.accentYellow" />;
+}
+
+// ---------------------------------------------------------------------------
+
+function useQuery() {
+  const { search } = useLocation();
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+// ---------------------------------------------------------------------------
+
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -148,71 +218,76 @@ export default function ProductStudio() {
 
   const slugParam = query.get("slug") || params.slug || "";
   const colorParam = query.get("color") || "";
-  const sizeParam  = query.get("size")  || "";
+  const sizeParam = query.get("size") || "";
 
   const [product, setProduct] = useState(null);
   const productType = useMemo(() => detectProductType(product), [product]);
-  const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
+  const availableViews = useMemo(
+    () => VIEWS_BY_TYPE[productType] || ["front"],
+    [productType]
+  );
 
   const [view, setView] = useState("front");
-  const [color, setColor] = useState(colorParam || "black");
-  const [size, setSize]   = useState(sizeParam || "");
+  const [color, setColor] = useState(colorParam);
+  const [size, setSize] = useState(sizeParam);
 
-  const wrapRef = useRef(null);
-  const canvasRef = useRef(null);
-  const fabricRef = useRef(null);
-
-  const [zoom, setZoom] = useState(1);
-  const [gridOn, setGridOn] = useState(true);
-  const [rulersOn, setRulersOn] = useState(true);
   const [mockupOpacity, setMockupOpacity] = useState(1);
-  const [layersOpen, setLayersOpen] = useState(true);
-  const [activeId, setActiveId] = useState(null);
+  const [showGrid, setShowGrid] = useState(true);
 
-  const [designs, setDesigns] = useState([]);
-  const [loadingDesigns, setLoadingDesigns] = useState(true);
+  const canvasRef = useRef(null);
+  const wrapRef = useRef(null);
+  const fabricRef = useRef(null);
+  const overlayGridImgRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
+  const [hasObjects, setHasObjects] = useState(false);
 
   const undoStack = useRef([]);
   const redoStack = useRef([]);
-  const rulerGroupRef = useRef(null);
-  const overlayGridImgRef = useRef(null);
 
-  // -----------------------------
-  // Data fetch
-  // -----------------------------
+  // Designs (your saved)
+  const [designs, setDesigns] = useState([]);
+  const [loadingDesigns, setLoadingDesigns] = useState(true);
+
+  // --------------------- Data fetch ---------------------
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (!slugParam) return;
-        const res = await client.get(`/storefront/product/${encodeURIComponent(slugParam)}`);
+        const res = await client.get(
+          `/storefront/product/${encodeURIComponent(slugParam)}`
+        );
         if (cancelled) return;
         const p = res.data;
         setProduct(p);
 
-        // Default color (prefer black)
-        const setC = new Set();
-        (p?.variants || []).forEach(v => v.color && setC.add(normColorKey(v.color)));
-        (p?.colors || []).forEach(c => c && setC.add(normColorKey(c)));
+        // pick default color: black first if available
+        const colorSet = new Set();
+        (p?.variants || []).forEach((v) => v.color && colorSet.add(v.color));
+        (p?.colors || []).forEach((c) => colorSet.add(c));
+        const normalized = [...colorSet].map(toKey);
+        const hasBlack = normalized.includes("black");
         if (!colorParam) {
-          setColor(setC.has("black") ? "black" : (Array.from(setC)[0] || "black"));
+          setColor(hasBlack ? "black" : colorSet.values().next().value || "");
         }
 
-        // Default size
+        // default size
         if (!sizeParam) {
-          const setS = new Set();
-          (p?.variants || []).forEach(v => v.size && setS.add(v.size));
-          const firstS = Array.from(setS)[0];
+          const sizeSet = new Set();
+          (p?.variants || []).forEach((v) => v.size && sizeSet.add(v.size));
+          const firstS = sizeSet.values().next().value;
           if (firstS) setSize(firstS);
         }
 
-        if (!availableViews.includes(view)) setView(availableViews[0] || "front");
+        if (!availableViews.includes(view)) setView(availableViews[0]);
       } catch (e) {
         console.error(e);
         toast({ title: "Could not load product", status: "error" });
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugParam]);
 
@@ -223,152 +298,102 @@ export default function ProductStudio() {
         setLoadingDesigns(true);
         const res = await client.get("/mydesigns");
         if (!cancelled) setDesigns(res.data || []);
-      } catch { /* ignore */ }
-      finally { if (!cancelled) setLoadingDesigns(false); }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoadingDesigns(false);
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // -----------------------------
-  // Fabric init & resize
-  // -----------------------------
+  // --------------------- Fabric init ---------------------
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
     if (!fabricRef.current) {
       const parentW = wrapRef.current.clientWidth;
-      const h = Math.round(parentW / CANVAS_ASPECT);
+      const parentH = parentW / CANVAS_ASPECT;
 
       const fc = new window.fabric.Canvas(canvasRef.current, {
         width: parentW,
-        height: h,
-        selection: true,
+        height: parentH,
         preserveObjectStacking: true,
+        selection: true,
       });
       fabricRef.current = fc;
 
-      fc.on("selection:created", () => setActiveId(fc.getActiveObject()?._layerId || null));
-      fc.on("selection:updated", () => setActiveId(fc.getActiveObject()?._layerId || null));
-      fc.on("selection:cleared", () => setActiveId(null));
-
-      // keyboard delete
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Delete" || e.key === "Backspace") del();
-      });
-
-      const ro = new ResizeObserver(() => {
-        if (!fabricRef.current || !wrapRef.current) return;
-        const W = wrapRef.current.clientWidth;
-        const H = Math.round(W / CANVAS_ASPECT);
-        fabricRef.current.setWidth(W);
-        fabricRef.current.setHeight(H);
-        refreshScene();
-      });
-      ro.observe(wrapRef.current);
+      const onChange = () =>
+        setHasObjects(
+          fc
+            .getObjects()
+            .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay")
+            .length > 0
+        );
+      fc.on("object:added", onChange);
+      fc.on("object:removed", onChange);
+      fc.on("object:modified", onChange);
     }
 
-    refreshScene();
+    const ro = new ResizeObserver(() => {
+      if (!fabricRef.current) return;
+      const w = wrapRef.current.clientWidth;
+      const h = w / CANVAS_ASPECT;
+      fabricRef.current.setWidth(w);
+      fabricRef.current.setHeight(h);
+      refreshBackground(); // keep pinned after resize
+    });
+    ro.observe(wrapRef.current);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -----------------------------
-  // History helpers
-  // -----------------------------
-  const pushHistory = useCallback(() => {
-    const fc = fabricRef.current; if (!fc) return;
-    redoStack.current = [];
-    undoStack.current.push(JSON.stringify(fc.toDatalessJSON(["_layerId","id"])));
-    if (undoStack.current.length > 60) undoStack.current.shift();
-  }, []);
-  const applyJSON = (json) => {
-    const fc = fabricRef.current; if (!fc) return;
-    fc.loadFromJSON(json, () => fc.renderAll(), (_o,obj) => obj);
-  };
-  const undo = () => {
-    const fc = fabricRef.current; if (!fc || undoStack.current.length===0) return;
-    const curr = JSON.stringify(fc.toDatalessJSON(["_layerId","id"]));
-    redoStack.current.push(curr);
-    const prev = undoStack.current.pop();
-    if (prev) applyJSON(prev);
-  };
-  const redo = () => {
-    const fc = fabricRef.current; if (!fc || redoStack.current.length===0) return;
-    const curr = JSON.stringify(fc.toDatalessJSON(["_layerId","id"]));
-    undoStack.current.push(curr);
-    const nxt = redoStack.current.pop();
-    if (nxt) applyJSON(nxt);
-  };
+  // --------------------- Mockup helpers ---------------------
 
-  // -----------------------------
-  // Mockup selection (local-first with fallback)
-  // -----------------------------
-  function pickMockupUrlLocalFirst(p, v, c) {
-    // Try local file first
-    if (c && v) {
-      const dir = `tee-${toFolderColor(c)}`;
-      const localUrl = `${LOCAL_MOCKUP_BASE}/${dir}/${v}.png`;
-      return localUrl; // we'll preflight and fallback if 404
-    }
+  // Cloudinary/MOCKUPS-first, then variants/images, else placeholder
+  function pickMockupUrl(product, view, color) {
+    const slugKey = normSlug(product) || norm(slugParam);
+    const colorKey = normColor(color);
+    const fromMap = MOCKUPS?.[slugKey]?.[colorKey]?.[view];
+    if (fromMap) return fromMap;
 
-    // Fallbacks (mapping/variant/product)
-    return pickMockupUrlFallback(p, v, c);
-  }
-
-  function pickMockupUrlFallback(p, v, c) {
-    const slugKey = normSlug(p) || norm(slugParam);
-    const colorKey = normColorKey(c).replace(/\s+/g, "-");
-    const bySlug = MOCKUPS?.[slugKey]?.[colorKey]?.[v];
-    if (bySlug) return bySlug;
-
-    const variants = p?.variants || [];
+    const variants = product?.variants || [];
     const variant =
-      variants.find(x => normColorKey(x.color) === normColorKey(c)) || variants[0];
+      variants.find((v) => toKey(v.color) === toKey(color)) || variants[0];
 
-    const tryCloudinary = (arr=[]) =>
-      arr.find(u => typeof u === "string" && /cloudinary/.test(u) && new RegExp(`${v}`, "i").test(u));
-
-    if (variant?.imageSet?.length) {
-      const exact = tryCloudinary(variant.imageSet.map(i => i.url));
-      if (exact) return exact;
-      const primary = variant.imageSet.find(i => i.isPrimary) || variant.imageSet[0];
-      if (primary?.url) return primary.url;
-    }
-    const pickFromFiles = (files=[]) => {
-      const pref = (t) => files.find(f => f?.type===t && (f.preview_url||f.url||f.thumbnail_url));
+    const chooseFile = (files = []) => {
+      const pref = (t) =>
+        files.find(
+          (f) => f?.type === t && (f.preview_url || f.url || f.thumbnail_url)
+        );
       const f = pref("preview") || pref("mockup") || files[0];
       return f?.preview_url || f?.url || f?.thumbnail_url || null;
     };
-    if (variant?.files?.length) {
-      const chosen = pickFromFiles(variant.files);
-      if (chosen) return chosen;
+
+    if (variant?.imageSet?.length) {
+      const primary =
+        variant.imageSet.find((i) => i.isPrimary) || variant.imageSet[0];
+      if (primary?.url) return primary.url;
     }
-    if (p?.images?.length) {
-      const exact = tryCloudinary(p.images.map(i => i.url || i));
-      if (exact) return exact;
-      const pimg = p.images.find(i => i.isPrimary) || p.images[0];
+    if (variant?.files?.length) {
+      const f = chooseFile(variant.files);
+      if (f) return f;
+    }
+    if (product?.images?.length) {
+      const pimg = product.images.find((i) => i.isPrimary) || product.images[0];
       if (pimg?.url) return pimg.url;
-      if (typeof p.images[0] === "string") return p.images[0];
+      if (typeof product.images[0] === "string") return product.images[0];
     }
     if (variant?.image) return variant.image;
-    if (p?.image) return p.image;
+    if (product?.image) return product.image;
+
     return PLACEHOLDER;
   }
 
-  function preflight(url) {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => resolve(true);
-      img.onerror = () => resolve(false);
-      img.src = url;
-    });
-  }
-
-  // -----------------------------
-  // Grid + Rulers overlays
-  // -----------------------------
-  const applyGridOverlay = useCallback((fc) => {
-    const size = 32;
+  const makeGridOverlay = useCallback((fc) => {
+    const size = 32; // px grid
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="${fc.width}" height="${fc.height}">
         <defs>
@@ -378,103 +403,32 @@ export default function ProductStudio() {
         </defs>
         <rect width="100%" height="100%" fill="url(#p)"/>
       </svg>`;
-    const dataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }, []);
 
-    window.fabric.Image.fromURL(
-      dataUrl,
-      (gridImg) => {
-        gridImg.set({
-          id: "gridOverlay",
-          selectable: false,
-          evented: false,
-          opacity: gridOn ? 1 : 0,
-          top: 0,
-          left: 0,
-          originX: "left",
-          originY: "top",
-        });
-        overlayGridImgRef.current = gridImg;
-        fc.setOverlayImage(gridImg, fc.renderAll.bind(fc));
-      },
-      { crossOrigin: "anonymous" }
-    );
-  }, [gridOn]);
-
-  const applyRulers = useCallback((fc) => {
-    if (rulerGroupRef.current) {
-      fc.remove(rulerGroupRef.current);
-      rulerGroupRef.current = null;
-    }
-    if (!rulersOn) { fc.renderAll(); return; }
-
-    const g = new window.fabric.Group([], {
-      id: "rulers",
-      selectable: false,
-      evented: false,
-      excludeFromExport: true,
-    });
-
-    const pad = 0;
-    const lenTop = fc.width;
-    const lenLeft = fc.height;
-
-    // Use inches: 300dpi basis, but visually scale down by factor 3 like print box
-    const pxPerIn = (DPI * 1) / 3;
-
-    for (let x = 0; x <= lenTop; x += pxPerIn) {
-      const isMajor = Math.round(x / pxPerIn) % 1 === 0;
-      const h = isMajor ? 12 : 6;
-      g.add(new window.fabric.Line([x, 0, x, h], { stroke: "rgba(255,255,255,.35)" }));
-      if (isMajor) {
-        g.add(new window.fabric.Text(`${Math.round(x / pxPerIn)}"`, {
-          left: x + 2, top: h + 2, fontSize: 10, fill: "#fff", selectable: false, evented: false
-        }));
-      }
-    }
-    g.add(new window.fabric.Line([0, 0, lenTop, 0], { stroke: "rgba(255,255,255,.35)" }));
-
-    for (let y = 0; y <= lenLeft; y += pxPerIn) {
-      const isMajor = Math.round(y / pxPerIn) % 1 === 0;
-      const w = isMajor ? 12 : 6;
-      g.add(new window.fabric.Line([0, y, w, y], { stroke: "rgba(255,255,255,.35)" }));
-      if (isMajor) {
-        g.add(new window.fabric.Text(`${Math.round(y / pxPerIn)}"`, {
-          left: w + 2, top: y + 2, fontSize: 10, fill: "#fff", selectable: false, evented: false
-        }));
-      }
-    }
-    g.add(new window.fabric.Line([0, 0, 0, lenLeft], { stroke: "rgba(255,255,255,.35)" }));
-
-    rulerGroupRef.current = g;
-    fc.add(g);
-    fc.sendToBack(g);
-    fc.renderAll();
-  }, [rulersOn]);
-
-  // -----------------------------
-  // Draw print area based on AREAS (relative to mockup bounds)
-  // -----------------------------
-  function getMockupBounds(fc) {
-    const bg = fc.backgroundImage;
-    if (!bg) return { left: 0, top: 0, w: fc.width, h: fc.height };
-    const w = bg.getScaledWidth();
-    const h = bg.getScaledHeight();
-    const left = (fc.width / 2) - (w / 2);
-    const top  = 0; // top-pinned
-    return { left, top, w, h };
+  // Compute mockup bounds after we fit-to-height & center horizontally
+  function getMockupBounds(fc, img) {
+    const scale = fc.height / img.height; // fit by height
+    const w = img.width * scale;
+    const h = fc.height; // scaled height == canvas height
+    const left = fc.width / 2 - w / 2;
+    const top = 0;
+    return { scale, left, top, w, h };
   }
 
-  const drawPrintArea = useCallback((fc) => {
-    const old = fc.getObjects().find(o => o.id === "printArea");
+  // Draw chest/sleeve rectangle using REL_AREAS (relative)
+  function drawPrintArea(fc, bounds) {
+    // remove old
+    const old = fc.getObjects().find((o) => o.id === "printArea");
     if (old) fc.remove(old);
 
-    const cfg = AREAS[productType]?.[view] || AREAS.tshirt.front;
-    const mock = getMockupBounds(fc);
+    const rel =
+      REL_AREAS[productType]?.[view] || REL_AREAS.tshirt.front;
 
-    const left = mock.left + cfg.left * mock.w;
-    const top  = mock.top  + cfg.top  * mock.h;
-    const w    = cfg.width  * mock.w;
-    const h    = cfg.height * mock.h;
+    const left = bounds.left + rel.left * bounds.w;
+    const top = bounds.top + rel.top * bounds.h;
+    const w = rel.width * bounds.w;
+    const h = rel.height * bounds.h;
 
     const rect = new window.fabric.Rect({
       id: "printArea",
@@ -493,198 +447,274 @@ export default function ProductStudio() {
       excludeFromExport: true,
     });
     fc.add(rect);
-    fc.renderAll();
-  }, [productType, view]);
+  }
 
-  // -----------------------------
-  // Full scene refresh
-  // -----------------------------
-  const refreshScene = useCallback(async () => {
-    const fc = fabricRef.current; if (!fc || !product) return;
+  const refreshBackground = useCallback(() => {
+    const fc = fabricRef.current;
+    if (!fc || !product) return;
 
-    // keep user objects
-    const keep = fc.getObjects().filter(o => !["printArea","gridOverlay","rulers"].includes(o.id));
+    // keep user objects, strip guides
+    const userObjects = fc
+      .getObjects()
+      .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay");
     fc.clear();
-    keep.forEach(o => fc.add(o));
+    userObjects.forEach((o) => fc.add(o));
 
-    // Choose image with local-first fallback
-    const primary = pickMockupUrlLocalFirst(product, view, color);
-    let chosen = primary;
-    const ok = await preflight(primary);
-    if (!ok) chosen = pickMockupUrlFallback(product, view, color);
+    const url = pickMockupUrl(product, view, color) || PLACEHOLDER;
 
     window.fabric.Image.fromURL(
-      chosen || PLACEHOLDER,
+      url,
       (img) => {
-        const scale = fc.height / img.height; // fit to height
+        // Fit to height & center horizontally
+        const scale = fc.height / img.height;
+        img.set({
+          opacity: mockupOpacity,
+          scaleX: scale,
+          scaleY: scale,
+          top: 0,
+          left: fc.width / 2,
+          originX: "center",
+          originY: "top",
+          selectable: false,
+          evented: false,
+        });
+
         fc.setBackgroundImage(img, () => {
-          img.set({
-            opacity: mockupOpacity,
-            scaleX: scale,
-            scaleY: scale,
-            top: 0,
-            left: fc.width / 2,
-            originX: "center",
-            originY: "top",
-            selectable: false,
-            evented: false,
-          });
-          applyGridOverlay(fc);
-          applyRulers(fc);
-          drawPrintArea(fc);
-          fc.renderAll();
+          // Grid overlay (optional)
+          const gridDataUrl = makeGridOverlay(fc);
+          window.fabric.Image.fromURL(
+            gridDataUrl,
+            (gridImg) => {
+              gridImg.set({
+                id: "gridOverlay",
+                selectable: false,
+                evented: false,
+                opacity: showGrid ? 1 : 0,
+                top: 0,
+                left: 0,
+                originX: "left",
+                originY: "top",
+              });
+              overlayGridImgRef.current = gridImg;
+              fc.setOverlayImage(gridImg, () => {
+                // Add chest/sleeve rect
+                const bounds = getMockupBounds(fc, img);
+                drawPrintArea(fc, bounds);
+                fc.renderAll();
+              });
+            },
+            { crossOrigin: "anonymous" }
+          );
         });
       },
       { crossOrigin: "anonymous" }
     );
-  }, [product, view, color, mockupOpacity, applyGridOverlay, applyRulers, drawPrintArea]);
+  }, [product, view, color, mockupOpacity, showGrid, makeGridOverlay, productType]);
 
-  useEffect(() => { if (product && fabricRef.current) refreshScene(); }, [product, refreshScene]);
-
-  // -----------------------------
-  // Snap + constrain to print area
-  // -----------------------------
+  // (Re)draw when inputs change
   useEffect(() => {
-    const fc = fabricRef.current; if (!fc) return;
+    if (!product || !fabricRef.current) return;
+    refreshBackground();
+  }, [product, refreshBackground]);
+
+  // Constrain user objects inside print area (with light snapping)
+  useEffect(() => {
+    const fc = fabricRef.current;
+    if (!fc) return;
     const SNAP = 8;
 
-    const onMove = () => {
-      const area = fc.getObjects().find(o => o.id === "printArea");
+    const constrain = () => {
+      const area = fc.getObjects().find((o) => o.id === "printArea");
       if (!area) return;
       const a = area.getBoundingRect(true, true);
-      const objs = fc.getObjects().filter(o => !["printArea","gridOverlay","rulers"].includes(o.id));
-
+      const objs = fc
+        .getObjects()
+        .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay");
       objs.forEach((o) => {
         const bb = o.getBoundingRect(true, true);
-        // keep inside
+
+        // clamp inside
         if (bb.left < a.left) o.left += a.left - bb.left;
-        if (bb.top  < a.top)  o.top  += a.top  - bb.top;
-        if (bb.left + bb.width > a.left + a.width) o.left -= bb.left + bb.width - (a.left + a.width);
-        if (bb.top  + bb.height > a.top  + a.height) o.top  -= bb.top  + bb.height - (a.top  + a.height);
+        if (bb.top < a.top) o.top += a.top - bb.top;
+        if (bb.left + bb.width > a.left + a.width)
+          o.left -= bb.left + bb.width - (a.left + a.width);
+        if (bb.top + bb.height > a.top + a.height)
+          o.top -= bb.top + bb.height - (a.top + a.height);
 
-        // snap to center/edges
-        const cx = a.left + a.width/2, cy = a.top + a.height/2;
-        const ocx = bb.left + bb.width/2, ocy = bb.top + bb.height/2;
-        if (Math.abs(ocx - cx) <= SNAP) o.left += (cx - ocx);
-        if (Math.abs(ocy - cy) <= SNAP) o.top  += (cy - ocy);
-
-        const r = o.left + o.width * o.scaleX;
-        const b = o.top  + o.height * o.scaleY;
-        if (Math.abs(o.left - a.left) <= SNAP) o.left = a.left;
-        if (Math.abs(o.top  - a.top)  <= SNAP) o.top  = a.top;
-        if (Math.abs(r - (a.left + a.width)) <= SNAP) o.left = (a.left + a.width) - o.width * o.scaleX;
-        if (Math.abs(b - (a.top + a.height)) <= SNAP) o.top  = (a.top + a.height) - o.height * o.scaleY;
+        // snap to center lines
+        const cx = a.left + a.width / 2;
+        const cy = a.top + a.height / 2;
+        const ocx = bb.left + bb.width / 2;
+        const ocy = bb.top + bb.height / 2;
+        if (Math.abs(ocx - cx) < SNAP) o.left += cx - ocx;
+        if (Math.abs(ocy - cy) < SNAP) o.top += cy - ocy;
 
         o.setCoords();
       });
       fc.requestRenderAll();
     };
-
-    fc.on("object:moving", onMove);
-    fc.on("object:scaling", onMove);
-    fc.on("object:rotating", onMove);
+    fc.on("object:moving", constrain);
+    fc.on("object:scaling", constrain);
+    fc.on("object:rotating", constrain);
     return () => {
-      fc.off("object:moving", onMove);
-      fc.off("object:scaling", onMove);
-      fc.off("object:rotating", onMove);
+      fc.off("object:moving", constrain);
+      fc.off("object:scaling", constrain);
+      fc.off("object:rotating", constrain);
     };
   }, [view, productType]);
 
-  // -----------------------------
-  // Canvas actions
-  // -----------------------------
-  const setZoomSafe = (v) => {
-    const fc = fabricRef.current; if (!fc) return;
-    const z = Math.min(2, Math.max(0.6, v));
-    setZoom(z);
-    fc.setZoom(z);
+  // --------------------- Editing actions ---------------------
+
+  const pushHistory = useCallback(() => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    redoStack.current = [];
+    undoStack.current.push(JSON.stringify(fc.toDatalessJSON(["id"])));
+    if (undoStack.current.length > 50) undoStack.current.shift();
+  }, []);
+
+  const applyJSON = (json) => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    fc.loadFromJSON(json, () => fc.renderAll(), (_o, obj) => obj);
+  };
+
+  const undo = () => {
+    const fc = fabricRef.current;
+    if (!fc || undoStack.current.length === 0) return;
+    const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
+    redoStack.current.push(curr);
+    const prev = undoStack.current.pop();
+    if (prev) applyJSON(prev);
+  };
+  const redo = () => {
+    const fc = fabricRef.current;
+    if (!fc || redoStack.current.length === 0) return;
+    const curr = JSON.stringify(fc.toDatalessJSON(["id"]));
+    undoStack.current.push(curr);
+    const nxt = redoStack.current.pop();
+    if (nxt) applyJSON(nxt);
+  };
+
+  const setZoomSafe = (z) => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const clamped = Math.max(0.75, Math.min(2, z));
+    setZoom(clamped);
+    fc.setZoom(clamped);
     fc.requestRenderAll();
   };
 
   const addText = () => {
-    const fc = fabricRef.current; if (!fc) return;
-    const t = new window.fabric.IText("Your text", {
-      left: fc.getWidth()*0.5, top: fc.getHeight()*0.5,
-      originX: "center", originY: "center",
-      fill: "#ffffff", fontSize: 42
+    const fc = fabricRef.current;
+    const textValue = prompt("Enter text");
+    if (!fc || !textValue || !textValue.trim()) return;
+    const t = new window.fabric.IText(textValue.trim(), {
+      left: fc.width / 2,
+      top: fc.height / 2,
+      originX: "center",
+      originY: "center",
+      fill: "#ffffff",
+      fontSize: 36,
     });
-    t._layerId = `layer_${Date.now()}`;
     pushHistory();
-    fc.add(t); fc.setActiveObject(t); fc.requestRenderAll();
-  };
-
-  const addDesign = (d) => {
-    const fc = fabricRef.current; if (!fc || !d?.imageDataUrl) return;
-    window.fabric.Image.fromURL(d.imageDataUrl, (img) => {
-      img.set({
-        left: fc.getWidth()*0.5, top: fc.getHeight()*0.5,
-        originX: "center", originY: "center",
-        scaleX: 0.5, scaleY: 0.5
-      });
-      img._layerId = `layer_${Date.now()}`;
-      pushHistory();
-      fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
-    }, { crossOrigin: "anonymous" });
-  };
-
-  const del = () => {
-    const fc = fabricRef.current; if (!fc) return;
-    const a = fc.getActiveObject();
-    if (!a || ["printArea","gridOverlay","rulers"].includes(a.id)) return;
-    pushHistory();
-    fc.remove(a); fc.discardActiveObject(); fc.requestRenderAll();
-  };
-
-  const centerHoriz = () => {
-    const fc = fabricRef.current; if (!fc) return;
-    const a = fc.getActiveObject(); if (!a || a.id==="printArea") return;
-    const area = fc.getObjects().find(o=>o.id==="printArea"); if (!area) return;
-    const aBB = area.getBoundingRect(true,true);
-    const bb = a.getBoundingRect(true,true);
-    a.left = aBB.left + (aBB.width - bb.width)/2 + (a.left - bb.left);
+    fc.add(t);
+    fc.setActiveObject(t);
     fc.requestRenderAll();
   };
 
-  // -----------------------------
-  // Export (DPI-true to PRINT_SIZE_IN)
-  // -----------------------------
+  const addDesign = (design) => {
+    const fc = fabricRef.current;
+    if (!fc || !design?.imageDataUrl) return;
+    window.fabric.Image.fromURL(
+      design.imageDataUrl,
+      (img) => {
+        img.set({
+          left: fc.width / 2,
+          top: fc.height / 2,
+          originX: "center",
+          originY: "center",
+          scaleX: 0.5,
+          scaleY: 0.5,
+        });
+        pushHistory();
+        fc.add(img);
+        fc.setActiveObject(img);
+        fc.requestRenderAll();
+      },
+      { crossOrigin: "anonymous" }
+    );
+  };
+
+  const del = () => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const active = fc.getActiveObject();
+    if (!active || active.id === "printArea" || active.id === "gridOverlay")
+      return;
+    pushHistory();
+    fc.remove(active);
+    fc.discardActiveObject();
+    fc.requestRenderAll();
+  };
+
+  const centerH = () => {
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const o = fc.getActiveObject();
+    if (!o || o.id === "printArea" || o.id === "gridOverlay") return;
+    o.centerH();
+    fc.requestRenderAll();
+  };
+
   const makePrintReadyAndUpload = async () => {
-    const fc = fabricRef.current; if (!fc) return;
+    const fc = fabricRef.current;
+    if (!fc) return;
 
-    const area = fc.getObjects().find(o => o.id==="printArea");
-    if (!area) return toast({ title:"No print area defined", status:"error" });
+    const area = fc.getObjects().find((o) => o.id === "printArea");
+    if (!area)
+      return toast({ title: "No print area defined", status: "error" });
 
-    const objs = fc.getObjects().filter(o => !["printArea","gridOverlay","rulers"].includes(o.id));
-    if (!objs.length) return toast({ title:"Nothing to print", status:"warning" });
+    const objs = fc
+      .getObjects()
+      .filter((o) => o.id !== "printArea" && o.id !== "gridOverlay");
+    if (!objs.length)
+      return toast({ title: "Nothing to print", status: "warning" });
 
-    const size = PRINT_SIZE_IN[productType]?.[view] || PRINT_SIZE_IN.tshirt.front;
+    // out size in pixels at DPI
+    const size =
+      PRINT_SIZE_IN[productType]?.[view] || PRINT_SIZE_IN.tshirt.front;
     const outW = Math.round(size.w * DPI);
     const outH = Math.round(size.h * DPI);
 
     const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
-    const aBB = area.getBoundingRect(true,true);
+    const aBB = area.getBoundingRect(true, true);
     const scaleFactor = outW / aBB.width;
 
-    objs.forEach(o => {
+    objs.forEach((o) => {
       const clone = window.fabric.util.object.clone(o);
-      const bb = o.getBoundingRect(true,true);
-      const relX = bb.left - aBB.left + bb.width/2;
-      const relY = bb.top  - aBB.top  + bb.height/2;
+      const bb = o.getBoundingRect(true, true);
+      const relX = bb.left - aBB.left + bb.width / 2;
+      const relY = bb.top - aBB.top + bb.height / 2;
 
-      clone.originX = "center"; clone.originY = "center";
-      clone.left = relX * scaleFactor; clone.top = relY * scaleFactor;
-      clone.scaleX = o.scaleX * scaleFactor; clone.scaleY = o.scaleY * scaleFactor;
-      if (clone.type === "i-text") clone.fontSize = (o.fontSize || 42) * scaleFactor;
+      clone.originX = "center";
+      clone.originY = "center";
+      clone.left = relX * scaleFactor;
+      clone.top = relY * scaleFactor;
+      clone.scaleX = o.scaleX * scaleFactor;
+      clone.scaleY = o.scaleY * scaleFactor;
+      if (clone.type === "i-text")
+        clone.fontSize = (o.fontSize || 36) * scaleFactor;
 
       tmp.add(clone);
     });
     tmp.requestRenderAll();
 
-    const png = tmp.toDataURL({ format:"png", quality:1, multiplier:1 });
+    const png = tmp.toDataURL({ format: "png", quality: 1, multiplier: 1 });
     tmp.dispose();
-    const previewPNG = fc.toDataURL({ format:"png", quality:0.92 });
+    const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
 
-    toast({ title:"Uploading design…", status:"info", duration:2500 });
+    toast({ title: "Uploading design…", status: "info", duration: 2500 });
     try {
       const upload = await client.post("/upload-print-file", {
         imageData: png,
@@ -697,96 +727,81 @@ export default function ProductStudio() {
       const item = {
         productId: product?.id || product?._id || "",
         slug: product?.slug || slugParam,
-        name: product?.name, color, size, view,
+        name: product?.name,
+        color,
+        size,
+        view,
         preview: previewPNG,
         printFileUrl: fileUrl,
-        productImage: pickMockupUrlFallback(product, view, color),
+        productImage: pickMockupUrl(product, view, color),
         unitPrice,
       };
       localStorage.setItem("itemToCheckout", JSON.stringify(item));
       navigate("/checkout");
     } catch (e) {
       console.error(e);
-      toast({ title:"Upload failed", status:"error" });
+      toast({ title: "Upload failed", status: "error" });
     }
   };
 
-  // -----------------------------
-  // Derived lists
-  // -----------------------------
+  // --------------------- Derived UI bits ---------------------
+
   const colorOptions = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach(v => v.color && set.add(normColorKey(v.color)));
-    (product?.colors || []).forEach(c => c && set.add(normColorKey(c)));
+    (product?.variants || []).forEach((v) => v.color && set.add(toKey(v.color)));
+    (product?.colors || []).forEach((c) => c && set.add(toKey(c)));
+    // order by SWATCH_ORDER then fallback alpha
     const arr = [...set];
-    const known   = arr.filter(c => COLOR_ORDER.includes(c));
-    const unknown = arr.filter(c => !COLOR_ORDER.includes(c));
-    return [...COLOR_ORDER.filter(c => known.includes(c)), ...unknown];
+    arr.sort((a, b) => {
+      const ia = SWATCH_ORDER.indexOf(a);
+      const ib = SWATCH_ORDER.indexOf(b);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      if (ia !== -1) return -1;
+      if (ib !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return arr;
   }, [product]);
 
-  const sizeOptions = useMemo(() => {
+  const sizes = useMemo(() => {
     const set = new Set();
-    (product?.variants || []).forEach(v => {
-      if (!color || normColorKey(v.color) === normColorKey(color)) v.size && set.add(v.size);
-    });
+    (product?.variants || []).forEach(
+      (v) => (!color || toKey(v.color) === toKey(color)) && v.size && set.add(v.size)
+    );
     return [...set];
   }, [product, color]);
 
-  const canCheckout =
+  const canProceed =
     product &&
     (!colorOptions.length || color) &&
-    (!sizeOptions.length || size) &&
-    fabricRef.current &&
-    fabricRef.current.getObjects().filter(o => !["printArea","gridOverlay","rulers"].includes(o.id)).length > 0;
+    (!sizes.length || size) &&
+    hasObjects;
 
-  // -----------------------------
-  // Layers helpers
-  // -----------------------------
-  const getLayerList = () => {
-    const fc = fabricRef.current; if (!fc) return [];
-    return fc.getObjects()
-      .filter(o => !["printArea","gridOverlay","rulers"].includes(o.id))
-      .map((o,idx) => ({
-        id: o._layerId || `layer_${idx}`,
-        obj: o,
-        label: (o.type || "object").toUpperCase(),
-        visible: o.visible !== false,
-        locked: !!o.lockMovementX || !!o.lockMovementY,
-      }));
-  };
-  const toggleVisible = (id) => {
-    const fc = fabricRef.current; if (!fc) return;
-    const l = getLayerList().find(x => x.id===id); if (!l) return;
-    l.obj.visible = !l.obj.visible; fc.requestRenderAll();
-  };
-  const toggleLock = (id) => {
-    const fc = fabricRef.current; if (!fc) return;
-    const l = getLayerList().find(x => x.id===id); if (!l) return;
-    const locked = !(l.obj.lockMovementX && l.obj.lockMovementY);
-    l.obj.lockMovementX = locked; l.obj.lockMovementY = locked;
-    l.obj.hasControls = !locked; l.obj.selectable = !locked;
-    fc.requestRenderAll();
-  };
-  const bringFwd = (id) => { const fc=fabricRef.current; if(!fc) return;
-    const l=getLayerList().find(x=>x.id===id); if(!l) return; fc.bringForward(l.obj); fc.requestRenderAll(); };
-  const sendBack = (id) => { const fc=fabricRef.current; if(!fc) return;
-    const l=getLayerList().find(x=>x.id===id); if(!l) return; fc.sendBackwards(l.obj); fc.requestRenderAll(); };
+  // --------------------- UI ---------------------
 
-  // -----------------------------
-  // UI
-  // -----------------------------
   return (
-    <Box className="ps-root" bg="brand.primary">
-      {/* LEFT */}
-      <Box className="ps-left">
-        <VStack align="stretch" spacing={3}>
-          <HStack justify="space-between">
-            <HStack>
-              <Heading size="md" color="brand.textLight">
-                {product?.name || "Product"}
-              </Heading>
-              <ProductTypeBadgeIcon type={productType} />
-            </HStack>
+    <Flex
+      direction={{ base: "column", xl: "row" }}
+      minH="100vh"
+      bg="brand.primary"
+    >
+      {/* Left rail */}
+      <Box
+        w={{ base: "100%", xl: "300px" }}
+        p={4}
+        borderRightWidth={{ xl: "1px" }}
+        borderColor="whiteAlpha.200"
+        bg="brand.paper"
+      >
+        <VStack align="stretch" spacing={4}>
+          <HStack>
+            <ProductTypeBadgeIcon type={productType} />
+            <Heading size="md" color="brand.textLight">
+              {product?.name || "Product"}
+            </Heading>
+            <Badge variant="outline" colorScheme="yellow" opacity={0.8}>
+              {productType.toUpperCase()}
+            </Badge>
           </HStack>
 
           <Tabs size="sm" variant="enclosed" colorScheme="yellow">
@@ -801,13 +816,15 @@ export default function ProductStudio() {
                 <VStack align="stretch" spacing={3}>
                   {/* View */}
                   <Box>
-                    <Text className="ps-label">View</Text>
+                    <Text mb={2} color="brand.textLight" fontWeight="medium">
+                      View
+                    </Text>
                     <HStack wrap="wrap" spacing={2}>
-                      {(availableViews || ["front"]).map(v => (
+                      {availableViews.map((v) => (
                         <Button
                           key={v}
-                          size="xs"
-                          variant={view===v?"solid":"outline"}
+                          size="sm"
+                          variant={view === v ? "solid" : "outline"}
                           onClick={() => setView(v)}
                         >
                           {v}
@@ -816,92 +833,151 @@ export default function ProductStudio() {
                     </HStack>
                   </Box>
 
-                  {/* Color */}
+                  {/* Colors */}
                   <Box>
-                    <Text className="ps-label">Color</Text>
+                    <Text mb={2} color="brand.textLight" fontWeight="medium">
+                      Color
+                    </Text>
                     <HStack wrap="wrap" spacing={2}>
                       {colorOptions.length ? (
                         colorOptions.map((c) => {
-                          const key = c.toLowerCase();
-                          const hex = COLOR_SWATCHES[key] || "#ccc";
-                          const isSel = key === String(color||"").toLowerCase();
+                          const hex = COLOR_SWATCHES[c] || "#CCCCCC";
                           return (
                             <Tooltip key={c} label={c}>
-                              <Box
+                              <Button
                                 onClick={() => setColor(c)}
+                                variant={toKey(color) === c ? "solid" : "outline"}
+                                size="xs"
+                                p={0}
                                 borderRadius="full"
-                                boxSize="16px"
-                                borderWidth={isSel ? "2px" : "1px"}
-                                borderColor={isSel ? "yellow.400" : "blackAlpha.600"}
-                                background={hex}
-                                cursor="pointer"
-                              />
+                                borderWidth="2px"
+                                borderColor={
+                                  toKey(color) === c
+                                    ? "yellow.400"
+                                    : "whiteAlpha.500"
+                                }
+                                _hover={{ borderColor: "yellow.300" }}
+                              >
+                                <Box
+                                  w="16px"
+                                  h="16px"
+                                  borderRadius="full"
+                                  bg={hex}
+                                  boxShadow="inset 0 0 0 1px rgba(0,0,0,.25)"
+                                />
+                              </Button>
                             </Tooltip>
                           );
                         })
-                      ) : <Badge>No colors</Badge>}
+                      ) : (
+                        <Badge>No color options</Badge>
+                      )}
                     </HStack>
                   </Box>
 
-                  {/* Size */}
+                  {/* Sizes */}
                   <Box>
-                    <Text className="ps-label">Size</Text>
+                    <Text mb={2} color="brand.textLight" fontWeight="medium">
+                      Size
+                    </Text>
                     <HStack wrap="wrap" spacing={2}>
-                      {sizeOptions.length ? (
-                        sizeOptions.map(s => (
+                      {sizes.length ? (
+                        sizes.map((s) => (
                           <Button
                             key={s}
-                            size="xs"
-                            variant={size===s?"solid":"outline"}
+                            size="sm"
+                            variant={size === s ? "solid" : "outline"}
                             onClick={() => setSize(s)}
                           >
                             {s}
                           </Button>
                         ))
-                      ) : <Badge>No size options</Badge>}
+                      ) : (
+                        <Badge>No size options</Badge>
+                      )}
                     </HStack>
                   </Box>
 
-                  {/* Zoom / Grid / Rulers / Opacity */}
-                  <Box>
-                    <Text className="ps-label">Zoom</Text>
+                  {/* Zoom + grid + opacity */}
+                  <VStack align="stretch" spacing={3}>
+                    <Text color="brand.textLight" fontWeight="medium">
+                      Zoom
+                    </Text>
                     <HStack>
-                      <IconButton size="xs" aria-label="zoom out" onClick={() => setZoomSafe(zoom-0.1)} icon={<FaSearchMinus/>} />
-                      <Text fontSize="sm" color="whiteAlpha.800">{zoom.toFixed(2)}x</Text>
-                      <IconButton size="xs" aria-label="zoom in" onClick={() => setZoomSafe(zoom+0.1)} icon={<FaSearchPlus/>} />
-                      <HStack ml={3}>
-                        <Switch size="sm" isChecked={gridOn} onChange={(e)=>{ setGridOn(e.target.checked); applyGridOverlay(fabricRef.current); }} />
-                        <Text fontSize="sm">Grid</Text>
-                        <Switch size="sm" isChecked={rulersOn} onChange={(e)=>{ setRulersOn(e.target.checked); applyRulers(fabricRef.current); }} />
-                        <Text fontSize="sm">Rulers</Text>
-                      </HStack>
+                      <Tooltip label="Zoom out">
+                        <IconButton
+                          size="sm"
+                          onClick={() => setZoomSafe(zoom - 0.1)}
+                          icon={<FaSearchMinus />}
+                          aria-label="zoom out"
+                        />
+                      </Tooltip>
+                      <Slider
+                        aria-label="zoom"
+                        value={zoom}
+                        min={0.75}
+                        max={2}
+                        step={0.1}
+                        onChange={setZoomSafe}
+                      >
+                        <SliderTrack>
+                          <SliderFilledTrack />
+                        </SliderTrack>
+                        <SliderThumb />
+                      </Slider>
+                      <Tooltip label="Zoom in">
+                        <IconButton
+                          size="sm"
+                          onClick={() => setZoomSafe(zoom + 0.1)}
+                          icon={<FaSearchPlus />}
+                          aria-label="zoom in"
+                        />
+                      </Tooltip>
                     </HStack>
-                  </Box>
 
-                  <Box>
-                    <Text className="ps-label">Mockup opacity</Text>
-                    <input
-                      type="range"
-                      min="0.2" max="1" step="0.05"
-                      value={mockupOpacity}
-                      onChange={(e)=>setMockupOpacity(parseFloat(e.target.value))}
-                      onMouseUp={refreshScene}
-                      onTouchEnd={refreshScene}
-                      className="ps-range"
-                    />
-                  </Box>
+                    <HStack>
+                      <Switch
+                        isChecked={showGrid}
+                        onChange={(e) => {
+                          setShowGrid(e.target.checked);
+                          refreshBackground();
+                        }}
+                      />
+                      <Text color="brand.textLight">Show grid</Text>
+                    </HStack>
+
+                    <Box>
+                      <Text color="brand.textLight" fontWeight="medium" mb={1}>
+                        Mockup opacity
+                      </Text>
+                      <Slider
+                        aria-label="mockup-opacity"
+                        min={0.2}
+                        max={1}
+                        step={0.05}
+                        value={mockupOpacity}
+                        onChange={(v) => setMockupOpacity(v)}
+                        onChangeEnd={() => refreshBackground()}
+                      >
+                        <SliderTrack>
+                          <SliderFilledTrack />
+                        </SliderTrack>
+                        <SliderThumb />
+                      </Slider>
+                    </Box>
+                  </VStack>
 
                   <Divider borderColor="whiteAlpha.300" />
                   <Button
-                    size="sm"
-                    colorScheme={canCheckout ? "yellow" : "gray"}
-                    isDisabled={!canCheckout}
+                    colorScheme={canProceed ? "yellow" : "gray"}
+                    isDisabled={!canProceed}
                     onClick={makePrintReadyAndUpload}
                   >
                     Add to cart / Checkout
                   </Button>
                   <Text fontSize="xs" color="whiteAlpha.700">
-                    We export a true print file at {DPI} DPI sized to the selected placement.
+                    We export a true print file at {DPI} DPI sized to the
+                    selected placement.
                   </Text>
                 </VStack>
               </TabPanel>
@@ -925,7 +1001,11 @@ export default function ProductStudio() {
                             onClick={() => addDesign(d)}
                           >
                             <AspectRatio ratio={1}>
-                              <Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" />
+                              <Image
+                                src={d.imageDataUrl}
+                                alt={d.prompt}
+                                objectFit="cover"
+                              />
                             </AspectRatio>
                           </Box>
                         </Tooltip>
@@ -933,7 +1013,7 @@ export default function ProductStudio() {
                     </SimpleGrid>
                   ) : (
                     <Text color="whiteAlpha.800" fontSize="sm">
-                      No saved designs yet. Create one in “Generate”.
+                      No saved designs yet.
                     </Text>
                   )}
                 </VStack>
@@ -946,7 +1026,7 @@ export default function ProductStudio() {
                     Add Text
                   </Button>
                   <Text fontSize="sm" color="whiteAlpha.800">
-                    (Use the controls on the canvas to move/resize/rotate.)
+                    Use the canvas handles to move/resize/rotate your text.
                   </Text>
                 </VStack>
               </TabPanel>
@@ -955,72 +1035,72 @@ export default function ProductStudio() {
 
           {/* Quick actions */}
           <HStack pt={1}>
-            <Tooltip label="Undo"><IconButton size="sm" onClick={undo} icon={<FaUndo />} /></Tooltip>
-            <Tooltip label="Redo"><IconButton size="sm" onClick={redo} icon={<FaRedo />} /></Tooltip>
-            <Tooltip label="Delete selected"><IconButton size="sm" onClick={del} colorScheme="red" variant="outline" icon={<FaTrash />} /></Tooltip>
-            <Tooltip label="Center horizontally"><IconButton size="sm" onClick={centerHoriz} icon={<FaArrowsAltH />} /></Tooltip>
+            <Tooltip label="Undo">
+              <Button size="sm" onClick={undo} leftIcon={<FaUndo />}>
+                Undo
+              </Button>
+            </Tooltip>
+            <Tooltip label="Redo">
+              <Button size="sm" onClick={redo} leftIcon={<FaRedo />}>
+                Redo
+              </Button>
+            </Tooltip>
+            <Tooltip label="Delete selected">
+              <Button
+                size="sm"
+                onClick={del}
+                colorScheme="red"
+                variant="outline"
+              >
+                <FaTrash />
+              </Button>
+            </Tooltip>
+            <Tooltip label="Center horizontally">
+              <Button size="sm" onClick={centerH} variant="outline">
+                <FaArrowsAltH />
+              </Button>
+            </Tooltip>
           </HStack>
         </VStack>
       </Box>
 
-      {/* CENTER */}
-      <Box className={`ps-center`}>
+      {/* Canvas column */}
+      <Flex flex="1" direction="column" p={4}>
         <Box
           ref={wrapRef}
-          className={`ps-canvas-wrap ${gridOn ? "ps-grid" : ""}`}
+          w="100%"
+          maxW="860px"
+          mx="auto"
+          sx={{
+            position: "relative",
+            aspectRatio: `${CANVAS_ASPECT}`,
+            background: "var(--chakra-colors-brand-secondary)",
+            borderRadius: "12px",
+            border: "1px solid rgba(255,255,255,.18)",
+            overflow: "hidden",
+          }}
         >
-          <canvas ref={canvasRef} className="ps-canvas" />
+          <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
         </Box>
-      </Box>
+      </Flex>
 
-      {/* RIGHT: Layers */}
-      <Box className={`ps-right ${layersOpen ? "" : "collapsed"}`}>
-        <HStack justify="space-between" px={3} py={2}>
-          <Heading size="sm" color="brand.textLight">Layers</Heading>
-          <IconButton
-            aria-label="toggle layers"
-            size="xs"
-            onClick={() => setLayersOpen(v => !v)}
-            icon={layersOpen ? <FaChevronRight /> : <FaChevronLeft />}
-          />
-        </HStack>
-        <Divider borderColor="whiteAlpha.300" mb={1} />
-        <VStack align="stretch" spacing={1} px={2} className="ps-layers">
-          {getLayerList().map((l) => (
-            <HStack
-              key={l.id}
-              className={`ps-layer ${activeId===l.id ? "active" : ""}`}
-              onClick={() => {
-                const fc = fabricRef.current; if (!fc) return;
-                fc.setActiveObject(l.obj); fc.requestRenderAll(); setActiveId(l.id);
-              }}
-            >
-              <Text className="ps-layer-label" noOfLines={1}>{l.label}</Text>
-              <HStack ml="auto" spacing={1}>
-                <IconButton
-                  aria-label="visible" size="xs" variant="ghost"
-                  icon={l.visible ? <FaEye/> : <FaEyeSlash/>}
-                  onClick={(e)=>{e.stopPropagation(); toggleVisible(l.id);}}
-                />
-                <IconButton
-                  aria-label="lock" size="xs" variant="ghost"
-                  icon={l.locked ? <FaLock/> : <FaLockOpen/>}
-                  onClick={(e)=>{e.stopPropagation(); toggleLock(l.id);}}
-                />
-                <IconButton aria-label="up" size="xs" variant="ghost" icon={<FaChevronUp/>}
-                  onClick={(e)=>{e.stopPropagation(); bringFwd(l.id);}} />
-                <IconButton aria-label="down" size="xs" variant="ghost" icon={<FaChevronDown/>}
-                  onClick={(e)=>{e.stopPropagation(); sendBack(l.id);}} />
-              </HStack>
-            </HStack>
-          ))}
-          {!getLayerList().length && (
-            <Text color="whiteAlpha.700" fontSize="xs" px={2} py={3}>
-              Click a layer on canvas to select & re-order. Add an image or text to get started.
-            </Text>
-          )}
-        </VStack>
+      {/* Layers rail (simple for now) */}
+      <Box
+        display={{ base: "none", xl: "block" }}
+        w="260px"
+        p={4}
+        borderLeftWidth="1px"
+        borderColor="whiteAlpha.200"
+        bg="brand.paper"
+      >
+        <Heading size="sm" color="brand.textLight" mb={2}>
+          Layers
+        </Heading>
+        <Text color="whiteAlpha.700" fontSize="sm">
+          Click a layer on the canvas to select it. (Advanced layer controls
+          coming soon.)
+        </Text>
       </Box>
-    </Box>
+    </Flex>
   );
 }
