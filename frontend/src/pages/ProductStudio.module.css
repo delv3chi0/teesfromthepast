@@ -1,0 +1,92 @@
+/* Stable, predictable layout for the studio */
+
+.root {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) 1fr minmax(220px, 280px);
+  gap: 16px;
+  min-height: calc(100vh - 96px); /* leave room for header */
+  align-items: start;
+}
+
+.leftPanel,
+.rightPanel {
+  position: sticky;
+  top: 84px;            /* sit under the site header */
+  align-self: start;
+}
+
+.canvasCol {
+  align-self: start;
+}
+
+/* The canvas stage is a bounded viewport so the mockup never slips below */
+.canvasViewport {
+  position: relative;
+  height: 72vh;                    /* keeps the canvas in view without scrolling */
+  min-height: 560px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Fabric canvas is absolutely positioned to fill the viewport */
+.fabricCanvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* Rulers (top + left) */
+.rulerTop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 22px;
+  width: 100%;
+  background: rgba(0,0,0,0.18);
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+.rulerLeft {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 100%;
+  background: rgba(0,0,0,0.18);
+  border-right: 1px solid rgba(255,255,255,0.12);
+}
+
+/* Inner stage area (offset by rulers when enabled) */
+.stageInset {
+  position: absolute;
+  left: var(--stage-left, 0px);
+  top: var(--stage-top, 0px);
+  right: 0;
+  bottom: 0;
+}
+
+/* Controls bar over the stage */
+.stageToolbar {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+
+/* Responsive: collapse to 1 column on mobile */
+@media (max-width: 960px) {
+  .root {
+    grid-template-columns: 1fr;
+  }
+  .leftPanel,
+  .rightPanel {
+    position: static;
+  }
+  .canvasViewport {
+    height: 64vh;
+    min-height: 480px;
+  }
+}
