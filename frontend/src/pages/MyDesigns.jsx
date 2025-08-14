@@ -3,20 +3,21 @@ import {
   Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
-  AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio, Link
+  AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt, FaDownload } from 'react-icons/fa';
+import { downloadImage } from '../utils/download';
 
 // Prefer Cloudinary thumb (w_400) in grid, derive preview (w_1200) for modal if needed
 const derivePreviewFromPublicUrl = (publicUrl) => {
   if (!publicUrl || typeof publicUrl !== 'string') return null;
-  // Only transform Cloudinary URLs
   try {
     const u = new URL(publicUrl);
     if (!u.hostname.includes('res.cloudinary.com')) return publicUrl;
+    // bigger, web-friendly preview for the modal (JPEG is lighter)
     return publicUrl.replace('/upload/', '/upload/w_1200,q_auto:good,f_jpg/');
   } catch {
     return publicUrl;
@@ -64,6 +65,7 @@ export default function MyDesigns() {
         setLoadingMore(true);
       }
       const res = await client.get(`/mydesigns?page=${targetPage}&limit=24`);
+      // Accept either an array (old) or {items,page,hasMore} (new)
       const items = Array.isArray(res.data) ? res.data : (res.data?.items || []);
       const nextHasMore = Array.isArray(res.data) ? false : !!res.data?.hasMore;
 
@@ -153,7 +155,13 @@ export default function MyDesigns() {
       <VStack spacing={6} align="stretch" mb={8}>
         <Heading as="h1" size="2xl" color="brand.textLight">My Saved Designs</Heading>
         {designs.length > 0 && (
-          <Button colorScheme="brandAccentOrange" onClick={() => navigate('/generate')} alignSelf="flex-start" size="lg" leftIcon={<Icon as={FaMagic} />}>
+          <Button
+            colorScheme="brandAccentOrange"
+            onClick={() => navigate('/generate')}
+            alignSelf="flex-start"
+            size="lg"
+            leftIcon={<Icon as={FaMagic} />}
+          >
             Create Another Design
           </Button>
         )}
@@ -187,10 +195,10 @@ export default function MyDesigns() {
                 <AspectRatio ratio={1}>
                   <Image
                     src={
-                      // prefer smallest first for speed
+                      // prefer smallest first for speed (thumb → legacy dataURL → full)
                       design.thumbUrl ||
-                      design.imageDataUrl ||  // for legacy entries
-                      design.publicUrl ||     // fallback
+                      design.imageDataUrl ||
+                      design.publicUrl ||
                       ''
                     }
                     alt={design.prompt}
@@ -223,7 +231,11 @@ export default function MyDesigns() {
 
           <VStack mt={8}>
             {hasMore ? (
-              <Button isLoading={loadingMore} onClick={() => fetchDesigns(page + 1, true)} colorScheme="brandAccentYellow">
+              <Button
+                isLoading={loadingMore}
+                onClick={() => fetchDesigns(page + 1, true)}
+                colorScheme="brandAccentYellow"
+              >
                 Load more
               </Button>
             ) : (
@@ -243,7 +255,7 @@ export default function MyDesigns() {
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image
                 src={
-                  // use a larger but still web-friendly preview when possible
+                  // bigger preview if Cloudinary; otherwise fallback
                   derivePreviewFromPublicUrl(selectedDesign.publicUrl) ||
                   selectedDesign.imageDataUrl ||
                   selectedDesign.thumbUrl ||
@@ -258,22 +270,39 @@ export default function MyDesigns() {
               />
             </ModalBody>
             <ModalFooter bg="brand.secondary" borderBottomRadius="md" justifyContent="space-between">
-              <Button colorScheme="red" onClick={() => handleOpenDeleteConfirmation(selectedDesign)} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>
+              <Button
+                colorScheme="red"
+                onClick={() => handleOpenDeleteConfirmation(selectedDesign)}
+                isLoading={isDeleting}
+                leftIcon={<Icon as={FaTrashAlt} />}
+              >
                 Delete
               </Button>
               <HStack>
-                <Link
-                  href={selectedDesign.publicUrl || selectedDesign.imageDataUrl || '#'}
-                  isExternal
-                  _hover={{ textDecoration: 'none' }}
+                <Button
+                  leftIcon={<Icon as={FaDownload} />}
+                  colorScheme="brandAccentYellow"
+                  isDisabled={!selectedDesign.publicUrl && !selectedDesign.imageDataUrl}
+                  onClick={() => {
+                    const src = selectedDesign.publicUrl || selectedDesign.imageDataUrl;
+                    if (!src) return;
+                    const name =
+                      (selectedDesign.prompt?.slice(0, 40) || 'design')
+                        .replace(/[^\w\-]+/g, '_') + '.png';
+                    downloadImage(src, name);
+                  }}
                 >
-                  <Button leftIcon={<Icon as={FaDownload} />} colorScheme="brandAccentYellow" isDisabled={!selectedDesign.publicUrl && !selectedDesign.imageDataUrl}>
-                    Download Full
-                  </Button>
-                </Link>
+                  Download Full
+                </Button>
 
-                {!selectedDesign.isSubmittedForContest || selectedDesign.contestSubmissionMonth !== getCurrentMonthYYYYMM() ? (
-                  <Button colorScheme="green" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>
+                {!selectedDesign.isSubmittedForContest ||
+                selectedDesign.contestSubmissionMonth !== getCurrentMonthYYYYMM() ? (
+                  <Button
+                    colorScheme="green"
+                    onClick={() => handleOpenSubmitConfirmation(selectedDesign)}
+                    isLoading={isSubmitting}
+                    leftIcon={<Icon as={FaTrophy} />}
+                  >
                     Submit to Contest
                   </Button>
                 ) : (
