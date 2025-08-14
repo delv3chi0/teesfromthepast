@@ -1,17 +1,19 @@
 // frontend/src/data/mockupsRegistry.js
 //
-// Single source of truth for mockup image URLs.
-// - Primary: Cloudinary
-// - Fallback: /public/mockups/* (optional)
+// Single source of truth for mockup image URLs and visual placements.
+// Primary source: Cloudinary; Fallback: /public/mockups/* (optional).
+//
 // Exports:
-//   getMockupUrl({ slug, color, view }) -> Promise<string>  // HEAD-checks the URL
-//   getPrimaryImage({ slug, color, view }) -> string        // fast, no network check
+//   getMockupUrl({ slug, color, view }) -> Promise<string>   // checks that a candidate exists
+//   getPrimaryImage({ slug, color, view }) -> string         // fastest, no network check
 //   listColors(slug) -> string[]
 //   resolveColor(slug, wantedColor) -> string | null
+//   getProductType(slug) -> "tshirt" | "hoodie" | ...
+//   getPlacement({ slug, view, productType }) -> { x,y,w,h } // FRACTIONS of canvas (0–1)
 //   MOCKUPS_PLACEHOLDER
 //
-// Add more products by extending REGISTRY and COLOR_TO_FOLDER.
-// ------------------------------------------------------------------
+// To add products: extend REGISTRY, COLOR_TO_FOLDER, and (if needed) PLACEMENTS.
+// -----------------------------------------------------------------------------
 
 const CLOUDINARY_BASE =
   "https://res.cloudinary.com/dqvsdvjis/image/upload/mockups";
@@ -19,37 +21,11 @@ const CLOUDINARY_BASE =
 export const MOCKUPS_PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// helpers
 const norm = (s) => String(s || "").trim().toLowerCase();
 const keyify = (s) => norm(s).replace(/\s+/g, "-");
 
-// supported display colors
-const COLORS = [
-  "black",
-  "maroon",
-  "red",
-  "orange",
-  "gold",
-  "lime",
-  "royal blue",
-  "purple",
-  "charcoal",
-  "white",
-  "military green",
-  "forest green",
-  "tropical blue",
-  "azalea",
-  "grey",
-  "sport_grey",
-  "ash",
-  "brown savana",
-  "brown savanna",
-  "brown",
-  "sand",
-  "navy",
-];
+// ---------- Color handling ----------
 
-// mapping from display color -> folder name
 const COLOR_TO_FOLDER = {
   black: "tee-black",
   maroon: "tee-maroon",
@@ -76,7 +52,8 @@ const COLOR_TO_FOLDER = {
   navy: "tee-navy",
 };
 
-// product registry
+// ---------- Products registry ----------
+
 const REGISTRY = {
   "classic-tee": {
     productType: "tshirt",
@@ -93,21 +70,54 @@ const REGISTRY = {
       "charcoal",
       "white",
     ],
+    // Optional: if a product needs special placement different from generic tshirt
+    // you can specify placements here; otherwise generic "tshirt" below is used.
   },
-  // Add more products here as you upload mockups:
+
+  // Example to add more:
   // "premium-hoodie": { productType: "hoodie", colors: ["black","charcoal","white"] },
 };
 
-// ---------------- internal url builders ----------------
+// ---------- Visual placements (fractions of the canvas W/H) ----------
+// Tuned to your current mockups so the chest box looks “right”.
+// If a slug is provided (e.g., "classic-tee"), it wins; else use productType.
+
+const PLACEMENTS = {
+  // Generic tees (good default)
+  tshirt: {
+    front:  { x: 0.29, y: 0.23, w: 0.32, h: 0.42 },
+    back:   { x: 0.29, y: 0.23, w: 0.32, h: 0.42 },
+    left:   { x: 0.15, y: 0.40, w: 0.12, h: 0.14 },
+    right:  { x: 0.73, y: 0.40, w: 0.12, h: 0.14 },
+  },
+
+  // You can specialize per product slug if the visuals differ
+  "classic-tee": {
+    front:  { x: 0.34, y: 0.24, w: 0.30, h: 0.40 }, // slightly tighter and a bit higher
+    back:   { x: 0.34, y: 0.24, w: 0.30, h: 0.42 },
+    left:   { x: 0.18, y: 0.41, w: 0.12, h: 0.14 },
+    right:  { x: 0.70, y: 0.41, w: 0.12, h: 0.14 },
+  },
+
+  hoodie: {
+    front:  { x: 0.34, y: 0.28, w: 0.28, h: 0.34 },
+    back:   { x: 0.33, y: 0.25, w: 0.30, h: 0.40 },
+  },
+
+  tote: {
+    front:  { x: 0.34, y: 0.26, w: 0.32, h: 0.38 },
+    back:   { x: 0.34, y: 0.26, w: 0.32, h: 0.38 },
+  },
+};
+
+// ---------- URL building ----------
 
 function buildCandidateUrls({ slug, color, view }) {
   const sKey = keyify(slug);
   const folderColor = COLOR_TO_FOLDER[norm(color)];
   if (!folderColor) return [MOCKUPS_PLACEHOLDER];
-
   const cloudinary = `${CLOUDINARY_BASE}/${sKey}/${folderColor}/${view}.png`;
-  const fallback = `/mockups/${sKey}/${folderColor}/${view}.png`; // optional public fallback
-
+  const fallback = `/mockups/${sKey}/${folderColor}/${view}.png`;
   return [cloudinary, fallback];
 }
 
@@ -120,7 +130,7 @@ async function headOk(url) {
   }
 }
 
-// ---------------- public API ----------------
+// ---------- Public API ----------
 
 export async function getMockupUrl({ slug, color, view = "front" }) {
   const candidates = buildCandidateUrls({ slug, color, view });
@@ -130,8 +140,6 @@ export async function getMockupUrl({ slug, color, view = "front" }) {
   return MOCKUPS_PLACEHOLDER;
 }
 
-// Fast, synchronous primary image (no HEAD check).
-// Good for cards/thumbnails where a broken image is acceptable until Cloudinary finishes syncing.
 export function getPrimaryImage({ slug, color, view = "front" }) {
   const candidates = buildCandidateUrls({ slug, color, view });
   return candidates[0] || MOCKUPS_PLACEHOLDER;
@@ -154,4 +162,12 @@ export function resolveColor(slug, wantedColor) {
 export function getProductType(slug) {
   const key = norm(slug);
   return REGISTRY[key]?.productType || "tshirt";
+}
+
+export function getPlacement({ slug, view = "front", productType = "tshirt" }) {
+  const sKey = keyify(slug);
+  const v = view || "front";
+  if (PLACEMENTS[sKey]?.[v]) return PLACEMENTS[sKey][v];
+  if (PLACEMENTS[productType]?.[v]) return PLACEMENTS[productType][v];
+  return { x: 0.34, y: 0.24, w: 0.30, h: 0.40 }; // safe default
 }

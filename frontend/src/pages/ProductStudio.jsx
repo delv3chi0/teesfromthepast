@@ -16,76 +16,18 @@ import {
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
 
-// Central image registry (Cloudinary + fallback)
 import {
   getMockupUrl,
+  getPlacement,
   listColors,
   resolveColor,
   MOCKUPS_PLACEHOLDER,
+  getProductType as getTypeFromRegistry,
 } from "../data/mockupsRegistry";
 
-// ---------- constants ----------
 const DPI = 300;
 const CANVAS_ASPECT = 3 / 4;
 
-// Placement table: fractions relative to the whole canvas (background mockup fills height)
-const PLACEMENTS = {
-  tshirt: {
-    front:  { leftFrac: 0.29, topFrac: 0.285, widthFrac: 0.42, aspect: 12 / 16 },
-    back:   { leftFrac: 0.29, topFrac: 0.320, widthFrac: 0.42, aspect: 12 / 16 },
-    left:   { leftFrac: 0.58, topFrac: 0.40,  widthFrac: 0.17, aspect: 4 / 3.5 },
-    right:  { leftFrac: 0.25, topFrac: 0.40,  widthFrac: 0.17, aspect: 4 / 3.5 },
-  },
-  hoodie: {
-    front:  { leftFrac: 0.30, topFrac: 0.31, widthFrac: 0.38, aspect: 12 / 14 },
-    back:   { leftFrac: 0.30, topFrac: 0.33, widthFrac: 0.40, aspect: 12 / 16 },
-  },
-  tote: {
-    front:  { leftFrac: 0.34, topFrac: 0.28, widthFrac: 0.32, aspect: 14 / 16 },
-    back:   { leftFrac: 0.34, topFrac: 0.28, widthFrac: 0.32, aspect: 14 / 16 },
-  },
-  hat: {
-    front:  { leftFrac: 0.43, topFrac: 0.36, widthFrac: 0.14, aspect: 4 / 1.75 },
-  },
-  beanie: {
-    front:  { leftFrac: 0.40, topFrac: 0.38, widthFrac: 0.20, aspect: 5 / 1.75 },
-  },
-};
-
-const VIEWS_BY_TYPE = {
-  tshirt: ["front", "back", "left", "right"],
-  hoodie: ["front", "back"],
-  tote: ["front", "back"],
-  hat: ["front"],
-  beanie: ["front"],
-};
-
-function detectProductType(product) {
-  const text = `${product?.type || product?.category || ""} ${product?.name || ""}`.toLowerCase();
-  if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
-  if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
-  if (/(tote|bag)/.test(text)) return "tote";
-  if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
-  if (/(beanie|knit)/.test(text)) return "beanie";
-  return "tshirt";
-}
-
-const norm = (s) => String(s || "").trim().toLowerCase();
-function ProductTypeBadgeIcon({ type }) {
-  const IconCmp =
-    type === "tshirt" ? FaTshirt :
-    type === "hoodie" ? FaTshirt :
-    type === "hat"    ? FaHatCowboy :
-    type === "beanie" ? FaHockeyPuck :
-    FaTshirt;
-  return <Icon as={IconCmp} color="brand.accentYellow" />;
-}
-function useQuery() {
-  const { search } = useLocation();
-  return useMemo(() => new URLSearchParams(search), [search]);
-}
-
-// Swatches (same palette you liked from ProductCard)
 const COLOR_SWATCHES = {
   black: "#000000",
   white: "#FFFFFF",
@@ -112,7 +54,36 @@ const COLOR_SWATCHES = {
   grey: "#8E8E8E",
 };
 
-// ---------- component ----------
+const norm = (s) => String(s || "").trim().toLowerCase();
+
+function detectProductType(product, slug) {
+  // Prefer registry’s known type, then text sniff
+  const reg = getTypeFromRegistry(slug);
+  if (reg) return reg;
+  const text = `${product?.type || product?.category || ""} ${product?.name || ""}`.toLowerCase();
+  if (/(tee|t-shirt|shirt|unisex)/.test(text)) return "tshirt";
+  if (/(hoodie|sweatshirt)/.test(text)) return "hoodie";
+  if (/(tote|bag)/.test(text)) return "tote";
+  if (/(hat|cap|trucker|snapback)/.test(text)) return "hat";
+  if (/(beanie|knit)/.test(text)) return "beanie";
+  return "tshirt";
+}
+
+function ProductTypeBadgeIcon({ type }) {
+  const IconCmp =
+    type === "tshirt" ? FaTshirt :
+    type === "hoodie" ? FaTshirt :
+    type === "hat"    ? FaHatCowboy :
+    type === "beanie" ? FaHockeyPuck :
+    FaTshirt;
+  return <Icon as={IconCmp} color="brand.accentYellow" />;
+}
+
+function useQuery() {
+  const { search } = useLocation();
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -124,8 +95,16 @@ export default function ProductStudio() {
   const sizeParam  = query.get("size")  || "";
 
   const [product, setProduct] = useState(null);
-  const productType = useMemo(() => detectProductType(product), [product]);
-  const availableViews = useMemo(() => VIEWS_BY_TYPE[productType] || ["front"], [productType]);
+  const productType = useMemo(
+    () => detectProductType(product, slugParam),
+    [product, slugParam]
+  );
+  const availableViews = useMemo(() => {
+    if (productType === "tshirt") return ["front", "back", "left", "right"];
+    if (productType === "hoodie") return ["front", "back"];
+    if (productType === "tote") return ["front", "back"];
+    return ["front"];
+  }, [productType]);
 
   const [view, setView] = useState("front");
   const [color, setColor] = useState(colorParam || "black");
@@ -134,8 +113,7 @@ export default function ProductStudio() {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const fabricRef = useRef(null);
-  const clipRef = useRef(null);           // clip path (print area)
-  const printRectRef = useRef(null);      // the dashed print area rect
+  const clipRef = useRef(null);
 
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
@@ -147,11 +125,13 @@ export default function ProductStudio() {
   const undoStack = useRef([]);
   const redoStack = useRef([]);
   const warnedRef = useRef(false);
+  const guideVRef = useRef(null);
+  const guideHRef = useRef(null);
 
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(true);
 
-  // ---------- data fetch ----------
+  // ---------------- data fetch ----------------
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -162,10 +142,9 @@ export default function ProductStudio() {
         const p = res.data;
         setProduct(p);
 
-        // default color from registry where possible
         const regColors = listColors(norm(p?.slug || slugParam));
-        if (regColors.length) {
-          setColor(resolveColor(p?.slug || slugParam, colorParam || "black") || regColors[0]);
+        if (regColors.length && !colorParam) {
+          setColor(resolveColor(p?.slug || slugParam, "black") || regColors[0]);
         }
 
         if (!sizeParam) {
@@ -175,7 +154,7 @@ export default function ProductStudio() {
           if (first) setSize(first);
         }
 
-        if (!availableViews.includes(view)) setView(availableViews[0] || "front");
+        if (!availableViews.includes(view)) setView(availableViews[0]);
       } catch (e) {
         console.error(e);
         setProduct({ name: params.slug, slug: params.slug });
@@ -199,7 +178,7 @@ export default function ProductStudio() {
     return () => { cancelled = true; };
   }, []);
 
-  // ---------- fabric init ----------
+  // ---------------- fabric init ----------------
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
@@ -215,37 +194,25 @@ export default function ProductStudio() {
       });
       fabricRef.current = fc;
 
+      const tick = () => setLayerTick((t) => t + 1);
       const onChange = () => {
         setHasObjects(
-          fc.getObjects().some(o => !["printArea", "gridOverlay"].includes(o.id))
+          fc.getObjects().some(o => !["printArea","gridOverlay","guide"].includes(o.id))
         );
-        setLayerTick((t) => t + 1);
+        tick();
       };
       fc.on("object:added", onChange);
       fc.on("object:removed", onChange);
       fc.on("object:modified", onChange);
 
-      // Keys
+      // keyboard shortcuts
       const onKey = (e) => {
         const active = fc.getActiveObject();
-        if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) {
-          e.preventDefault(); zoomToPrintArea(zoom + 0.1); return;
-        }
-        if ((e.ctrlKey || e.metaKey) && e.key === "-") {
-          e.preventDefault(); zoomToPrintArea(zoom - 0.1); return;
-        }
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") {
-          setShowGrid((v)=>!v); refreshBackground(); return;
-        }
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") {
-          setMockupVisible((v)=>!v);
-          const bg = fc.backgroundImage;
-          if (bg) { bg.set("opacity", bg.opacity === 0 ? mockupOpacity : 0); fc.requestRenderAll(); }
-          return;
-        }
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") {
-          autoFit(); return;
-        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) { e.preventDefault(); setZoomSafe(zoom + 0.1, { anchorPrintArea: true }); return; }
+        if ((e.ctrlKey || e.metaKey) && e.key === "-") { e.preventDefault(); setZoomSafe(zoom - 0.1, { anchorPrintArea: true }); return; }
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") { setShowGrid((v)=>!v); return; }
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") { setMockupVisible((v)=>!v); return; }
+        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") { autoFit(); return; }
         if (!active) return;
         const step = e.shiftKey ? 5 : 1;
         if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); del(); return; }
@@ -272,9 +239,10 @@ export default function ProductStudio() {
         ro.disconnect();
       };
     }
-  }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoom]);
 
-  // ---------- helpers ----------
+  // ---------------- helpers ----------------
   const makeGridOverlay = useCallback((fc) => {
     const size = 32;
     const svg = `
@@ -289,57 +257,75 @@ export default function ProductStudio() {
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }, []);
 
-  const computePrintRect = (fc, type, v) => {
-    const rule = (PLACEMENTS[type] && PLACEMENTS[type][v]) || PLACEMENTS.tshirt.front;
-    const width = fc.width * rule.widthFrac;
-    const height = width / rule.aspect; // keep 12x16 etc.
-    const left = fc.width * rule.leftFrac;
-    const top  = fc.height * rule.topFrac;
-    return { left, top, width, height };
-  };
-
-  const applyClipToUserObjects = (fc, clip) => {
-    fc.getObjects()
-      .filter(o => !["printArea", "gridOverlay"].includes(o.id))
-      .forEach(o => { o.clipPath = clip; });
-  };
-
-  // Center zoom around the print area
-  const zoomToPrintArea = (nextZoomRaw) => {
+  const applyMockupVisibility = useCallback(() => {
     const fc = fabricRef.current; if (!fc) return;
-    const clamped = Math.max(0.75, Math.min(2, nextZoomRaw));
-    setZoom(clamped);
-
-    const rect = printRectRef.current;
-    if (rect) {
-      const a = rect.getBoundingRect(true, true);
-      const cx = a.left + a.width / 2;
-      const cy = a.top  + a.height / 2;
-      const pt = new window.fabric.Point(cx, cy);
-      fc.zoomToPoint(pt, clamped);
-    } else {
-      fc.setZoom(clamped);
+    const bg = fc.backgroundImage;
+    if (bg) {
+      bg.set({ opacity: mockupVisible ? mockupOpacity : 0 });
+      fc.requestRenderAll();
     }
+  }, [mockupOpacity, mockupVisible]);
+
+  // place/size rect by fractions
+  const placePrintArea = useCallback((fc) => {
+    const slug = product?.slug || slugParam || "classic-tee";
+    const placement = getPlacement({ slug, view, productType });
+
+    const left = placement.x * fc.width;
+    const top  = placement.y * fc.height;
+    const w    = placement.w * fc.width;
+    const h    = placement.h * fc.height;
+
+    const existing = fc.getObjects().find(o => o.id === "printArea");
+    if (existing) fc.remove(existing);
+
+    const rect = new window.fabric.Rect({
+      id: "printArea",
+      left, top, width: w, height: h,
+      originX: "left", originY: "top",
+      fill: "",
+      stroke: "#FFFFFF",
+      strokeDashArray: [6, 6],
+      strokeWidth: 2,
+      selectable: false,
+      evented: false,
+      excludeFromExport: true,
+    });
+    fc.add(rect);
+
+    // clip path for all user objects
+    const clipRect = new window.fabric.Rect({
+      left, top, width: w, height: h,
+      absolutePositioned: true,
+      originX: "left", originY: "top",
+    });
+    clipRef.current = clipRect;
+
+    fc.getObjects().forEach(o => {
+      if (!["printArea","gridOverlay","guide"].includes(o.id)) {
+        o.clipPath = clipRect;
+      }
+    });
+
     fc.requestRenderAll();
-  };
+    return rect;
+  }, [product, slugParam, view, productType]);
 
   const refreshBackground = useCallback(async () => {
     const fc = fabricRef.current;
-    const slug = product?.slug || slugParam || "classic-tee";
     if (!fc) return;
 
-    // Keep user objects; remove guides/overlays
-    const keep = fc.getObjects().filter(o => !["printArea", "gridOverlay"].includes(o.id));
+    // keep user objects
+    const keep = fc.getObjects().filter(o => !["printArea","gridOverlay","guide"].includes(o.id));
     fc.clear();
     keep.forEach(o => fc.add(o));
 
-    // background mockup
+    const slug = product?.slug || slugParam || "classic-tee";
     const url = await getMockupUrl({ slug, color, view });
 
     window.fabric.Image.fromURL(
       url || MOCKUPS_PLACEHOLDER,
       (img) => {
-        // Fit by height, center horizontally
         const scale = fc.height / img.height;
         img.set({
           top: 0,
@@ -354,7 +340,6 @@ export default function ProductStudio() {
         });
         fc.setBackgroundImage(img, fc.renderAll.bind(fc));
 
-        // Grid overlay
         const gridDataUrl = makeGridOverlay(fc);
         window.fabric.Image.fromURL(
           gridDataUrl,
@@ -374,52 +359,52 @@ export default function ProductStudio() {
           { crossOrigin: "anonymous" }
         );
 
-        // PRINT AREA (based on placement fractions)
-        const { left, top, width, height } = computePrintRect(fc, productType, view);
+        // place rect by fractions (visually correct)
+        const area = placePrintArea(fc);
 
-        const rect = new window.fabric.Rect({
-          id: "printArea",
-          left, top, width, height,
-          originX: "left",
-          originY: "top",
-          fill: "",
-          stroke: "#FFFFFF",
-          strokeDashArray: [6, 6],
-          strokeWidth: 2,
-          selectable: false,
-          evented: false,
-          excludeFromExport: true,
-        });
-        fc.add(rect);
-        printRectRef.current = rect;
-
-        // clip path = absolute rect
-        const clipRect = new window.fabric.Rect({
-          left, top, width, height,
-          absolutePositioned: true,
-          originX: "left", originY: "top",
-        });
-        clipRef.current = clipRect;
-        applyClipToUserObjects(fc, clipRect);
+        // keep zoom anchored at print-area center on re-render
+        if (area) {
+          const center = { x: area.left + area.width / 2, y: area.top + area.height / 2 };
+          fc.zoomToPoint(new window.fabric.Point(center.x, center.y), Math.max(0.75, Math.min(2, zoom)));
+        }
 
         fc.requestRenderAll();
       },
       { crossOrigin: "anonymous" }
     );
-  }, [product, slugParam, color, view, mockupOpacity, mockupVisible, showGrid, makeGridOverlay, productType]);
+  }, [product, slugParam, color, view, mockupOpacity, mockupVisible, showGrid, makeGridOverlay, placePrintArea, zoom]);
 
   useEffect(() => { refreshBackground(); }, [refreshBackground]);
+  useEffect(() => { applyMockupVisibility(); }, [applyMockupVisibility]);
 
-  // clamp + warn + tiny center snap inside print area
+  // ---------------- guides + clamp + warn ----------------
   useEffect(() => {
-    const fc = fabricRef.current; if (!fc) return;
+    const fc = fabricRef.current;
+    if (!fc) return;
+    const SNAP = 8;
+
+    const hideGuides = () => {
+      [guideVRef.current, guideHRef.current].forEach((g) => g && fc.remove(g));
+      guideVRef.current = null; guideHRef.current = null;
+      fc.requestRenderAll();
+    };
+    const showGuide = (axis, x1, y1, x2, y2) => {
+      const ln = new window.fabric.Line([x1, y1, x2, y2], {
+        stroke: "#FFD54F", strokeWidth: 1, selectable: false, evented: false,
+        strokeDashArray: [4,4], id: "guide", excludeFromExport: true,
+      });
+      if (axis === "v") { if (guideVRef.current) fc.remove(guideVRef.current); guideVRef.current = ln; }
+      else { if (guideHRef.current) fc.remove(guideHRef.current); guideHRef.current = ln; }
+      fc.add(ln);
+    };
 
     const onTransform = () => {
-      const area = printRectRef.current;
-      const o = fc.getActiveObject();
-      if (!area || !o) return;
-
+      const area = fc.getObjects().find(o => o.id === "printArea");
+      if (!area) return;
       const a = area.getBoundingRect(true,true);
+      const o = fc.getActiveObject();
+      if (!o) { hideGuides(); return; }
+
       const bb = o.getBoundingRect(true,true);
 
       // center snap
@@ -427,10 +412,12 @@ export default function ProductStudio() {
       const cy = a.top + a.height/2;
       const ocx = bb.left + bb.width/2;
       const ocy = bb.top + bb.height/2;
-      if (Math.abs(ocx - cx) < 8) { o.left += cx - ocx; }
-      if (Math.abs(ocy - cy) < 8) { o.top  += cy - ocy; }
 
-      // clamp to area
+      let snapV = false, snapH = false;
+      if (Math.abs(ocx - cx) < SNAP) { o.left += cx - ocx; snapV = true; }
+      if (Math.abs(ocy - cy) < SNAP) { o.top  += cy - ocy; snapH = true; }
+
+      // edge clamp
       const bb2 = o.getBoundingRect(true,true);
       if (bb2.left < a.left) o.left += a.left - bb2.left;
       if (bb2.top  < a.top)  o.top  += a.top  - bb2.top;
@@ -439,7 +426,7 @@ export default function ProductStudio() {
       if (bb2.top + bb2.height > a.top + a.height)
         o.top  -= bb2.top  + bb2.height - (a.top + a.height);
 
-      o.setCoords(); fc.requestRenderAll();
+      o.setCoords();
 
       const overflow =
         bb2.left < a.left || bb2.top < a.top ||
@@ -451,19 +438,39 @@ export default function ProductStudio() {
         toast({ title: "Part of your design is outside the print area", status: "warning", duration: 1400 });
         setTimeout(() => (warnedRef.current = false), 1000);
       }
+
+      hideGuides();
+      if (snapV) showGuide("v", cx, a.top, cx, a.top + a.height);
+      if (snapH) showGuide("h", a.left, cy, a.left + a.width, cy);
+      fc.requestRenderAll();
     };
 
     fc.on("object:moving", onTransform);
     fc.on("object:scaling", onTransform);
     fc.on("object:rotating", onTransform);
+    fc.on("mouse:up", () => {
+      if (guideVRef.current) fc.remove(guideVRef.current);
+      if (guideHRef.current) fc.remove(guideHRef.current);
+      guideVRef.current = null; guideHRef.current = null;
+      fc.requestRenderAll();
+    });
+    fc.on("selection:cleared", () => {
+      if (guideVRef.current) fc.remove(guideVRef.current);
+      if (guideHRef.current) fc.remove(guideHRef.current);
+      guideVRef.current = null; guideHRef.current = null;
+      fc.requestRenderAll();
+    });
+
     return () => {
       fc.off("object:moving", onTransform);
       fc.off("object:scaling", onTransform);
       fc.off("object:rotating", onTransform);
+      fc.off("mouse:up");
+      fc.off("selection:cleared");
     };
   }, [toast]);
 
-  // ---------- actions ----------
+  // ---------------- actions ----------------
   const pushHistory = useCallback(() => {
     const fc = fabricRef.current; if (!fc) return;
     redoStack.current = [];
@@ -489,6 +496,40 @@ export default function ProductStudio() {
     if (nxt) applyJSON(nxt);
   };
 
+  const zoomToPrintAreaCenter = (targetZoom) => {
+    const fc = fabricRef.current; if (!fc) return;
+    const area = fc.getObjects().find(o => o.id === "printArea"); if (!area) return;
+    const center = new window.fabric.Point(area.left + area.width/2, area.top + area.height/2);
+    fc.zoomToPoint(center, targetZoom);
+    fc.requestRenderAll();
+  };
+
+  const setZoomSafe = (z, { anchorPrintArea = false } = {}) => {
+    const fc = fabricRef.current; if (!fc) return;
+    const clamped = Math.max(0.75, Math.min(2, z));
+    setZoom(clamped);
+    if (anchorPrintArea) zoomToPrintAreaCenter(clamped);
+    else { fc.setZoom(clamped); fc.requestRenderAll(); }
+  };
+
+  const fitIntoPrintArea = (obj, scalePad = 0.9) => {
+    const fc = fabricRef.current; if (!fc || !obj) return;
+    const area = fc.getObjects().find(x => x.id==="printArea"); if (!area) return;
+    const a = area.getBoundingRect(true,true);
+
+    const ow = obj.getScaledWidth();
+    const oh = obj.getScaledHeight();
+    const s = Math.min((a.width*scalePad)/ow, (a.height*scalePad)/oh);
+
+    obj.scaleX = obj.scaleX * s;
+    obj.scaleY = obj.scaleY * s;
+
+    const bb = obj.getBoundingRect(true,true);
+    obj.left += a.left + a.width/2 - (bb.left + bb.width/2);
+    obj.top  += a.top  + a.height/2 - (bb.top  + bb.height/2);
+    obj.setCoords();
+  };
+
   const addText = () => {
     const fc = fabricRef.current;
     const textValue = prompt("Enter text");
@@ -499,15 +540,23 @@ export default function ProductStudio() {
       fill: "#ffffff", fontSize: 36,
     });
     t.clipPath = clipRef.current || null;
-    pushHistory(); fc.add(t); fc.setActiveObject(t); fc.requestRenderAll();
+    pushHistory();
+    fc.add(t);
+    fitIntoPrintArea(t, 0.8); // fit on add
+    fc.setActiveObject(t);
+    fc.requestRenderAll();
   };
 
   const addDesign = (design) => {
     const fc = fabricRef.current; if (!fc || !design?.imageDataUrl) return;
     window.fabric.Image.fromURL(design.imageDataUrl, (img) => {
-      img.set({ left: fc.width/2, top: fc.height/2, originX: "center", originY: "center", scaleX: 0.5, scaleY: 0.5 });
+      img.set({ left: fc.width/2, top: fc.height/2, originX: "center", originY: "center" });
       img.clipPath = clipRef.current || null;
-      pushHistory(); fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
+      pushHistory();
+      fc.add(img);
+      fitIntoPrintArea(img, 0.9); // fit on add
+      fc.setActiveObject(img);
+      fc.requestRenderAll();
     }, { crossOrigin: "anonymous" });
   };
 
@@ -520,15 +569,15 @@ export default function ProductStudio() {
       if (/\.svg$/i.test(file.name)) {
         window.fabric.loadSVGFromString(url, (objects, options) => {
           const grp = window.fabric.util.groupSVGElements(objects, options);
-          grp.set({ left: fc.width/2, top: fc.height/2, originX: "center", originY: "center", scaleX: 0.6, scaleY: 0.6 });
+          grp.set({ left: fc.width/2, top: fc.height/2, originX: "center", originY: "center" });
           grp.clipPath = clipRef.current || null;
-          pushHistory(); fc.add(grp); fc.setActiveObject(grp); fc.requestRenderAll();
+          pushHistory(); fc.add(grp); fitIntoPrintArea(grp, 0.9); fc.setActiveObject(grp); fc.requestRenderAll();
         });
       } else {
         window.fabric.Image.fromURL(url, (img) => {
-          img.set({ left: fc.width/2, top: fc.height/2, originX: "center", originY: "center", scaleX: 0.5, scaleY: 0.5 });
+          img.set({ left: fc.width/2, top: fc.height/2, originX: "center", originY: "center" });
           img.clipPath = clipRef.current || null;
-          pushHistory(); fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
+          pushHistory(); fc.add(img); fitIntoPrintArea(img, 0.9); fc.setActiveObject(img); fc.requestRenderAll();
         });
       }
     };
@@ -538,14 +587,15 @@ export default function ProductStudio() {
   const del = () => {
     const fc = fabricRef.current; if (!fc) return;
     const active = fc.getActiveObject();
-    if (!active || active.id === "printArea" || active.id === "gridOverlay") return;
+    if (!active || ["printArea","gridOverlay","guide"].includes(active.id)) return;
     pushHistory(); fc.remove(active); fc.discardActiveObject(); fc.requestRenderAll();
   };
 
   const centerH = () => {
     const fc = fabricRef.current; if (!fc) return;
     const o = fc.getActiveObject(); if (!o) return;
-    const a = printRectRef.current?.getBoundingRect(true,true); if (!a) return;
+    const area = fc.getObjects().find(x => x.id==="printArea"); if (!area) return;
+    const a = area.getBoundingRect(true,true);
     const bb = o.getBoundingRect(true,true);
     o.left += a.left + a.width/2 - (bb.left + bb.width/2);
     o.setCoords(); fc.requestRenderAll();
@@ -554,38 +604,26 @@ export default function ProductStudio() {
   const autoFit = () => {
     const fc = fabricRef.current; if (!fc) return;
     const o = fc.getActiveObject(); if (!o) return;
-    const a = printRectRef.current?.getBoundingRect(true,true); if (!a) return;
-    const maxW = a.width * 0.9;
-    const maxH = a.height * 0.9;
-    const ow = o.getScaledWidth();
-    const oh = o.getScaledHeight();
-    const s = Math.min(maxW/ow, maxH/oh);
-    o.scaleX *= s; o.scaleY *= s;
-    const bb = o.getBoundingRect(true,true);
-    o.left += a.left + a.width/2 - (bb.left + bb.width/2);
-    o.top  += a.top  + a.height/2 - (bb.top  + bb.height/2);
-    o.setCoords(); fc.requestRenderAll();
+    fitIntoPrintArea(o, 0.9);
+    fc.requestRenderAll();
   };
 
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current; if (!fc) return;
 
-    const area = printRectRef.current;
+    const area = fc.getObjects().find(o => o.id === "printArea");
     if (!area) return toast({ title: "No print area defined", status: "error" });
 
-    const objs = fc.getObjects().filter(o => !["printArea", "gridOverlay"].includes(o.id));
+    const objs = fc.getObjects().filter(o => !["printArea","gridOverlay","guide"].includes(o.id));
     if (!objs.length) return toast({ title: "Nothing to print", status: "warning" });
 
-    // True output size (inches * DPI)
-    const rule = (PLACEMENTS[productType] && PLACEMENTS[productType][view]) || PLACEMENTS.tshirt.front;
-    const outW = Math.round((12) * DPI * (rule.aspect)); // we keep aspect by scaling below anyway
-    // Instead of guessing, compute from fraction + DPI relative to current on-screen rect
-    const aBB = area.getBoundingRect(true, true);
-    const OUT_W = Math.round(12 * DPI); // base 12-inch width for tees
-    const OUT_H = Math.round(OUT_W / rule.aspect);
+    // Use a standard 12x16 chest for tees at 300 DPI (you can branch by productType if needed)
+    const outW = Math.round(12 * DPI);
+    const outH = Math.round(16 * DPI);
 
-    const tmp = new window.fabric.Canvas(null, { width: OUT_W, height: OUT_H });
-    const scaleFactor = OUT_W / aBB.width;
+    const tmp = new window.fabric.Canvas(null, { width: outW, height: outH });
+    const aBB = area.getBoundingRect(true, true);
+    const scaleFactor = outW / aBB.width;
 
     objs.forEach((o) => {
       const clone = window.fabric.util.object.clone(o);
@@ -636,6 +674,7 @@ export default function ProductStudio() {
     }
   };
 
+  // ---------------- derived UI ----------------
   const registryColors = useMemo(() => listColors(norm(product?.slug || slugParam)), [product, slugParam]);
   const sizes = useMemo(() => {
     const set = new Set();
@@ -647,7 +686,7 @@ export default function ProductStudio() {
   const layerList = () => {
     const fc = fabricRef.current; if (!fc) return [];
     return fc.getObjects()
-      .filter(o => !["printArea", "gridOverlay"].includes(o.id))
+      .filter(o => !["printArea","gridOverlay","guide"].includes(o.id))
       .map((o,idx) => ({
         id: o._layerId || `layer_${idx}`,
         obj: o,
@@ -661,7 +700,7 @@ export default function ProductStudio() {
   const bringFwd     = (it) => { const fc=fabricRef.current; fc.bringForward(it.obj); fc.requestRenderAll(); setLayerTick(t=>t+1); };
   const sendBack     = (it) => { const fc=fabricRef.current; fc.sendBackwards(it.obj); fc.requestRenderAll(); setLayerTick(t=>t+1); };
 
-  // ---------- UI ----------
+  // ---------------- UI ----------------
   return (
     <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
       {/* LEFT */}
@@ -743,14 +782,14 @@ export default function ProductStudio() {
                     <Text color="brand.textLight" fontWeight="medium">Zoom</Text>
                     <HStack>
                       <Tooltip label="Zoom out">
-                        <Button size="sm" onClick={() => zoomToPrintArea(zoom - 0.1)} leftIcon={<FaSearchMinus />}>Out</Button>
+                        <Button size="sm" onClick={() => setZoomSafe(zoom - 0.1, { anchorPrintArea: true })} leftIcon={<FaSearchMinus />}>Out</Button>
                       </Tooltip>
-                      <Slider aria-label="zoom" value={zoom} min={0.75} max={2} step={0.1} onChange={zoomToPrintArea}>
+                      <Slider aria-label="zoom" value={zoom} min={0.75} max={2} step={0.1} onChange={(v)=>setZoomSafe(v, { anchorPrintArea: true })}>
                         <SliderTrack><SliderFilledTrack /></SliderTrack>
                         <SliderThumb />
                       </Slider>
                       <Tooltip label="Zoom in">
-                        <Button size="sm" onClick={() => zoomToPrintArea(zoom + 0.1)} leftIcon={<FaSearchPlus />}>In</Button>
+                        <Button size="sm" onClick={() => setZoomSafe(zoom + 0.1, { anchorPrintArea: true })} leftIcon={<FaSearchPlus />}>In</Button>
                       </Tooltip>
                     </HStack>
 
@@ -760,33 +799,13 @@ export default function ProductStudio() {
                     </HStack>
 
                     <HStack>
-                      <Switch
-                        isChecked={mockupVisible}
-                        onChange={(e) => {
-                          setMockupVisible(e.target.checked);
-                          const fc = fabricRef.current;
-                          const bg = fc?.backgroundImage;
-                          if (bg) { bg.set("opacity", e.target.checked ? mockupOpacity : 0); fc.requestRenderAll(); }
-                        }}
-                      />
+                      <Switch isChecked={mockupVisible} onChange={(e) => { setMockupVisible(e.target.checked); }} />
                       <Text color="brand.textLight">Show mockup</Text>
                     </HStack>
 
                     <Box>
                       <Text color="brand.textLight" fontWeight="medium" mb={1}>Mockup opacity</Text>
-                      <Slider
-                        aria-label="mockup-opacity"
-                        min={0.2}
-                        max={1}
-                        step={0.05}
-                        value={mockupOpacity}
-                        onChange={(v)=> {
-                          setMockupOpacity(v);
-                          const fc = fabricRef.current;
-                          const bg = fc?.backgroundImage;
-                          if (bg && mockupVisible) { bg.set("opacity", v); fc.requestRenderAll(); }
-                        }}
-                      >
+                      <Slider aria-label="mockup-opacity" min={0.2} max={1} step={0.05} value={mockupOpacity} onChange={(v)=>setMockupOpacity(v)} onChangeEnd={() => applyMockupVisibility()}>
                         <SliderTrack><SliderFilledTrack /></SliderTrack>
                         <SliderThumb />
                       </Slider>
