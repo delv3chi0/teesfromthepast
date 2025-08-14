@@ -1,13 +1,14 @@
-// Central registry for mockup URLs, colors, and print-area placements.
-// Plain JS (no JSX) so Vite parses it fine.
+// Central registry: mockup URLs, color folders, and print-area placements.
+// Pure JS (no JSX). Safe for Vite build.
 
 const CLOUDINARY_BASE =
   "https://res.cloudinary.com/dqvsdvjis/image/upload/mockups";
 
+export const PUBLIC_BASE = "/mockups";
 export const MOCKUPS_PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Map UI color names → Cloudinary folders
+// UI color → Cloudinary folder
 const COLOR_TO_FOLDER = {
   black: "tee-black",
   white: "tee-white",
@@ -43,41 +44,35 @@ const SWATCH_ORDER = [
 
 const norm = (s) => String(s || "").trim().toLowerCase();
 
-// Registry of products (add more here)
+// ---------- PRODUCT REGISTRY ----------
 const REGISTRY = {
   "classic-tee": {
     productType: "tshirt",
     colors: SWATCH_ORDER,
-    makeUrl(colorFolder, view) {
-      return `${CLOUDINARY_BASE}/classic-tee/${colorFolder}/${view}.png`;
+    makeUrl(colorFolder, view, ext = "png") {
+      return `${CLOUDINARY_BASE}/classic-tee/${colorFolder}/${view}.${ext}`;
+    },
+    makePublic(colorFolder, view, ext = "png") {
+      return `${PUBLIC_BASE}/classic-tee/${colorFolder}/${view}.${ext}`;
     },
   },
 };
 
-// --- Placement math ----------------------------------------------------------
-// Fractions are relative to the rendered mockup box (bgBox), not the full canvas.
-//   front/back: { cx, top, w, ratio }   (ratio = height/width)
-//   sides     : { left, top, w, ratio }
-// 12×16 chest => ratio 16/12 = 1.333…
+// ---------- PLACEMENT TUNING ----------
+const RATIO_TSHIRT_FULL = 16 / 12; // 12×16 chest
+const RATIO_SLEEVE = 3.5 / 4;      // ~4" wide × 3.5" tall
 
-const RATIO_TSHIRT_FULL = 16 / 12;
-const RATIO_SLEEVE      = 3.5 / 4; // 4" wide × 3.5" tall (landscape-ish)
-
-// Tuned for your current “classic-tee” Cloudinary mockups
-// (Centered, ~3" down from collar, realistic width)
+// Tuned for your current classic-tee mockups
 const PLACEMENTS = {
   "classic-tee": {
-    // ↓ FINAL DIAL-IN
     front: { cx: 0.5, top: 0.295, w: 0.285, ratio: RATIO_TSHIRT_FULL },
     back:  { cx: 0.5, top: 0.295, w: 0.285, ratio: RATIO_TSHIRT_FULL },
-
-    // Sleeves: placed mid-bicep, compact
     left:  { left: 0.31, top: 0.47, w: 0.15, ratio: RATIO_SLEEVE },
     right: { left: 0.54, top: 0.47, w: 0.15, ratio: RATIO_SLEEVE },
   },
 };
 
-// Product-type fallbacks (used if a slug isn’t listed above)
+// Fallbacks per product type (if a slug isn’t in PLACEMENTS)
 const TYPE_DEFAULTS = {
   tshirt: {
     front: { cx: 0.5, top: 0.30, w: 0.29, ratio: RATIO_TSHIRT_FULL },
@@ -87,7 +82,7 @@ const TYPE_DEFAULTS = {
   },
 };
 
-// --- Exports -----------------------------------------------------------------
+// ---------- EXPORTS ----------
 export function getProductType(slug) {
   const key = norm(slug);
   return REGISTRY[key]?.productType || "tshirt";
@@ -107,42 +102,41 @@ export function resolveColor(slug, color) {
   return opts[0] || "black";
 }
 
-export async function getMockupUrl({ slug, color, view = "front" }) {
+// Return ordered candidates: cloudinary (.webp, .png, .jpg), then public, color→black
+export function getMockupCandidates({ slug, color, view = "front" }) {
   const key = norm(slug || "");
   const product = REGISTRY[key];
-  const cFolder = COLOR_TO_FOLDER[norm(color)] || COLOR_TO_FOLDER.black;
-  if (!product) return MOCKUPS_PLACEHOLDER;
-  return product.makeUrl(cFolder, view) || MOCKUPS_PLACEHOLDER;
+  const chosen = COLOR_TO_FOLDER[norm(color)] || COLOR_TO_FOLDER.black;
+  const black = COLOR_TO_FOLDER.black;
+
+  if (!product) return [MOCKUPS_PLACEHOLDER];
+
+  const exts = ["webp", "png", "jpg"];
+  const urls = [];
+
+  // color first
+  exts.forEach((ext) => urls.push(product.makeUrl(chosen, view, ext)));
+  exts.forEach((ext) => urls.push(product.makePublic(chosen, view, ext)));
+
+  // fallback to black
+  exts.forEach((ext) => urls.push(product.makeUrl(black, view, ext)));
+  exts.forEach((ext) => urls.push(product.makePublic(black, view, ext)));
+
+  urls.push(MOCKUPS_PLACEHOLDER);
+  return urls;
 }
 
-// Primary image for cards/details (prefers Cloudinary)
+// For cards/details (first candidate; UI will still show image even if Cloudinary
+// color is missing, because ProductCard <Image> will render whatever resolves)
 export function getPrimaryImage(product) {
   if (!product) return MOCKUPS_PLACEHOLDER;
   const slug = norm(product.slug || product.name || "");
   const color = resolveColor(slug, "black");
-
-  const cloud = REGISTRY[slug]
-    ? REGISTRY[slug].makeUrl(
-        COLOR_TO_FOLDER[color] || "tee-black",
-        "front"
-      )
-    : null;
-
-  const fromProduct =
-    product.images?.find?.((i) => i.isPrimary)?.url ||
-    (Array.isArray(product.images) && typeof product.images[0] === "string"
-      ? product.images[0]
-      : product.images?.[0]?.url) ||
-    product.variants?.[0]?.image ||
-    product.variants?.[0]?.imageSet?.[0]?.url ||
-    product.image ||
-    null;
-
-  return cloud || fromProduct || MOCKUPS_PLACEHOLDER;
+  const candidates = getMockupCandidates({ slug, color, view: "front" });
+  return candidates[0] || MOCKUPS_PLACEHOLDER;
 }
 
-// Compute the print-area rectangle (px) from placement fractions.
-// bgBox = { left, top, width, height } is the mockup image bounds on canvas.
+// Compute final px rect from placement fractions
 export function getPlacementRect({ slug, view = "front", productType = "tshirt", bgBox }) {
   const key = norm(slug);
   const type = productType || getProductType(slug);
