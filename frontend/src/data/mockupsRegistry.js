@@ -2,18 +2,15 @@
 //
 // Single source of truth for mockup image URLs.
 // - Primary: Cloudinary
-// - Fallback: public/ folder
-//
-// API:
-//   getMockupUrl({ slug, color, view }) -> Promise<string>
+// - Fallback: /public/mockups/* (optional)
+// Exports:
+//   getMockupUrl({ slug, color, view }) -> Promise<string>  // HEAD-checks the URL
+//   getPrimaryImage({ slug, color, view }) -> string        // fast, no network check
 //   listColors(slug) -> string[]
 //   resolveColor(slug, wantedColor) -> string | null
-//   MOCKUPS_PLACEHOLDER: string
+//   MOCKUPS_PLACEHOLDER
 //
-// Notes:
-// - Add more products by copying the "classic-tee" shape.
-// - Colors are normalized to simple lower-case keys (e.g. "royal blue" -> "royal blue").
-//
+// Add more products by extending REGISTRY and COLOR_TO_FOLDER.
 // ------------------------------------------------------------------
 
 const CLOUDINARY_BASE =
@@ -22,12 +19,11 @@ const CLOUDINARY_BASE =
 export const MOCKUPS_PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-// Helpers
+// helpers
 const norm = (s) => String(s || "").trim().toLowerCase();
 const keyify = (s) => norm(s).replace(/\s+/g, "-");
 
-// Friendly list of color names you show around the site
-// (These keys are used by ProductStudio’s swatches.)
+// supported display colors
 const COLORS = [
   "black",
   "maroon",
@@ -53,7 +49,7 @@ const COLORS = [
   "navy",
 ];
 
-// Map a user-facing color name to folder color on disk
+// mapping from display color -> folder name
 const COLOR_TO_FOLDER = {
   black: "tee-black",
   maroon: "tee-maroon",
@@ -62,7 +58,7 @@ const COLOR_TO_FOLDER = {
   gold: "tee-gold",
   lime: "tee-lime",
   "tropical blue": "tee-tropical-blue",
-  "royal": "tee-royal",
+  royal: "tee-royal",
   "royal blue": "tee-royal",
   purple: "tee-purple",
   charcoal: "tee-charcoal",
@@ -80,12 +76,8 @@ const COLOR_TO_FOLDER = {
   navy: "tee-navy",
 };
 
-// ---------------------------
-// Registry: product -> colors
-// ---------------------------
-
+// product registry
 const REGISTRY = {
-  // Adjust or add products here.
   "classic-tee": {
     productType: "tshirt",
     colors: [
@@ -102,73 +94,63 @@ const REGISTRY = {
       "white",
     ],
   },
-  // Example you can add next:
-  // "premium-hoodie": {
-  //   productType: "hoodie",
-  //   colors: ["black", "charcoal", "royal blue", "white"],
-  // },
+  // Add more products here as you upload mockups:
+  // "premium-hoodie": { productType: "hoodie", colors: ["black","charcoal","white"] },
 };
 
-// -------------------------------------------
-// URL builder (primary: Cloudinary, fallback)
-// -------------------------------------------
+// ---------------- internal url builders ----------------
 
 function buildCandidateUrls({ slug, color, view }) {
-  const folderColor = COLOR_TO_FOLDER[norm(color)];
   const sKey = keyify(slug);
+  const folderColor = COLOR_TO_FOLDER[norm(color)];
+  if (!folderColor) return [MOCKUPS_PLACEHOLDER];
 
-  // Cloudinary first
-  const cloudinary = folderColor
-    ? `${CLOUDINARY_BASE}/${sKey}/${folderColor}/${view}.png`
-    : null;
+  const cloudinary = `${CLOUDINARY_BASE}/${sKey}/${folderColor}/${view}.png`;
+  const fallback = `/mockups/${sKey}/${folderColor}/${view}.png`; // optional public fallback
 
-  // Public fallback
-  const fallback = folderColor
-    ? `/mockups/${sKey}/${folderColor}/${view}.png`
-    : null;
-
-  const arr = [];
-  if (cloudinary) arr.push(cloudinary);
-  if (fallback) arr.push(fallback);
-  return arr.length ? arr : [MOCKUPS_PLACEHOLDER];
+  return [cloudinary, fallback];
 }
 
-async function tryUrl(url) {
+async function headOk(url) {
   try {
     const res = await fetch(url, { method: "HEAD" });
-    if (res.ok) return url;
-  } catch (_) {}
-  return null;
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
+
+// ---------------- public API ----------------
 
 export async function getMockupUrl({ slug, color, view = "front" }) {
   const candidates = buildCandidateUrls({ slug, color, view });
   for (const url of candidates) {
-    // Fabric will also try loading, but this speeds up choosing a working one
-    const good = await tryUrl(url);
-    if (good) return good;
+    if (await headOk(url)) return url;
   }
   return MOCKUPS_PLACEHOLDER;
 }
 
-// Return all colors supported for a given slug (from this registry)
+// Fast, synchronous primary image (no HEAD check).
+// Good for cards/thumbnails where a broken image is acceptable until Cloudinary finishes syncing.
+export function getPrimaryImage({ slug, color, view = "front" }) {
+  const candidates = buildCandidateUrls({ slug, color, view });
+  return candidates[0] || MOCKUPS_PLACEHOLDER;
+}
+
 export function listColors(slug) {
   const key = norm(slug);
   return REGISTRY[key]?.colors || [];
 }
 
-// Pick a valid color for a product, falling back smartly
 export function resolveColor(slug, wantedColor) {
   const colors = listColors(slug).map(norm);
   if (!colors.length) return null;
   const w = norm(wantedColor);
   if (colors.includes(w)) return wantedColor;
-  // prefer black if present, else first
   if (colors.includes("black")) return "black";
   return colors[0];
 }
 
-// Give product type for placement rules if needed elsewhere
 export function getProductType(slug) {
   const key = norm(slug);
   return REGISTRY[key]?.productType || "tshirt";
