@@ -1,17 +1,12 @@
-// Central registry: mockup URLs, color folders, and print-area placements.
-// Pure JS (no JSX). Safe for Vite build.
+// frontend/src/data/mockupsRegistry.js
+// Central source of truth for mockup URLs + print-area placements.
 
-const CLOUDINARY_BASE =
+export const CLOUDINARY_BASE =
   "https://res.cloudinary.com/dqvsdvjis/image/upload/mockups";
 
-export const PUBLIC_BASE = "/mockups";
-export const MOCKUPS_PLACEHOLDER =
-  "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
-
-// UI color → Cloudinary folder
+// ---------- Color folder mapping (Cloudinary folder names) ----------
 const COLOR_TO_FOLDER = {
   black: "tee-black",
-  white: "tee-white",
   maroon: "tee-maroon",
   red: "tee-red",
   royal: "tee-royal",
@@ -19,162 +14,154 @@ const COLOR_TO_FOLDER = {
   purple: "tee-purple",
   charcoal: "tee-charcoal",
   navy: "tee-navy",
+  white: "tee-white",
+  "tropical blue": "tee-tropical-blue",
   "military green": "tee-military-green",
   "forest green": "tee-forest-green",
   lime: "tee-lime",
-  "tropical blue": "tee-tropical-blue",
   gold: "tee-gold",
   orange: "tee-orange",
   azalea: "tee-azalea",
-  grey: "tee-grey",
-  gray: "tee-grey",
-  sport_grey: "tee-grey",
+  "brown savanna": "tee-brown-savanna",
+  "brown savana": "tee-brown-savanna",
   sand: "tee-sand",
   ash: "tee-ash",
-  brown: "tee-brown",
-  "brown savana": "tee-brown",
-  "brown savanna": "tee-brown",
+  sport_grey: "tee-sport-grey",
+  grey: "tee-grey",
 };
 
-const SWATCH_ORDER = [
-  "black","maroon","red","royal","royal blue","purple","charcoal","navy",
-  "military green","forest green","lime","tropical blue","gold","orange",
-  "azalea","brown","sand","ash","sport_grey","grey","white",
-];
+// Build a candidate list of URLs (Cloudinary png/webp → public png/webp)
+function makeUrlCandidates(slug, folder, view) {
+  const base = `${CLOUDINARY_BASE}/${slug}/${folder}/${view}`;
+  const pub  = `/mockups/${slug}/${folder}/${view}`;
+  return [
+    `${base}.png`,
+    `${base}.webp`,
+    `${pub}.png`,
+    `${pub}.webp`,
+  ];
+}
 
-const norm = (s) => String(s || "").trim().toLowerCase();
+// Helper to build the images map for a product from its color list
+function buildImages(slug, colors) {
+  const out = {};
+  colors.forEach((c) => {
+    const key = normalize(c);
+    const folder = COLOR_TO_FOLDER[key];
+    if (!folder) return;
+    out[key] = {
+      front: makeUrlCandidates(slug, folder, "front"),
+      back:  makeUrlCandidates(slug, folder, "back"),
+      left:  makeUrlCandidates(slug, folder, "left"),
+      right: makeUrlCandidates(slug, folder, "right"),
+    };
+  });
+  return out;
+}
 
-// ---------- PRODUCT REGISTRY ----------
+const normalize = (s) =>
+  String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+// ---------------- Registry ----------------
 const REGISTRY = {
   "classic-tee": {
     productType: "tshirt",
-    colors: SWATCH_ORDER,
-    makeUrl(colorFolder, view, ext = "png") {
-      return `${CLOUDINARY_BASE}/classic-tee/${colorFolder}/${view}.${ext}`;
-    },
-    makePublic(colorFolder, view, ext = "png") {
-      return `${PUBLIC_BASE}/classic-tee/${colorFolder}/${view}.${ext}`;
-    },
+    colors: [
+      "black","maroon","red","royal","purple","charcoal","navy","white",
+      "tropical blue","military green","forest green","lime","gold","orange",
+      "azalea","brown savanna","sand","ash","sport_grey","grey",
+    ],
+    images: {}, // filled below
   },
+
+  // Add more products here as you upload their mockups:
+  // "pullover-hoodie": { productType: "hoodie", colors: [...], images: {...} },
 };
 
-// ---------- PLACEMENT TUNING ----------
-const RATIO_TSHIRT_FULL = 16 / 12; // 12×16 chest
-const RATIO_SLEEVE = 3.5 / 4;      // ~4" wide × 3.5" tall
+// build image maps from colors → folder names
+Object.keys(REGISTRY).forEach((slug) => {
+  const p = REGISTRY[slug];
+  p.images = buildImages(slug, p.colors || []);
+});
 
-// Tuned for your current classic-tee mockups
+// --------------- Default placements by productType ----------------
+// Fractional {x,y,w,h} in the mockup image *after* scaling.
+// These are tuned to your mockups. Back mirrors Front for tees.
 const PLACEMENTS = {
-  "classic-tee": {
-    front: { cx: 0.5, top: 0.295, w: 0.285, ratio: RATIO_TSHIRT_FULL },
-    back:  { cx: 0.5, top: 0.295, w: 0.285, ratio: RATIO_TSHIRT_FULL },
-    left:  { left: 0.31, top: 0.47, w: 0.15, ratio: RATIO_SLEEVE },
-    right: { left: 0.54, top: 0.47, w: 0.15, ratio: RATIO_SLEEVE },
-  },
-};
-
-// Fallbacks per product type (if a slug isn’t in PLACEMENTS)
-const TYPE_DEFAULTS = {
   tshirt: {
-    front: { cx: 0.5, top: 0.30, w: 0.29, ratio: RATIO_TSHIRT_FULL },
-    back:  { cx: 0.5, top: 0.30, w: 0.29, ratio: RATIO_TSHIRT_FULL },
-    left:  { left: 0.31, top: 0.47, w: 0.15, ratio: RATIO_SLEEVE },
-    right: { left: 0.54, top: 0.47, w: 0.15, ratio: RATIO_SLEEVE },
+    front: { x: 0.305, y: 0.245, w: 0.390, h: 0.500 },
+    back:  { x: 0.305, y: 0.245, w: 0.390, h: 0.500 },
+    left:  { x: 0.260, y: 0.430, w: 0.140, h: 0.180 }, // viewer's left sleeve
+    right: { x: 0.600, y: 0.430, w: 0.140, h: 0.180 }, // viewer's right sleeve
   },
+  hoodie: {
+    front: { x: 0.305, y: 0.270, w: 0.360, h: 0.440 },
+    back:  { x: 0.305, y: 0.250, w: 0.380, h: 0.480 },
+  },
+  tote: {
+    front: { x: 0.305, y: 0.220, w: 0.420, h: 0.520 },
+    back:  { x: 0.305, y: 0.220, w: 0.420, h: 0.520 },
+  },
+  hat:   { front: { x: 0.400, y: 0.400, w: 0.200, h: 0.120 } },
+  beanie:{ front: { x: 0.400, y: 0.430, w: 0.220, h: 0.120 } },
 };
 
-// ---------- EXPORTS ----------
+// Optional per-product overrides (leave empty unless a mockup’s framing is unique)
+const OVERRIDES = {
+  // "some-tee-slug": { front: {x:..}, back: {...}, left: {...}, right: {...} }
+};
+
+// ---------------- Public API ----------------
+
+export const MOCKUPS_PLACEHOLDER = "/mockups/placeholder.png";
+
+export function listColors(slug) {
+  const key = normalize(slug);
+  return REGISTRY[key]?.colors?.map(normalize) || [];
+}
+
 export function getProductType(slug) {
-  const key = norm(slug);
+  const key = normalize(slug);
   return REGISTRY[key]?.productType || "tshirt";
 }
 
-export function listColors(slug) {
-  const key = norm(slug);
-  const arr = REGISTRY[key]?.colors || SWATCH_ORDER;
-  return Array.from(new Set(arr.map(norm)));
-}
-
-export function resolveColor(slug, color) {
-  const want = norm(color);
-  const opts = listColors(slug);
-  if (opts.includes(want)) return want;
-  if (opts.includes("black")) return "black";
-  return opts[0] || "black";
-}
-
-// Return ordered candidates: cloudinary (.webp, .png, .jpg), then public, color→black
+// Return an ordered list of URL candidates (we'll try them in order)
 export function getMockupCandidates({ slug, color, view = "front" }) {
-  const key = norm(slug || "");
-  const product = REGISTRY[key];
-  const chosen = COLOR_TO_FOLDER[norm(color)] || COLOR_TO_FOLDER.black;
-  const black = COLOR_TO_FOLDER.black;
-
-  if (!product) return [MOCKUPS_PLACEHOLDER];
-
-  const exts = ["webp", "png", "jpg"];
-  const urls = [];
-
-  // color first
-  exts.forEach((ext) => urls.push(product.makeUrl(chosen, view, ext)));
-  exts.forEach((ext) => urls.push(product.makePublic(chosen, view, ext)));
-
-  // fallback to black
-  exts.forEach((ext) => urls.push(product.makeUrl(black, view, ext)));
-  exts.forEach((ext) => urls.push(product.makePublic(black, view, ext)));
-
-  urls.push(MOCKUPS_PLACEHOLDER);
-  return urls;
+  const s = normalize(slug);
+  const c = normalize(color);
+  const v = String(view || "front");
+  const images = REGISTRY[s]?.images?.[c]?.[v];
+  return Array.isArray(images) && images.length ? images : [MOCKUPS_PLACEHOLDER];
 }
 
-// For cards/details (first candidate; UI will still show image even if Cloudinary
-// color is missing, because ProductCard <Image> will render whatever resolves)
-export function getPrimaryImage(product) {
-  if (!product) return MOCKUPS_PLACEHOLDER;
-  const slug = norm(product.slug || product.name || "");
-  const color = resolveColor(slug, "black");
-  const candidates = getMockupCandidates({ slug, color, view: "front" });
-  return candidates[0] || MOCKUPS_PLACEHOLDER;
+// A single "best" URL (first candidate). Kept for backward compatibility.
+export function getMockupUrl(opts) {
+  const list = getMockupCandidates(opts);
+  return list[0];
 }
 
-// Compute final px rect from placement fractions
-export function getPlacementRect({ slug, view = "front", productType = "tshirt", bgBox }) {
-  const key = norm(slug);
+// A best-effort front image for product cards (black or first color)
+export function getPrimaryImage(slug) {
+  const colors = listColors(slug);
+  const color = colors.includes("black") ? "black" : colors[0];
+  const list = getMockupCandidates({ slug, color, view: "front" });
+  return list[0] || MOCKUPS_PLACEHOLDER;
+}
+
+export function getPlacement({ slug, view = "front", productType }) {
+  const s = normalize(slug);
+  const v = String(view || "front");
+  // product-specific override beats type default
+  if (OVERRIDES[s]?.[v]) return OVERRIDES[s][v];
   const type = productType || getProductType(slug);
+  if (PLACEMENTS[type]?.[v]) return PLACEMENTS[type][v];
+  // last-resort safe default
+  return { x: 0.34, y: 0.24, w: 0.38, h: 0.49 };
+}
 
-  const entry =
-    (PLACEMENTS[key] && PLACEMENTS[key][view]) ||
-    (TYPE_DEFAULTS[type] && TYPE_DEFAULTS[type][view]) ||
-    TYPE_DEFAULTS.tshirt.front;
-
-  const wFrac = entry.w ?? 0.29;
-  const ratio = entry.ratio ?? RATIO_TSHIRT_FULL;
-
-  const pxW = bgBox.width * wFrac;
-  const pxH = pxW * ratio;
-
-  let leftFrac;
-  if (typeof entry.left === "number") {
-    leftFrac = entry.left;
-  } else if (typeof entry.cx === "number") {
-    leftFrac = entry.cx - wFrac / 2;
-  } else {
-    leftFrac = 0.5 - wFrac / 2;
-  }
-
-  let topFrac;
-  if (typeof entry.top === "number") {
-    topFrac = entry.top;
-  } else if (typeof entry.cy === "number") {
-    const hFrac = pxH / bgBox.height;
-    topFrac = entry.cy - hFrac / 2;
-  } else {
-    topFrac = 0.30;
-  }
-
-  return {
-    left: bgBox.left + bgBox.width * leftFrac,
-    top:  bgBox.top  + bgBox.height * topFrac,
-    width: pxW,
-    height: pxH,
-  };
+export function resolveColor(slug, preferred) {
+  const colors = listColors(slug);
+  if (!colors.length) return "";
+  const want = normalize(preferred);
+  return colors.includes(want) ? want : colors[0];
 }
