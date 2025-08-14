@@ -3,12 +3,32 @@ import {
   Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
-  AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio
+  AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio, Link
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt } from 'react-icons/fa';
+import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt, FaDownload } from 'react-icons/fa';
+
+// Prefer Cloudinary thumb (w_400) in grid, derive preview (w_1200) for modal if needed
+const derivePreviewFromPublicUrl = (publicUrl) => {
+  if (!publicUrl || typeof publicUrl !== 'string') return null;
+  // Only transform Cloudinary URLs
+  try {
+    const u = new URL(publicUrl);
+    if (!u.hostname.includes('res.cloudinary.com')) return publicUrl;
+    return publicUrl.replace('/upload/', '/upload/w_1200,q_auto:good,f_jpg/');
+  } catch {
+    return publicUrl;
+  }
+};
+
+const getCurrentMonthYYYYMM = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
 
 export default function MyDesigns() {
   const [designs, setDesigns] = useState([]);
@@ -44,7 +64,6 @@ export default function MyDesigns() {
         setLoadingMore(true);
       }
       const res = await client.get(`/mydesigns?page=${targetPage}&limit=24`);
-      // Accept either an array (old) or {items,page,hasMore} (new)
       const items = Array.isArray(res.data) ? res.data : (res.data?.items || []);
       const nextHasMore = Array.isArray(res.data) ? false : !!res.data?.hasMore;
 
@@ -80,7 +99,7 @@ export default function MyDesigns() {
       toast({ title: "Submission Successful!", description: response.data.message, status: "success", isClosable: true });
       onImageModalClose();
       onContestAlertClose();
-      fetchDesigns(1, false); // refresh page 1
+      fetchDesigns(1, false);
     } catch (err) {
       const errorMessage = err.response?.data?.message || "Could not submit your design.";
       toast({ title: "Submission Failed", description: errorMessage, status: "error", isClosable: true });
@@ -100,7 +119,7 @@ export default function MyDesigns() {
       toast({ title: "Design Deleted", status: "success", isClosable: true });
       onImageModalClose();
       onDeleteAlertClose();
-      fetchDesigns(1, false); // refresh
+      fetchDesigns(1, false);
     } catch (err) {
       const errorMessage = err.response?.data?.message || "Could not delete the design.";
       toast({ title: "Deletion Failed", description: errorMessage, status: "error", isClosable: true });
@@ -134,13 +153,7 @@ export default function MyDesigns() {
       <VStack spacing={6} align="stretch" mb={8}>
         <Heading as="h1" size="2xl" color="brand.textLight">My Saved Designs</Heading>
         {designs.length > 0 && (
-          <Button
-            colorScheme="brandAccentOrange"
-            onClick={() => navigate('/generate')}
-            alignSelf="flex-start"
-            size="lg"
-            leftIcon={<Icon as={FaMagic} />}
-          >
+          <Button colorScheme="brandAccentOrange" onClick={() => navigate('/generate')} alignSelf="flex-start" size="lg" leftIcon={<Icon as={FaMagic} />}>
             Create Another Design
           </Button>
         )}
@@ -173,12 +186,20 @@ export default function MyDesigns() {
               >
                 <AspectRatio ratio={1}>
                   <Image
-                    src={design.imageDataUrl || design.thumbUrl || design.publicUrl}
+                    src={
+                      // prefer smallest first for speed
+                      design.thumbUrl ||
+                      design.imageDataUrl ||  // for legacy entries
+                      design.publicUrl ||     // fallback
+                      ''
+                    }
                     alt={design.prompt}
                     fit="cover"
                     w="100%"
                     h="100%"
                     bg="brand.primary"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </AspectRatio>
                 <Box p={4}>
@@ -202,11 +223,7 @@ export default function MyDesigns() {
 
           <VStack mt={8}>
             {hasMore ? (
-              <Button
-                isLoading={loadingMore}
-                onClick={() => fetchDesigns(page + 1, true)}
-                colorScheme="brandAccentYellow"
-              >
+              <Button isLoading={loadingMore} onClick={() => fetchDesigns(page + 1, true)} colorScheme="brandAccentYellow">
                 Load more
               </Button>
             ) : (
@@ -218,14 +235,21 @@ export default function MyDesigns() {
 
       {/* View / Action Modal */}
       {selectedDesign && (
-        <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="2xl" isCentered>
+        <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="3xl" isCentered>
           <ModalOverlay bg="blackAlpha.800"/>
           <ModalContent>
             <ModalHeader>Design Preview</ModalHeader>
             <ModalCloseButton _hover={{bg:"whiteAlpha.200"}}/>
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
               <Image
-                src={selectedDesign.imageDataUrl || selectedDesign.publicUrl || selectedDesign.thumbUrl}
+                src={
+                  // use a larger but still web-friendly preview when possible
+                  derivePreviewFromPublicUrl(selectedDesign.publicUrl) ||
+                  selectedDesign.imageDataUrl ||
+                  selectedDesign.thumbUrl ||
+                  selectedDesign.publicUrl ||
+                  ''
+                }
                 alt={selectedDesign.prompt}
                 maxH="70vh"
                 maxW="100%"
@@ -238,8 +262,18 @@ export default function MyDesigns() {
                 Delete
               </Button>
               <HStack>
+                <Link
+                  href={selectedDesign.publicUrl || selectedDesign.imageDataUrl || '#'}
+                  isExternal
+                  _hover={{ textDecoration: 'none' }}
+                >
+                  <Button leftIcon={<Icon as={FaDownload} />} colorScheme="brandAccentYellow" isDisabled={!selectedDesign.publicUrl && !selectedDesign.imageDataUrl}>
+                    Download Full
+                  </Button>
+                </Link>
+
                 {!selectedDesign.isSubmittedForContest || selectedDesign.contestSubmissionMonth !== getCurrentMonthYYYYMM() ? (
-                  <Button colorScheme="brandAccentYellow" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>
+                  <Button colorScheme="green" onClick={() => handleOpenSubmitConfirmation(selectedDesign)} isLoading={isSubmitting} leftIcon={<Icon as={FaTrophy} />}>
                     Submit to Contest
                   </Button>
                 ) : (
@@ -286,10 +320,3 @@ export default function MyDesigns() {
     </Box>
   );
 }
-
-const getCurrentMonthYYYYMM = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
-};

@@ -6,7 +6,6 @@ import FormData from 'form-data';
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
 const STABILITY_BASE = 'https://api.stability.ai';
 
-// Aim for ~3K long edge (good for tees). Bump to 3840 if you prefer.
 const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '3072', 10);
 
 // --- Optional Cloudinary upload ---
@@ -17,7 +16,6 @@ const useCloudinary =
   !!process.env.CLOUDINARY_API_SECRET;
 
 if (useCloudinary) {
-  // Lazy import to avoid requiring if you don't use it
   const { v2 } = await import('cloudinary');
   v2.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -35,7 +33,6 @@ function dataUrlToBuffer(dataUrl) {
 function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
-// Quick IHDR width/height read
 function getPngDims(buf) {
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
@@ -58,9 +55,8 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
   }
   const form = new FormData();
   form.append('prompt', prompt);
-  form.append('aspect_ratio', aspectRatio); // e.g. "1:1", "3:4", "16:9"
+  form.append('aspect_ratio', aspectRatio);
   form.append('output_format', 'png');
-
   if (initImageBuf) {
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
   }
@@ -76,9 +72,7 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
   return Buffer.from(data);
 }
 
-// Reliable 2× ESRGAN. For 4× we chain two passes.
 async function stabilityUpscale2x(pngBuffer) {
-  // Using v1 ESRGAN x2 endpoint for robustness
   const model = 'esrgan-v1-x2plus';
   const form = new FormData();
   form.append('image', pngBuffer, { filename: 'in.png', contentType: 'image/png' });
@@ -97,16 +91,7 @@ async function stabilityUpscale2x(pngBuffer) {
 
 // ---------- Optional Cloudinary upload ----------
 async function uploadPngToCloudinary(buf, { userId }) {
-  if (!cloudinary) return { masterUrl: null, previewUrl: null };
-
-  // master: original upscaled PNG
-  const masterUpload = await cloudinary.uploader.upload_stream({
-    folder: `designs/master/${userId || 'anon'}`,
-    resource_type: 'image',
-    overwrite: true,
-    format: 'png',
-    type: 'upload',
-  });
+  if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null };
 
   const masterUrl = await new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -121,16 +106,13 @@ async function uploadPngToCloudinary(buf, { userId }) {
     stream.end(buf);
   });
 
-  // preview: transform (server-side) to 1200px JPG quality ~85
-  // (Don’t re-upload bytes—use delivery transformation)
-  // Build preview URL from master public_id if you prefer; here we just request a derived preview.
-  let previewUrl = masterUrl;
-  if (masterUrl) {
-    // crude transform injection for delivery URLs
-    previewUrl = masterUrl.replace('/upload/', '/upload/w_1200,q_auto:good,f_jpg/');
-  }
+  if (!masterUrl) return { masterUrl: null, previewUrl: null, thumbUrl: null };
 
-  return { masterUrl, previewUrl };
+  // delivery transforms for preview + thumb (derived by CDN at request time)
+  const previewUrl = masterUrl.replace('/upload/', '/upload/w_1200,q_auto:good,f_jpg/');
+  const thumbUrl   = masterUrl.replace('/upload/', '/upload/w_400,q_auto:eco,f_jpg/');
+
+  return { masterUrl, previewUrl, thumbUrl };
 }
 
 // ---------- PUBLIC HANDLER ----------
@@ -141,14 +123,12 @@ export async function createDesign(req, res, next) {
 
     const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
 
-    // 1) Generate base PNG
     const basePng = await stableGenerateUltra({
       prompt,
       aspectRatio: aspectRatio || '1:1',
       initImageBuf: initBuf,
     });
 
-    // 2) Upscale
     const { width, height } = getPngDims(basePng);
     const scale = decideScale(width, height);
 
@@ -160,20 +140,18 @@ export async function createDesign(req, res, next) {
       master = await stabilityUpscale2x(pass1);
     }
 
-    // 3) Optional upload to Cloudinary
-    let masterUrl = null;
-    let previewUrl = null;
+    let masterUrl = null, previewUrl = null, thumbUrl = null;
     if (useCloudinary) {
-      ({ masterUrl, previewUrl } = await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() }));
+      ({ masterUrl, previewUrl, thumbUrl } = await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() }));
     }
 
-    // 4) Always return a data URL so your Generate page keeps working right now
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
 
     res.json({
-      imageDataUrl,       // for immediate preview (your current UI)
-      masterUrl,          // null if Cloudinary isn’t configured
-      previewUrl,         // null if Cloudinary isn’t configured
+      imageDataUrl,
+      masterUrl,
+      previewUrl,
+      thumbUrl,
       meta: {
         baseWidth: width,
         baseHeight: height,
