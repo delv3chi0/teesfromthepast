@@ -1,59 +1,44 @@
 // frontend/src/data/mockupsRegistry.js
 //
-// Single source of truth for mockup image URLs and visual placements.
-// Primary source: Cloudinary; Fallback: /public/mockups/* (optional).
+// Central registry for mockup image locations + helpers.
+// - Primary source: Cloudinary
+// - Fallbacks: local public assets
 //
-// Exports:
-//   getMockupUrl({ slug, color, view }) -> Promise<string>   // checks that a candidate exists
-//   getPrimaryImage({ slug, color, view }) -> string         // fastest, no network check
-//   listColors(slug) -> string[]
-//   resolveColor(slug, wantedColor) -> string | null
-//   getProductType(slug) -> "tshirt" | "hoodie" | ...
-//   getPlacement({ slug, view, productType }) -> { x,y,w,h } // FRACTIONS of canvas (0–1)
+// Exports used by the app:
+//   getMockupUrl({ slug, color, view })
+//   resolveColor(slug, desiredColor)
+//   listColors(slug)
+//   getPrimaryImage(product)   // for ProductCard compatibility
 //   MOCKUPS_PLACEHOLDER
 //
-// To add products: extend REGISTRY, COLOR_TO_FOLDER, and (if needed) PLACEMENTS.
-// -----------------------------------------------------------------------------
+// Notes:
+// - `slug` is the product slug used in your public/mockups/<slug>/... structure
+// - `color` keys need to match folder names below (normalize via toKey)
 
 const CLOUDINARY_BASE =
   "https://res.cloudinary.com/dqvsdvjis/image/upload/mockups";
 
+// Normalize helpers
+const toKey = (c) =>
+  String(c || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
 export const MOCKUPS_PLACEHOLDER =
   "https://placehold.co/900x1200/1a202c/a0aec0?text=Mockup+Unavailable";
 
-const norm = (s) => String(s || "").trim().toLowerCase();
-const keyify = (s) => norm(s).replace(/\s+/g, "-");
-
-// ---------- Color handling ----------
-
-const COLOR_TO_FOLDER = {
-  black: "tee-black",
-  maroon: "tee-maroon",
-  red: "tee-red",
-  orange: "tee-orange",
-  gold: "tee-gold",
-  lime: "tee-lime",
-  "tropical blue": "tee-tropical-blue",
-  royal: "tee-royal",
-  "royal blue": "tee-royal",
-  purple: "tee-purple",
-  charcoal: "tee-charcoal",
-  white: "tee-white",
-  "military green": "tee-military-green",
-  "forest green": "tee-forest-green",
-  azalea: "tee-azalea",
-  grey: "tee-grey",
-  sport_grey: "tee-sport-grey",
-  ash: "tee-ash",
-  "brown savana": "tee-brown-savana",
-  "brown savanna": "tee-brown-savana",
-  brown: "tee-brown",
-  sand: "tee-sand",
-  navy: "tee-navy",
-};
-
-// ---------- Products registry ----------
-
+/**
+ * Registry structure:
+ *  slug: {
+ *    colors: ["black", ...],
+ *    // folder names for each color (default to same as key if omitted)
+ *    colorFolder: { "royal": "royal-blue", ... }
+ *    views: ["front","back","left","right"],
+ *    // build url(path) given colorKey + view
+ *  }
+ */
 const REGISTRY = {
   "classic-tee": {
     productType: "tshirt",
@@ -64,110 +49,107 @@ const REGISTRY = {
       "orange",
       "gold",
       "lime",
+      "military green",
+      "forest green",
       "tropical blue",
+      "royal",
       "royal blue",
       "purple",
+      "pink",
+      "azalea",
       "charcoal",
+      "grey",
       "white",
     ],
-    // Optional: if a product needs special placement different from generic tshirt
-    // you can specify placements here; otherwise generic "tshirt" below is used.
-  },
-
-  // Example to add more:
-  // "premium-hoodie": { productType: "hoodie", colors: ["black","charcoal","white"] },
-};
-
-// ---------- Visual placements (fractions of the canvas W/H) ----------
-// Tuned to your current mockups so the chest box looks “right”.
-// If a slug is provided (e.g., "classic-tee"), it wins; else use productType.
-
-const PLACEMENTS = {
-  // Generic tees (good default)
-  tshirt: {
-    front:  { x: 0.29, y: 0.23, w: 0.32, h: 0.42 },
-    back:   { x: 0.29, y: 0.23, w: 0.32, h: 0.42 },
-    left:   { x: 0.15, y: 0.40, w: 0.12, h: 0.14 },
-    right:  { x: 0.73, y: 0.40, w: 0.12, h: 0.14 },
-  },
-
-  // You can specialize per product slug if the visuals differ
-  "classic-tee": {
-    front:  { x: 0.34, y: 0.24, w: 0.30, h: 0.40 }, // slightly tighter and a bit higher
-    back:   { x: 0.34, y: 0.24, w: 0.30, h: 0.42 },
-    left:   { x: 0.18, y: 0.41, w: 0.12, h: 0.14 },
-    right:  { x: 0.70, y: 0.41, w: 0.12, h: 0.14 },
-  },
-
-  hoodie: {
-    front:  { x: 0.34, y: 0.28, w: 0.28, h: 0.34 },
-    back:   { x: 0.33, y: 0.25, w: 0.30, h: 0.40 },
-  },
-
-  tote: {
-    front:  { x: 0.34, y: 0.26, w: 0.32, h: 0.38 },
-    back:   { x: 0.34, y: 0.26, w: 0.32, h: 0.38 },
+    colorFolder: {
+      "royal": "royal",
+      "royal blue": "royal-blue",
+      "tropical blue": "tropical-blue",
+      "military green": "military-green",
+    },
+    views: ["front", "back", "left", "right"],
   },
 };
 
-// ---------- URL building ----------
+// If a slug isn’t explicitly registered, fall back to this shape
+const DEFAULT_DEF = {
+  productType: "tshirt",
+  colors: ["black", "white"],
+  colorFolder: {},
+  views: ["front", "back"],
+};
 
-function buildCandidateUrls({ slug, color, view }) {
-  const sKey = keyify(slug);
-  const folderColor = COLOR_TO_FOLDER[norm(color)];
-  if (!folderColor) return [MOCKUPS_PLACEHOLDER];
-  const cloudinary = `${CLOUDINARY_BASE}/${sKey}/${folderColor}/${view}.png`;
-  const fallback = `/mockups/${sKey}/${folderColor}/${view}.png`;
-  return [cloudinary, fallback];
-}
+// Map a slug to its config
+const cfg = (slug) => REGISTRY[slug] || DEFAULT_DEF;
 
-async function headOk(url) {
-  try {
-    const res = await fetch(url, { method: "HEAD" });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+// Folder name used on Cloudinary/public for a specific color
+const folderForColor = (slug, color) => {
+  const c = toKey(color);
+  const map = cfg(slug).colorFolder || {};
+  return (map[c] || c).replace(/\s+/g, "-");
+};
 
-// ---------- Public API ----------
+// Build candidates list from cloudinary + local fallback
+const buildCandidates = ({ slug, color, view }) => {
+  const colorFolder = folderForColor(slug, color);
+  return [
+    `${CLOUDINARY_BASE}/${slug}/tee-${colorFolder}/${view}.png`,
+    `/mockups/${slug}/tee-${colorFolder}/${view}.png`,
+  ];
+};
 
-export async function getMockupUrl({ slug, color, view = "front" }) {
-  const candidates = buildCandidateUrls({ slug, color, view });
-  for (const url of candidates) {
-    if (await headOk(url)) return url;
+export async function getMockupUrl({ slug, color = "black", view = "front" }) {
+  slug = String(slug || "").trim().toLowerCase();
+  const cands = buildCandidates({ slug, color, view });
+
+  // Try sequentially; return the first one that loads (HEAD-ish using Image)
+  for (const url of cands) {
+    const ok = await new Promise((resolve) => {
+      const i = new Image();
+      i.onload = () => resolve(true);
+      i.onerror = () => resolve(false);
+      i.src = url;
+    });
+    if (ok) return url;
   }
   return MOCKUPS_PLACEHOLDER;
 }
 
-export function getPrimaryImage({ slug, color, view = "front" }) {
-  const candidates = buildCandidateUrls({ slug, color, view });
-  return candidates[0] || MOCKUPS_PLACEHOLDER;
-}
-
 export function listColors(slug) {
-  const key = norm(slug);
-  return REGISTRY[key]?.colors || [];
+  slug = String(slug || "").trim().toLowerCase();
+  return (cfg(slug).colors || []).map(toKey);
 }
 
-export function resolveColor(slug, wantedColor) {
-  const colors = listColors(slug).map(norm);
-  if (!colors.length) return null;
-  const w = norm(wantedColor);
-  if (colors.includes(w)) return wantedColor;
+export function resolveColor(slug, desired = "black") {
+  const colors = listColors(slug);
+  const want = toKey(desired);
+  if (colors.includes(want)) return want;
   if (colors.includes("black")) return "black";
-  return colors[0];
+  return colors[0] || "black";
 }
 
-export function getProductType(slug) {
-  const key = norm(slug);
-  return REGISTRY[key]?.productType || "tshirt";
-}
+/**
+ * ProductCard compatibility:
+ * Returns a best-effort "primary" image (front/black) from the registry,
+ * falling back to product.images or variant media provided by the backend.
+ */
+export function getPrimaryImage(product) {
+  const slug =
+    (product?.slug || product?.name || "product").toString().toLowerCase().replace(/\s+/g, "-");
+  const color = resolveColor(slug, "black");
+  const fromRegistry = `${CLOUDINARY_BASE}/${slug}/tee-${folderForColor(slug, color)}/front.png`;
 
-export function getPlacement({ slug, view = "front", productType = "tshirt" }) {
-  const sKey = keyify(slug);
-  const v = view || "front";
-  if (PLACEMENTS[sKey]?.[v]) return PLACEMENTS[sKey][v];
-  if (PLACEMENTS[productType]?.[v]) return PLACEMENTS[productType][v];
-  return { x: 0.34, y: 0.24, w: 0.30, h: 0.40 }; // safe default
+  const candidates = [
+    fromRegistry,
+    product?.images?.find?.((i) => i.isPrimary)?.url,
+    Array.isArray(product?.images) && typeof product.images[0] === "string"
+      ? product.images[0]
+      : product?.images?.[0]?.url,
+    product?.variants?.[0]?.image,
+    product?.variants?.[0]?.imageSet?.[0]?.url,
+    product?.image,
+    MOCKUPS_PLACEHOLDER,
+  ].filter(Boolean);
+
+  return candidates[0];
 }
