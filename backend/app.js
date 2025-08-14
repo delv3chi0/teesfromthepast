@@ -63,6 +63,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // respond to preflight with the same options
 
+// Cookies (required if client ever uses httpOnly cookie token)
+app.use(cookieParser());
+
 // Stripe webhook (raw body) — must be BEFORE express.json()
 app.use("/api/stripe", stripeWebhookRoutes);
 
@@ -109,7 +112,7 @@ app.use("/api/storefront", storefrontProductRoutes);
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
-app.use("/api/admin", adminProductRoutes);
+app.use("/api/admin/products", adminProductRoutes);
 
 // Uploads & Printful helpers
 app.use("/api", uploadRoutes);

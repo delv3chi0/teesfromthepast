@@ -15,6 +15,7 @@ const router = express.Router();
 
 router.route('/summary')
     .get(protect, admin, getDashboardSummary);
+router.get('/summary', protect, admin, getDashboardSummary);
 
 router.route('/')
     .get(protect, admin, getAllOrdersAdmin);
