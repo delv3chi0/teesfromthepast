@@ -17,10 +17,21 @@ import { client } from "../api/client";
 
 import {
   getMockupCandidates, getPrimaryImage, listColors, resolveColor,
-  getPlacement, getProductType, MOCKUPS_PLACEHOLDER,
+  getPlacement, getProductType,
 } from "../data/mockupsRegistry";
 
 const CANVAS_ASPECT = 3 / 4;
+
+// Fixed export pixel sizes for print files.
+// You can tweak per product/view later if needed.
+function getExportPixelSize(slug, view, productType) {
+  const v = String(view || "front").toLowerCase();
+  if (v === "left" || v === "right") {
+    return { width: 3600, height: 3600 };
+  }
+  // front/back default
+  return { width: 4200, height: 4800 };
+}
 
 // UI mapping (same as ProductCard palette keys you use)
 const COLOR_SWATCHES = {
@@ -34,7 +45,6 @@ const COLOR_SWATCHES = {
 };
 
 const norm = (s) => String(s || "").trim().toLowerCase();
-
 const VIEWS = ["front", "back", "left", "right"];
 
 function ProductTypeBadgeIcon({ type }) {
@@ -66,11 +76,12 @@ export default function ProductStudio() {
   const [mockupOpacity, setMockupOpacity] = useState(1);
   const [hasObjects, setHasObjects] = useState(false);
   const [layerTick, setLayerTick] = useState(0);
+  const [uploading, setUploading] = useState(false);
 
   const wrapRef   = useRef(null);
   const canvasRef = useRef(null);
   const fabricRef = useRef(null);
-  const printRectRef = useRef(null);     // the dashed rectangle
+  const printRectRef = useRef(null);     // dashed rectangle
   const clipRef = useRef(null);          // clipPath rect (absolute)
   const bgImgInfoRef = useRef(null);     // {img, scale, left, top, width, height}
   const undoStack = useRef([]); const redoStack = useRef([]);
@@ -179,7 +190,7 @@ export default function ProductStudio() {
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }, []);
 
-  // ---------- load an image from candidates, trying sequential fallbacks ----------
+  // ---------- load image (mockup) from candidates with fallbacks ----------
   const loadImageFromCandidates = useCallback((candidates, onSuccess, onFail) => {
     const tryIndex = (i) => {
       if (i >= candidates.length) { onFail && onFail(); return; }
@@ -209,7 +220,7 @@ export default function ProductStudio() {
       (img /* fabric.Image */, loadedUrl) => {
         const canvasW = fc.width, canvasH = fc.height;
 
-        // scale mockup to full height (like your screenshots)
+        // scale mockup to full height
         const scale = canvasH / img.height;
         const imgW = img.width * scale;
         const imgH = img.height * scale;
@@ -308,7 +319,6 @@ export default function ProductStudio() {
     );
   }, [product, slugParam, color, view, mockupOpacity, mockupVisible, showGrid, makeGridDataUrl, productType, loadImageFromCandidates]);
 
-  // apply mockup visibility without reloading
   const applyMockupVisibility = useCallback(() => {
     const fc = fabricRef.current, info = bgImgInfoRef.current;
     if (!fc || !info || !info.img) return;
@@ -452,6 +462,7 @@ export default function ProductStudio() {
 
   const addDesignFromUrl = (url) => {
     const fc = fabricRef.current; if (!fc) return;
+    if (!url) return;
     window.fabric.Image.fromURL(url, (img) => {
       fitInsidePrintArea(img, 0.90);
       pushHistory(); fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
@@ -485,7 +496,6 @@ export default function ProductStudio() {
     const area = printRectRef.current; if (!area) return;
     const a = area.getBoundingRect(true,true);
 
-    // natural size
     const ow = obj.getScaledWidth(), oh = obj.getScaledHeight();
     const maxW = a.width * fraction, maxH = a.height * fraction;
     const s = Math.min(maxW/ow, maxH/oh);
@@ -523,6 +533,13 @@ export default function ProductStudio() {
     fitInsidePrintArea(o, 0.90);
   };
 
+  // ---- High-res export + upload for print provider ----
+  async function cloneForExport(o) {
+    return new Promise((resolve) => {
+      o.clone((cl) => resolve(cl));
+    });
+  }
+
   const makePrintReadyAndUpload = async () => {
     const fc = fabricRef.current; if (!fc) return;
     const area = printRectRef.current; if (!area) { toast({ title:"No print area", status:"error"}); return; }
@@ -530,34 +547,76 @@ export default function ProductStudio() {
     const objs = fc.getObjects().filter(o => !["printArea","gridOverlay","guide"].includes(o.id));
     if (!objs.length) { toast({ title:"Nothing to print", status:"warning"}); return; }
 
-    // render export canvas in print-area pixel size (300dpi not needed for preview)
-    const ab = area.getBoundingRect(true,true);
-    const tmp = new window.fabric.Canvas(null, { width: Math.round(ab.width), height: Math.round(ab.height) });
+    // Export size in pixels (print-ready)
+    const { width: exportW, height: exportH } = getExportPixelSize(product?.slug || slugParam, view, productType);
 
-    objs.forEach((o) => {
-      const clone = window.fabric.util.object.clone(o);
-      const bb = o.getBoundingRect(true,true);
-      clone.left = bb.left - ab.left + bb.width/2;
-      clone.top  = bb.top  - ab.top  + bb.height/2;
-      clone.originX = "center"; clone.originY = "center";
-      clone.clipPath = null;
-      tmp.add(clone);
+    // Bounding rect of the print area on the editor canvas (screen pixels)
+    const ab = area.getBoundingRect(true,true);
+
+    // Scale factor from editor “print rect” → export pixels
+    const sX = exportW / ab.width;
+    const sY = exportH / ab.height;
+
+    // Create an offscreen Fabric canvas at export resolution
+    const tmp = new window.fabric.Canvas(null, {
+      width: Math.round(exportW),
+      height: Math.round(exportH),
+      enableRetinaScaling: false,
+      selection: false,
+      backgroundColor: null,
     });
+
+    // Clone & place each object into export canvas
+    const clones = await Promise.all(objs.map(cloneForExport));
+    clones.forEach((cl, idx) => {
+      const src = objs[idx];
+      const bb = src.getBoundingRect(true,true);
+
+      // Position relative to print area, center-based
+      const relCenterX = (bb.left - ab.left) + bb.width/2;
+      const relCenterY = (bb.top  - ab.top ) + bb.height/2;
+
+      cl.set({
+        originX: "center",
+        originY: "center",
+        left: relCenterX * sX,
+        top:  relCenterY * sY,
+        clipPath: null,
+      });
+
+      cl.scaleX = (src.scaleX || 1) * sX;
+      cl.scaleY = (src.scaleY || 1) * sY;
+      cl.angle = src.angle || 0;
+      cl.opacity = src.opacity ?? 1;
+
+      tmp.add(cl);
+    });
+
     tmp.requestRenderAll();
 
+    // Export PNG (full quality, transparent BG)
     const png = tmp.toDataURL({ format: "png", quality: 1 });
     tmp.dispose();
+
+    // Also keep a lower-res preview of the whole editor for cart/checkout thumbnails
     const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
 
-    toast({ title: "Uploading design…", status: "info", duration: 2000 });
+    setUploading(true);
+    toast({ title: "Uploading print file…", status: "info", duration: 2000 });
     try {
-      const upload = await client.post("/upload-print-file", {
-        imageData: png,
+      // NOTE: your backend exposes both /api/upload-print-file and /api/upload/printfile in different places.
+      // This one expects /api/upload/printfile returning { publicUrl, thumbUrl, publicId }.
+      const upload = await client.post("/upload/printfile", {
+        dataUrl: png,
+        productSlug: product?.slug || slugParam,
+        side: view,
         designName: `${product?.name || "Custom"} ${view}`,
       });
-      const fileUrl = upload.data?.publicUrl;
-      if (!fileUrl) throw new Error("Upload failed");
 
+      const { publicUrl, thumbUrl, publicId } = upload.data || {};
+      if (!publicUrl) throw new Error("Upload failed");
+
+      // Prepare cart line item
       const unitPrice = product?.priceMin || product?.basePrice || 0;
       const slug = product?.slug || slugParam;
       const productImage = getPrimaryImage(slug);
@@ -567,8 +626,10 @@ export default function ProductStudio() {
         slug,
         name: product?.name,
         color, size, view,
-        preview: previewPNG,
-        printFileUrl: fileUrl,
+        preview: previewPNG,       // full-canvas preview for UI
+        printFileUrl: publicUrl,   // MASTER print asset (send to Printify/Printful)
+        printThumbUrl: thumbUrl,   // tiny preview (grids, order list)
+        printPublicId: publicId,   // for later deletes if needed
         productImage,
         unitPrice,
       };
@@ -577,6 +638,8 @@ export default function ProductStudio() {
     } catch (e) {
       console.error(e);
       toast({ title: "Upload failed", status: "error" });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -587,7 +650,7 @@ export default function ProductStudio() {
     (product?.variants || []).forEach(v => (!color || v.color) && v.size && set.add(v.size));
     return [...set];
   }, [product, color]);
-  const canProceed = product && (!registryColors.length || color) && (!sizes.length || size) && hasObjects;
+  const canProceed = product && (!registryColors.length || color) && (!sizes.length || size) && hasObjects && !uploading;
 
   // ---------- UI ----------
   return (
@@ -666,14 +729,16 @@ export default function ProductStudio() {
                     <HStack>
                       <Tooltip label="Zoom out"><Button size="sm" onClick={() => setZoomSafe(zoom - 0.1)} leftIcon={<FaSearchMinus />}>Out</Button></Tooltip>
                       <Slider aria-label="zoom" value={zoom} min={0.75} max={2} step={0.1} onChange={setZoomSafe}>
-                        <SliderTrack><SliderFilledTrack /></SliderTrack><SliderThumb />
+                        <SliderTrack><SliderFilledTrack /></SliderTrack>
+                        <SliderThumb />
                       </Slider>
                       <Tooltip label="Zoom in"><Button size="sm" onClick={() => setZoomSafe(zoom + 0.1)} leftIcon={<FaSearchPlus />}>In</Button></Tooltip>
                     </HStack>
 
-                    <HStack><Tooltip label="Toggle grid">
-                      <IconButton aria-label="grid" size="sm" variant="outline" onClick={() => { setShowGrid(v=>!v); drawBackground(); }} icon={<span>▦</span>} />
-                    </Tooltip>
+                    <HStack>
+                      <Tooltip label="Toggle grid">
+                        <IconButton aria-label="grid" size="sm" variant="outline" onClick={() => { setShowGrid(v=>!v); drawBackground(); }} icon={<span>▦</span>} />
+                      </Tooltip>
                       <Text color="brand.textLight">Show grid</Text>
                     </HStack>
 
@@ -685,7 +750,8 @@ export default function ProductStudio() {
                     <Box>
                       <Text color="brand.textLight" fontWeight="medium" mb={1}>Mockup opacity</Text>
                       <Slider aria-label="mockup-opacity" min={0.2} max={1} step={0.05} value={mockupOpacity} onChange={setMockupOpacity} onChangeEnd={() => applyMockupVisibility()}>
-                        <SliderTrack><SliderFilledTrack /></SliderTrack><SliderThumb />
+                        <SliderTrack><SliderFilledTrack /></SliderTrack>
+                        <SliderThumb />
                       </Slider>
                     </Box>
                   </VStack>
@@ -699,7 +765,7 @@ export default function ProductStudio() {
 
                   <Divider borderColor="whiteAlpha.300" />
 
-                  <Button colorScheme={canProceed ? "yellow" : "gray"} isDisabled={!canProceed} onClick={makePrintReadyAndUpload}>
+                  <Button colorScheme={canProceed ? "yellow" : "gray"} isDisabled={!canProceed} onClick={makePrintReadyAndUpload} isLoading={uploading}>
                     Add to cart / Checkout
                   </Button>
                   <Text fontSize="xs" color="whiteAlpha.700">We export a true print file sized to the selected placement.</Text>
@@ -720,9 +786,6 @@ export default function ProductStudio() {
                     <FaUpload />
                   </HStack>
 
-                  {/* Your saved designs */}
-                  {/* If you have res.data as [{_id,imageDataUrl,prompt}] */}
-                  {/* Keep simple grid */}
                   <SavedDesigns addDesignFromUrl={addDesignFromUrl} />
                 </VStack>
               </TabPanel>
@@ -803,7 +866,7 @@ export default function ProductStudio() {
   );
 }
 
-// Simple saved designs grid (uses /mydesigns API if present)
+// Simple saved designs grid (prefers thumb for speed; inserts publicUrl for quality)
 function SavedDesigns({ addDesignFromUrl }) {
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -812,7 +875,9 @@ function SavedDesigns({ addDesignFromUrl }) {
     (async () => {
       try {
         const res = await client.get("/mydesigns");
-        if (!cancel) setDesigns(res.data || []);
+        // Accept both {items:[]} or [] responses
+        const arr = Array.isArray(res.data) ? res.data : (res.data?.items || []);
+        if (!cancel) setDesigns(arr);
       } finally {
         if (!cancel) setLoading(false);
       }
@@ -823,14 +888,29 @@ function SavedDesigns({ addDesignFromUrl }) {
   if (!designs.length) return <Text color="whiteAlpha.800" fontSize="sm">No saved designs yet. Upload above or create in “Generate”.</Text>;
   return (
     <SimpleGrid columns={{ base: 3 }} spacing={2}>
-      {designs.map((d) => (
-        <Tooltip key={d._id} label={d.prompt || "design"}>
-          <Box borderWidth="2px" borderColor="transparent" rounded="md" overflow="hidden" cursor="pointer"
-            _hover={{ borderColor: "purple.400" }} onClick={() => addDesignFromUrl(d.imageDataUrl)}>
-            <AspectRatio ratio={1}><Image src={d.imageDataUrl} alt={d.prompt} objectFit="cover" /></AspectRatio>
-          </Box>
-        </Tooltip>
-      ))}
+      {designs.map((d) => {
+        // Thumbnail priority for grid speed
+        const tileSrc   = d.thumbUrl || d.imageDataUrl || d.publicUrl;
+        // High-quality source added to canvas
+        const insertSrc = d.publicUrl || d.imageDataUrl || d.thumbUrl;
+        return (
+          <Tooltip key={d._id} label={d.prompt || "design"}>
+            <Box
+              borderWidth="2px"
+              borderColor="transparent"
+              rounded="md"
+              overflow="hidden"
+              cursor="pointer"
+              _hover={{ borderColor: "purple.400" }}
+              onClick={() => addDesignFromUrl(insertSrc)}
+            >
+              <AspectRatio ratio={1}>
+                <Image src={tileSrc} alt={d.prompt} objectFit="cover" />
+              </AspectRatio>
+            </Box>
+          </Tooltip>
+        );
+      })}
     </SimpleGrid>
   );
 }
