@@ -6,7 +6,9 @@ import FormData from 'form-data';
 const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
 const STABILITY_BASE = 'https://api.stability.ai';
 
-const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '3072', 10);
+// Pick your target long edge. 4096–4800 is typical for DTG print areas.
+// You can tweak via .env: GEN_TARGET_LONG_EDGE=4096 (or 4800)
+const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '4096', 10);
 
 // --- Optional Cloudinary upload ---
 let cloudinary = null;
@@ -34,6 +36,7 @@ function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
 function getPngDims(buf) {
+  // PNG IHDR: width @ byte 16, height @ byte 20 (big-endian)
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
   return { width: w, height: h };
@@ -55,8 +58,8 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
   }
   const form = new FormData();
   form.append('prompt', prompt);
-  form.append('aspect_ratio', aspectRatio);
-  form.append('output_format', 'png');
+  form.append('aspect_ratio', aspectRatio);          // e.g., '1:1', '3:4', '4:3'
+  form.append('output_format', 'png');               // keep transparency
   if (initImageBuf) {
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
   }
@@ -67,12 +70,14 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
     {
       headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
       responseType: 'arraybuffer',
+      timeout: 60000,
     }
   );
   return Buffer.from(data);
 }
 
 async function stabilityUpscale2x(pngBuffer) {
+  // If you have Stability’s upscale endpoint/model; otherwise skip or swap to Cloudinary Eager transforms.
   const model = 'esrgan-v1-x2plus';
   const form = new FormData();
   form.append('image', pngBuffer, { filename: 'in.png', contentType: 'image/png' });
@@ -84,6 +89,7 @@ async function stabilityUpscale2x(pngBuffer) {
     {
       headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
       responseType: 'arraybuffer',
+      timeout: 60000,
     }
   );
   return Buffer.from(data);
@@ -91,28 +97,31 @@ async function stabilityUpscale2x(pngBuffer) {
 
 // ---------- Optional Cloudinary upload ----------
 async function uploadPngToCloudinary(buf, { userId }) {
-  if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null };
+  if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
 
-  const masterUrl = await new Promise((resolve, reject) => {
+  const uploadResult = await new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: `designs/master/${userId || 'anon'}`,
+        folder: `tees_from_the_past/designs/master/${userId || 'anon'}`,
         resource_type: 'image',
         overwrite: true,
         format: 'png',
+        quality: 'auto:best',
       },
-      (err, result) => (err ? reject(err) : resolve(result?.secure_url))
+      (err, result) => (err ? reject(err) : resolve(result))
     );
     stream.end(buf);
   });
 
-  if (!masterUrl) return { masterUrl: null, previewUrl: null, thumbUrl: null };
+  const masterUrl = uploadResult?.secure_url || null;
+  const publicId = uploadResult?.public_id || null;
+  if (!masterUrl || !publicId) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
 
-  // delivery transforms for preview + thumb (derived by CDN at request time)
-  const previewUrl = masterUrl.replace('/upload/', '/upload/w_1200,q_auto:good,f_jpg/');
-  const thumbUrl   = masterUrl.replace('/upload/', '/upload/w_400,q_auto:eco,f_jpg/');
+  // Delivery transforms via URL (no extra storage)
+  const previewUrl = cloudinary.url(publicId, { width: 1200, crop: 'fit', format: 'jpg', quality: 'auto:good', secure: true });
+  const thumbUrl   = cloudinary.url(publicId, { width: 400,  crop: 'fit', format: 'jpg', quality: 'auto:eco',  secure: true });
 
-  return { masterUrl, previewUrl, thumbUrl };
+  return { masterUrl, previewUrl, thumbUrl, publicId };
 }
 
 // ---------- PUBLIC HANDLER ----------
@@ -123,12 +132,14 @@ export async function createDesign(req, res, next) {
 
     const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
 
+    // 1) Generate base PNG
     const basePng = await stableGenerateUltra({
       prompt,
       aspectRatio: aspectRatio || '1:1',
       initImageBuf: initBuf,
     });
 
+    // 2) Upscale as needed to reach TARGET_LONG_EDGE (2× or 4×)
     const { width, height } = getPngDims(basePng);
     const scale = decideScale(width, height);
 
@@ -136,27 +147,28 @@ export async function createDesign(req, res, next) {
     if (scale === 2) {
       master = await stabilityUpscale2x(basePng);
     } else if (scale === 4) {
-      const pass1 = await stabilityUpscale2x(basePng);
-      master = await stabilityUpscale2x(pass1);
+      const p1 = await stabilityUpscale2x(basePng);
+      master = await stabilityUpscale2x(p1);
     }
 
-    let masterUrl = null, previewUrl = null, thumbUrl = null;
-    if (useCloudinary) {
-      ({ masterUrl, previewUrl, thumbUrl } = await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() }));
-    }
+    // 3) Upload to Cloudinary (if configured)
+    const { masterUrl, previewUrl, thumbUrl, publicId } =
+      await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() });
 
+    // 4) Also return a dataURL (useful for previewing immediately)
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
 
     res.json({
-      imageDataUrl,
-      masterUrl,
-      previewUrl,
-      thumbUrl,
+      imageDataUrl,       // big base64 (for immediate UI preview)
+      masterUrl,          // full-size PNG on Cloudinary (for Printify & “Download Full”)
+      previewUrl,         // w=1200 jpg (modal preview)
+      thumbUrl,           // w=400  jpg (grid)
+      publicId,
       meta: {
-        baseWidth: width,
-        baseHeight: height,
-        scaleApplied: scale,
+        sourceWidth: width,
+        sourceHeight: height,
         targetLongEdge: TARGET_LONG_EDGE,
+        scaleApplied: scale,
         uploadedToCloudinary: !!masterUrl,
       },
     });

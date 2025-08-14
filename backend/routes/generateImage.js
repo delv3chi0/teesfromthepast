@@ -1,138 +1,287 @@
 // backend/routes/generateImage.js
-import express from 'express';
-import axios from 'axios';
-import 'dotenv/config';
-import { protect } from '../middleware/authMiddleware.js';
+import express from "express";
+import axios from "axios";
+import FormData from "form-data";
+import "dotenv/config";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-const STABILITY_API_ENGINE_ID = 'stable-diffusion-xl-1024-v1-0'; // Your configured engine ID
-const STABILITY_API_HOST = 'https://api.stability.ai';
+// ---- Env & constants --------------------------------------------------------
+const STABILITY_API_HOST = process.env.STABILITY_API_HOST || "https://api.stability.ai";
+const STABILITY_API_KEY = process.env.STABILITY_AI_API_KEY || process.env.STABILITY_API_KEY; // support either var name
+const ENGINE_ID = process.env.STABILITY_API_ENGINE_ID || "stable-diffusion-xl-1024-v1-0";
+const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || "4096", 10);
 
-router.post('/designs/create', protect, async (req, res) => {
-    console.log('-----------------------------------------------------');
-    console.log("[GenerateImage] Route handler started.");
+// Optional Cloudinary (upload full-res for CDN + Printify)
+let cloudinary = null;
+const cloudEnabled =
+  !!process.env.CLOUDINARY_CLOUD_NAME &&
+  !!process.env.CLOUDINARY_API_KEY &&
+  !!process.env.CLOUDINARY_API_SECRET;
 
-    const apiKeyFromEnv = process.env.STABILITY_AI_API_KEY;
-    if (!apiKeyFromEnv) {
-        console.error("[GenerateImage] Stability AI API key is missing from environment variables!");
-        return res.status(500).json({ message: "Image generation service is not configured (API key missing)." });
+if (cloudEnabled) {
+  const { v2 } = await import("cloudinary");
+  v2.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  cloudinary = v2;
+}
+
+// ---- Helpers ----------------------------------------------------------------
+function dataUrlToBuffer(dataUrl) {
+  const b64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+  return Buffer.from(b64, "base64");
+}
+
+function bufferToDataUrl(buf, mime = "image/png") {
+  return `data:${mime};base64,${buf.toString("base64")}`;
+}
+
+function getPngDims(buf) {
+  // IHDR width/height at byte offsets 16/20 (big endian)
+  const w = buf.readUInt32BE(16);
+  const h = buf.readUInt32BE(20);
+  return { width: w, height: h };
+}
+
+function longEdgeOf(buf) {
+  const { width, height } = getPngDims(buf);
+  return Math.max(width, height);
+}
+
+async function stabilityTextToImage({ prompt, width = 1024, height = 1024, steps = 30, cfg_scale = 7 }) {
+  const body = {
+    text_prompts: [{ text: prompt }],
+    width,
+    height,
+    steps,
+    cfg_scale,
+    samples: 1,
+    // tip: if you want style presets etc., add here
+  };
+  const { data } = await axios.post(
+    `${STABILITY_API_HOST}/v1/generation/${ENGINE_ID}/text-to-image`,
+    body,
+    {
+      headers: {
+        Authorization: `Bearer ${STABILITY_API_KEY}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      responseType: "json",
     }
+  );
 
-    // MODIFIED: Destructure prompt and NEW initImageBase64 from req.body
-    const { prompt, initImageBase64 } = req.body;
+  const art = data?.artifacts?.[0];
+  if (!art?.base64) throw new Error("No image returned from text-to-image.");
+  return Buffer.from(art.base64, "base64");
+}
 
-    if (!prompt && !initImageBase64) {
-        return res.status(400).json({ message: "Either a text prompt or an initial image is required to generate an image." });
+async function stabilityImageToImage({ initBuf, prompt, width = 1024, height = 1024, steps = 30, cfg_scale = 7, image_strength = 0.35 }) {
+  const form = new FormData();
+  form.append("init_image", initBuf, { filename: "init.png", contentType: "image/png" });
+  form.append("text_prompts[0][text]", prompt);
+  form.append("text_prompts[0][weight]", "1");
+  form.append("init_image_mode", "IMAGE_STRENGTH");
+  form.append("image_strength", String(image_strength));
+  form.append("cfg_scale", String(cfg_scale));
+  form.append("width", String(width));
+  form.append("height", String(height));
+  form.append("steps", String(steps));
+  form.append("samples", "1");
+
+  const { data } = await axios.post(
+    `${STABILITY_API_HOST}/v1/generation/${ENGINE_ID}/image-to-image`,
+    form,
+    {
+      headers: {
+        Authorization: `Bearer ${STABILITY_API_KEY}`,
+        ...form.getHeaders(),
+        Accept: "application/json",
+      },
+      maxBodyLength: Infinity,
     }
+  );
 
-    console.log(`[GenerateImage] Received prompt: "${prompt}"`);
-    if (initImageBase64) {
-        console.log("[GenerateImage] Received initial image for image-to-image generation.");
+  const art = data?.artifacts?.[0];
+  if (!art?.base64) throw new Error("No image returned from image-to-image.");
+  return Buffer.from(art.base64, "base64");
+}
+
+// Stability ESRGAN 2× upscaler
+async function stabilityUpscale2x(pngBuffer) {
+  const form = new FormData();
+  form.append("image", pngBuffer, { filename: "in.png", contentType: "image/png" });
+  form.append("scale", "2");
+
+  const { data } = await axios.post(
+    `${STABILITY_API_HOST}/v1/generation/esrgan-v1-x2plus/image-to-image/upscale`,
+    form,
+    {
+      headers: {
+        Authorization: `Bearer ${STABILITY_API_KEY}`,
+        ...form.getHeaders(),
+      },
+      responseType: "arraybuffer",
+      maxBodyLength: Infinity,
     }
+  );
+  return Buffer.from(data);
+}
 
+// Upscale in 2× hops until reaching TARGET_LONG_EDGE (or first hop that passes it)
+async function upscaleToTarget(buf, targetLong = TARGET_LONG_EDGE) {
+  let out = buf;
+  while (longEdgeOf(out) < targetLong) {
+    const next = await stabilityUpscale2x(out);
+    // guard: if no growth (rare), stop
+    if (longEdgeOf(next) <= longEdgeOf(out)) break;
+    out = next;
+    // Usually 1024 -> 2048 -> 4096 and done
+  }
+  return out;
+}
+
+async function uploadBufferToCloudinary(buf, { userId, prompt }) {
+  if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
+
+  const publicIdBase =
+    `tees_from_the_past/designs/master/${userId || "anon"}/` +
+    `${Date.now()}-${(prompt || "design").slice(0, 48).replace(/[^\w-]+/g, "_")}`;
+
+  const masterUrl = await new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        public_id: publicIdBase,
+        overwrite: false,
+        resource_type: "image",
+        format: "png", // keep transparency
+        folder: undefined, // included in public_id
+        tags: ["stability", "ai", userId ? `user-${userId}` : "anon"],
+      },
+      (err, result) => (err ? reject(err) : resolve(result?.secure_url))
+    );
+    stream.end(buf);
+  });
+
+  if (!masterUrl) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
+
+  // Derived delivery transforms via CDN (no extra upload)
+  const previewUrl = masterUrl.replace("/upload/", "/upload/w_1200,q_auto:good,f_jpg/");
+  const thumbUrl = masterUrl.replace("/upload/", "/upload/w_400,q_auto:eco,f_jpg/");
+
+  // Extract public_id from result url – Cloudinary gives it on upload, but we didn’t capture result object.
+  // For convenience, we can reconstruct from URL pathname parts:
+  const publicId = (() => {
     try {
-        let apiUrl = '';
-        let requestBody = {};
-        let contentType = 'application/json'; // Default for JSON body
-
-        if (initImageBase64) {
-            // --- Image-to-Image Generation ---
-            apiUrl = `${STABILITY_API_HOST}/v1/generation/${STABILITY_API_ENGINE_ID}/image-to-image`;
-            // For image-to-image, Stability AI typically expects multipart/form-data for image.
-            // If frontend sends Base64 in JSON, you might need to convert it to a Buffer
-            // or modify this endpoint to expect multipart/form-data using 'multer'.
-            // For simplicity in this direct JSON example, let's assume Stability AI accepts base64 via JSON if init_image_mode is set.
-            // However, Stability AI's image-to-image usually expects FormData.
-            // If this fails, the frontend will need to send FormData.
-
-            // To support Base64 in JSON, we can convert it to Buffer
-            // However, Stability AI's image-to-image API usually expects a FormData object with the image file appended.
-            // If frontend sends it as Base64 in JSON body, you'd typically convert it like this:
-            const imageDataBuffer = Buffer.from(initImageBase64.split(',')[1], 'base64'); // Assuming "data:image/png;base64,..." format
-
-            // To send Buffer in axios, we'd need a FormData object. This will require 'multer' or similar setup on backend.
-            // Given the complexity of multipart/form-data for this simple route, let's assume for now
-            // that Stability AI text-to-image endpoint can potentially be used with a prompt
-            // derived from the image, or that we're sending a base64 for *some* endpoint.
-
-            // Re-evaluating: Stability AI's image-to-image endpoint expects `init_image` as a binary file in `multipart/form-data`.
-            // Sending it as Base64 in a JSON body is not standard for this API.
-            // To make this work, the frontend needs to send `multipart/form-data`, and the backend needs `multer`.
-
-            // For now, let's keep the backend simplified and assume if an image is provided,
-            // we will try to pass a specific prompt *and* acknowledge image provided, but
-            // the *full* image-to-image functionality might require a separate route/library setup.
-
-            // A more direct path for image-to-image: frontend sends base64, backend forms FormData.
-            // This requires 'form-data' package on backend.
-
-            const FormData = require('form-data'); // Import form-data package at top
-
-            const formData = new FormData();
-            formData.append('init_image', imageDataBuffer, {
-                filename: 'image.png', // Or image.jpeg based on actual file type
-                contentType: 'image/png', // Or image/jpeg
-            });
-            formData.append('text_prompts[0][text]', prompt);
-            formData.append('text_prompts[0][weight]', '1');
-            formData.append('init_image_mode', 'IMAGE_STRENGTH');
-            formData.append('image_strength', '0.35'); // How much the original image influences the result
-            formData.append('cfg_scale', '7');
-            formData.append('height', '1024');
-            formData.append('width', '1024');
-            formData.append('steps', '30');
-            formData.append('samples', '1');
-
-            requestBody = formData;
-            contentType = `multipart/form-data; boundary=${formData._boundary}`; // Important for FormData
-
-        } else {
-            // --- Text-to-Image Generation (Existing Logic) ---
-            apiUrl = `${STABILITY_API_HOST}/v1/generation/${STABILITY_API_ENGINE_ID}/text-to-image`;
-            requestBody = {
-                text_prompts: [{ text: prompt }],
-                cfg_scale: 7,
-                height: 1024,
-                width: 1024,
-                steps: 30,
-                samples: 1,
-            };
-            contentType = 'application/json';
-        }
-
-        const response = await axios.post(apiUrl, requestBody, {
-            headers: {
-                'Content-Type': contentType,
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${apiKeyFromEnv}`
-            },
-            maxBodyLength: Infinity, // Important for large image uploads
-        });
-
-        const imageArtifact = response.data.artifacts[0];
-        if (imageArtifact && imageArtifact.base64) {
-            console.log("[GenerateImage] Image generated successfully.");
-            res.json({
-                message: "Image generated successfully!",
-                imageDataUrl: `data:image/png;base64,${imageArtifact.base64}`
-            });
-        } else {
-            throw new Error("No image data found in Stability AI response.");
-        }
-
-    } catch (error) {
-        console.error("[GenerateImage] Error calling Stability AI:", error.response ? JSON.stringify(error.response.data, null, 2) : error.message);
-        if (error.response && error.response.data && error.response.data.errors) {
-            console.error("[GenerateImage] Stability AI specific errors:", JSON.stringify(error.response.data.errors, null, 2));
-        }
-        res.status(500).json({
-            message: "Failed to generate image.",
-            errorDetails: error.response ? error.response.data : error.message
-        });
-    } finally {
-        console.log('-----------------------------------------------------');
+      const u = new URL(masterUrl);
+      const parts = u.pathname.split("/");
+      const uploadIdx = parts.findIndex((p) => p === "upload");
+      const afterUpload = parts.slice(uploadIdx + 1);
+      const first = afterUpload[0];
+      const keyParts = /^v\d+$/i.test(first) ? afterUpload.slice(1) : afterUpload;
+      const file = keyParts.pop() || "";
+      const base = file.replace(/\.[a-z0-9]+$/i, "");
+      return [...keyParts, base].join("/");
+    } catch {
+      return null;
     }
+  })();
+
+  return { masterUrl, previewUrl, thumbUrl, publicId };
+}
+
+// ---- Route: POST /designs/create -------------------------------------------
+router.post("/designs/create", protect, async (req, res) => {
+  if (!STABILITY_API_KEY) {
+    return res.status(500).json({ message: "Stability AI key is not configured on the server." });
+  }
+
+  const { prompt, initImageBase64, width, height, steps, cfg_scale, image_strength } = req.body || {};
+  if (!prompt && !initImageBase64) {
+    return res.status(400).json({ message: "Either a text prompt or an initial image is required." });
+  }
+
+  try {
+    // 1) Generate base image (1024x1024 default for SDXL; allow overrides)
+    const baseW = Math.max(256, Math.min(1536, parseInt(width || "1024", 10)));
+    const baseH = Math.max(256, Math.min(1536, parseInt(height || "1024", 10)));
+    const genSteps = Math.max(10, Math.min(60, parseInt(steps || "30", 10)));
+    const genCfg = Math.max(1, Math.min(20, parseInt(cfg_scale || "7", 10)));
+
+    let base;
+    if (initImageBase64) {
+      const initBuf = dataUrlToBuffer(initImageBase64);
+      base = await stabilityImageToImage({
+        initBuf,
+        prompt,
+        width: baseW,
+        height: baseH,
+        steps: genSteps,
+        cfg_scale: genCfg,
+        image_strength: image_strength ?? 0.35,
+      });
+    } else {
+      base = await stabilityTextToImage({
+        prompt,
+        width: baseW,
+        height: baseH,
+        steps: genSteps,
+        cfg_scale: genCfg,
+      });
+    }
+
+    // 2) Upscale to your target long edge (2× hops)
+    const master = await upscaleToTarget(base, TARGET_LONG_EDGE);
+
+    // 3) Optional: Upload master to Cloudinary and derive preview/thumb
+    let masterUrl = null;
+    let previewUrl = null;
+    let thumbUrl = null;
+    let publicId = null;
+
+    if (cloudEnabled) {
+      const uploaded = await uploadBufferToCloudinary(master, {
+        userId: req.user?._id?.toString(),
+        prompt,
+      });
+      masterUrl = uploaded.masterUrl;
+      previewUrl = uploaded.previewUrl;
+      thumbUrl = uploaded.thumbUrl;
+      publicId = uploaded.publicId;
+    }
+
+    // 4) Also return a data URL (handy for immediate preview)
+    const imageDataUrl = bufferToDataUrl(master, "image/png");
+    const { width: w, height: h } = getPngDims(master);
+
+    res.json({
+      message: "Image generated successfully",
+      imageDataUrl,
+      masterUrl,         // Full-resolution PNG (good for Product Studio & Print provider)
+      previewUrl,        // 1200px JPG (modal/web preview)
+      thumbUrl,          // 400px JPG (grids)
+      publicId,          // Cloudinary public_id (if uploaded)
+      meta: {
+        engine: ENGINE_ID,
+        baseWidth: baseW,
+        baseHeight: baseH,
+        finalWidth: w,
+        finalHeight: h,
+        targetLongEdge: TARGET_LONG_EDGE,
+        uploadedToCloudinary: !!masterUrl,
+      },
+    });
+  } catch (err) {
+    console.error("[GenerateImage] Error:", err?.response?.data || err.message);
+    res.status(500).json({
+      message: "Failed to generate image.",
+      error: err?.response?.data || err.message,
+    });
+  }
 });
 
 export default router;

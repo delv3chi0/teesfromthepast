@@ -1,55 +1,24 @@
-import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Tooltip as ChakraTooltip, IconButton, Input as ChakraInput, Slider, SliderTrack, SliderFilledTrack, SliderThumb } from "@chakra-ui/react";
+// frontend/src/pages/Generate.jsx
+import { Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon, Alert, AlertIcon, SimpleGrid, FormControl, FormLabel, Select, Switch, Flex, Collapse, Tooltip as ChakraTooltip, Input as ChakraInput, Slider, SliderTrack, SliderFilledTrack, SliderThumb } from "@chakra-ui/react";
 import { useState, useCallback } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 import { FaMagic, FaSave, FaUpload } from 'react-icons/fa';
 
-// Utility for mapping slider values to string options and vice-versa
 const ART_STYLES_MAP = ["Classic Art", "Stencil Art", "Embroidery Style"];
 const DECADES_MAP = ["1960s", "1970s", "1980s", "1990s"];
-
-const getMappedValue = (map, index) => map[index];
 const getMappedIndex = (map, value) => map.indexOf(value);
 
-const ThemedSelect = (props) => (
-  <Select
-    size="lg"
-    bg="brand.secondary"
-    color="brand.textLight"
-    borderColor="whiteAlpha.300"
-    _placeholder={{ color: "brand.textMuted" }}
-    _hover={{ borderColor: "whiteAlpha.400" }}
-    focusBorderColor="brand.accentYellow"
-    {...props}
-  />
-);
-
-// Knob Slider
 const KnobSlider = ({ label, value, onChange, optionsMap, isDisabled }) => {
   const currentIndex = getMappedIndex(optionsMap, value);
   const displayValue = optionsMap[currentIndex];
-
-  const handleSliderChange = (newIndex) => onChange(getMappedValue(optionsMap, newIndex));
-
   return (
     <FormControl>
       <FormLabel mb={1} textAlign="center" fontSize={{ base: "sm", md: "md" }} fontWeight="bold">{label}</FormLabel>
       <VStack spacing={2}>
-        <Slider
-          value={currentIndex}
-          min={0}
-          max={optionsMap.length - 1}
-          step={1}
-          onChange={handleSliderChange}
-          isDisabled={isDisabled}
-          colorScheme="yellow"
-          width="100%"
-          p={2}
-        >
-          <SliderTrack bg="whiteAlpha.300" borderRadius="full">
-            <SliderFilledTrack bg="brand.accentYellow" />
-          </SliderTrack>
+        <Slider value={currentIndex} min={0} max={optionsMap.length - 1} step={1} onChange={(i)=>onChange(optionsMap[i])} isDisabled={isDisabled} colorScheme="yellow" width="100%" p={2}>
+          <SliderTrack bg="whiteAlpha.300" borderRadius="full"><SliderFilledTrack bg="brand.accentYellow" /></SliderTrack>
           <ChakraTooltip hasArrow placement="top" label={displayValue} bg="brand.accentYellow" color="brand.textDark">
             <SliderThumb boxSize={6} bg="brand.accentOrange" border="2px solid" borderColor="brand.accentYellow" />
           </ChakraTooltip>
@@ -60,15 +29,8 @@ const KnobSlider = ({ label, value, onChange, optionsMap, isDisabled }) => {
   );
 };
 
-// VCR Upload
 const VcrUpload = ({ onFileChange, isDisabled }) => {
   const [fileName, setFileName] = useState("No file chosen");
-  const handleInternalFileChange = (e) => {
-    const file = e.target.files[0];
-    setFileName(file ? file.name : "No file chosen");
-    onFileChange(file || null);
-  };
-
   return (
     <Box bg="gray.800" p={4} borderRadius="md" border="2px solid" borderColor="whiteAlpha.300" shadow="inner" w="100%" textAlign="center" display="flex" flexDirection="column" alignItems="center" justifyContent="center" minH="100px" position="relative" overflow="hidden">
       <FormLabel htmlFor="vcr-file-upload" cursor={isDisabled ? "not-allowed" : "pointer"} width="100%" height="100%" display="flex" alignItems="center" justifyContent="center" m={0}>
@@ -78,32 +40,21 @@ const VcrUpload = ({ onFileChange, isDisabled }) => {
           <Text fontSize="xs" mt={1}>{fileName}</Text>
         </VStack>
       </FormLabel>
-      <ChakraInput type="file" id="vcr-file-upload" accept="image/*" onChange={handleInternalFileChange} isDisabled={isDisabled} display="none" />
+      <ChakraInput
+        type="file"
+        id="vcr-file-upload"
+        accept="image/*"
+        onChange={(e) => {
+          const f = e.target.files?.[0] || null;
+          setFileName(f ? f.name : "No file chosen");
+          onFileChange(f);
+        }}
+        isDisabled={isDisabled}
+        display="none"
+      />
     </Box>
   );
 };
-
-const GeneratorControls = ({ prompt, setPrompt, loading, isSaving, artStyle, setArtStyle, isRetro, setIsRetro, decade, setDecade, handleGenerate, handleImageUploadFileChange }) => (
-  <VStack spacing={6} w="100%" bg="brand.secondary" p={{base: 5, md: 8}} borderRadius="xl">
-    <Textarea placeholder="Describe your image idea here..." value={prompt} onChange={(e) => setPrompt(e.target.value)} isDisabled={loading || isSaving} size="lg" minHeight="120px" resize="vertical" />
-    <SimpleGrid columns={{base: 1, md: 3}} spacing={5} w="100%">
-      <KnobSlider label="Art Style" value={artStyle} onChange={setArtStyle} optionsMap={ART_STYLES_MAP} isDisabled={loading || isSaving} />
-      <FormControl>
-        <FormLabel textAlign="center" mb={1} fontSize={{ base: "sm", md: "md" }} fontWeight="bold">Retro Mode</FormLabel>
-        <Flex align="center" h="100%" pl={2} pt={2} justifyContent="center">
-          <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="yellow" size="lg" isDisabled={loading || isSaving}/>
-        </Flex>
-      </FormControl>
-      <Collapse in={isRetro} animateOpacity style={{width: '100%'}}>
-        <KnobSlider label="Decade" value={decade} onChange={setDecade} optionsMap={DECADES_MAP} isDisabled={!isRetro || loading || isSaving} />
-      </Collapse>
-    </SimpleGrid>
-    <VcrUpload onFileChange={handleImageUploadFileChange} isDisabled={loading || isSaving} />
-    <Button onClick={handleGenerate} colorScheme="brandAccentOrange" isLoading={loading} loadingText="Generating..." isDisabled={isSaving || loading || !prompt} size="lg" w="100%" leftIcon={<Icon as={FaMagic} />}>
-      Generate Image
-    </Button>
-  </VStack>
-);
 
 export default function Generate() {
   const [prompt, setPrompt] = useState("");
@@ -122,11 +73,10 @@ export default function Generate() {
   const navigate = useNavigate();
 
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
-    let message = err.response?.data?.message || defaultMessage;
+    const message = err.response?.data?.message || defaultMessage;
     if (err.response?.status === 401) {
       toast({ title: 'Session Expired', status: 'error', isClosable: true });
-      logout();
-      navigate('/login');
+      logout(); navigate('/login');
     } else {
       toast({ title: `${actionType} Failed`, description: message, status: 'error', isClosable: true });
     }
@@ -140,43 +90,31 @@ export default function Generate() {
     } else if (artStyle === 'Embroidery Style') {
       finalPrompt = `detailed embroidery pattern, satin stitch, clean edges, vector art, limited color palette, ${prompt}`;
     }
-    if (isRetro) {
-      finalPrompt = `${finalPrompt}, ${DECADES_MAP[getMappedIndex(DECADES_MAP, decade)] || ''}`;
-    }
+    if (isRetro) finalPrompt = `${finalPrompt}, ${decade}`;
     return finalPrompt.trim();
   }, [prompt, artStyle, isRetro, decade]);
 
   const handleGenerate = async () => {
-    setLoading(true);
-    setError("");
-    setImageUrl("");
+    setLoading(true); setError(""); setImageUrl("");
     try {
       const finalPrompt = constructFinalPrompt();
-      const requestBody = { prompt: finalPrompt };
+      const payload = { prompt: finalPrompt };
 
       if (uploadedImageFile) {
         const reader = new FileReader();
-        const base64Image = await new Promise((resolve, reject) => {
+        const base64 = await new Promise((resolve, reject) => {
           reader.onloadend = () => resolve(reader.result);
           reader.onerror = reject;
           reader.readAsDataURL(uploadedImageFile);
         });
-        requestBody.initImageBase64 = base64Image;
+        payload.initImageBase64 = base64;
       }
 
-      const response = await client.post('/designs/create', requestBody);
-      const { imageDataUrl, masterUrl, thumbUrl } = response.data;
+      const { data } = await client.post('/designs/create', payload);
+      const { imageDataUrl, masterUrl, previewUrl, thumbUrl } = data || {};
 
-      // Show result immediately in viewport
-      setImageUrl(imageDataUrl || masterUrl || '');
-
-      // Immediately persist (optional: keep your “Save” button only — if you prefer manual save, remove this block)
-      // If you prefer manual save, keep the Save button below and remove this auto-save.
-      // ---- Auto-save disabled by default; user clicks Save. ----
-
-      // keep state: we’ll reuse imageDataUrl/masterUrl/thumbUrl on Save
-      (window).__lastGen = { imageDataUrl, masterUrl, thumbUrl, prompt: finalPrompt };
-
+      setImageUrl(previewUrl || imageDataUrl || masterUrl || '');
+      window.__lastGen = { imageDataUrl, masterUrl, thumbUrl, prompt: finalPrompt };
     } catch (err) {
       handleApiError(err, 'Failed to generate image.', 'Generation');
     } finally {
@@ -185,7 +123,7 @@ export default function Generate() {
   };
 
   const handleSaveDesign = async () => {
-    const gen = (window).__lastGen;
+    const gen = window.__lastGen;
     if (!gen?.imageDataUrl && !gen?.masterUrl) {
       toast({ title: 'Nothing to save yet', status: 'info' });
       return;
@@ -194,9 +132,9 @@ export default function Generate() {
     try {
       await client.post('/mydesigns', {
         prompt: gen.prompt || prompt,
-        imageDataUrl: gen.imageDataUrl,  // optional (nice to keep a base64 snapshot)
-        masterUrl: gen.masterUrl,        // full-size PNG (Cloudinary)
-        thumbUrl: gen.thumbUrl,          // fast thumb for grids
+        imageDataUrl: gen.imageDataUrl || undefined,
+        masterUrl: gen.masterUrl || undefined,   // saved as publicUrl in API
+        thumbUrl: gen.thumbUrl || undefined,
       });
       toast({ title: 'Design Saved!', description: "It's now available in 'My Designs'.", status: 'success', isClosable: true });
     } catch (err) {
@@ -220,6 +158,7 @@ export default function Generate() {
   return (
     <VStack spacing={8} w="100%">
       <Heading as="h1" size="2xl" color="brand.textLight">AI Image Generator</Heading>
+
       <Box bg="brand.secondary" borderRadius="3xl" p={{ base: 4, md: 8 }} w="100%" maxW="800px" shadow="dark-lg" border="8px solid" borderColor="gray.800" position="relative">
         <Box w="100%" h={{ base: "300px", md: "520px" }} bg="brand.primary" mb={4} borderRadius="lg" display="flex" alignItems="center" justifyContent="center" position="relative" borderWidth="2px" borderColor="whiteAlpha.300" overflow="hidden">
           {loading && <Spinner size="xl" />}
@@ -231,20 +170,27 @@ export default function Generate() {
             </VStack>
           )}
         </Box>
-        <GeneratorControls
-          prompt={prompt}
-          setPrompt={setPrompt}
-          loading={loading}
-          isSaving={isSaving}
-          artStyle={artStyle}
-          setArtStyle={setArtStyle}
-          isRetro={isRetro}
-          setIsRetro={setIsRetro}
-          decade={decade}
-          setDecade={setDecade}
-          handleGenerate={handleGenerate}
-          handleImageUploadFileChange={handleImageUploadFileChange}
-        />
+
+        {/* Controls */}
+        <VStack spacing={6} w="100%" bg="brand.secondary" p={{base: 5, md: 8}} borderRadius="xl">
+          <Textarea placeholder="Describe your image idea here..." value={prompt} onChange={(e) => setPrompt(e.target.value)} isDisabled={loading || isSaving} size="lg" minHeight="120px" resize="vertical" />
+          <SimpleGrid columns={{base: 1, md: 3}} spacing={5} w="100%">
+            <KnobSlider label="Art Style" value={artStyle} onChange={setArtStyle} optionsMap={ART_STYLES_MAP} isDisabled={loading || isSaving} />
+            <FormControl>
+              <FormLabel textAlign="center" mb={1} fontSize={{ base: "sm", md: "md" }} fontWeight="bold">Retro Mode</FormLabel>
+              <Flex align="center" h="100%" pl={2} pt={2} justifyContent="center">
+                <Switch isChecked={isRetro} onChange={e => setIsRetro(e.target.checked)} colorScheme="yellow" size="lg" isDisabled={loading || isSaving}/>
+              </Flex>
+            </FormControl>
+            <Collapse in={isRetro} animateOpacity style={{width: '100%'}}>
+              <KnobSlider label="Decade" value={decade} onChange={setDecade} optionsMap={DECADES_MAP} isDisabled={!isRetro || loading || isSaving} />
+            </Collapse>
+          </SimpleGrid>
+          <VcrUpload onFileChange={handleImageUploadFileChange} isDisabled={loading || isSaving} />
+          <Button onClick={handleGenerate} colorScheme="brandAccentOrange" isLoading={loading} loadingText="Generating..." isDisabled={isSaving || loading || !prompt} size="lg" w="100%">
+            <Icon as={FaMagic} mr={2}/> Generate Image
+          </Button>
+        </VStack>
       </Box>
 
       {error && (
@@ -254,16 +200,8 @@ export default function Generate() {
         </Alert>
       )}
 
-      <Button
-        onClick={handleSaveDesign}
-        colorScheme="brandAccentYellow"
-        isLoading={isSaving}
-        loadingText="Saving..."
-        isDisabled={loading}
-        size="lg"
-        leftIcon={<Icon as={FaSave} />}
-      >
-        Save This Design
+      <Button onClick={handleSaveDesign} colorScheme="brandAccentYellow" isLoading={isSaving} loadingText="Saving..." isDisabled={loading} size="lg">
+        <Icon as={FaSave} mr={2}/> Save This Design
       </Button>
     </VStack>
   );
