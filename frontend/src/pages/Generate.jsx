@@ -1,14 +1,6 @@
 // backend/controllers/designController.js
-import 'dotenv/config';
 import axios from 'axios';
 import FormData from 'form-data';
-
-const STABILITY_API_KEY = process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
-const STABILITY_BASE = 'https://api.stability.ai';
-
-const T2I_ENGINE = process.env.STABILITY_API_ENGINE_ID || 'stable-diffusion-xl-1024-v1-0';
-const T2I_W = parseInt(process.env.GEN_TARGET_WIDTH || '1024', 10);
-const T2I_H = parseInt(process.env.GEN_TARGET_HEIGHT || '1024', 10);
 
 function dataUrlToBuffer(dataUrl) {
   const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
