@@ -4,7 +4,8 @@ import axios from 'axios';
 import FormData from 'form-data';
 
 // ---------- Config ----------
-const STABILITY_API_KEY = process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
+const STABILITY_API_KEY =
+  process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
 const STABILITY_BASE = 'https://api.stability.ai';
 
 // Long-edge target for print-ready art (DTG safe: 4096–4800 typical)
@@ -24,13 +25,19 @@ if (useCloudinary) {
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-  cloudinary = v2;
+  cloudinary = v2; // use cloudinary.url(...) below
 }
 
 // ---------- Helpers ----------
 function dataUrlToBuffer(dataUrl) {
+  if (!dataUrl) return null;
+  // Accept both raw base64 and full data URLs
   const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  return Buffer.from(b64, 'base64');
+  try {
+    return Buffer.from(b64, 'base64');
+  } catch {
+    return null;
+  }
 }
 function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
@@ -49,8 +56,9 @@ function decideScale(longEdge) {
 }
 
 // ---------- Stability calls ----------
-// v2beta Ultra — text-to-image AND image-to-image (no width/height on i2i)
-async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf = null }) {
+// v2beta Ultra — text-to-image AND image-to-image
+// IMPORTANT: For i2i, DO NOT send width/height/aspect ratio. Output = init image size.
+async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf = null, imageStrength }) {
   if (!STABILITY_API_KEY) {
     const err = new Error('STABILITY_API_KEY is not set');
     err.status = 500;
@@ -58,17 +66,22 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
   }
 
   const form = new FormData();
-  form.append('prompt', prompt);
-  form.append('output_format', 'png');
 
   if (initImageBuf) {
-    // Image-to-image: DO NOT send width/height or aspect ratio (Stability ignores or errors)
+    // IMAGE-TO-IMAGE
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
-    // You may add an image strength if you want:
-    // form.append('strength', '0.35'); // 0–1 optional for some models
+    form.append('prompt', prompt);
+    form.append('output_format', 'png');
+    // Optional strength (0..1). Many Stability models call this "strength" for Ultra i2i.
+    if (typeof imageStrength !== 'undefined' && imageStrength !== null) {
+      const s = Math.max(0, Math.min(1, Number(imageStrength)));
+      form.append('strength', String(Number.isFinite(s) ? s : 0.35));
+    }
   } else {
-    // Text-to-image: an aspect ratio is OK here (examples: '1:1', '3:4', '4:3')
-    form.append('aspect_ratio', aspectRatio);
+    // TEXT-TO-IMAGE
+    form.append('prompt', prompt);
+    form.append('aspect_ratio', aspectRatio); // e.g. '1:1', '3:4', '4:3'
+    form.append('output_format', 'png');
   }
 
   try {
@@ -146,21 +159,24 @@ async function uploadPngToCloudinary(buf, { userId }) {
 }
 
 // ---------- PUBLIC HANDLER ----------
-export async function createDesign(req, res, next) {
+export async function createDesign(req, res) {
   try {
-    const { prompt, initImageBase64, aspectRatio } = req.body;
+    const { prompt, initImageBase64, aspectRatio, imageStrength } = req.body || {};
     if (!prompt && !initImageBase64) {
       return res.status(400).json({ message: 'Either a prompt or an init image is required.' });
     }
 
     const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
+    if (initImageBase64 && !initBuf) {
+      return res.status(400).json({ message: 'initImageBase64 is not a valid base64 data URL.' });
+    }
 
-    // 1) Generate base PNG
+    // 1) Generate base PNG (Ultra). For i2i we DO NOT pass aspect ratio/width/height.
     const basePng = await stableGenerateUltra({
       prompt,
-      // Only pass aspect ratio when there is NO init image
       aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
       initImageBuf: initBuf || null,
+      imageStrength, // 0..1 optional
     });
 
     // 2) Upscale in 2× passes until we reach target long edge
@@ -175,8 +191,6 @@ export async function createDesign(req, res, next) {
       const p1 = await stabilityUpscale2x(basePng);
       master = await stabilityUpscale2x(p1);
     }
-    // Optional: hard-cap to ~5000px if a future endpoint overshoots
-    // (not necessary today, but left here as a note)
 
     // 3) Upload to Cloudinary (if configured)
     const { masterUrl, previewUrl, thumbUrl, publicId } =
@@ -192,6 +206,7 @@ export async function createDesign(req, res, next) {
       thumbUrl,           // w=400 jpg (grids)
       publicId,
       meta: {
+        mode: initBuf ? 'i2i' : 't2i',
         sourceWidth: width,
         sourceHeight: height,
         targetLongEdge: TARGET_LONG_EDGE,
@@ -200,10 +215,9 @@ export async function createDesign(req, res, next) {
       },
     });
   } catch (err) {
-    // Log concise error to server; return compact message to client
     const status = err.response?.status || 500;
-    const msg = err.response?.data?.message || err.message || 'Generation failed';
-    console.error('[createDesign][ERROR]', status, msg);
-    res.status(500).json({ message: 'Failed to generate image.', error: err.response?.data || msg });
+    const details = err.response?.data || err.message || 'Unknown error';
+    console.error('[createDesign][ERROR]', status, details);
+    res.status(500).json({ message: 'Failed to generate image.', error: details });
   }
 }
