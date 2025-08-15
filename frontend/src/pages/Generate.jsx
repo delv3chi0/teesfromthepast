@@ -1,379 +1,373 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+// frontend/src/pages/Generate.jsx
 import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  HStack,
-  Button,
-  Icon,
-  useToast,
-  Alert,
-  AlertIcon,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  Switch,
-  Tooltip as ChakraTooltip,
-  FormControl,
-  FormLabel,
-  Input as ChakraInput,
-} from '@chakra-ui/react';
-import { FaMagic, FaSave, FaUpload, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+  Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon,
+  Alert, AlertIcon, FormControl, FormLabel, Flex, Collapse, Tooltip as ChakraTooltip,
+  Input as ChakraInput, HStack
+} from "@chakra-ui/react";
+import { useState, useCallback, useMemo } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
+import { FaMagic, FaSave, FaUpload } from 'react-icons/fa';
 
-/**
- * DROP‑IN REPLACEMENT — Generate.jsx
- * ------------------------------------------------------------
- * - Keeps existing routes/exports intact
- * - Calls the same backend endpoints:
- *   POST /api/designs/create  (body: { prompt, initImageBase64? })
- *   POST /api/mydesigns       (body: { prompt, imageDataUrl?, masterUrl?, thumbUrl? })
- * - New retro UI: CRT TV + VCR combo, style/year knobs, VCR image upload
- * - Heavier decade weighting in prompt construction
- */
+// ----------------- constants -----------------
+const ART_STYLES = ["Classic Art", "Stencil Art", "Embroidery Style"];
+const DECADES = ["1960s", "1970s", "1980s", "1990s"];
 
-// ====== Configurable UI options ======
-const ART_STYLES = ['Classic Art', 'Stencil Art', 'Embroidery Style'];
-const DECADES = ['1960s', '1970s', '1980s', '1990s'];
-
-// Era descriptors added to the prompt for stronger conditioning
-const ERA_HINTS = {
-  '1960s': '1960s aesthetic, Kodachrome film look, vintage print, muted colors, retro typography, mid-century style',
-  '1970s': '1970s aesthetic, film grain, warm tones, analog photography, vintage magazine style, airbrushed poster',
-  '1980s': '1980s aesthetic, analog film, slight grain, bold colors, retro pop culture, glossy poster look, store shelf art',
-  '1990s': '1990s aesthetic, early digital, disposable camera look, pop magazine style, retro print design',
+// stronger style language for each option (server stays secret)
+const STYLE_PHRASES = {
+  "Classic Art": "",
+  "Stencil Art": "monochrome stencil, crisp outlines, high contrast, posterized, vector look",
+  "Embroidery Style": "embroidery pattern, satin stitch, limited color palette, thread texture, vector-friendly"
+};
+const DECADE_PHRASES = {
+  "1960s": "1960s film look, vintage color, analog grain",
+  "1970s": "1970s photo, warm film stock, retro vibe",
+  "1980s": "1980s snapshot, kodachrome, nostalgic tones",
+  "1990s": "1990s print, subtle film grain, era-accurate style"
 };
 
-// Style descriptors
-const STYLE_HINTS = {
-  'Classic Art': 'photo-real, clean lighting, detailed, balanced tones, professional grade composition',
-  'Stencil Art': 'high-contrast stencil art, bold outlines, cut vinyl look, limited values, posterized shapes, vector-friendly, clean edges',
-  'Embroidery Style': 'embroidery patch design, satin stitch, limited color palette (6 colors), simplified vector shapes, clean edges, applique texture, thread detail',
-};
+// ----------------- rotary dial -----------------
+function Dial({
+  label,
+  value,            // string from options
+  options,          // array of strings
+  onChange,         // (nextString)
+  ariaLabel,
+}) {
+  const idx = options.indexOf(value);
+  const anglePerStop = 240 / (options.length - 1); // sweep across ~240°
+  const baseAngle = -120; // start at -120° → +120°
+  const angle = baseAngle + idx * anglePerStop;
 
-const knobSize = 84; // px visual size for knobs
+  const next = () => onChange(options[(idx + 1) % options.length]);
+  const prev = () => onChange(options[(idx - 1 + options.length) % options.length]);
 
-function Knob({ label, valueIndex, setIndex, options }) {
-  const onStep = (dir) => {
-    const n = options.length;
-    setIndex((prev) => (prev + (dir > 0 ? 1 : n - 1)) % n);
+  // drag to rotate
+  const [dragging, setDragging] = useState(false);
+  const onMouseDown = (e) => { e.preventDefault(); setDragging(true); };
+  const onMouseUp = () => setDragging(false);
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    // simple left/right motion to rotate
+    if (e.movementX > 1) next();
+    if (e.movementX < -1) prev();
   };
+
   return (
-    <VStack spacing={2} userSelect="none">
+    <VStack spacing={2} userSelect="none" onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
+      <Text fontWeight="bold" color="brand.textLight">{label}</Text>
       <Box
+        role="button"
+        aria-label={ariaLabel}
+        onClick={next}
+        onContextMenu={(e)=>{e.preventDefault(); prev();}}
+        onMouseDown={onMouseDown}
+        tabIndex={0}
+        onKeyDown={(e)=>{ if(e.key==='ArrowRight') next(); if(e.key==='ArrowLeft') prev(); if(e.key==='Enter') next(); }}
+        w="84px" h="84px"
+        rounded="full"
         position="relative"
-        w={`${knobSize}px`}
-        h={`${knobSize}px`}
-        borderRadius="full"
-        bg="linear-gradient(145deg, rgba(14,19,21,0.9), rgba(32,44,48,0.9))"
-        border="2px solid rgba(255,255,255,0.15)"
-        boxShadow="inset 0 4px 10px rgba(0,0,0,.6), 0 10px 20px rgba(0,0,0,.35)"
+        transition="transform .15s ease"
+        transform={`rotate(${angle}deg)`}
+        // knob skin
+        bgGradient="radial(circle at 35% 35%, rgba(255,255,255,.25), rgba(0,0,0,.35)), radial(circle at 65% 65%, rgba(0,0,0,.25), rgba(0,0,0,.55))"
+        border="4px solid"
+        borderColor="blackAlpha.700"
+        boxShadow="inset 0 1px 8px rgba(0,0,0,.6), 0 4px 18px rgba(0,0,0,.45)"
+        cursor="pointer"
       >
-        {/* indicator */}
-        <Box
-          position="absolute"
-          left="50%"
-          top="50%"
-          w="2px"
-          h="32px"
-          bg="yellow.300"
-          transform={`rotate(${(valueIndex / options.length) * 300 - 150}deg) translate(-50%, -115%)`}
-          transformOrigin="top left"
-          borderRadius="md"
-        />
-        {/* center cap */}
-        <Box
-          position="absolute"
-          left="50%"
-          top="50%"
-          transform="translate(-50%, -50%)"
-          w="34px"
-          h="34px"
-          borderRadius="full"
-          bg="radial-gradient(circle at 40% 40%, #6b7174, #2b2f31)"
-          border="2px solid rgba(0,0,0,.6)"
-        />
+        {/* marker */}
+        <Box position="absolute" left="50%" top="8px" w="3px" h="16px" bg="yellow.300" rounded="sm" transform="translateX(-50%) rotate(-90deg)" />
       </Box>
-      <HStack spacing={3}>
-        <Button size="xs" variant="outline" onClick={() => onStep(-1)} leftIcon={<FaChevronLeft />}>Prev</Button>
-        <Text color="whiteAlpha.900" fontWeight="semibold" minW="120px" textAlign="center">{options[valueIndex]}</Text>
-        <Button size="xs" variant="outline" onClick={() => onStep(1)} rightIcon={<FaChevronRight />}>Next</Button>
+      <Text fontSize="sm" color="yellow.300">{value}</Text>
+      <HStack spacing={2} pt={1}>
+        {options.map((opt, i) => (
+          <Box key={opt} w="6px" h="6px" rounded="full"
+               bg={i===idx ? "yellow.300" : "whiteAlpha.400"} />
+        ))}
       </HStack>
-      <Text fontSize="xs" color="whiteAlpha.700">{label}</Text>
     </VStack>
   );
 }
 
-function VcrDeck({ file, setFile, disabled }) {
-  const inputRef = useRef(null);
-  const [hover, setHover] = useState(false);
-
-  const onPick = () => inputRef.current?.click();
-  const onFile = (f) => {
-    setFile(f || null);
-  };
-
-  const handleChange = (e) => onFile(e.target.files?.[0]);
-  const onDrop = (e) => {
-    e.preventDefault();
-    if (disabled) return;
-    const f = e.dataTransfer.files?.[0];
-    if (f) onFile(f);
-    setHover(false);
+// ----------------- VCR upload -----------------
+function VcrUpload({ onFileChange, disabled }) {
+  const [fileName, setFileName] = useState("No file chosen");
+  const handle = (e) => {
+    const file = e.target.files?.[0];
+    setFileName(file ? file.name : "No file chosen");
+    onFileChange(file || null);
   };
 
   return (
     <Box
-      bg="#0b1416"
-      border="2px solid rgba(255,255,255,.15)"
-      rounded="md"
-      p={4}
+      bg="#12161d"
+      border="3px solid #0d1016"
+      rounded="lg"
       w="100%"
-      onDragOver={(e) => { e.preventDefault(); setHover(true); }}
-      onDragLeave={() => setHover(false)}
-      onDrop={onDrop}
+      p={4}
+      position="relative"
+      boxShadow="inset 0 0 0 2px #1d2430, 0 8px 24px rgba(0,0,0,.45)"
     >
-      <HStack align="center" spacing={4}>
-        <Box flex="1" bg="#0e0e12" border="1px solid #2a3033" rounded="sm" h="48px" position="relative">
-          <Box position="absolute" left="8px" top="10px" w="calc(100% - 16px)" h="28px" bg="#1b2326" border="1px solid #344044" rounded="sm" />
-          <Box position="absolute" left="12px" top="14px" w="calc(100% - 24px)" h="20px" bg={hover ? '#1f2f35' : '#121b1e'} border="1px solid #2d3a3e" rounded="sm" />
-          <Text position="absolute" left="14px" top="14px" fontSize="xs" color="whiteAlpha.700">
-            {file ? file.name : 'Insert Image into VCR (drag & drop or click)'}
-          </Text>
-        </Box>
-        <Button onClick={onPick} leftIcon={<Icon as={FaUpload} />} isDisabled={disabled}>Load</Button>
-        <ChakraInput ref={inputRef} display="none" type="file" accept="image/*" onChange={handleChange} />
-      </HStack>
-      <HStack mt={3} spacing={6}>
-        <FormControl display="flex" alignItems="center">
-          <FormLabel mb="0" color="whiteAlpha.800">Use VCR image</FormLabel>
-          {/* This switch is cosmetic; we always send the image if provided. Kept to match UI expectations. */}
-          <Switch isChecked={!!file} onChange={(e)=>{ if (!e.target.checked) onFile(null); }} isDisabled={disabled} colorScheme="yellow"/>
-        </FormControl>
-        <Text fontSize="xs" color="whiteAlpha.600">(Optional) Provide a starting image for image‑to‑image</Text>
-      </HStack>
+      {/* faux slot */}
+      <Box h="18px" bgGradient="linear(to-b, #0a0d12, #0f141c)" rounded="sm" />
+      {/* bezel */}
+      <Flex mt={4} justify="space-between" align="center">
+        <Text color="whiteAlpha.800" fontWeight="semibold" fontSize="sm">VCR</Text>
+        <Text color="whiteAlpha.600" fontSize="xs">{fileName}</Text>
+      </Flex>
+
+      <ChakraInput
+        type="file"
+        accept="image/*"
+        onChange={handle}
+        mt={3}
+        disabled={disabled}
+        sx={{
+          bg: "blackAlpha.400",
+          borderColor: "whiteAlpha.300",
+          color: "whiteAlpha.900",
+          _hover: { borderColor: "whiteAlpha.500" },
+          _disabled: { opacity: 0.5, cursor: "not-allowed" }
+        }}
+      />
     </Box>
   );
 }
 
+// ----------------- main page -----------------
 export default function Generate() {
-  const [prompt, setPrompt] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  // secret sauce stays on server; we only show user prompt field
+  const [userPrompt, setUserPrompt] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [file, setFile] = useState(null);
+  const [error, setError] = useState("");
 
-  const [styleIndex, setStyleIndex] = useState(0);
-  const [decadeIndex, setDecadeIndex] = useState(2); // default 1980s
-  const [retroOn, setRetroOn] = useState(true);
+  const [artStyle, setArtStyle] = useState(ART_STYLES[0]);
+  const [decade, setDecade] = useState("1980s");
+  const [retroMode, setRetroMode] = useState(true);
+
+  const [initImageFile, setInitImageFile] = useState(null);
 
   const toast = useToast();
   const { logout } = useAuth();
   const navigate = useNavigate();
 
-  const artStyle = ART_STYLES[styleIndex];
-  const decade = DECADES[decadeIndex];
-
-  // Build the final prompt, heavily weighting decade/style
-  const finalPrompt = useMemo(() => {
-    let p = prompt?.trim() || '';
-    const parts = [];
-    if (p) parts.push(p);
-    if (artStyle) parts.push(STYLE_HINTS[artStyle]);
-    if (retroOn && decade) parts.push(ERA_HINTS[decade]);
-
-    // Bonus hints that tend to help print‑friendly results
-    parts.push('clean composition, printable artwork');
-
-    return parts.filter(Boolean).join(', ');
-  }, [prompt, artStyle, retroOn, decade]);
-
-  const handleApiError = (err, defaultMessage, actionType = 'operation') => {
-    const message = err?.response?.data?.message || defaultMessage;
-    if (err?.response?.status === 401) {
-      toast({ title: 'Session Expired', status: 'error', isClosable: true });
-      logout();
-      navigate('/login');
+  const handleApiError = (err, fallback) => {
+    const msg = err.response?.data?.message || fallback;
+    if (err.response?.status === 401) {
+      toast({ title: "Session expired", status: "error" });
+      logout(); navigate("/login");
     } else {
-      toast({ title: `${actionType} Failed`, description: message, status: 'error', isClosable: true });
+      toast({ title: "Error", description: msg, status: "error" });
     }
-    setError(message);
+    setError(msg);
   };
 
-  const readFileAsDataUrl = (f) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(f);
-  });
+  // Build final prompt BUT DO NOT SHOW IT
+  const finalPrompt = useMemo(() => {
+    const parts = [userPrompt];
+    if (STYLE_PHRASES[artStyle]) parts.push(STYLE_PHRASES[artStyle]);
+    if (retroMode && DECADE_PHRASES[decade]) parts.push(DECADE_PHRASES[decade]);
+    // keep flexible for future seasoning
+    return parts.filter(Boolean).join(", ").trim();
+  }, [userPrompt, artStyle, decade, retroMode]);
 
-  const handleGenerate = useCallback(async () => {
-    if (!finalPrompt) {
-      toast({ title: 'Please enter a prompt first.', status: 'info' });
+  const handleGenerate = async () => {
+    if (!userPrompt.trim()) {
+      toast({ title: "Please describe your image idea.", status: "info" });
       return;
     }
     setLoading(true);
-    setError('');
-    setImageUrl('');
+    setError(""); setImageUrl("");
 
     try {
       const body = { prompt: finalPrompt };
-      if (file) {
-        body.initImageBase64 = await readFileAsDataUrl(file);
+      if (initImageFile) {
+        const reader = new FileReader();
+        const base64 = await new Promise((res, rej) => {
+          reader.onloadend = () => res(reader.result);
+          reader.onerror = rej;
+          reader.readAsDataURL(initImageFile);
+        });
+        body.initImageBase64 = base64;
       }
+      const { data } = await client.post("/designs/create", body);
+      const { imageDataUrl, masterUrl, thumbUrl } = data;
 
-      const res = await client.post('/designs/create', body);
-      const { imageDataUrl, masterUrl, previewUrl, thumbUrl } = res.data || {};
-
-      setImageUrl(imageDataUrl || masterUrl || previewUrl || '');
-      // Stash for Save
-      window.__lastGen = { imageDataUrl, masterUrl, thumbUrl, prompt: finalPrompt };
-    } catch (err) {
-      handleApiError(err, 'Failed to generate image.', 'Generation');
+      setImageUrl(imageDataUrl || masterUrl || "");
+      // stash for Save
+      (window).__lastGen = {
+        imageDataUrl, masterUrl, thumbUrl,
+        prompt: userPrompt    // store ONLY user-entered prompt (not our seasoning)
+      };
+    } catch (e) {
+      handleApiError(e, "Failed to generate image.");
     } finally {
       setLoading(false);
     }
-  }, [finalPrompt, file]);
+  };
 
-  const handleSave = useCallback(async () => {
-    const gen = window.__lastGen;
+  const handleSave = async () => {
+    const gen = (window).__lastGen;
     if (!gen?.imageDataUrl && !gen?.masterUrl) {
-      toast({ title: 'Nothing to save yet', status: 'info' });
+      toast({ title: "Nothing to save yet", status: "info" });
       return;
     }
     setIsSaving(true);
     try {
-      await client.post('/mydesigns', {
-        prompt: gen.prompt || finalPrompt || prompt,
+      await client.post("/mydesigns", {
+        prompt: gen.prompt || userPrompt,     // ONLY user prompt is persisted
         imageDataUrl: gen.imageDataUrl,
         masterUrl: gen.masterUrl,
-        thumbUrl: gen.thumbUrl,
+        thumbUrl: gen.thumbUrl
       });
-      toast({ title: 'Design Saved!', description: "Find it under ‘My Designs’.", status: 'success', isClosable: true });
-    } catch (err) {
-      handleApiError(err, 'Failed to save design.', 'Save');
+      toast({ title: "Design saved!", status: "success" });
+    } catch (e) {
+      handleApiError(e, "Failed to save design.");
     } finally {
       setIsSaving(false);
     }
-  }, [finalPrompt, prompt]);
+  };
 
+  // ----------------- UI -----------------
   return (
-    <VStack spacing={8} w="100%" px={{ base: 3, md: 6 }}>
+    <VStack spacing={8} w="100%" pb={10}>
       <Heading as="h1" size="2xl" color="brand.textLight">AI Image Generator</Heading>
 
-      {/* TV + VCR combo */}
+      {/* WOOD-TV WRAPPER */}
       <Box
-        w="100%"
-        maxW="980px"
-        bg="#0c1719"
-        border="8px solid #0a0f10"
-        rounded="2xl"
-        boxShadow="0 18px 60px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.06)"
-        p={{ base: 3, md: 6 }}
+        w="100%" maxW="900px"
+        rounded="3xl"
+        p={{ base: 4, md: 6 }}
+        // woodgrain made from layered gradients
+        bgGradient="
+          linear(135deg, #3b2618, #2a1a11 55%, #3a2417),
+          repeating-linear(90deg, rgba(255,255,255,.04) 0 2px, rgba(0,0,0,.06) 2px 4px)
+        "
+        boxShadow="0 18px 40px rgba(0,0,0,.55), inset 0 0 0 2px rgba(0,0,0,.25)"
+        border="6px solid rgba(0,0,0,.35)"
       >
-        <HStack align="stretch" spacing={{ base: 4, md: 8 }}>
-          {/* CRT body */}
-          <VStack flex="1" spacing={4}>
-            {/* Screen */}
+        {/* TV/SCREEN */}
+        <Box
+          bg="brand.secondary"
+          rounded="xl"
+          p={{ base: 3, md: 4 }}
+          border="2px solid rgba(0,0,0,.45)"
+          boxShadow="inset 0 0 0 2px rgba(255,255,255,.05)"
+          position="relative"
+        >
+          {/* “glass” bezel */}
+          <Box
+            rounded="lg"
+            bg="#0b1720"
+            border="1px solid rgba(255,255,255,.06)"
+            boxShadow="inset 0 0 60px rgba(0,0,0,.8)"
+            p={{ base: 2, md: 3 }}
+          >
             <Box
-              position="relative"
-              w="100%"
-              pt="60%" // aspect ratio 5:3ish
-              bg="#071013"
-              border="6px solid #0a0f10"
-              rounded="lg"
+              h={{ base: "260px", md: "420px" }}
+              rounded="md"
               overflow="hidden"
-              boxShadow="inset 0 0 35px rgba(0,0,0,.8), inset 0 0 240px rgba(18, 255, 196, .05)"
+              position="relative"
+              bg="linear-gradient(180deg, #0e2230, #0b1b26)"
+              border="1px solid rgba(255,255,255,.06)"
             >
-              {/* image */}
-              {imageUrl ? (
-                <Box as="img" src={imageUrl} alt={prompt || 'Generated Art'}
-                  position="absolute" inset={0} w="100%" h="100%" objectFit="contain" />
-              ) : (
-                <VStack position="absolute" inset={0} align="center" justify="center" spacing={3}>
-                  <Icon as={FaMagic} boxSize={12} color="whiteAlpha.700" />
-                  <Text color="whiteAlpha.800">Your Generated Image Will Appear Here</Text>
-                </VStack>
+              {/* subtle glare */}
+              <Box position="absolute" inset="0"
+                   bg="linear-gradient(120deg, rgba(255,255,255,.08), transparent 40%)"
+                   pointerEvents="none"/>
+              {loading && (
+                <Flex align="center" justify="center" h="100%">
+                  <Spinner size="xl" />
+                </Flex>
               )}
-              {/* scanline overlay */}
-              <Box position="absolute" inset={0} pointerEvents="none" bg="repeating-linear-gradient(transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(0,0,0,.03) 4px)" />
-              {/* subtle curve highlight */}
-              <Box position="absolute" inset={0} pointerEvents="none" bg="radial-gradient(120% 90% at 50% -20%, rgba(255,255,255,.14), transparent 60%)" />
+              {!loading && imageUrl && (
+                <Image src={imageUrl} alt="Generated" objectFit="contain" w="100%" h="100%" />
+              )}
+              {!loading && !imageUrl && (
+                <Flex align="center" justify="center" h="100%" direction="column" color="whiteAlpha.700">
+                  <Icon as={FaMagic} boxSize="56px" mb={3} />
+                  <Text>Your Generated Image Will Appear Here</Text>
+                </Flex>
+              )}
             </Box>
+          </Box>
 
-            {/* VCR Deck */}
-            <VcrDeck file={file} setFile={setFile} disabled={loading || isSaving} />
-          </VStack>
+          {/* control cluster (dials) */}
+          <Flex mt={4} gap={8} wrap="wrap" align="center" justify="space-between">
+            <Dial
+              label="Art Style"
+              value={artStyle}
+              options={ART_STYLES}
+              onChange={setArtStyle}
+              ariaLabel="Art style dial"
+            />
+            <Dial
+              label="Decade"
+              value={decade}
+              options={DECADES}
+              onChange={setDecade}
+              ariaLabel="Decade dial"
+            />
+          </Flex>
+        </Box>
 
-          {/* Side controls / knobs */}
-          <VStack w={{ base: 'auto', md: '240px' }} spacing={6} align="center" justify="flex-start">
-            <Knob label="Art Style" valueIndex={styleIndex} setIndex={setStyleIndex} options={ART_STYLES} />
+        {/* VCR BELOW THE SCREEN */}
+        <Box mt={5}>
+          <VcrUpload onFileChange={setInitImageFile} disabled={loading || isSaving} />
+        </Box>
 
-            <VStack spacing={3}>
-              <HStack spacing={3}>
-                <Switch isChecked={retroOn} onChange={(e)=>setRetroOn(e.target.checked)} colorScheme="yellow" />
-                <Text color="whiteAlpha.900" fontWeight="semibold">Retro Mode</Text>
-              </HStack>
-              <Box opacity={retroOn ? 1 : .45} pointerEvents={retroOn ? 'auto' : 'none'}>
-                <Knob label="Decade" valueIndex={decadeIndex} setIndex={setDecadeIndex} options={DECADES} />
-              </Box>
-            </VStack>
+        {/* (1) MOVED the user prompt BELOW the VCR, with better contrast */}
+        <Box mt={5}>
+          <FormControl>
+            <FormLabel color="yellow.200" fontWeight="bold">Describe your image idea</FormLabel>
+            <Textarea
+              value={userPrompt}
+              onChange={(e)=>setUserPrompt(e.target.value)}
+              placeholder="Example: a Bigfoot blasting a boombox in a neon arcade"
+              minH="110px"
+              bg="rgba(0,0,0,.35)"
+              color="whiteAlpha.900"                 // <-- brighter text
+              _placeholder={{ color: "whiteAlpha.700" }}  // <-- brighter placeholder
+              border="1px solid rgba(255,255,255,.25)"
+              _hover={{ borderColor: "whiteAlpha.400" }}
+              focusBorderColor="yellow.300"
+              isDisabled={loading || isSaving}
+            />
+          </FormControl>
+        </Box>
 
-            {/* Prompt box */}
-            <FormControl>
-              <FormLabel color="whiteAlpha.800">Describe your image idea</FormLabel>
-              <ChakraInput
-                value={prompt}
-                onChange={(e)=>setPrompt(e.target.value)}
-                placeholder="e.g., A dolphin kicking a game winning field goal"
-                bg="brand.secondary"
-                borderColor="whiteAlpha.300"
-                _hover={{ borderColor: 'whiteAlpha.400' }}
-                focusBorderColor="brand.accentYellow"
-              />
-            </FormControl>
-
-            <VStack w="100%" spacing={3}>
-              <Button
-                onClick={handleGenerate}
-                colorScheme="brandAccentOrange"
-                isLoading={loading}
-                loadingText="Generating..."
-                isDisabled={isSaving || loading || !prompt}
-                leftIcon={<Icon as={FaMagic} />}
-                w="100%"
-              >
-                Generate Image
-              </Button>
-              <Button
-                onClick={handleSave}
-                colorScheme="brandAccentYellow"
-                isLoading={isSaving}
-                loadingText="Saving..."
-                isDisabled={loading}
-                leftIcon={<Icon as={FaSave} />}
-                w="100%"
-              >
-                Save This Design
-              </Button>
-            </VStack>
-
-            {/* Live prompt preview (dev aid) */}
-            <Box w="100%" p={3} bg="blackAlpha.500" border="1px solid" borderColor="whiteAlpha.300" rounded="md">
-              <Text fontSize="xs" color="whiteAlpha.700">Prompt preview:</Text>
-              <Text fontSize="xs" color="whiteAlpha.900">{finalPrompt || '(enter a prompt to see the final text)'}</Text>
-            </Box>
-          </VStack>
-        </HStack>
+        <Flex mt={5} gap={4} wrap="wrap">
+          <Button
+            onClick={handleGenerate}
+            colorScheme="orange"
+            isLoading={loading}
+            loadingText="Generating..."
+            isDisabled={isSaving || loading || !userPrompt.trim()}
+            leftIcon={<Icon as={FaMagic} />}
+            size="lg"
+          >
+            Generate Image
+          </Button>
+          <Button
+            onClick={handleSave}
+            colorScheme="yellow"
+            isLoading={isSaving}
+            loadingText="Saving..."
+            isDisabled={loading}
+            size="lg"
+            leftIcon={<Icon as={FaSave} />}
+          >
+            Save This Design
+          </Button>
+        </Flex>
       </Box>
 
       {error && (
-        <Alert status="error" colorScheme="red" borderRadius="md" p={4} borderWidth="1px" maxW="980px" w="100%">
+        <Alert status="error" colorScheme="red" borderRadius="md" p={4} borderWidth="1px" maxW="900px" w="100%">
           <AlertIcon />
           <Text>{error}</Text>
         </Alert>
@@ -381,5 +375,3 @@ export default function Generate() {
     </VStack>
   );
 }
-
-
