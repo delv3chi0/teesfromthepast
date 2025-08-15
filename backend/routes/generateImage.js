@@ -2,14 +2,17 @@
 import express from "express";
 import axios from "axios";
 import FormData from "form-data";
+import sharp from "sharp";               // <-- local upscale fallback
 import "dotenv/config";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
 // ---- ENV ----
-const STABILITY_API_KEY = process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
-const ENGINE_ID = process.env.STABILITY_API_ENGINE_ID || "stable-diffusion-xl-1024-v1-0";
+const STABILITY_API_KEY =
+  process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
+const ENGINE_ID =
+  process.env.STABILITY_API_ENGINE_ID || "stable-diffusion-xl-1024-v1-0";
 const TARGET_LONG = parseInt(process.env.GEN_TARGET_LONG_EDGE || "2048", 10);
 const HOST = process.env.STABILITY_API_HOST || "https://api.stability.ai";
 
@@ -28,11 +31,19 @@ function pngDims(buf) {
   }
 }
 const longEdgeOf = (buf) => Math.max(...Object.values(pngDims(buf)));
-const toDataUrl = (buf, mime = "image/png") => `data:${mime};base64,${buf.toString("base64")}`;
+const toDataUrl = (buf, mime = "image/png") =>
+  `data:${mime};base64,${buf.toString("base64")}`;
 
 // ---- SDXL text-to-image ----
-async function sdxlTextToImage({ prompt, width = 1024, height = 1024, steps = 30, cfg_scale = 7 }) {
-  if (!STABILITY_API_KEY) throw Object.assign(new Error("STABILITY_API_KEY missing"), { status: 500 });
+async function sdxlTextToImage({
+  prompt,
+  width = 1024,
+  height = 1024,
+  steps = 30,
+  cfg_scale = 7,
+}) {
+  if (!STABILITY_API_KEY)
+    throw Object.assign(new Error("STABILITY_API_KEY missing"), { status: 500 });
   const body = {
     text_prompts: [{ text: prompt }],
     cfg_scale,
@@ -57,10 +68,14 @@ async function sdxlTextToImage({ prompt, width = 1024, height = 1024, steps = 30
 
 // ---- SDXL image-to-image ----
 async function sdxlImageToImage({ prompt, initImageBase64 }) {
-  if (!STABILITY_API_KEY) throw Object.assign(new Error("STABILITY_API_KEY missing"), { status: 500 });
+  if (!STABILITY_API_KEY)
+    throw Object.assign(new Error("STABILITY_API_KEY missing"), { status: 500 });
   const form = new FormData();
   const b64 = (initImageBase64 || "").split(",").pop();
-  form.append("init_image", Buffer.from(b64, "base64"), { filename: "init.png", contentType: "image/png" });
+  form.append("init_image", Buffer.from(b64, "base64"), {
+    filename: "init.png",
+    contentType: "image/png",
+  });
   form.append("text_prompts[0][text]", prompt);
   form.append("text_prompts[0][weight]", "1");
   form.append("init_image_mode", "IMAGE_STRENGTH");
@@ -73,7 +88,11 @@ async function sdxlImageToImage({ prompt, initImageBase64 }) {
 
   const url = `${HOST}/v1/generation/${ENGINE_ID}/image-to-image`;
   const { data } = await axios.post(url, form, {
-    headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders(), Accept: "application/json" },
+    headers: {
+      Authorization: `Bearer ${STABILITY_API_KEY}`,
+      ...form.getHeaders(),
+      Accept: "application/json",
+    },
     maxBodyLength: Infinity,
   });
   const art = data?.artifacts?.[0];
@@ -81,95 +100,150 @@ async function sdxlImageToImage({ prompt, initImageBase64 }) {
   return Buffer.from(art.base64, "base64");
 }
 
-// ---- Upscalers ----
+// ---- External upscalers ----
 
-// v2beta – accepts `image` + either scale or explicit width/height.
-// We’ll support both styles.
+// v2beta – binary -> binary
 async function upscale_v2beta({ buf, scale = 2, width, height }) {
   const form = new FormData();
   form.append("image", buf, { filename: "in.png", contentType: "image/png" });
   if (scale) form.append("scale", String(scale));
   if (width) form.append("width", String(width));
   if (height) form.append("height", String(height));
-  form.append("output_format", "png"); // MUST for bytes
+  form.append("output_format", "png"); // return bytes
 
   const url = `${HOST}/v2beta/stable-image/upscale`;
   const resp = await axios.post(url, form, {
-    headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders(), Accept: "image/png" },
+    headers: {
+      Authorization: `Bearer ${STABILITY_API_KEY}`,
+      ...form.getHeaders(),
+      Accept: "image/png",
+    },
     responseType: "arraybuffer",
     maxBodyLength: Infinity,
+    validateStatus: () => true, // let us inspect non-2xx
   });
+
+  if (resp.status < 200 || resp.status >= 300) {
+    const errBody =
+      Buffer.isBuffer(resp.data) ? resp.data.toString("utf8") : resp.data;
+    const err = new Error(`v2beta upscale failed: ${resp.status}`);
+    err.status = resp.status;
+    err.body = errBody;
+    throw err;
+  }
+
   return Buffer.from(resp.data);
 }
 
-// ESRGAN v1 – returns JSON with artifacts[0].base64
+// ESRGAN v1 – JSON -> base64
 async function upscale_esrgan_v1({ buf, scale = 2 }) {
   const form = new FormData();
   form.append("image", buf, { filename: "in.png", contentType: "image/png" });
   form.append("scale", String(scale));
 
   const url = `${HOST}/v1/generation/esrgan-v1-x2plus/image-to-image/upscale`;
-  const { data } = await axios.post(url, form, {
-    headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders(), Accept: "application/json" },
-    responseType: "json",
+  const resp = await axios.post(url, form, {
+    headers: {
+      Authorization: `Bearer ${STABILITY_API_KEY}`,
+      ...form.getHeaders(),
+      Accept: "application/json",
+    },
     maxBodyLength: Infinity,
+    validateStatus: () => true,
   });
 
-  const art = data?.artifacts?.[0];
+  if (resp.status < 200 || resp.status >= 300) {
+    const err = new Error(`esrgan-v1 upscale failed: ${resp.status}`);
+    err.status = resp.status;
+    err.body = resp.data;
+    throw err;
+  }
+
+  const art = resp.data?.artifacts?.[0];
   if (!art?.base64) throw new Error("ESRGAN response missing artifacts[0].base64");
   return Buffer.from(art.base64, "base64");
 }
 
-// Try multiple strategies; record each attempt.
+// Local fallback via sharp (Lanczos3)
+async function upscale_local_double(buf) {
+  const { width, height } = pngDims(buf);
+  const outW = Math.max(1, width * 2);
+  const outH = Math.max(1, height * 2);
+  const out = await sharp(buf).resize(outW, outH, { kernel: sharp.kernel.lanczos3 }).png().toBuffer();
+  return out;
+}
+
+// Try strategies in order; record each attempt and its status/result sizes.
 async function upscaleOnce(buf) {
   const attempts = [];
 
-  // 1) v2beta with explicit scale
+  // 1) v2beta with scale=2
   try {
     const out = await upscale_v2beta({ buf, scale: 2 });
     const before = pngDims(buf), after = pngDims(out);
-    attempts.push({ step: "v2beta-scale", from: before, to: after, ok: true });
+    attempts.push({ step: "v2beta-scale", status: 200, from: before, to: after });
     if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
-    // fall through if no growth
   } catch (e) {
-    attempts.push({ step: "v2beta-scale", error: e?.response?.status || e?.message || "err" });
+    attempts.push({
+      step: "v2beta-scale",
+      status: e?.status || "ERR",
+      error: e?.body || e?.message,
+    });
   }
 
-  // 2) v2beta with explicit width/height (double)
+  // 2) v2beta with explicit width/height
   try {
     const { width: w, height: h } = pngDims(buf);
     const out = await upscale_v2beta({ buf, width: w * 2, height: h * 2 });
     const before = pngDims(buf), after = pngDims(out);
-    attempts.push({ step: "v2beta-width-height", from: before, to: after, ok: true });
+    attempts.push({ step: "v2beta-width-height", status: 200, from: before, to: after });
     if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
   } catch (e) {
-    attempts.push({ step: "v2beta-width-height", error: e?.response?.status || e?.message || "err" });
+    attempts.push({
+      step: "v2beta-width-height",
+      status: e?.status || "ERR",
+      error: e?.body || e?.message,
+    });
   }
 
   // 3) ESRGAN v1
   try {
     const out = await upscale_esrgan_v1({ buf, scale: 2 });
     const before = pngDims(buf), after = pngDims(out);
-    attempts.push({ step: "esrgan-v1", from: before, to: after, ok: true });
+    attempts.push({ step: "esrgan-v1", status: 200, from: before, to: after });
     if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
   } catch (e) {
-    attempts.push({ step: "esrgan-v1", error: e?.response?.status || e?.message || "err" });
+    attempts.push({
+      step: "esrgan-v1",
+      status: e?.status || "ERR",
+      error: e?.body || e?.message,
+    });
   }
 
-  // No growth → return original, but include attempts for debugging
+  // 4) Local fallback
+  try {
+    const out = await upscale_local_double(buf);
+    const before = pngDims(buf), after = pngDims(out);
+    attempts.push({ step: "local-sharp-x2", status: 200, from: before, to: after });
+    if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
+  } catch (e) {
+    attempts.push({ step: "local-sharp-x2", status: "ERR", error: e?.message });
+  }
+
+  // Nothing improved; return original
   return { out: buf, attempts };
 }
 
 async function upscaleToTarget(buf, targetLong) {
-  const attemptsAll = [];
+  const all = [];
   let out = buf;
   while (targetLong > 0 && longEdgeOf(out) < targetLong) {
     const res = await upscaleOnce(out);
-    attemptsAll.push(...res.attempts);
-    if (longEdgeOf(res.out) <= longEdgeOf(out)) break; // safety (no improvement)
+    all.push(...res.attempts);
+    if (longEdgeOf(res.out) <= longEdgeOf(out)) break; // no improvement → stop
     out = res.out;
   }
-  return { buf: out, attempts: attemptsAll };
+  return { buf: out, attempts: all };
 }
 
 // ---- Routes ----
@@ -184,8 +258,10 @@ router.get("/designs/health", protect, (req, res) => {
 
 router.post("/designs/create", protect, async (req, res) => {
   const { prompt, initImageBase64 } = req.body || {};
-  if (!prompt && !initImageBase64) return res.status(400).json({ message: "Prompt or init image required." });
-  if (!STABILITY_API_KEY) return res.status(500).json({ message: "STABILITY_API_KEY is not configured." });
+  if (!prompt && !initImageBase64)
+    return res.status(400).json({ message: "Prompt or init image required." });
+  if (!STABILITY_API_KEY)
+    return res.status(500).json({ message: "STABILITY_API_KEY is not configured." });
 
   try {
     let base;
@@ -193,7 +269,13 @@ router.post("/designs/create", protect, async (req, res) => {
       log("Image-to-image");
       base = await sdxlImageToImage({ prompt, initImageBase64 });
     } else {
-      log("Text-to-image", { ENGINE_ID, width: 1024, height: 1024, steps: 30, cfg_scale: 7 });
+      log("Text-to-image", {
+        ENGINE_ID,
+        width: 1024,
+        height: 1024,
+        steps: 30,
+        cfg_scale: 7,
+      });
       base = await sdxlTextToImage({ prompt });
     }
 
@@ -208,7 +290,7 @@ router.post("/designs/create", protect, async (req, res) => {
     }
 
     const finalDims = pngDims(finalBuf);
-    log("Result meta", { baseDims, finalDims, targetLong: TARGET_LONG, attempts });
+    log("Result meta", { baseDims, finalDims, targetLong: TARGET_LONG });
 
     res.json({
       message: "ok",
@@ -231,7 +313,9 @@ router.post("/designs/create", protect, async (req, res) => {
       }
       return err?.response?.data || err.message || "unknown";
     })();
-    res.status(err?.response?.status || err.status || 500).json({ message: "Failed to generate image.", error: payload });
+    res
+      .status(err?.response?.status || err.status || 500)
+      .json({ message: "Failed to generate image.", error: payload });
   }
 });
 
