@@ -1,430 +1,385 @@
-// frontend/src/pages/Generate.jsx
 import {
-  Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon,
-  Alert, AlertIcon, FormControl, FormLabel, Flex, HStack, Slider, SliderTrack,
-  SliderFilledTrack, SliderThumb, Tooltip as ChakraTooltip, Input as ChakraInput,
-  VisuallyHidden, useBreakpointValue
+  Box, VStack, HStack, Heading, Text, Textarea, Button, Image, Icon,
+  useToast, useDisclosure, Slider, SliderTrack, SliderFilledTrack, SliderThumb,
+  Badge, Divider, Tooltip, Input as ChakraInput
 } from "@chakra-ui/react";
-import { useState, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { FaPowerOff, FaPlay, FaForward, FaBackward, FaEject, FaMagic, FaSave, FaUpload } from "react-icons/fa";
 import { client } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
-import { FaMagic, FaSave, FaUpload, FaPowerOff } from "react-icons/fa";
 
-// ----------------- Options & “secret sauce” phrases -----------------
+/* ----------------------------- TV Dial Options ---------------------------- */
 const ART_STYLES = ["Classic Art", "Stencil Art", "Embroidery Style"];
-const DECADES = ["1960s", "1970s", "1980s", "1990s"];
+const DECADES     = ["1960s", "1970s", "1980s", "1990s"];
 
-const STYLE_PHRASES = {
-  "Classic Art": "",
-  "Stencil Art": "monochrome stencil, crisp outlines, bold shapes, high contrast, cut-paper aesthetic, vector-safe edges",
-  "Embroidery Style": "embroidery pattern, satin stitch, thread texture, limited color palette, digitizing-friendly, clean vector edges"
-};
-const DECADE_PHRASES = {
-  "1960s": "1960s film look, vintage color cast, analog grain, period-correct style",
-  "1970s": "1970s photo, warm film stock, soft halation, retro vibe",
-  "1980s": "1980s snapshot, kodachrome tones, subtle noise, nostalgic palette",
-  "1990s": "1990s print, slight matte finish, era-accurate style"
-};
-
-// ----------------- Antenna (pure CSS) -----------------
-function Antenna() {
+/* ----------------------------- Knob Component ----------------------------- */
+function Dial({ label, valueIndex, setValueIndex, options }) {
+  const degreesPerStop = 240 / (options.length - 1); // big TV-ish sweep
+  const rotation = useMemo(() => -120 + valueIndex * degreesPerStop, [valueIndex, degreesPerStop]);
   return (
-    <Box position="absolute" top="-54px" left="50%" transform="translateX(-50%)" w="160px" h="60px">
-      <Box position="absolute" left="50%" bottom="0" transform="translateX(-50%)" w="18px" h="18px" bg="gray.600" rounded="full" boxShadow="inset 0 0 3px rgba(0,0,0,.7)" />
-      <Box position="absolute" left="calc(50% - 6px)" bottom="10px" w="12px" h="24px" bg="gray.700" rounded="sm" />
-      {/* ears */}
-      <Box position="absolute" left="50%" bottom="22px" w="2px" h="70px" bg="gray.400" transformOrigin="bottom" transform="translateX(-50%) rotate(-25deg)" boxShadow="0 0 2px rgba(0,0,0,.6)"/>
-      <Box position="absolute" left="50%" bottom="22px" w="2px" h="70px" bg="gray.400" transformOrigin="bottom" transform="translateX(-50%) rotate(25deg)" boxShadow="0 0 2px rgba(0,0,0,.6)"/>
-    </Box>
-  );
-}
-
-// ----------------- Power Switch -----------------
-function PowerSwitch({ on, setOn }) {
-  return (
-    <Button
-      onClick={() => setOn(!on)}
-      size="md"
-      leftIcon={<FaPowerOff />}
-      bg={on ? "red.500" : "gray.700"}
-      _hover={{ bg: on ? "red.400" : "gray.600" }}
-      color="white"
-      rounded="full"
-      title="Power"
-      aria-pressed={on}
-    >
-      Power
-    </Button>
-  );
-}
-
-// ----------------- Rotary Dial (TV-like) -----------------
-function Dial({ label, value, options, onChange, ariaLabel }) {
-  const idx = options.indexOf(value);
-  const anglePerStop = 300 / (options.length - 1); // wide sweep
-  const baseAngle = -150;
-  const angle = baseAngle + idx * anglePerStop;
-
-  const next = () => onChange(options[(idx + 1) % options.length]);
-  const prev = () => onChange(options[(idx - 1 + options.length) % options.length]);
-
-  return (
-    <VStack minW="110px" spacing={2} userSelect="none">
-      <Text fontWeight="bold" color="yellow.300">{label}</Text>
-      <Box position="relative">
-        {/* bezel plate */}
+    <VStack spacing={1} w="120px">
+      <Text fontSize="xs" color="yellow.300" letterSpacing="0.08em">{label}</Text>
+      <Box
+        onClick={() => setValueIndex((i) => (i + 1) % options.length)}
+        role="button"
+        aria-label={`${label} knob`}
+        w="72px"
+        h="72px"
+        borderRadius="full"
+        position="relative"
+        _active={{ transform: "scale(0.98)" }}
+        sx={{
+          background:
+            "radial-gradient(40% 40% at 50% 50%, #3a3f47 0%, #1f242b 60%)",
+          boxShadow:
+            "inset 0 2px 6px rgba(0,0,0,.8), 0 4px 14px rgba(0,0,0,.6)"
+        }}
+      >
+        {/* Tick marks */}
         <Box
-          w="110px" h="110px" rounded="full"
-          bgGradient="linear(to-b, #b2b2b2, #757575)"
-          boxShadow="inset 0 1px 2px rgba(255,255,255,.5), inset 0 -2px 4px rgba(0,0,0,.4), 0 8px 18px rgba(0,0,0,.45)"
-          border="2px solid #333"
+          position="absolute"
+          inset="0"
+          borderRadius="full"
+          bgGradient="conic-gradient(from -120deg, transparent 0deg, rgba(255,255,255,.08) 2deg, transparent 2deg)"
+          style={{ maskImage: "radial-gradient(circle at center, rgba(0,0,0,1) 55%, rgba(0,0,0,0) 56%)" }}
         />
-        {/* ticks */}
-        {Array.from({ length: options.length }).map((_, i) => {
-          const a = baseAngle + i * anglePerStop;
-          const rad = (a * Math.PI) / 180;
-          const R = 44;
-          const x = 55 + Math.cos(rad) * R;
-          const y = 55 + Math.sin(rad) * R;
-          return (
-            <Box key={i} position="absolute" left={`${x}px`} top={`${y}px`} w="4px" h="4px" rounded="full"
-                 bg={i === idx ? "yellow.300" : "blackAlpha.800"} />
-          );
-        })}
-        {/* dial */}
+        {/* Pointer cap */}
         <Box
-          role="button"
-          aria-label={ariaLabel}
-          tabIndex={0}
-          onClick={next}
-          onContextMenu={(e)=>{ e.preventDefault(); prev(); }}
-          onKeyDown={(e)=>{ if(e.key==='ArrowRight') next(); if(e.key==='ArrowLeft') prev(); if(e.key==='Enter') next(); }}
-          position="absolute" left="50%" top="50%" transform={`translate(-50%,-50%) rotate(${angle}deg)`}
-          w="84px" h="84px" rounded="full"
-          bgGradient="radial(circle at 35% 35%, #eaeaea, #9a9a9a 50%, #5d5d5d 70%, #3c3c3c)"
-          border="4px solid #1f1f1f"
-          boxShadow="inset 0 1px 10px rgba(0,0,0,.6), 0 8px 18px rgba(0,0,0,.5)"
-          cursor="pointer"
-          transition="transform .15s ease"
+          position="absolute"
+          left="50%" top="50%"
+          transform={`translate(-50%,-50%) rotate(${rotation}deg)`}
+          transformOrigin="50% 50%"
+          transition="transform .25s ease"
         >
-          {/* indicator ridge */}
-          <Box position="absolute" top="6px" left="50%" transform="translateX(-50%)" w="5px" h="18px" bg="yellow.300" rounded="sm"/>
+          <Box w="4px" h="24px" bg="yellow.300" borderRadius="2px" mx="auto" />
+          <Box mt="4px" w="18px" h="18px" bg="gray.700" borderRadius="full" mx="auto"
+               boxShadow="inset 0 1px 2px rgba(255,255,255,.08), 0 1px 2px rgba(0,0,0,.6)" />
         </Box>
       </Box>
-      <Text fontSize="sm" color="whiteAlpha.900">{value}</Text>
+      <Text fontSize="xs" color="whiteAlpha.800">{options[valueIndex]}</Text>
     </VStack>
   );
 }
 
-// ----------------- VCR with preview + image strength -----------------
-function VCR({ file, setFile, strength, setStrength, disabled }) {
-  const handleFile = (e) => {
-    const f = e.target.files?.[0] || null;
-    setFile(f);
-  };
+/* ------------------------------ VCR Component ---------------------------- */
+function VCRDeck({ previewSrc, onSelectFile, onEject, imageStrength, setImageStrength }) {
   return (
     <Box
-      mt={4}
-      bgGradient="linear(to-b, #151a22, #0f141c)"
-      border="2px solid #0d1117"
-      rounded="lg"
+      borderRadius="lg"
       p={4}
-      boxShadow="inset 0 0 0 2px #1a2230, 0 10px 28px rgba(0,0,0,.5)"
+      bg="#0f1217"
+      border="1px solid rgba(255,255,255,.08)"
+      boxShadow="inset 0 0 0 1px rgba(0,0,0,.6), 0 6px 18px rgba(0,0,0,.35)"
     >
-      {/* slot */}
-      <Box h="16px" bgGradient="linear(to-b, #050709, #0c1118)" rounded="sm" />
-      <Flex mt={3} align="center" justify="space-between" wrap="wrap" gap={4}>
-        <HStack spacing={4} align="center">
-          <Box
-            w="72px" h="48px" bg="black"
-            border="2px solid #202837" rounded="sm"
-            display="grid" placeItems="center"
-          >
-            {file ? (
-              <Image
-                src={URL.createObjectURL(file)}
-                alt="init preview"
-                objectFit="cover"
-                w="100%" h="100%"
-              />
-            ) : (
-              <Text fontSize="xs" color="whiteAlpha.600">No Tape</Text>
-            )}
-          </Box>
-          <Box>
-            <Text fontWeight="semibold" color="whiteAlpha.900">VCR Tape</Text>
-            <Text fontSize="xs" color="whiteAlpha.600">Optional: use your image for image-to-image</Text>
-          </Box>
+      <HStack justify="space-between" mb={3}>
+        <HStack spacing={3}>
+          <Badge colorScheme="yellow" variant="subtle">VCR Tape</Badge>
+          <Text fontSize="xs" color="whiteAlpha.700">Optional: use your image for image-to-image</Text>
         </HStack>
-
-        <HStack spacing={3} flex="1" minW="260px">
-          <Text color="whiteAlpha.800" fontSize="sm" whiteSpace="nowrap">Image Influence</Text>
-          <Slider
-            value={strength}
-            min={0} max={100} step={1}
-            onChange={setStrength}
-            isDisabled={disabled}
-          >
-            <SliderTrack><SliderFilledTrack /></SliderTrack>
-            <SliderThumb />
-          </Slider>
-          <Text w="38px" textAlign="right" color="whiteAlpha.700" fontSize="sm">{strength}%</Text>
+        <HStack spacing={2}>
+          <Tooltip label="Rewind" hasArrow><Button size="sm" variant="ghost" leftIcon={<FaBackward />} isDisabled/></Tooltip>
+          <Tooltip label="Play" hasArrow><Button size="sm" variant="ghost" leftIcon={<FaPlay />} isDisabled/></Tooltip>
+          <Tooltip label="Fast Forward" hasArrow><Button size="sm" variant="ghost" leftIcon={<FaForward />} isDisabled/></Tooltip>
+          <Tooltip label="Eject (clear image)" hasArrow>
+            <Button size="sm" colorScheme="red" leftIcon={<FaEject />} onClick={onEject} isDisabled={!previewSrc}>
+              Eject
+            </Button>
+          </Tooltip>
         </HStack>
+      </HStack>
 
-        <ChakraInput
-          type="file"
-          accept="image/*"
-          onChange={handleFile}
-          disabled={disabled}
-          w={useBreakpointValue({ base: "100%", md: "auto" })}
-          sx={{
-            bg: "blackAlpha.400",
-            borderColor: "whiteAlpha.300",
-            color: "whiteAlpha.900",
-            _hover: { borderColor: "whiteAlpha.500" },
-            _disabled: { opacity: .6 }
-          }}
-        />
-      </Flex>
+      <HStack align="stretch" spacing={4}>
+        <Box
+          w="140px" h="88px" borderRadius="md" overflow="hidden"
+          bg="black" border="1px solid rgba(255,255,255,.06)"
+          display="flex" alignItems="center" justifyContent="center"
+        >
+          {previewSrc ? (
+            <Image src={previewSrc} alt="Tape preview" maxW="100%" maxH="100%" objectFit="contain" />
+          ) : (
+            <Text fontSize="xs" color="whiteAlpha.500">No tape inserted</Text>
+          )}
+        </Box>
+
+        <VStack align="stretch" flex="1" spacing={3}>
+          <HStack>
+            <ChakraInput
+              type="file"
+              accept="image/*"
+              onChange={(e) => onSelectFile(e.target.files?.[0] || null)}
+              bg="whiteAlpha.200"
+              borderColor="whiteAlpha.300"
+              _hover={{ borderColor: "whiteAlpha.500" }}
+              color="white"
+              size="sm"
+              p={1}
+            />
+            <Icon as={FaUpload} color="whiteAlpha.700" />
+          </HStack>
+
+          <HStack spacing={4}>
+            <Text fontSize="xs" color="whiteAlpha.800" w="120px">Image Influence</Text>
+            <Slider
+              value={Math.round(imageStrength * 100)}
+              onChange={(v) => setImageStrength(v / 100)}
+              min={0} max={100} step={1}
+              flex="1"
+            >
+              <SliderTrack bg="whiteAlpha.300"><SliderFilledTrack bg="yellow.400" /></SliderTrack>
+              <SliderThumb />
+            </Slider>
+            <Text fontSize="xs" w="40px" textAlign="right" color="whiteAlpha.800">
+              {Math.round(imageStrength * 100)}%
+            </Text>
+          </HStack>
+        </VStack>
+      </HStack>
     </Box>
   );
 }
 
-// ----------------- Main Page -----------------
+/* ---------------------------------- Page --------------------------------- */
 export default function Generate() {
   const [powerOn, setPowerOn] = useState(true);
-  const [userPrompt, setUserPrompt] = useState("");
-  const [artStyle, setArtStyle] = useState("Classic Art");
-  const [decade, setDecade] = useState("1980s");
-  const [initImageFile, setInitImageFile] = useState(null);
-  const [imgStrength, setImgStrength] = useState(35); // % → sent as 0.0–0.75
 
-  const [imageUrl, setImageUrl] = useState("");
+  const [artIndex, setArtIndex] = useState(0);      // ART_STYLES
+  const [decadeIndex, setDecadeIndex] = useState(2); // 1980s by default
+
+  const [userCaption, setUserCaption] = useState("");
+  const [screenSrc, setScreenSrc] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [tapeFile, setTapeFile] = useState(null);
+  const [tapePreview, setTapePreview] = useState("");
+  const [imageStrength, setImageStrength] = useState(0.35); // 35%
 
   const toast = useToast();
-  const { logout } = useAuth();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
-  // Build “seasoned” prompt (kept secret from UI/DB)
-  const finalPrompt = useMemo(() => {
-    const parts = [userPrompt];
-    if (STYLE_PHRASES[artStyle]) parts.push(STYLE_PHRASES[artStyle]);
-    if (DECADE_PHRASES[decade]) parts.push(DECADE_PHRASES[decade]);
-    return parts.filter(Boolean).join(", ").trim();
-  }, [userPrompt, artStyle, decade]);
+  /* ------------------------------ Prompt craft ----------------------------- */
+  const engineeredPrompt = useMemo(() => {
+    // Keep this private; don’t display it. Just send to backend.
+    let base = userCaption?.trim() || "";
+    const style = ART_STYLES[artIndex];
+    if (style === "Stencil Art") {
+      base = `monochrome stencil art, clean sharp outlines, high contrast, vector aesthetic, ${base}`;
+    } else if (style === "Embroidery Style") {
+      base = `embroidery pattern aesthetic, satin stitch, limited colors, clean edges, vector-friendly, ${base}`;
+    }
+    const decade = DECADES[decadeIndex];
+    base = `${base}, retro ${decade} photography vibe, period-accurate color/lighting/wardrobe`;
+    return base;
+  }, [userCaption, artIndex, decadeIndex]);
 
-  const handleError = (err, fallback) => {
-    const msg = err?.response?.data?.message || fallback;
-    if (err?.response?.status === 401) { toast({ title: "Session expired", status: "error" }); logout(); navigate("/login"); }
-    else { toast({ title: "Error", description: msg, status: "error" }); }
-    setError(msg);
-  };
+  /* ---------------------------- Upload (VCR tape) --------------------------- */
+  const handleSelectTape = useCallback((file) => {
+    setTapeFile(file);
+    if (!file) { setTapePreview(""); return; }
+    const r = new FileReader();
+    r.onloadend = () => setTapePreview(String(r.result || ""));
+    r.readAsDataURL(file);
+  }, []);
+  const ejectTape = () => { setTapeFile(null); setTapePreview(""); };
 
+  /* ------------------------ Generate with Stability ------------------------ */
   const handleGenerate = async () => {
-    if (!powerOn) { toast({ title: "Turn the TV on first 😉", status: "info" }); return; }
-    if (!userPrompt.trim()) { toast({ title: "Please describe your image idea.", status: "info" }); return; }
-    setLoading(true); setError(""); setImageUrl("");
+    setErr("");
+    if (!powerOn) {
+      toast({ title: "TV is off", description: "Turn power on to generate.", status: "info" });
+      return;
+    }
+    if (!engineeredPrompt) {
+      toast({ title: "Describe your image first", status: "warning" });
+      return;
+    }
+    setLoading(true);
     try {
-      const body = { prompt: finalPrompt };
-      if (initImageFile) {
-        const reader = new FileReader();
-        const base64 = await new Promise((res, rej) => {
-          reader.onloadend = () => res(reader.result);
-          reader.onerror = rej;
-          reader.readAsDataURL(initImageFile);
-        });
-        body.initImageBase64 = base64;
-        // Map 0–100 → 0.0–0.75 (stability good zone)
-        body.imageStrength = Math.round((imgStrength / 100) * 75) / 100;
-      }
-      const { data } = await client.post("/designs/create", body);
-      const { imageDataUrl, masterUrl, thumbUrl } = data;
-      setImageUrl(imageDataUrl || masterUrl || "");
-      // Save ONLY the user-entered prompt
-      (window).__lastGen = { imageDataUrl, masterUrl, thumbUrl, prompt: userPrompt };
+      const body = { prompt: engineeredPrompt };
+      if (tapePreview) body.initImageBase64 = tapePreview;
+      if (typeof imageStrength === "number") body.imageStrength = imageStrength;
+
+      const res = await client.post("/designs/create", body);
+      const { imageDataUrl, masterUrl } = res.data || {};
+      setScreenSrc(imageDataUrl || masterUrl || "");
+      // cache last gen for Save
+      window.__lastGen = {
+        imageDataUrl: imageDataUrl || "",
+        masterUrl: masterUrl || "",
+        thumbUrl: res.data?.thumbUrl || "",
+        userCaption, // only the user’s caption is saved/showed
+      };
     } catch (e) {
-      handleError(e, "Failed to generate image.");
+      const msg = e.response?.data?.message || "Failed to generate image.";
+      setErr(msg);
+      if (e.response?.status === 401) { logout(); navigate("/login"); }
     } finally {
       setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    const gen = (window).__lastGen;
-    if (!gen?.imageDataUrl && !gen?.masterUrl) { toast({ title: "Nothing to save yet", status: "info" }); return; }
-    setIsSaving(true);
+    const gen = window.__lastGen;
+    if (!gen?.imageDataUrl && !gen?.masterUrl) {
+      toast({ title: "Generate an image first", status: "info" });
+      return;
+    }
+    setSaving(true);
     try {
       await client.post("/mydesigns", {
-        prompt: gen.prompt || userPrompt, // ONLY user text
-        imageDataUrl: gen.imageDataUrl,
-        masterUrl: gen.masterUrl,
-        thumbUrl: gen.thumbUrl,
+        prompt: gen.userCaption || userCaption || "Untitled", // only user caption
+        imageDataUrl: gen.imageDataUrl || undefined,
+        masterUrl: gen.masterUrl || undefined,
+        thumbUrl: gen.thumbUrl || undefined,
       });
-      toast({ title: "Design saved!", status: "success" });
+      toast({ title: "Design Saved!", status: "success" });
     } catch (e) {
-      handleError(e, "Failed to save design.");
+      const msg = e.response?.data?.message || "Save failed.";
+      setErr(msg);
+      if (e.response?.status === 401) { logout(); navigate("/login"); }
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
 
+  /* --------------------------------- UI ----------------------------------- */
   return (
-    <VStack spacing={8} w="100%" pb={10}>
-      <Heading as="h1" size="2xl" color="brand.textLight">AI Image Generator</Heading>
+    <VStack spacing={8} align="stretch" px={{ base: 3, md: 6 }} py={6}>
+      <Heading as="h1" size="2xl" color="brand.textLight" textAlign="center">AI IMAGE GENERATOR</Heading>
 
-      {/* CONSOLE TV SHELL */}
+      {/* Console TV */}
       <Box
+        maxW="980px" mx="auto" p={0}
+        borderRadius="2xl"
         position="relative"
-        w="100%" maxW="980px"
-        rounded="2xl"
-        p={{ base: 3, md: 5 }}
-        bgGradient="
-          linear(135deg, #432a1a, #2f1e13 55%, #3e2618),
-          repeating-linear(90deg, rgba(255,255,255,.04) 0 2px, rgba(0,0,0,.06) 2px 4px)
-        "
-        border="8px solid rgba(0,0,0,.45)"
-        boxShadow="0 18px 40px rgba(0,0,0,.6), inset 0 0 0 2px rgba(0,0,0,.35)"
+        sx={{
+          // wood console
+          background:
+            "linear-gradient(#5e3b22, #4b301c) padding-box, linear-gradient(135deg, rgba(255,255,255,.25), rgba(0,0,0,.4)) border-box",
+          border: "10px solid transparent",
+          boxShadow: "0 20px 50px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.25)",
+        }}
       >
-        <Antenna />
-
-        {/* Brand plaque */}
-        <Box
-          position="absolute" top="-28px" left="20px"
-          bgGradient="linear(to-b, #cbb67b, #8f7e4e)"
-          color="#1f1408"
-          fontWeight="bold"
-          px={3} py={1}
-          rounded="md"
-          border="2px solid #4a3a22"
-          boxShadow="0 6px 14px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.35)"
-          fontFamily="'Trebuchet MS', system-ui, sans-serif"
-        >
-          TeesFromThePast
+        {/* Brand badge + bunny ears */}
+        <Badge position="absolute" top="-10px" left="18px" colorScheme="yellow" variant="solid">TeesFromThePast</Badge>
+        <Box position="absolute" top="-22px" left="50%" transform="translateX(-50%)" w="46px" h="46px">
+          {/* simple antenna */}
+          <Box position="absolute" left="50%" top="0" w="2px" h="36px" bg="silver" transform="rotate(-18deg) translateX(-180%)" />
+          <Box position="absolute" left="50%" top="0" w="2px" h="36px" bg="silver" transform="rotate(18deg) translateX(80%)" />
         </Box>
 
-        {/* Bezel + Screen */}
+        {/* Screen bezel */}
         <Box
-          bgGradient="linear(to-b, #d7d7d7, #999)"
-          border="3px solid #2c2c2c"
-          rounded="xl"
-          p={{ base: 2, md: 3 }}
-          boxShadow="inset 0 1px 3px rgba(255,255,255,.6), inset 0 -2px 4px rgba(0,0,0,.3)"
+          m={6} borderRadius="lg" p={3}
+          bgGradient="linear(to-b, #0c1016, #0b0e14)"
+          border="1px solid rgba(255,255,255,.08)"
+          boxShadow="inset 0 0 25px rgba(0,0,0,.9)"
         >
+          {/* the CRT */}
           <Box
-            rounded="lg"
-            p={{ base: 2, md: 3 }}
-            bg="#0b1720"
-            border="1px solid rgba(255,255,255,.08)"
-            boxShadow="inset 0 0 70px rgba(0,0,0,.85)"
+            position="relative"
+            h={{ base: "320px", md: "420px" }}
+            borderRadius="md"
+            overflow="hidden"
+            bgGradient={powerOn
+              ? "radial(circle at 50% 20%, #1b2330 0%, #0e141c 45%, #0b0f15 100%)"
+              : "linear(to-b, #030506, #010203)"}
+            border="1px solid rgba(255,255,255,.06)"
           >
-            <Box
-              h={{ base: "260px", md: "440px" }}
-              rounded="md"
-              overflow="hidden"
-              position="relative"
-              bg={powerOn ? "linear-gradient(180deg, #0f2230, #0b1b26)" : "#000"}
-              border="1px solid rgba(255,255,255,.06)"
-              filter={powerOn ? "saturate(1) brightness(1)" : "saturate(.2) brightness(.4)"}
-              transition="filter .2s ease, background .2s ease"
-            >
-              {/* light glare when on */}
-              {powerOn && (
-                <Box position="absolute" inset="0"
-                     bg="linear-gradient(120deg, rgba(255,255,255,.08), transparent 40%)"
-                     pointerEvents="none"/>
-              )}
-              {loading && (
-                <Flex align="center" justify="center" h="100%">
-                  <Spinner size="xl" />
-                </Flex>
-              )}
-              {!loading && imageUrl && (
-                <Image src={imageUrl} alt="Generated" objectFit="contain" w="100%" h="100%"/>
-              )}
-              {!loading && !imageUrl && (
-                <Flex align="center" justify="center" h="100%" direction="column" color="whiteAlpha.700">
-                  <Icon as={FaMagic} boxSize="56px" mb={3} />
-                  <Text>Your Generated Image Will Appear Here</Text>
-                </Flex>
-              )}
-            </Box>
-
-            {/* control bar */}
-            <Flex mt={4} align="center" justify="space-between" wrap="wrap" gap={4}>
-              <PowerSwitch on={powerOn} setOn={setPowerOn} />
-              <HStack spacing={8}>
-                <Dial label="Art Style" value={artStyle} options={ART_STYLES} onChange={setArtStyle} ariaLabel="Art style dial"/>
-                <Dial label="Decade" value={decade} options={DECADES} onChange={setDecade} ariaLabel="Decade dial"/>
-              </HStack>
-            </Flex>
+            {screenSrc ? (
+              <Image
+                src={screenSrc}
+                alt="Generated"
+                position="absolute" inset="0" m="auto"
+                maxH="100%" maxW="100%" objectFit="contain"
+                filter={powerOn ? "none" : "grayscale(1) brightness(.2)"}
+              />
+            ) : (
+              <VStack position="absolute" inset="0" justify="center" spacing={3} color="whiteAlpha.700">
+                <Icon as={FaMagic} boxSize={8} />
+                <Text fontSize="sm">Your Generated Image Will Appear Here</Text>
+              </VStack>
+            )}
+            {/* glow scanline hint */}
+            {powerOn && (
+              <Box position="absolute" inset="0"
+                   background="repeating-linear-gradient(to bottom, rgba(255,255,255,0.02) 0, rgba(255,255,255,0.02) 1px, transparent 3px)"
+                   pointerEvents="none" />
+            )}
           </Box>
+
+          {/* Controls row under screen */}
+          <HStack justify="space-between" align="center" mt={3}>
+            <Button size="sm" colorScheme={powerOn ? "red" : "gray"} onClick={() => setPowerOn((p) => !p)}>
+              <Icon as={FaPowerOff} mr={2} /> Power
+            </Button>
+            <HStack spacing={8}>
+              <Dial label="Art Style" valueIndex={artIndex} setValueIndex={setArtIndex} options={ART_STYLES} />
+              <Dial label="Decade" valueIndex={decadeIndex} setValueIndex={setDecadeIndex} options={DECADES} />
+            </HStack>
+          </HStack>
+
+          <Text mt={2} fontSize="xs" color="whiteAlpha.600" textAlign="center">
+            Tune your image or disable the retro-renderer.
+          </Text>
         </Box>
 
         {/* VCR */}
-        <VCR
-          file={initImageFile}
-          setFile={setInitImageFile}
-          strength={imgStrength}
-          setStrength={setImgStrength}
-          disabled={loading || isSaving}
-        />
-
-        {/* USER PROMPT (moved here, higher contrast) */}
-        <Box mt={5}>
-          <FormControl>
-            <FormLabel color="yellow.200" fontWeight="bold">Describe your image idea</FormLabel>
-            <Textarea
-              value={userPrompt}
-              onChange={(e)=>setUserPrompt(e.target.value)}
-              placeholder="Example: A yeti tossing snowballs at kids in the neighborhood"
-              minH="110px"
-              bg="rgba(0,0,0,.35)"
-              color="whiteAlpha.900"
-              _placeholder={{ color: "whiteAlpha.700" }}
-              border="1px solid rgba(255,255,255,.25)"
-              _hover={{ borderColor: "whiteAlpha.400" }}
-              focusBorderColor="yellow.300"
-              isDisabled={loading || isSaving}
-            />
-          </FormControl>
+        <Box mx={6} mb={4}>
+          <VCRDeck
+            previewSrc={tapePreview}
+            onSelectFile={handleSelectTape}
+            onEject={ejectTape}
+            imageStrength={imageStrength}
+            setImageStrength={setImageStrength}
+          />
         </Box>
 
-        {/* Actions */}
-        <Flex mt={5} gap={4} wrap="wrap">
+        {/* Caption (moved under VCR & higher contrast) */}
+        <Box mx={6} mb={6} bg="rgba(0,0,0,.35)" p={4} borderRadius="lg" border="1px solid rgba(255,255,255,.08)">
+          <Text fontSize="sm" mb={2} color="yellow.200">Describe your image idea</Text>
+          <Textarea
+            value={userCaption}
+            onChange={(e) => setUserCaption(e.target.value)}
+            placeholder="e.g., Yeti in a snowball fight at a ski resort"
+            bg="rgba(255,255,255,.08)"
+            borderColor="whiteAlpha.400"
+            _hover={{ borderColor: "whiteAlpha.600" }}
+            _placeholder={{ color: "whiteAlpha.700" }}
+            color="white"
+            minH="90px"
+          />
+        </Box>
+
+        <HStack mx={6} mb={6} spacing={4} justify="space-between">
           <Button
-            onClick={handleGenerate}
-            colorScheme="orange"
-            isLoading={loading}
-            loadingText="Generating..."
-            isDisabled={isSaving || loading || !userPrompt.trim() || !powerOn}
-            leftIcon={<Icon as={FaMagic} />}
             size="lg"
+            colorScheme="orange"
+            leftIcon={<FaMagic />}
+            isLoading={loading}
+            onClick={handleGenerate}
           >
             Generate Image
           </Button>
           <Button
-            onClick={handleSave}
-            colorScheme="yellow"
-            isLoading={isSaving}
-            loadingText="Saving..."
-            isDisabled={loading}
             size="lg"
-            leftIcon={<Icon as={FaSave} />}
+            colorScheme="yellow"
+            leftIcon={<FaSave />}
+            isLoading={saving}
+            onClick={handleSave}
           >
             Save This Design
           </Button>
-        </Flex>
+        </HStack>
       </Box>
 
-      {error && (
-        <Alert status="error" colorScheme="red" borderRadius="md" p={4} borderWidth="1px" maxW="980px" w="100%">
-          <AlertIcon />
-          <Text>{error}</Text>
-        </Alert>
+      {!!err && (
+        <Box maxW="980px" mx="auto" color="red.300" bg="red.900" border="1px solid" borderColor="red.700" p={3} borderRadius="md">
+          {err}
+        </Box>
       )}
     </VStack>
   );
