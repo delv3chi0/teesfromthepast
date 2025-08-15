@@ -13,7 +13,7 @@ const ENGINE_ID = process.env.STABILITY_API_ENGINE_ID || "stable-diffusion-xl-10
 const TARGET_LONG = parseInt(process.env.GEN_TARGET_LONG_EDGE || "2048", 10);
 const HOST = process.env.STABILITY_API_HOST || "https://api.stability.ai";
 
-// ---- Log helpers ----
+// ---- log helpers ----
 const log = (...a) => console.log("[GenerateImage]", ...a);
 const logErr = (...a) => console.error("[GenerateImage][ERROR]", ...a);
 
@@ -55,7 +55,7 @@ async function sdxlTextToImage({ prompt, width = 1024, height = 1024, steps = 30
   return Buffer.from(art.base64, "base64");
 }
 
-// ---- SDXL image-to-image (optional) ----
+// ---- SDXL image-to-image ----
 async function sdxlImageToImage({ prompt, initImageBase64 }) {
   if (!STABILITY_API_KEY) throw Object.assign(new Error("STABILITY_API_KEY missing"), { status: 500 });
   const form = new FormData();
@@ -82,12 +82,16 @@ async function sdxlImageToImage({ prompt, initImageBase64 }) {
 }
 
 // ---- Upscalers ----
-// Preferred v2beta: returns raw image bytes IF we send output_format=png
-async function upscale2x_v2beta(pngBuffer) {
+
+// v2beta – accepts `image` + either scale or explicit width/height.
+// We’ll support both styles.
+async function upscale_v2beta({ buf, scale = 2, width, height }) {
   const form = new FormData();
-  form.append("image", pngBuffer, { filename: "in.png", contentType: "image/png" });
-  form.append("scale", "2");
-  form.append("output_format", "png"); // IMPORTANT
+  form.append("image", buf, { filename: "in.png", contentType: "image/png" });
+  if (scale) form.append("scale", String(scale));
+  if (width) form.append("width", String(width));
+  if (height) form.append("height", String(height));
+  form.append("output_format", "png"); // MUST for bytes
 
   const url = `${HOST}/v2beta/stable-image/upscale`;
   const resp = await axios.post(url, form, {
@@ -98,11 +102,11 @@ async function upscale2x_v2beta(pngBuffer) {
   return Buffer.from(resp.data);
 }
 
-// Legacy ESRGAN v1: returns JSON with artifacts[0].base64 (NOT bytes)
-async function upscale2x_v1_esrgan(pngBuffer) {
+// ESRGAN v1 – returns JSON with artifacts[0].base64
+async function upscale_esrgan_v1({ buf, scale = 2 }) {
   const form = new FormData();
-  form.append("image", pngBuffer, { filename: "in.png", contentType: "image/png" });
-  form.append("scale", "2");
+  form.append("image", buf, { filename: "in.png", contentType: "image/png" });
+  form.append("scale", String(scale));
 
   const url = `${HOST}/v1/generation/esrgan-v1-x2plus/image-to-image/upscale`;
   const { data } = await axios.post(url, form, {
@@ -116,38 +120,56 @@ async function upscale2x_v1_esrgan(pngBuffer) {
   return Buffer.from(art.base64, "base64");
 }
 
-// Try v2beta, then ESRGAN
-async function upscale2x(pngBuffer) {
+// Try multiple strategies; record each attempt.
+async function upscaleOnce(buf) {
+  const attempts = [];
+
+  // 1) v2beta with explicit scale
   try {
-    const out = await upscale2x_v2beta(pngBuffer);
-    log("Upscale v2beta OK", pngDims(out));
-    return { buf: out, upscaler: "v2beta" };
-  } catch (e1) {
-    logErr("v2beta upscale failed → try ESRGAN", e1?.response?.status || e1?.message);
-    const out = await upscale2x_v1_esrgan(pngBuffer);
-    log("Upscale ESRGAN OK", pngDims(out));
-    return { buf: out, upscaler: "v1-esrgan" };
+    const out = await upscale_v2beta({ buf, scale: 2 });
+    const before = pngDims(buf), after = pngDims(out);
+    attempts.push({ step: "v2beta-scale", from: before, to: after, ok: true });
+    if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
+    // fall through if no growth
+  } catch (e) {
+    attempts.push({ step: "v2beta-scale", error: e?.response?.status || e?.message || "err" });
   }
+
+  // 2) v2beta with explicit width/height (double)
+  try {
+    const { width: w, height: h } = pngDims(buf);
+    const out = await upscale_v2beta({ buf, width: w * 2, height: h * 2 });
+    const before = pngDims(buf), after = pngDims(out);
+    attempts.push({ step: "v2beta-width-height", from: before, to: after, ok: true });
+    if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
+  } catch (e) {
+    attempts.push({ step: "v2beta-width-height", error: e?.response?.status || e?.message || "err" });
+  }
+
+  // 3) ESRGAN v1
+  try {
+    const out = await upscale_esrgan_v1({ buf, scale: 2 });
+    const before = pngDims(buf), after = pngDims(out);
+    attempts.push({ step: "esrgan-v1", from: before, to: after, ok: true });
+    if (longEdgeOf(out) > longEdgeOf(buf)) return { out, attempts };
+  } catch (e) {
+    attempts.push({ step: "esrgan-v1", error: e?.response?.status || e?.message || "err" });
+  }
+
+  // No growth → return original, but include attempts for debugging
+  return { out: buf, attempts };
 }
 
-// Upscale until target met; on any failure, return best-so-far
 async function upscaleToTarget(buf, targetLong) {
-  const hops = [];
+  const attemptsAll = [];
   let out = buf;
   while (targetLong > 0 && longEdgeOf(out) < targetLong) {
-    const before = longEdgeOf(out);
-    try {
-      const { buf: next, upscaler } = await upscale2x(out);
-      const after = longEdgeOf(next);
-      hops.push({ upscaler, from: before, to: after });
-      out = next;
-      if (after <= before) break; // safety
-    } catch (e) {
-      logErr("Upscale step failed; returning current image", e?.message || e);
-      break;
-    }
+    const res = await upscaleOnce(out);
+    attemptsAll.push(...res.attempts);
+    if (longEdgeOf(res.out) <= longEdgeOf(out)) break; // safety (no improvement)
+    out = res.out;
   }
-  return { buf: out, hops };
+  return { buf: out, attempts: attemptsAll };
 }
 
 // ---- Routes ----
@@ -177,16 +199,16 @@ router.post("/designs/create", protect, async (req, res) => {
 
     const baseDims = pngDims(base);
     let finalBuf = base;
-    let hops = [];
+    let attempts = [];
 
     if (TARGET_LONG > 0 && longEdgeOf(base) < TARGET_LONG) {
       const up = await upscaleToTarget(base, TARGET_LONG);
       finalBuf = up.buf;
-      hops = up.hops;
+      attempts = up.attempts;
     }
 
     const finalDims = pngDims(finalBuf);
-    log("Result meta", { baseDims, finalDims, targetLong: TARGET_LONG, hops });
+    log("Result meta", { baseDims, finalDims, targetLong: TARGET_LONG, attempts });
 
     res.json({
       message: "ok",
@@ -197,7 +219,7 @@ router.post("/designs/create", protect, async (req, res) => {
         finalWidth: finalDims.width,
         finalHeight: finalDims.height,
         targetLong: TARGET_LONG,
-        hops,
+        attempts,
       },
     });
   } catch (err) {
