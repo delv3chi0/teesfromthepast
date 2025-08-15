@@ -149,6 +149,8 @@ async function stabilityUpscale2x(pngBuffer) {
         headers: {
           Authorization: `Bearer ${STABILITY_API_KEY}`,
           ...form.getHeaders(),
+          // On success the API returns binary; on error it returns JSON.
+          // We don't force Accept here; responseType handles binary path.
         },
         responseType: "arraybuffer",
         maxBodyLength: Infinity,
@@ -156,22 +158,38 @@ async function stabilityUpscale2x(pngBuffer) {
     );
     return Buffer.from(data);
   } catch (e) {
-    logErr("upscale 2x failed", e?.response?.status, e?.response?.data || e.message);
+    // Try to decode JSON error so logs are readable
+    try {
+      const buf = e?.response?.data;
+      const asText = Buffer.isBuffer(buf) ? buf.toString("utf8") : "";
+      const maybeJson = asText && JSON.parse(asText);
+      logErr("upscale 2x failed", e?.response?.status, maybeJson || asText || e.message);
+    } catch {
+      logErr("upscale 2x failed (non-JSON)", e?.response?.status, e?.message);
+    }
     throw e;
   }
 }
+
 
 async function upscaleToTarget(buf, targetLong) {
   let out = buf;
   while (longEdgeOf(out) < targetLong) {
     const before = longEdgeOf(out);
-    out = await stabilityUpscale2x(out);
+    try {
+      out = await stabilityUpscale2x(out);
+    } catch (e) {
+      // Graceful degrade: keep whatever we already have and stop upscaling
+      log("[Upscale] Skipping further upscales due to error; returning current image.");
+      return out;
+    }
     const after = longEdgeOf(out);
     log(`Upscaled ${before} -> ${after}`);
-    if (after <= before) break; // guard
+    if (after <= before) break; // guard, should not happen
   }
   return out;
 }
+
 
 // ---------- Cloudinary upload (dynamic import) ----------
 async function uploadBufferToCloudinary(buf, { userId, prompt }) {
@@ -290,7 +308,14 @@ router.post("/designs/create", protect, async (req, res) => {
       });
     }
 
-    const master = await upscaleToTarget(base, TARGET_LONG_EDGE);
+    let master = base;
+try {
+  master = await upscaleToTarget(base, TARGET_LONG_EDGE);
+} catch (e) {
+  log("[Create] Upscale threw; returning base image instead.");
+  master = base;
+}
+
 
     let masterUrl = null,
       previewUrl = null,
