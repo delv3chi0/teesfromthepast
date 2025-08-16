@@ -24,10 +24,10 @@ export default function Generate() {
   const [error, setError] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
 
-  // VCR/i2i
+  // VCR / image-to-image
   const [initFile, setInitFile] = useState(null);
   const [initPreview, setInitPreview] = useState("");
-  const [imageInfluence, setImageInfluence] = useState(0.35);
+  const [imageInfluence, setImageInfluence] = useState(0.35); // 0..1
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -83,8 +83,14 @@ export default function Generate() {
 
     setLoading(true); setError(""); setImageUrl("");
     try {
-      const payload = { prompt: constructedPrompt, aspectRatio: '1:1' };
-      if (initPreview) { payload.initImageBase64 = initPreview; payload.imageStrength = clamp01(imageInfluence); }
+      const payload = { prompt: constructedPrompt };
+      // Only pass aspect ratio for text-to-image
+      if (!initPreview) payload.aspectRatio = '1:1';
+      if (initPreview) {
+        payload.initImageBase64 = initPreview;
+        payload.imageStrength = clamp01(imageInfluence); // 0..1 required for i2i
+      }
+
       const resp = await client.post('/designs/create', payload);
       const { imageDataUrl } = resp.data || {};
       setImageUrl(imageDataUrl || "");
@@ -224,7 +230,6 @@ export default function Generate() {
                 cursor="pointer"
                 position="relative"
               >
-                {/* slot bevel */}
                 <Box position="absolute" inset="4px" border="1px solid rgba(255,255,255,.08)" borderRadius="4px" />
                 <Text fontSize="sm" color="gray.200" letterSpacing="widest">
                   {initPreview ? "TAPE LOADED – CLICK TO REPLACE" : "INSERT TAPE"}

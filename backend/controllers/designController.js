@@ -31,18 +31,12 @@ if (useCloudinary) {
 // ---------- Helpers ----------
 function dataUrlToBuffer(dataUrl) {
   if (!dataUrl) return null;
-  // Accept both raw base64 and full data URLs
   const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  try {
-    return Buffer.from(b64, 'base64');
-  } catch {
-    return null;
-  }
+  try { return Buffer.from(b64, 'base64'); } catch { return null; }
 }
 function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
-// Read PNG IHDR (big-endian) for width/height
 function getPngDims(buf) {
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
@@ -72,11 +66,11 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
     form.append('prompt', prompt);
     form.append('output_format', 'png');
-    // Optional strength (0..1). Many Stability models call this "strength" for Ultra i2i.
-    if (typeof imageStrength !== 'undefined' && imageStrength !== null) {
-      const s = Math.max(0, Math.min(1, Number(imageStrength)));
-      form.append('strength', String(Number.isFinite(s) ? s : 0.35));
-    }
+
+    // REQUIRED by /ultra i2i: strength 0..1
+    const sRaw = (imageStrength ?? 0.35);
+    const s = Math.min(1, Math.max(0, Number(sRaw)));
+    form.append('strength', String(Number.isFinite(s) ? s : 0.35));
   } else {
     // TEXT-TO-IMAGE
     form.append('prompt', prompt);
@@ -151,7 +145,6 @@ async function uploadPngToCloudinary(buf, { userId }) {
   const publicId = uploadResult?.public_id || null;
   if (!masterUrl || !publicId) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
 
-  // Fast, CDN-derived previews (no extra storage)
   const previewUrl = cloudinary.url(publicId, { width: 1200, crop: 'fit', format: 'jpg', quality: 'auto:good', secure: true });
   const thumbUrl   = cloudinary.url(publicId, { width: 400,  crop: 'fit', format: 'jpg', quality: 'auto:eco',  secure: true });
 
@@ -171,15 +164,15 @@ export async function createDesign(req, res) {
       return res.status(400).json({ message: 'initImageBase64 is not a valid base64 data URL.' });
     }
 
-    // 1) Generate base PNG (Ultra). For i2i we DO NOT pass aspect ratio/width/height.
+    // 1) Generate base PNG (Ultra)
     const basePng = await stableGenerateUltra({
       prompt,
       aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
       initImageBuf: initBuf || null,
-      imageStrength, // 0..1 optional
+      imageStrength, // 0..1 (required for i2i)
     });
 
-    // 2) Upscale in 2× passes until we reach target long edge
+    // 2) Upscale in 2× passes until target long edge
     const { width, height } = getPngDims(basePng);
     const longEdge = Math.max(width, height);
     const scale = decideScale(longEdge);
@@ -200,10 +193,10 @@ export async function createDesign(req, res) {
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
 
     res.json({
-      imageDataUrl,       // full-res PNG as data URL for immediate preview
-      masterUrl,          // Cloudinary secure_url (full PNG for Download / Print provider)
-      previewUrl,         // w=1200 jpg (modal)
-      thumbUrl,           // w=400 jpg (grids)
+      imageDataUrl,
+      masterUrl,
+      previewUrl,
+      thumbUrl,
       publicId,
       meta: {
         mode: initBuf ? 'i2i' : 't2i',
