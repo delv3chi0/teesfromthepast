@@ -30,30 +30,54 @@ const app = express();
 
 // --- Security / infra middleware ---
 app.set("trust proxy", 1);
-app.use(helmet());
 
 // CORS
-const allowedOrigins = [
-  "https://teesfromthepast.vercel.app",
-  "http://localhost:5173",
-];
+const allowedStatic = new Set([
+  'https://teesfromthepast.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // allow curl/Postman or same-origin
+  if (allowedStatic.has(origin)) return true;
+  if (/\.vercel\.app$/.test(origin)) return true;
+  if (/\.vercel\.dev$/.test(origin)) return true;
+
+  return false;
+}
+
 const corsOptions = {
   origin(origin, callback) {
-    // allow server-to-server / curl (no Origin) and our known frontends
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Allow any vercel preview for this project
-    if (/\.vercel\.app$/i.test(origin)) return callback(null, true);
-    console.warn(`[CORS] Blocked origin: ${origin}`);
-    return callback(new Error("Not allowed by CORS"));
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: [
+    'Authorization',
+    'Content-Type',
+    'Accept',
+    'X-Requested-With',
+  ],
+  exposedHeaders: [], // add if you need to read specific response headers
 };
+
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(cookieParser());
+
+// Security headers (after CORS so CORS headers aren’t blocked)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+}));
 
 // Stripe webhook (raw body) — must be BEFORE express.json()
 app.use("/api/stripe", stripeWebhookRoutes);
