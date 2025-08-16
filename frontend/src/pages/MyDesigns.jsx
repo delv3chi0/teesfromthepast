@@ -3,12 +3,14 @@ import {
   Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
-  AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio
+  AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio, Divider,
+  Drawer, DrawerBody, DrawerHeader, DrawerOverlay, DrawerContent, DrawerCloseButton,
+  Code, Tooltip
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
-import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt, FaDownload } from 'react-icons/fa';
+import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt, FaDownload, FaExternalLinkAlt, FaInfoCircle, FaClipboard } from 'react-icons/fa';
 import { downloadImage } from '../utils/download';
 
 // Prefer Cloudinary thumb (w_400) in grid, derive preview (w_1200) for modal if needed
@@ -30,6 +32,25 @@ const getCurrentMonthYYYYMM = () => {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 };
+
+// Build a nice metadata object for viewing/copying
+const buildMeta = (d) => ({
+  _id: d._id,
+  createdAt: d.createdAt,
+  user: d.user?.username || undefined,
+  prompt: d.prompt,
+  negativePrompt: d.negativePrompt || '',
+  settings: d.settings || {},
+  urls: {
+    masterUrl: d.publicUrl || null,
+    previewThumb: d.thumbUrl || null,
+    inlineDataUrl: d.imageDataUrl ? `(data URL, length=${d.imageDataUrl.length})` : null
+  },
+  contest: d.isSubmittedForContest ? {
+    month: d.contestSubmissionMonth,
+    votes: d.votes || 0
+  } : null
+});
 
 export default function MyDesigns() {
   const [designs, setDesigns] = useState([]);
@@ -54,6 +75,9 @@ export default function MyDesigns() {
   const [designToDelete, setDesignToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const cancelDeleteRef = useRef();
+
+  // Metadata drawer
+  const { isOpen: isMetaOpen, onOpen: onMetaOpen, onClose: onMetaClose } = useDisclosure();
 
   const fetchDesigns = async (targetPage = 1, append = false) => {
     if (!user) return;
@@ -129,6 +153,17 @@ export default function MyDesigns() {
     } finally {
       setIsDeleting(false);
       setDesignToDelete(null);
+    }
+  };
+
+  const copyMeta = async () => {
+    if (!selectedDesign) return;
+    try {
+      const data = buildMeta(selectedDesign);
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      toast({ title: 'Metadata copied to clipboard', status: 'success', duration: 1500 });
+    } catch {
+      toast({ title: 'Copy failed', status: 'error' });
     }
   };
 
@@ -247,32 +282,72 @@ export default function MyDesigns() {
 
       {/* View / Action Modal */}
       {selectedDesign && (
-        <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="3xl" isCentered>
+        <Modal isOpen={isImageModalOpen} onClose={onImageModalClose} size="5xl" isCentered>
           <ModalOverlay bg="blackAlpha.800"/>
           <ModalContent>
-            <ModalHeader>Design Preview</ModalHeader>
+            <ModalHeader display="flex" alignItems="center" justifyContent="space-between">
+              <Text>Design Preview</Text>
+              <HStack spacing={3}>
+                <Tooltip label="View metadata">
+                  <Button size="sm" leftIcon={<FaInfoCircle/>} variant="outline" onClick={onMetaOpen}>
+                    Metadata
+                  </Button>
+                </Tooltip>
+                <Tooltip label="Open full size in a new tab">
+                  <Button
+                    size="sm"
+                    leftIcon={<FaExternalLinkAlt/>}
+                    variant="outline"
+                    isDisabled={!selectedDesign.publicUrl}
+                    onClick={() => {
+                      if (selectedDesign.publicUrl) window.open(selectedDesign.publicUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    Open Full
+                  </Button>
+                </Tooltip>
+              </HStack>
+            </ModalHeader>
             <ModalCloseButton _hover={{bg:"whiteAlpha.200"}}/>
-            <ModalBody display="flex" justifyContent="center" alignItems="center" py={6}>
-              <Image
-                src={
-                  // bigger preview if Cloudinary; otherwise fallback
-                  derivePreviewFromPublicUrl(selectedDesign.publicUrl) ||
-                  selectedDesign.imageDataUrl ||
-                  selectedDesign.thumbUrl ||
-                  selectedDesign.publicUrl ||
-                  ''
-                }
-                alt={selectedDesign.prompt}
-                maxH="70vh"
-                maxW="100%"
-                objectFit="contain"
-                borderRadius="md"
-              />
+            <ModalBody py={4}>
+              <VStack spacing={4}>
+                <Image
+                  src={
+                    // bigger preview if Cloudinary; otherwise fallback
+                    derivePreviewFromPublicUrl(selectedDesign.publicUrl) ||
+                    selectedDesign.imageDataUrl ||
+                    selectedDesign.thumbUrl ||
+                    selectedDesign.publicUrl ||
+                    ''
+                  }
+                  alt={selectedDesign.prompt}
+                  maxH="80vh"
+                  maxW="100%"
+                  objectFit="contain"
+                  borderRadius="md"
+                  bg="black"
+                />
+                {selectedDesign.prompt && (
+                  <>
+                    <Divider/>
+                    <Box w="100%">
+                      <Text fontWeight="semibold" mb={1}>Prompt</Text>
+                      <Text fontSize="sm" color="brand.textLight">{selectedDesign.prompt}</Text>
+                      {selectedDesign.negativePrompt ? (
+                        <>
+                          <Text fontWeight="semibold" mt={4} mb={1}>Negative Prompt</Text>
+                          <Text fontSize="sm" color="brand.textLight">{selectedDesign.negativePrompt}</Text>
+                        </>
+                      ) : null}
+                    </Box>
+                  </>
+                )}
+              </VStack>
             </ModalBody>
-            <ModalFooter bg="brand.secondary" borderBottomRadius="md" justifyContent="space-between">
+            <ModalFooter bg="brand.secondary" borderBottomRadius="md" justifyContent="space-between" gap={3} flexWrap="wrap">
               <Button
                 colorScheme="red"
-                onClick={() => handleOpenDeleteConfirmation(selectedDesign)}
+                onClick={() => setDesignToDelete(selectedDesign) || onDeleteAlertOpen()}
                 isLoading={isDeleting}
                 leftIcon={<Icon as={FaTrashAlt} />}
               >
@@ -299,7 +374,7 @@ export default function MyDesigns() {
                 selectedDesign.contestSubmissionMonth !== getCurrentMonthYYYYMM() ? (
                   <Button
                     colorScheme="green"
-                    onClick={() => handleOpenSubmitConfirmation(selectedDesign)}
+                    onClick={() => setDesignToSubmit(selectedDesign) || onContestAlertOpen()}
                     isLoading={isSubmitting}
                     leftIcon={<Icon as={FaTrophy} />}
                   >
@@ -315,6 +390,77 @@ export default function MyDesigns() {
             </ModalFooter>
           </ModalContent>
         </Modal>
+      )}
+
+      {/* Metadata Drawer */}
+      {selectedDesign && (
+        <Drawer isOpen={isMetaOpen} placement="right" onClose={onMetaClose} size="md">
+          <DrawerOverlay bg="blackAlpha.700" />
+          <DrawerContent>
+            <DrawerCloseButton />
+            <DrawerHeader display="flex" alignItems="center" justifyContent="space-between">
+              <Text>Design Metadata</Text>
+              <Button size="sm" leftIcon={<FaClipboard/>} onClick={copyMeta}>Copy JSON</Button>
+            </DrawerHeader>
+            <DrawerBody>
+              <VStack align="stretch" spacing={4}>
+                <Box>
+                  <Text fontWeight="semibold" mb={1}>ID</Text>
+                  <Code p={1}>{selectedDesign._id}</Code>
+                </Box>
+
+                <Box>
+                  <Text fontWeight="semibold" mb={1}>Created</Text>
+                  <Text fontSize="sm">{new Date(selectedDesign.createdAt).toLocaleString()}</Text>
+                </Box>
+
+                <Divider/>
+
+                <Box>
+                  <Text fontWeight="semibold" mb={1}>Prompt</Text>
+                  <Text fontSize="sm">{selectedDesign.prompt || '(none)'}</Text>
+                </Box>
+                <Box>
+                  <Text fontWeight="semibold" mb={1}>Negative Prompt</Text>
+                  <Text fontSize="sm">{selectedDesign.negativePrompt || '(none)'}</Text>
+                </Box>
+
+                <Divider/>
+
+                <Box>
+                  <Text fontWeight="semibold" mb={2}>Settings</Text>
+                  <Code whiteSpace="pre" display="block" p={3}>
+                    {JSON.stringify(selectedDesign.settings || {}, null, 2)}
+                  </Code>
+                </Box>
+
+                <Divider/>
+
+                <Box>
+                  <Text fontWeight="semibold" mb={2}>Links</Text>
+                  <VStack align="stretch" spacing={2}>
+                    <Text fontSize="sm"><strong>Master:</strong> {selectedDesign.publicUrl || '(none)'}</Text>
+                    <Text fontSize="sm"><strong>Thumb:</strong> {selectedDesign.thumbUrl || '(none)'}</Text>
+                    <Text fontSize="sm"><strong>Inline:</strong> {selectedDesign.imageDataUrl ? '(data URL)' : '(none)'}</Text>
+                  </VStack>
+                </Box>
+
+                {selectedDesign.isSubmittedForContest && (
+                  <>
+                    <Divider/>
+                    <Box>
+                      <Text fontWeight="semibold" mb={2}>Contest</Text>
+                      <VStack align="stretch" spacing={1}>
+                        <Text fontSize="sm"><strong>Month:</strong> {selectedDesign.contestSubmissionMonth}</Text>
+                        <Text fontSize="sm"><strong>Votes:</strong> {selectedDesign.votes || 0}</Text>
+                      </VStack>
+                    </Box>
+                  </>
+                )}
+              </VStack>
+            </DrawerBody>
+          </DrawerContent>
+        </Drawer>
       )}
 
       {/* Submit to Contest Dialog */}
