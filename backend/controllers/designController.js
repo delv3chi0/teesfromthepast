@@ -15,9 +15,7 @@ function parseDataUrl(dataUrl) {
   // returns { buffer, mime, ext } or null
   if (!dataUrl) return null;
   try {
-    const parts = String(dataUrl).split(',');
-    const meta = parts[0];
-    const b64 = parts[1];
+    const [meta, b64] = dataUrl.split(',');
     if (!meta || !b64) return null;
     const m = /^data:([^;]+);base64$/i.exec(meta.trim());
     const mime = (m && m[1]) || 'application/octet-stream';
@@ -34,72 +32,32 @@ function parseDataUrl(dataUrl) {
     return null;
   }
 }
-
 function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
-
 function getPngDims(buf) {
-  // Stability returns PNG here; guard just in case
-  try {
-    const w = buf.readUInt32BE(16);
-    const h = buf.readUInt32BE(20);
-    return { width: w, height: h };
-  } catch {
-    return { width: undefined, height: undefined };
-  }
+  // Only call this on PNGs returned by Stability
+  const w = buf.readUInt32BE(16);
+  const h = buf.readUInt32BE(20);
+  return { width: w, height: h };
 }
-
 function decideScale(longEdge) {
-  if (!Number.isFinite(longEdge)) return 1;
   if (longEdge >= TARGET_LONG_EDGE) return 1;
   if (longEdge * 4 <= TARGET_LONG_EDGE) return 4;
   if (longEdge * 2 <= TARGET_LONG_EDGE) return 2;
   return 1;
 }
 
-// Turn axios error/arraybuffer into readable text
-function decodeNonImageBody(data) {
-  if (!data) return '';
-  try {
-    const str = Buffer.isBuffer(data) ? data.toString('utf8') : String(data);
-    try {
-      const j = JSON.parse(str);
-      return j.message || j.error || str;
-    } catch {
-      return str;
-    }
-  } catch {
-    return '(binary response)';
-  }
-}
-
-// ---------- Stability: Ultra generate (T2I / I2I) ----------
-async function stableGenerateUltra({
-  prompt,
-  negativePrompt,
-  aspectRatio = '1:1',
-  initImage, // { buffer, mime, ext } | null
-  imageStrength,
-  cfgScale,
-  steps,
-}) {
-  if (!STABILITY_API_KEY) {
-    const err = new Error('STABILITY_API_KEY is not set on the server');
-    err.status = 500;
-    throw err;
-  }
-
+// Build a form for either T2I or I2I
+function buildStabilityForm({ prompt, negativePrompt, aspectRatio, initImage, imageStrength, cfgScale, steps }) {
   const form = new FormData();
-
-  // Shared
   form.append('prompt', String(prompt || '').slice(0, 2000));
   if (negativePrompt) form.append('negative_prompt', String(negativePrompt).slice(0, 2000));
   if (Number.isFinite(cfgScale)) form.append('cfg_scale', String(Math.max(1, Math.min(20, Math.round(cfgScale)))));
-  if (Number.isFinite(steps)) form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
+  if (Number.isFinite(steps))    form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
 
   if (initImage?.buffer) {
-    // I2I — use correct MIME + filename
+    // I2I
     const filename = `init.${initImage.ext || 'png'}`;
     form.append('image', initImage.buffer, { filename, contentType: initImage.mime || 'image/png' });
     form.append('output_format', 'png');
@@ -109,10 +67,20 @@ async function stableGenerateUltra({
     }
   } else {
     // T2I
-    form.append('aspect_ratio', aspectRatio);
+    form.append('aspect_ratio', aspectRatio || '1:1');
     form.append('output_format', 'png');
   }
+  return form;
+}
 
+// Post to a given Stability endpoint and return Buffer if successful
+async function postStability({ endpointPath, form }) {
+  if (!STABILITY_API_KEY) {
+    const err = new Error('STABILITY_API_KEY is not set on the server');
+    err.status = 500; throw err;
+  }
+
+  const url = `${STABILITY_BASE}${endpointPath}`;
   const cfg = {
     headers: {
       Authorization: `Bearer ${STABILITY_API_KEY}`,
@@ -123,24 +91,51 @@ async function stableGenerateUltra({
     timeout: 120000,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
-    validateStatus: () => true, // we’ll handle non-2xx
+    validateStatus: () => true, // handle non-2xx ourselves
   };
 
-  const { data, headers, status } = await axios.post(
-    `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
-    form,
-    cfg
-  );
+  const { data, headers, status } = await axios.post(url, form, cfg);
 
   const contentType = String(headers['content-type'] || '');
-  if (status < 200 || status >= 300 || !contentType.startsWith('image/')) {
-    const text = decodeNonImageBody(data);
-    const err = new Error(text || `Stability returned ${contentType || 'non-image'} response`);
-    err.status = status || 502;
-    throw err;
+  // Stability sends images when OK; otherwise JSON/text with details.
+  if (status >= 200 && status < 300 && contentType.startsWith('image/')) {
+    return Buffer.from(data);
   }
 
-  return Buffer.from(data);
+  // Decode error body for logging and bubble a readable error
+  let errText = '';
+  try { errText = Buffer.from(data).toString('utf8'); } catch { /* ignore */ }
+  const msg = `${status} ${contentType || ''} ${errText.slice(0, 800)}`.trim();
+  const err = new Error(msg || `Stability error (${status})`);
+  err.status = status;
+  err._stabilityDetails = { status, contentType, body: errText };
+  throw err;
+}
+
+// Try Ultra first, then Core as a fallback if Ultra is unavailable (404/403/other non-image)
+async function stableGenerateWithFallback(payload) {
+  const form = buildStabilityForm(payload);
+  const isI2I = !!payload?.initImage?.buffer;
+
+  // Candidate endpoints in priority order
+  const paths = [
+    '/v2beta/stable-image/generate/ultra', // Ultra (T2I and I2I supported with same path)
+    '/v2beta/stable-image/generate/core',  // Core fallback
+  ];
+
+  let lastErr = null;
+  for (const p of paths) {
+    try {
+      console.log(`[Stability] Trying ${p} (${isI2I ? 'i2i' : 't2i'})`);
+      return await postStability({ endpointPath: p, form });
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[Stability] ${p} failed:`, e?.message);
+      // If first attempt was Ultra and it failed, we’ll try Core next
+      continue;
+    }
+  }
+  throw lastErr || new Error('All Stability endpoints failed');
 }
 
 // ---------- Stability: Upscale ×2 (v2beta) ----------
@@ -150,33 +145,27 @@ async function stabilityUpscale2x(pngBuffer) {
   form.append('scale', '2');
   form.append('output_format', 'png');
 
-  const cfg = {
-    headers: {
-      Authorization: `Bearer ${STABILITY_API_KEY}`,
-      Accept: 'image/*,application/octet-stream,application/json',
-      ...form.getHeaders(),
-    },
-    responseType: 'arraybuffer',
-    timeout: 120000,
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
-    validateStatus: () => true,
-  };
-
   const { data, headers, status } = await axios.post(
     `${STABILITY_BASE}/v2beta/stable-image/upscale/factor`,
     form,
-    cfg
+    {
+      headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
+      responseType: 'arraybuffer',
+      timeout: 120000,
+      validateStatus: () => true,
+    }
   );
 
   const contentType = String(headers['content-type'] || '');
-  if (status < 200 || status >= 300 || !contentType.startsWith('image/')) {
-    const text = decodeNonImageBody(data);
-    const err = new Error(text || 'Upscale failed with non-image response');
-    err.status = status || 502;
-    throw err;
+  if (status >= 200 && status < 300 && contentType.startsWith('image/')) {
+    return Buffer.from(data);
   }
-  return Buffer.from(data);
+
+  let errText = '';
+  try { errText = Buffer.from(data).toString('utf8'); } catch {}
+  const err = new Error(`Upscale failed: ${status} ${contentType} ${errText.slice(0, 400)}`.trim());
+  err.status = status;
+  throw err;
 }
 
 // ---------- Optional Cloudinary upload ----------
@@ -217,7 +206,7 @@ async function uploadPngToCloudinary(buf, { userId }) {
   if (!masterUrl || !publicId) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
 
   const previewUrl = cloudinary.url(publicId, { width: 1200, crop: 'fit', format: 'jpg', quality: 'auto:good', secure: true });
-  const thumbUrl = cloudinary.url(publicId, { width: 400, crop: 'fit', format: 'jpg', quality: 'auto:eco', secure: true });
+  const thumbUrl   = cloudinary.url(publicId, { width: 400,  crop: 'fit', format: 'jpg', quality: 'auto:eco',  secure: true });
 
   return { masterUrl, previewUrl, thumbUrl, publicId };
 }
@@ -240,18 +229,14 @@ export async function createDesign(req, res) {
       return res.status(400).json({ message: 'Either a prompt or an init image is required.' });
     }
 
-    console.log(
-      '[Generate] mode=%s, hasKey=%s, initMime=%s',
-      init?.buffer ? 'i2i' : 't2i',
-      !!STABILITY_API_KEY,
-      init?.mime || '-'
-    );
+    const mode = init?.buffer ? 'i2i' : 't2i';
+    console.log('[Generate] mode=%s, keyPresent=%s', mode, !!STABILITY_API_KEY);
 
-    // 1) generate
-    const basePng = await stableGenerateUltra({
+    // 1) generate (Ultra→Core fallback)
+    const basePng = await stableGenerateWithFallback({
       prompt,
       negativePrompt,
-      aspectRatio: init?.buffer ? undefined : (aspectRatio || '1:1'),
+      aspectRatio: mode === 't2i' ? (aspectRatio || '1:1') : undefined,
       initImage: init || null,
       imageStrength,
       cfgScale,
@@ -260,7 +245,7 @@ export async function createDesign(req, res) {
 
     // 2) upscale to target long edge
     const { width, height } = getPngDims(basePng);
-    const longEdge = Math.max(width || 0, height || 0);
+    const longEdge = Math.max(width, height);
     const scale = decideScale(longEdge);
 
     let master = basePng;
@@ -284,7 +269,7 @@ export async function createDesign(req, res) {
       thumbUrl,
       publicId,
       meta: {
-        mode: init?.buffer ? 'i2i' : 't2i',
+        mode,
         sourceWidth: width,
         sourceHeight: height,
         targetLongEdge: TARGET_LONG_EDGE,
@@ -292,16 +277,17 @@ export async function createDesign(req, res) {
         uploadedToCloudinary: !!masterUrl,
         cfgScale: Number.isFinite(cfgScale) ? Math.max(1, Math.min(20, Math.round(cfgScale))) : undefined,
         steps: Number.isFinite(steps) ? Math.max(10, Math.min(50, Math.round(steps))) : undefined,
-        aspectRatio: init?.buffer ? undefined : (aspectRatio || '1:1'),
-        imageStrength: init?.buffer ? Math.max(0, Math.min(1, Number(imageStrength))) : undefined,
+        aspectRatio: mode === 't2i' ? (aspectRatio || '1:1') : undefined,
+        imageStrength: mode === 'i2i' ? Math.max(0, Math.min(1, Number(imageStrength))) : undefined,
         negativePrompt: negativePrompt || undefined,
       },
     });
   } catch (err) {
     const status = err.status || err.response?.status || 500;
     const details =
-      (err.response?.data && decodeNonImageBody(err.response.data)) ||
+      err._stabilityDetails?.body ||
       err.details ||
+      (err.response?.data && err.response.data.toString?.('utf8')) ||
       err.message ||
       'Unknown error';
     console.error('[createDesign][ERROR]', status, details);
