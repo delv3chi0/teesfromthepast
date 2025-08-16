@@ -163,9 +163,17 @@ const updateOrderStatusAdmin = asyncHandler(async (req, res) => {
    DESIGN MANAGEMENT (unchanged)
    =========================== */
 const getAllDesignsAdmin = asyncHandler(async (_req, res) => {
-  const designs = await Design.find({})
-    .populate('user', 'id username email')
-    .sort({ createdAt: -1 });
+  const q = Design.find({})
+    .sort({ createdAt: -1 })
+    .select(
+      '_id user prompt negativePrompt imageDataUrl publicUrl thumbUrl settings isSubmittedForContest contestSubmissionMonth votes createdAt'
+    )
+    .populate({ path: 'user', select: 'id username email' })
+    .lean();
+
+  if (typeof q.allowDiskUse === 'function') q.allowDiskUse(true);
+
+  const designs = await q.exec();
   res.json(designs || []);
 });
 

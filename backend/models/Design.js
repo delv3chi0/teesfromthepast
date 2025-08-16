@@ -45,6 +45,7 @@ const designSchema = new mongoose.Schema(
 
 // Fast per-user recency queries
 designSchema.index({ user: 1, createdAt: -1 });
+designSchema.index({ createdAt: -1 });
 
 const Design = mongoose.model('Design', designSchema);
 export default Design;
