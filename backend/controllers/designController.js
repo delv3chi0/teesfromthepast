@@ -1,4 +1,3 @@
-// backend/controllers/designController.js
 import 'dotenv/config';
 import axios from 'axios';
 import FormData from 'form-data';
@@ -9,6 +8,7 @@ const STABILITY_BASE = 'https://api.stability.ai';
 
 // Long-edge target for print-ready art
 const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '4096', 10);
+const DISABLE_UPSCALE = String(process.env.GEN_DISABLE_UPSCALE || '').trim() === '1';
 
 // ---------- helpers ----------
 function parseDataUrl(dataUrl) {
@@ -48,7 +48,7 @@ function decideScale(longEdge) {
   return 1;
 }
 
-// Build a form for either T2I or I2I
+// Build form for T2I or I2I
 function buildStabilityForm({ prompt, negativePrompt, aspectRatio, initImage, imageStrength, cfgScale, steps }) {
   const form = new FormData();
   form.append('prompt', String(prompt || '').slice(0, 2000));
@@ -57,7 +57,6 @@ function buildStabilityForm({ prompt, negativePrompt, aspectRatio, initImage, im
   if (Number.isFinite(steps))    form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
 
   if (initImage?.buffer) {
-    // I2I
     const filename = `init.${initImage.ext || 'png'}`;
     form.append('image', initImage.buffer, { filename, contentType: initImage.mime || 'image/png' });
     form.append('output_format', 'png');
@@ -66,14 +65,12 @@ function buildStabilityForm({ prompt, negativePrompt, aspectRatio, initImage, im
       form.append('strength', String(Number.isFinite(s) ? s : 0.35));
     }
   } else {
-    // T2I
     form.append('aspect_ratio', aspectRatio || '1:1');
     form.append('output_format', 'png');
   }
   return form;
 }
 
-// Post to a given Stability endpoint and return Buffer if successful
 async function postStability({ endpointPath, form }) {
   if (!STABILITY_API_KEY) {
     const err = new Error('STABILITY_API_KEY is not set on the server');
@@ -91,54 +88,48 @@ async function postStability({ endpointPath, form }) {
     timeout: 120000,
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
-    validateStatus: () => true, // handle non-2xx ourselves
+    validateStatus: () => true,
   };
 
   const { data, headers, status } = await axios.post(url, form, cfg);
-
   const contentType = String(headers['content-type'] || '');
-  // Stability sends images when OK; otherwise JSON/text with details.
+
   if (status >= 200 && status < 300 && contentType.startsWith('image/')) {
     return Buffer.from(data);
   }
 
-  // Decode error body for logging and bubble a readable error
-  let errText = '';
-  try { errText = Buffer.from(data).toString('utf8'); } catch { /* ignore */ }
-  const msg = `${status} ${contentType || ''} ${errText.slice(0, 800)}`.trim();
+  // decode for logs / error
+  let bodyText = '';
+  try { bodyText = Buffer.from(data).toString('utf8'); } catch {}
+  const msg = `${status} ${contentType || ''} ${bodyText.slice(0, 800)}`.trim();
   const err = new Error(msg || `Stability error (${status})`);
   err.status = status;
-  err._stabilityDetails = { status, contentType, body: errText };
+  err._stabilityDetails = { status, contentType, body: bodyText };
   throw err;
 }
 
-// Try Ultra first, then Core as a fallback if Ultra is unavailable (404/403/other non-image)
+// Generate with Ultra → Core fallback
 async function stableGenerateWithFallback(payload) {
   const form = buildStabilityForm(payload);
-  const isI2I = !!payload?.initImage?.buffer;
-
-  // Candidate endpoints in priority order
   const paths = [
-    '/v2beta/stable-image/generate/ultra', // Ultra (T2I and I2I supported with same path)
-    '/v2beta/stable-image/generate/core',  // Core fallback
+    '/v2beta/stable-image/generate/ultra',
+    '/v2beta/stable-image/generate/core',
   ];
-
   let lastErr = null;
   for (const p of paths) {
     try {
-      console.log(`[Stability] Trying ${p} (${isI2I ? 'i2i' : 't2i'})`);
+      console.log(`[Stability] Trying ${p} (${payload?.initImage?.buffer ? 'i2i' : 't2i'})`);
       return await postStability({ endpointPath: p, form });
     } catch (e) {
       lastErr = e;
       console.warn(`[Stability] ${p} failed:`, e?.message);
-      // If first attempt was Ultra and it failed, we’ll try Core next
       continue;
     }
   }
-  throw lastErr || new Error('All Stability endpoints failed');
+  throw lastErr || new Error('All Stability generate endpoints failed');
 }
 
-// ---------- Stability: Upscale ×2 (v2beta) ----------
+// Upscale ×2 (v2beta)
 async function stabilityUpscale2x(pngBuffer) {
   const form = new FormData();
   form.append('image', pngBuffer, { filename: 'in.png', contentType: 'image/png' });
@@ -165,6 +156,7 @@ async function stabilityUpscale2x(pngBuffer) {
   try { errText = Buffer.from(data).toString('utf8'); } catch {}
   const err = new Error(`Upscale failed: ${status} ${contentType} ${errText.slice(0, 400)}`.trim());
   err.status = status;
+  err._stabilityDetails = { status, contentType, body: errText };
   throw err;
 }
 
@@ -243,17 +235,30 @@ export async function createDesign(req, res) {
       steps,
     });
 
-    // 2) upscale to target long edge
+    // 2) optional upscale to target long edge
     const { width, height } = getPngDims(basePng);
     const longEdge = Math.max(width, height);
-    const scale = decideScale(longEdge);
+    const scale = DISABLE_UPSCALE ? 1 : decideScale(longEdge);
 
     let master = basePng;
-    if (scale === 2) {
-      master = await stabilityUpscale2x(basePng);
-    } else if (scale === 4) {
-      const p1 = await stabilityUpscale2x(basePng);
-      master = await stabilityUpscale2x(p1);
+    let upscaleAttempted = false;
+    let upscaleError = undefined;
+
+    if (scale === 2 || scale === 4) {
+      upscaleAttempted = true;
+      try {
+        if (scale === 2) {
+          master = await stabilityUpscale2x(basePng);
+        } else if (scale === 4) {
+          const p1 = await stabilityUpscale2x(basePng);
+          master = await stabilityUpscale2x(p1);
+        }
+      } catch (e) {
+        // IMPORTANT: Do not fail the whole request if upscale endpoint is unavailable.
+        upscaleError = e?.message || 'Upscale failed';
+        console.warn('[Upscale] Skipping upscale due to error:', upscaleError);
+        master = basePng; // fall back to base image
+      }
     }
 
     // 3) upload (optional)
@@ -280,6 +285,9 @@ export async function createDesign(req, res) {
         aspectRatio: mode === 't2i' ? (aspectRatio || '1:1') : undefined,
         imageStrength: mode === 'i2i' ? Math.max(0, Math.min(1, Number(imageStrength))) : undefined,
         negativePrompt: negativePrompt || undefined,
+        upscaleAttempted,
+        upscaleError, // present if we skipped due to a failure (e.g., 404)
+        upscaleDisabledByEnv: DISABLE_UPSCALE || undefined,
       },
     });
   } catch (err) {
