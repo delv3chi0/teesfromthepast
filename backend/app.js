@@ -11,7 +11,6 @@ import xss from "xss-clean";
 
 // Route imports
 import authRoutes from "./routes/auth.js";
-import generateImageRoutes from "./routes/generateImage.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";
 import checkoutRoutes from "./routes/checkout.js";
 import designRoutes from "./routes/designs.js";
@@ -100,7 +99,6 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
 // --- API routes ---
 app.use("/api/auth", authRoutes);
-app.use("/api", generateImageRoutes);         // e.g., /api/generate
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/mydesigns", designRoutes);
 app.use("/api/contest", contestRoutes);
