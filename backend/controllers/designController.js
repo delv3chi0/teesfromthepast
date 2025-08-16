@@ -15,7 +15,9 @@ function parseDataUrl(dataUrl) {
   // returns { buffer, mime, ext } or null
   if (!dataUrl) return null;
   try {
-    const [meta, b64] = dataUrl.split(',');
+    const parts = String(dataUrl).split(',');
+    const meta = parts[0];
+    const b64 = parts[1];
     if (!meta || !b64) return null;
     const m = /^data:([^;]+);base64$/i.exec(meta.trim());
     const mime = (m && m[1]) || 'application/octet-stream';
@@ -32,20 +34,44 @@ function parseDataUrl(dataUrl) {
     return null;
   }
 }
+
 function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
+
 function getPngDims(buf) {
-  // Only call this on ACTUAL PNGs you generated (Stability returns PNG here)
-  const w = buf.readUInt32BE(16);
-  const h = buf.readUInt32BE(20);
-  return { width: w, height: h };
+  // Stability returns PNG here; guard just in case
+  try {
+    const w = buf.readUInt32BE(16);
+    const h = buf.readUInt32BE(20);
+    return { width: w, height: h };
+  } catch {
+    return { width: undefined, height: undefined };
+  }
 }
+
 function decideScale(longEdge) {
+  if (!Number.isFinite(longEdge)) return 1;
   if (longEdge >= TARGET_LONG_EDGE) return 1;
   if (longEdge * 4 <= TARGET_LONG_EDGE) return 4;
   if (longEdge * 2 <= TARGET_LONG_EDGE) return 2;
   return 1;
+}
+
+// Turn axios error/arraybuffer into readable text
+function decodeNonImageBody(data) {
+  if (!data) return '';
+  try {
+    const str = Buffer.isBuffer(data) ? data.toString('utf8') : String(data);
+    try {
+      const j = JSON.parse(str);
+      return j.message || j.error || str;
+    } catch {
+      return str;
+    }
+  } catch {
+    return '(binary response)';
+  }
 }
 
 // ---------- Stability: Ultra generate (T2I / I2I) ----------
@@ -60,19 +86,20 @@ async function stableGenerateUltra({
 }) {
   if (!STABILITY_API_KEY) {
     const err = new Error('STABILITY_API_KEY is not set on the server');
-    err.status = 500; throw err;
+    err.status = 500;
+    throw err;
   }
 
   const form = new FormData();
 
   // Shared
-  form.append('prompt', String(prompt || '').slice(0, 2000)); // guard
+  form.append('prompt', String(prompt || '').slice(0, 2000));
   if (negativePrompt) form.append('negative_prompt', String(negativePrompt).slice(0, 2000));
   if (Number.isFinite(cfgScale)) form.append('cfg_scale', String(Math.max(1, Math.min(20, Math.round(cfgScale)))));
-  if (Number.isFinite(steps))    form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
+  if (Number.isFinite(steps)) form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
 
   if (initImage?.buffer) {
-    // I2I mode — use correct MIME + filename
+    // I2I — use correct MIME + filename
     const filename = `init.${initImage.ext || 'png'}`;
     form.append('image', initImage.buffer, { filename, contentType: initImage.mime || 'image/png' });
     form.append('output_format', 'png');
@@ -81,41 +108,39 @@ async function stableGenerateUltra({
       form.append('strength', String(Number.isFinite(s) ? s : 0.35));
     }
   } else {
-    // T2I mode
+    // T2I
     form.append('aspect_ratio', aspectRatio);
     form.append('output_format', 'png');
   }
 
-  try {
-    const { data, headers } = await axios.post(
-      `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
-      form,
-      {
-        headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
-        responseType: 'arraybuffer',
-        timeout: 90000,
-        validateStatus: () => true, // we'll handle non-2xx below
-      }
-    );
+  const cfg = {
+    headers: {
+      Authorization: `Bearer ${STABILITY_API_KEY}`,
+      Accept: 'image/*,application/octet-stream,application/json',
+      ...form.getHeaders(),
+    },
+    responseType: 'arraybuffer',
+    timeout: 120000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    validateStatus: () => true, // we’ll handle non-2xx
+  };
 
-    // When the API returns an error, "data" is often JSON (text) — not an image
-    const contentType = String(headers['content-type'] || '');
-    if (!contentType.startsWith('image/')) {
-      const text = data?.toString?.('utf8') || '';
-      const msg = text.slice(0, 1000) || `Stability returned ${headers['content-type'] || 'non-image'} response`;
-      const err = new Error(msg);
-      err.status = 502;
-      throw err;
-    }
+  const { data, headers, status } = await axios.post(
+    `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
+    form,
+    cfg
+  );
 
-    return Buffer.from(data);
-  } catch (e) {
-    // Re-throw a clean error for our handler
-    const err = new Error(e?.message || 'Stability request failed');
-    err.status = e?.status || e?.response?.status || 500;
-    err.details = e?.response?.data ? e.response.data.toString?.('utf8') : undefined;
+  const contentType = String(headers['content-type'] || '');
+  if (status < 200 || status >= 300 || !contentType.startsWith('image/')) {
+    const text = decodeNonImageBody(data);
+    const err = new Error(text || `Stability returned ${contentType || 'non-image'} response`);
+    err.status = status || 502;
     throw err;
   }
+
+  return Buffer.from(data);
 }
 
 // ---------- Stability: Upscale ×2 (v2beta) ----------
@@ -125,22 +150,30 @@ async function stabilityUpscale2x(pngBuffer) {
   form.append('scale', '2');
   form.append('output_format', 'png');
 
-  const { data, headers } = await axios.post(
+  const cfg = {
+    headers: {
+      Authorization: `Bearer ${STABILITY_API_KEY}`,
+      Accept: 'image/*,application/octet-stream,application/json',
+      ...form.getHeaders(),
+    },
+    responseType: 'arraybuffer',
+    timeout: 120000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+    validateStatus: () => true,
+  };
+
+  const { data, headers, status } = await axios.post(
     `${STABILITY_BASE}/v2beta/stable-image/upscale/factor`,
     form,
-    {
-      headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
-      responseType: 'arraybuffer',
-      timeout: 90000,
-      validateStatus: () => true,
-    }
+    cfg
   );
 
   const contentType = String(headers['content-type'] || '');
-  if (!contentType.startsWith('image/')) {
-    const text = data?.toString?.('utf8') || '';
-    const err = new Error(text.slice(0, 1000) || 'Upscale failed with non-image response');
-    err.status = 502;
+  if (status < 200 || status >= 300 || !contentType.startsWith('image/')) {
+    const text = decodeNonImageBody(data);
+    const err = new Error(text || 'Upscale failed with non-image response');
+    err.status = status || 502;
     throw err;
   }
   return Buffer.from(data);
@@ -184,7 +217,7 @@ async function uploadPngToCloudinary(buf, { userId }) {
   if (!masterUrl || !publicId) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
 
   const previewUrl = cloudinary.url(publicId, { width: 1200, crop: 'fit', format: 'jpg', quality: 'auto:good', secure: true });
-  const thumbUrl   = cloudinary.url(publicId, { width: 400,  crop: 'fit', format: 'jpg', quality: 'auto:eco',  secure: true });
+  const thumbUrl = cloudinary.url(publicId, { width: 400, crop: 'fit', format: 'jpg', quality: 'auto:eco', secure: true });
 
   return { masterUrl, previewUrl, thumbUrl, publicId };
 }
@@ -207,7 +240,12 @@ export async function createDesign(req, res) {
       return res.status(400).json({ message: 'Either a prompt or an init image is required.' });
     }
 
-    console.log('[Generate] mode=%s, hasKey=%s', init?.buffer ? 'i2i' : 't2i', !!STABILITY_API_KEY);
+    console.log(
+      '[Generate] mode=%s, hasKey=%s, initMime=%s',
+      init?.buffer ? 'i2i' : 't2i',
+      !!STABILITY_API_KEY,
+      init?.mime || '-'
+    );
 
     // 1) generate
     const basePng = await stableGenerateUltra({
@@ -222,7 +260,7 @@ export async function createDesign(req, res) {
 
     // 2) upscale to target long edge
     const { width, height } = getPngDims(basePng);
-    const longEdge = Math.max(width, height);
+    const longEdge = Math.max(width || 0, height || 0);
     const scale = decideScale(longEdge);
 
     let master = basePng;
@@ -262,8 +300,8 @@ export async function createDesign(req, res) {
   } catch (err) {
     const status = err.status || err.response?.status || 500;
     const details =
+      (err.response?.data && decodeNonImageBody(err.response.data)) ||
       err.details ||
-      (err.response?.data && err.response.data.toString?.('utf8')) ||
       err.message ||
       'Unknown error';
     console.error('[createDesign][ERROR]', status, details);
