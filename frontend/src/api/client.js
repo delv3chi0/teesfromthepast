@@ -11,20 +11,14 @@ export const client = axios.create({
   withCredentials: true,
 });
 
-// Helpers used by AuthProvider
 export function setAuthHeader(token) {
-  if (token) {
-    client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-  } else {
-    delete client.defaults.headers.common["Authorization"];
-  }
+  if (token) client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  else delete client.defaults.headers.common["Authorization"];
 }
 export function clearAuthHeader() {
   delete client.defaults.headers.common["Authorization"];
 }
 
-// Safety net: if a page refresh happens before AuthProvider runs,
-// try to attach the token from localStorage.
 const TOKEN_KEYS = ["tftp_token", "token"];
 client.interceptors.request.use((config) => {
   if (!config.headers?.Authorization) {

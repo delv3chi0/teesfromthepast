@@ -3,30 +3,12 @@ import 'dotenv/config';
 import axios from 'axios';
 import FormData from 'form-data';
 
-// ---------- Config ----------
 const STABILITY_API_KEY =
   process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
 const STABILITY_BASE = 'https://api.stability.ai';
 
 // Long-edge target for print-ready art (DTG safe: 4096–4800 typical)
 const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '4096', 10);
-
-// Optional Cloudinary upload
-let cloudinary = null;
-const useCloudinary =
-  !!process.env.CLOUDINARY_CLOUD_NAME &&
-  !!process.env.CLOUDINARY_API_KEY &&
-  !!process.env.CLOUDINARY_API_SECRET;
-
-if (useCloudinary) {
-  const { v2 } = await import('cloudinary');
-  v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-  cloudinary = v2; // use cloudinary.url(...) below
-}
 
 // ---------- Helpers ----------
 function dataUrlToBuffer(dataUrl) {
@@ -49,81 +31,79 @@ function decideScale(longEdge) {
   return 1;
 }
 
-// ---------- Stability calls ----------
-// v2beta Ultra — text-to-image AND image-to-image
-// IMPORTANT: For i2i, DO NOT send width/height/aspect ratio. Output = init image size.
+// ---------- Stability: Ultra generate (T2I or I2I) ----------
 async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf = null, imageStrength }) {
   if (!STABILITY_API_KEY) {
     const err = new Error('STABILITY_API_KEY is not set');
-    err.status = 500;
-    throw err;
+    err.status = 500; throw err;
   }
 
   const form = new FormData();
 
   if (initImageBuf) {
-    // IMAGE-TO-IMAGE
+    // I2I: do NOT send width/height/aspect; output matches init image
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
     form.append('prompt', prompt);
     form.append('output_format', 'png');
-
-    // REQUIRED by /ultra i2i: strength 0..1
-    const sRaw = (imageStrength ?? 0.35);
-    const s = Math.min(1, Math.max(0, Number(sRaw)));
-    form.append('strength', String(Number.isFinite(s) ? s : 0.35));
+    if (typeof imageStrength !== 'undefined' && imageStrength !== null) {
+      const s = Math.max(0, Math.min(1, Number(imageStrength)));
+      form.append('strength', String(Number.isFinite(s) ? s : 0.35));
+    }
   } else {
-    // TEXT-TO-IMAGE
+    // T2I
     form.append('prompt', prompt);
-    form.append('aspect_ratio', aspectRatio); // e.g. '1:1', '3:4', '4:3'
+    form.append('aspect_ratio', aspectRatio);
     form.append('output_format', 'png');
   }
 
-  try {
-    const { data } = await axios.post(
-      `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
-      form,
-      {
-        headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
-        responseType: 'arraybuffer',
-        timeout: 90000,
-      }
-    );
-    return Buffer.from(data);
-  } catch (e) {
-    const status = e.response?.status;
-    const body = e.response?.data;
-    console.error('[Generate][ERROR] Ultra request failed', status || '', body?.toString?.() || e.message);
-    throw e;
-  }
+  const { data } = await axios.post(
+    `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
+    form,
+    {
+      headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
+      responseType: 'arraybuffer',
+      timeout: 90000,
+    }
+  );
+  return Buffer.from(data);
 }
 
-// v2beta upscale 2× (preferred over old v1 ESRGAN)
+// ---------- Stability: v2beta upscale ×2 ----------
 async function stabilityUpscale2x(pngBuffer) {
   const form = new FormData();
   form.append('image', pngBuffer, { filename: 'in.png', contentType: 'image/png' });
   form.append('scale', '2');
   form.append('output_format', 'png');
 
-  try {
-    const { data } = await axios.post(
-      `${STABILITY_BASE}/v2beta/stable-image/upscale/factor`,
-      form,
-      {
-        headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
-        responseType: 'arraybuffer',
-        timeout: 90000,
-      }
-    );
-    return Buffer.from(data);
-  } catch (e) {
-    const status = e.response?.status;
-    const body = e.response?.data;
-    console.error('[Upscale][ERROR] 2x failed', status || '', body?.toString?.() || e.message);
-    throw e;
-  }
+  const { data } = await axios.post(
+    `${STABILITY_BASE}/v2beta/stable-image/upscale/factor`,
+    form,
+    {
+      headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
+      responseType: 'arraybuffer',
+      timeout: 90000,
+    }
+  );
+  return Buffer.from(data);
 }
 
 // ---------- Optional Cloudinary upload ----------
+let cloudinary = null;
+const useCloudinary =
+  !!process.env.CLOUDINARY_CLOUD_NAME &&
+  !!process.env.CLOUDINARY_API_KEY &&
+  !!process.env.CLOUDINARY_API_SECRET;
+
+if (useCloudinary) {
+  const { v2 } = await import('cloudinary');
+  v2.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+  });
+  cloudinary = v2;
+}
+
 async function uploadPngToCloudinary(buf, { userId }) {
   if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
 
@@ -164,15 +144,15 @@ export async function createDesign(req, res) {
       return res.status(400).json({ message: 'initImageBase64 is not a valid base64 data URL.' });
     }
 
-    // 1) Generate base PNG (Ultra)
+    // 1) Generate base
     const basePng = await stableGenerateUltra({
       prompt,
       aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
       initImageBuf: initBuf || null,
-      imageStrength, // 0..1 (required for i2i)
+      imageStrength,
     });
 
-    // 2) Upscale in 2× passes until target long edge
+    // 2) Upscale to target
     const { width, height } = getPngDims(basePng);
     const longEdge = Math.max(width, height);
     const scale = decideScale(longEdge);
@@ -185,11 +165,11 @@ export async function createDesign(req, res) {
       master = await stabilityUpscale2x(p1);
     }
 
-    // 3) Upload to Cloudinary (if configured)
+    // 3) Upload (optional)
     const { masterUrl, previewUrl, thumbUrl, publicId } =
       await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() });
 
-    // 4) Also return dataURL for instant on-page preview
+    // 4) Return preview + URLs
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
 
     res.json({

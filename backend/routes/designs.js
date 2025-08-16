@@ -3,11 +3,66 @@ import express from 'express';
 import mongoose from 'mongoose';
 import { protect } from '../middleware/authMiddleware.js';
 import Design from '../models/Design.js';
+import { createDesign } from '../controllers/designController.js';
 import 'dotenv/config';
 
 const router = express.Router();
 
-// Optional Cloudinary delete support
+// ---------- Save a design (from Generate) ----------
+router.post('/', protect, async (req, res) => {
+  console.log('[Save Design] body:', Object.keys(req.body));
+  const { prompt, imageDataUrl, masterUrl, previewUrl, thumbUrl, publicId } = req.body;
+
+  if (!prompt || (!imageDataUrl && !masterUrl)) {
+    return res.status(400).json({ message: 'Prompt and an image are required.' });
+  }
+
+  try {
+    const doc = new Design({
+      user: req.user.id,
+      prompt,
+      imageDataUrl: imageDataUrl || undefined,
+      publicUrl: masterUrl || undefined,
+      thumbUrl: thumbUrl || previewUrl || undefined,
+      publicId: publicId || undefined,
+    });
+
+    const saved = await doc.save();
+    return res.status(201).json(saved);
+  } catch (error) {
+    console.error('[Save Design] error:', error);
+    return res.status(500).json({ message: 'Server error while saving design.', error: error.message });
+  }
+});
+
+// ---------- Generate (T2I / I2I) ----------
+router.post('/create', protect, createDesign);
+
+// ---------- List (paged) ----------
+router.get('/', protect, async (req, res) => {
+  try {
+    const page  = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '24', 10)));
+    const skip  = (page - 1) * limit;
+
+    const q = Design.find({ user: req.user.id })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('_id prompt publicUrl thumbUrl imageDataUrl isSubmittedForContest contestSubmissionMonth votes createdAt')
+      .lean();
+
+    if (typeof q.allowDiskUse === 'function') q.allowDiskUse(true);
+    const items = await q.exec();
+
+    res.json({ items, page, hasMore: items.length === limit });
+  } catch (error) {
+    console.error('[Get My Designs] error:', error);
+    res.status(500).json({ message: 'Server error while fetching designs.', error: error.message });
+  }
+});
+
+// ---------- Delete (+ Cloudinary best-effort) ----------
 let cloudinary = null;
 const useCloudinary =
   !!process.env.CLOUDINARY_CLOUD_NAME &&
@@ -43,58 +98,6 @@ function cloudinaryPublicIdFromUrl(url) {
   }
 }
 
-// Save a design (from Generate)
-router.post('/', protect, async (req, res) => {
-  console.log('[Save Design] body:', Object.keys(req.body));
-  const { prompt, imageDataUrl, masterUrl, previewUrl, thumbUrl, publicId } = req.body;
-
-  if (!prompt || (!imageDataUrl && !masterUrl)) {
-    return res.status(400).json({ message: 'Prompt and an image are required.' });
-  }
-
-  try {
-    const doc = new Design({
-      user: req.user.id,
-      prompt,
-      imageDataUrl: imageDataUrl || undefined,
-      publicUrl: masterUrl || undefined,
-      thumbUrl: thumbUrl || previewUrl || undefined,
-      publicId: publicId || undefined,
-    });
-
-    const saved = await doc.save();
-    return res.status(201).json(saved);
-  } catch (error) {
-    console.error('[Save Design] error:', error);
-    return res.status(500).json({ message: 'Server error while saving design.', error: error.message });
-  }
-});
-
-// List (paged)
-router.get('/', protect, async (req, res) => {
-  try {
-    const page  = Math.max(1, parseInt(req.query.page || '1', 10));
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || '24', 10)));
-    const skip  = (page - 1) * limit;
-
-    const q = Design.find({ user: req.user.id })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select('_id prompt publicUrl thumbUrl imageDataUrl isSubmittedForContest contestSubmissionMonth votes createdAt')
-      .lean();
-
-    if (typeof q.allowDiskUse === 'function') q.allowDiskUse(true);
-    const items = await q.exec();
-
-    res.json({ items, page, hasMore: items.length === limit });
-  } catch (error) {
-    console.error('[Get My Designs] error:', error);
-    res.status(500).json({ message: 'Server error while fetching designs.', error: error.message });
-  }
-});
-
-// Delete (+ Cloudinary)
 router.delete('/:designId', protect, async (req, res) => {
   const { designId } = req.params;
 

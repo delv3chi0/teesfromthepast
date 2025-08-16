@@ -13,7 +13,7 @@ import xss from "xss-clean";
 import authRoutes from "./routes/auth.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";
 import checkoutRoutes from "./routes/checkout.js";
-import designRoutes from "./routes/designs.js";
+import designRoutes from "./routes/designs.js";            // ✅ designs router
 import contestRoutes from "./routes/contest.js";
 import orderRoutes from "./routes/orders.js";
 import formRoutes from "./routes/formRoutes.js";
@@ -41,7 +41,6 @@ const corsOptions = {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
-      // Allow Vercel preview deployments like https://<hash>-delv3chios-projects.vercel.app
       /-delv3chios-projects\.vercel\.app$/.test(origin)
     ) {
       return callback(null, true);
@@ -51,18 +50,10 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  // IMPORTANT: Let cors reflect whatever headers the browser asks for.
-  // By *omitting* allowedHeaders, the 'cors' package will echo
-  // Access-Control-Request-Headers from the preflight automatically.
-  // (This avoids breaking when new headers like "token" or "cache-control" appear.)
-  // allowedHeaders: undefined
 };
-
-// Handle CORS + preflight early
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // respond to preflight with the same options
+app.options("*", cors(corsOptions));
 
-// Cookies (required if client ever uses httpOnly cookie token)
 app.use(cookieParser());
 
 // Stripe webhook (raw body) — must be BEFORE express.json()
@@ -100,7 +91,14 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 // --- API routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/checkout", checkoutRoutes);
+
+// ✅ mount designs at /api/designs (so POST /api/designs/create is real)
+app.use("/api/designs", designRoutes);
+
+// Keep your existing “My Designs” paths working (aliases to the same router)
+// This preserves existing frontend calls to /api/mydesigns
 app.use("/api/mydesigns", designRoutes);
+
 app.use("/api/contest", contestRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/forms", formRoutes);
