@@ -32,15 +32,7 @@ function decideScale(longEdge) {
 }
 
 // ---------- Stability: Ultra generate (T2I / I2I) ----------
-async function stableGenerateUltra({
-  prompt,
-  negativePrompt,
-  aspectRatio = '1:1',
-  initImageBuf = null,
-  imageStrength,
-  cfgScale,
-  steps,
-}) {
+async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf = null, imageStrength }) {
   if (!STABILITY_API_KEY) {
     const err = new Error('STABILITY_API_KEY is not set on the server');
     err.status = 500; throw err;
@@ -48,20 +40,10 @@ async function stableGenerateUltra({
 
   const form = new FormData();
 
-  // Shared
-  form.append('prompt', String(prompt || '').slice(0, 2000)); // guard
-
-  if (negativePrompt) {
-    form.append('negative_prompt', String(negativePrompt).slice(0, 2000));
-  }
-
-  // Optional knobs (Stability v2beta accepts these; extras are ignored gracefully)
-  if (Number.isFinite(cfgScale)) form.append('cfg_scale', String(Math.max(1, Math.min(20, Math.round(cfgScale)))));
-  if (Number.isFinite(steps))    form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
-
   if (initImageBuf) {
     // I2I: do NOT send width/height/aspect; output = init size
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
+    form.append('prompt', prompt);
     form.append('output_format', 'png');
     if (typeof imageStrength !== 'undefined' && imageStrength !== null) {
       const s = Math.max(0, Math.min(1, Number(imageStrength)));
@@ -69,6 +51,7 @@ async function stableGenerateUltra({
     }
   } else {
     // T2I
+    form.append('prompt', prompt);
     form.append('aspect_ratio', aspectRatio);
     form.append('output_format', 'png');
   }
@@ -149,16 +132,7 @@ async function uploadPngToCloudinary(buf, { userId }) {
 
 // ---------- PUBLIC HANDLER ----------
 export async function createDesign(req, res) {
-  const {
-    prompt,
-    negativePrompt,
-    initImageBase64,
-    aspectRatio,
-    imageStrength,
-    cfgScale,
-    steps,
-  } = req.body || {};
-
+  const { prompt, initImageBase64, aspectRatio, imageStrength } = req.body || {};
   try {
     const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
     if (!prompt && !initBuf) {
@@ -170,12 +144,9 @@ export async function createDesign(req, res) {
     // 1) generate
     const basePng = await stableGenerateUltra({
       prompt,
-      negativePrompt,
       aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
       initImageBuf: initBuf || null,
       imageStrength,
-      cfgScale,
-      steps,
     });
 
     // 2) upscale to target long edge
@@ -195,7 +166,7 @@ export async function createDesign(req, res) {
     const { masterUrl, previewUrl, thumbUrl, publicId } =
       await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() });
 
-    // 4) respond (we keep dataUrl for compatibility; frontend will prefer previewUrl)
+    // 4) respond
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
     res.json({
       imageDataUrl,
@@ -210,11 +181,6 @@ export async function createDesign(req, res) {
         targetLongEdge: TARGET_LONG_EDGE,
         scaleApplied: scale,
         uploadedToCloudinary: !!masterUrl,
-        cfgScale: Number.isFinite(cfgScale) ? Math.max(1, Math.min(20, Math.round(cfgScale))) : undefined,
-        steps: Number.isFinite(steps) ? Math.max(10, Math.min(50, Math.round(steps))) : undefined,
-        aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
-        imageStrength: initBuf ? Math.max(0, Math.min(1, Number(imageStrength))) : undefined,
-        negativePrompt: negativePrompt || undefined,
       },
     });
   } catch (err) {

@@ -21,6 +21,7 @@ import adminUserRoutes from "./routes/adminUserRoutes.js";
 import adminOrderRoutes from "./routes/adminOrderRoutes.js";
 import adminDesignRoutes from "./routes/adminDesignRoutes.js";
 import adminProductRoutes from "./routes/adminProductRoutes.js";
+import adminRouter from './routes/admin.js';
 import storefrontProductRoutes from "./routes/storefrontProductRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import printfulRoutes from "./routes/printful.js";
@@ -109,6 +110,7 @@ app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin/products", adminProductRoutes);
+app.use('/admin', protect, adminRouter); // protect is also used inside; double-protection is fine
 
 // Uploads & Printful helpers
 app.use("/api", uploadRoutes);

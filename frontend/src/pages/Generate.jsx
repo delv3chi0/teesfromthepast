@@ -2,7 +2,7 @@
 import {
   Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon,
   Alert, AlertIcon, HStack, Slider, SliderTrack, SliderFilledTrack, SliderThumb,
-  useBoolean, Tooltip, Badge
+  useBoolean, Tooltip, Badge, Select
 } from "@chakra-ui/react";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { client } from '../api/client';
@@ -12,12 +12,20 @@ import { FaMagic, FaSave, FaPowerOff, FaPlay, FaFastForward, FaBackward, FaEject
 
 const ART_STYLES = ["Classic Art", "Stencil Art", "Embroidery Style"];
 const DECADES = ["1960s", "1970s", "1980s", "1990s"];
+const ARS = ["1:1","3:2","2:3","16:9","9:16"]; // T2I only
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 
 export default function Generate() {
   const [powerOn, setPowerOn] = useBoolean(true);
   const [styleIx, setStyleIx] = useState(0);
   const [decadeIx, setDecadeIx] = useState(2);
+
+  // NEW: advanced controls
+  const [aspectRatio, setAspectRatio] = useState("1:1"); // T2I only
+  const [cfgScale, setCfgScale] = useState(7);           // 1..20
+  const [steps, setSteps] = useState(30);                // 10..50
+  const [negativePrompt, setNegativePrompt] = useState("");
+
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -83,18 +91,46 @@ export default function Generate() {
 
     setLoading(true); setError(""); setImageUrl("");
     try {
-      const payload = { prompt: constructedPrompt };
+      const payload = {
+        prompt: constructedPrompt,
+        negativePrompt: negativePrompt || undefined,
+        cfgScale,
+        steps
+      };
+
       // Only pass aspect ratio for text-to-image
-      if (!initPreview) payload.aspectRatio = '1:1';
+      if (!initPreview) payload.aspectRatio = aspectRatio || '1:1';
+
+      // I2I attachments
       if (initPreview) {
         payload.initImageBase64 = initPreview;
-        payload.imageStrength = clamp01(imageInfluence); // 0..1 required for i2i
+        payload.imageStrength = clamp01(imageInfluence);
       }
 
       const resp = await client.post('/designs/create', payload);
-      const { imageDataUrl } = resp.data || {};
-      setImageUrl(imageDataUrl || "");
-      (window).__lastGen = { imageDataUrl: imageDataUrl || "", prompt: userPrompt || '' };
+      const { imageDataUrl, previewUrl, masterUrl, thumbUrl, publicId, meta } = resp.data || {};
+
+      // Prefer Cloudinary preview if available
+      setImageUrl(previewUrl || imageDataUrl || "");
+
+      // Stash the last generation for "Save"
+      (window).__lastGen = {
+        prompt: userPrompt || '',
+        negativePrompt: negativePrompt || '',
+        imageDataUrl: imageDataUrl || '',
+        masterUrl: masterUrl || '',
+        previewUrl: previewUrl || '',
+        thumbUrl: thumbUrl || '',
+        publicId: publicId || '',
+        settings: {
+          mode: initPreview ? 'i2i' : 't2i',
+          cfgScale,
+          steps,
+          aspectRatio: initPreview ? undefined : aspectRatio,
+          imageStrength: initPreview ? clamp01(imageInfluence) : undefined,
+          ...meta
+        }
+      };
     } catch (err) {
       handleApiError(err, 'Failed to generate image.', 'Generation');
     } finally { setLoading(false); }
@@ -102,10 +138,28 @@ export default function Generate() {
 
   const handleSaveDesign = async () => {
     const gen = (window).__lastGen;
-    if (!gen?.imageDataUrl) { toast({ title: 'Nothing to save yet', status: 'info' }); return; }
+    if (!gen || (!gen.imageDataUrl && !gen.masterUrl)) {
+      toast({ title: 'Nothing to save yet', status: 'info' });
+      return;
+    }
     setIsSaving(true);
     try {
-      await client.post('/mydesigns', { prompt: gen.prompt || userPrompt || '(untitled)', imageDataUrl: gen.imageDataUrl });
+      await client.post('/mydesigns', {
+        prompt: gen.prompt || userPrompt || '(untitled)',
+        negativePrompt: gen.negativePrompt || negativePrompt || '',
+        imageDataUrl: gen.imageDataUrl || undefined,
+        masterUrl: gen.masterUrl || undefined,
+        previewUrl: gen.previewUrl || undefined,
+        thumbUrl: gen.thumbUrl || undefined,
+        publicId: gen.publicId || undefined,
+        settings: gen.settings || {
+          mode: initPreview ? 'i2i' : 't2i',
+          cfgScale,
+          steps,
+          aspectRatio: initPreview ? undefined : aspectRatio,
+          imageStrength: initPreview ? clamp01(imageInfluence) : undefined
+        }
+      });
       toast({ title: 'Design Saved!', description: "Check “My Designs”.", status: 'success', isClosable: true });
     } catch (err) {
       handleApiError(err, 'Failed to save design.', 'Save');
@@ -280,7 +334,7 @@ export default function Generate() {
               </Text>
             </Box>
 
-            <HStack w="100%" justify="space-between" py={3}>
+            <HStack w="100%" justify="space-between" py={3} align="center" flexWrap="wrap" rowGap={3}>
               <Button size="sm" leftIcon={<FaPowerOff/>} colorScheme={powerOn ? 'pink' : 'gray'} onClick={setPowerOn.toggle}>
                 Power
               </Button>
@@ -290,6 +344,16 @@ export default function Generate() {
                 <VStack spacing={1}><Text fontSize="xs" color="yellow.300">Decade</Text>
                   <Dial valueIx={decadeIx} setValueIx={setDecadeIx} labels={DECADES}/></VStack>
               </HStack>
+
+              {/* NEW: Aspect ratio picker (T2I only) */}
+              {!initPreview && (
+                <HStack spacing={2}>
+                  <Text fontSize="xs" color="yellow.300">Aspect</Text>
+                  <Select size="sm" value={aspectRatio} onChange={(e)=>setAspectRatio(e.target.value)} bg="brand.primaryDark" borderColor="whiteAlpha.300">
+                    {ARS.map(ar => <option key={ar} value={ar}>{ar}</option>)}
+                  </Select>
+                </HStack>
+              )}
             </HStack>
           </VStack>
 
@@ -299,7 +363,7 @@ export default function Generate() {
           </Box>
         </HStack>
 
-        {/* Prompt area */}
+        {/* Prompt + Advanced */}
         <Box mx="16px" mb="16px" bg="rgba(0,0,0,.35)" border="1px solid rgba(0,0,0,.6)" borderRadius="8px" p={3}>
           <Text fontSize="sm" color="yellow.200" mb={2}>Describe your image idea</Text>
           <Textarea
@@ -309,6 +373,36 @@ export default function Generate() {
             bg="rgba(0,0,0,.5)" color="white"
             _placeholder={{ color: 'whiteAlpha.700' }}
           />
+
+          {/* NEW: Negative prompt */}
+          <Text fontSize="sm" color="yellow.200" mt={4} mb={2}>Things to avoid</Text>
+          <Textarea
+            placeholder="e.g. text, watermarks, extra limbs, artifacts"
+            value={negativePrompt}
+            onChange={(e) => setNegativePrompt(e.target.value)}
+            bg="rgba(0,0,0,.5)" color="white"
+            _placeholder={{ color: 'whiteAlpha.700' }}
+          />
+
+          {/* NEW: CFG & Steps */}
+          <HStack mt={4} spacing={6} align="center" flexWrap="wrap">
+            <HStack minW="280px" flex="1">
+              <Text fontSize="sm" color="whiteAlpha.800" w="90px">CFG Scale</Text>
+              <Slider value={cfgScale} min={1} max={20} step={1} onChange={setCfgScale}>
+                <SliderTrack><SliderFilledTrack/></SliderTrack>
+                <SliderThumb />
+              </Slider>
+              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{cfgScale}</Text>
+            </HStack>
+            <HStack minW="280px" flex="1">
+              <Text fontSize="sm" color="whiteAlpha.800" w="90px">Steps</Text>
+              <Slider value={steps} min={10} max={50} step={1} onChange={setSteps}>
+                <SliderTrack><SliderFilledTrack/></SliderTrack>
+                <SliderThumb />
+              </Slider>
+              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{steps}</Text>
+            </HStack>
+          </HStack>
         </Box>
       </Box>
 

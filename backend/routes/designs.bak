@@ -13,32 +13,21 @@ router.post('/create', protect, createDesign);
 
 // Save a design (manual save from UI)
 router.post('/', protect, async (req, res) => {
-  console.log('[Save Design] body keys:', Object.keys(req.body));
-  const {
-    prompt,
-    negativePrompt,
-    imageDataUrl,
-    masterUrl,
-    previewUrl,
-    thumbUrl,
-    publicId,
-    settings,
-  } = req.body;
+  console.log('[Save Design] body:', Object.keys(req.body));
+  const { prompt, imageDataUrl, masterUrl, previewUrl, thumbUrl, publicId } = req.body;
 
   if (!prompt || (!imageDataUrl && !masterUrl)) {
     return res.status(400).json({ message: 'Prompt and an image are required.' });
-    }
+  }
 
   try {
     const doc = new Design({
       user: req.user.id,
       prompt,
-      negativePrompt: negativePrompt || undefined,
       imageDataUrl: imageDataUrl || undefined,
       publicUrl: masterUrl || undefined,
       thumbUrl: thumbUrl || previewUrl || undefined,
       publicId: publicId || undefined,
-      settings: settings || undefined,
     });
 
     const saved = await doc.save();
@@ -60,7 +49,7 @@ router.get('/', protect, async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .select('_id prompt negativePrompt publicUrl thumbUrl imageDataUrl settings isSubmittedForContest contestSubmissionMonth votes createdAt')
+      .select('_id prompt publicUrl thumbUrl imageDataUrl isSubmittedForContest contestSubmissionMonth votes createdAt')
       .lean();
 
     if (typeof q.allowDiskUse === 'function') q.allowDiskUse(true);
@@ -83,7 +72,7 @@ const useCloudinary =
 if (useCloudinary) {
   const { v2 } = await import('cloudinary');
   v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINDARY_CLOUD_NAME, // keep fallback
+    cloud_name: process.env.CLOUDINDARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
@@ -120,7 +109,7 @@ router.delete('/:designId', protect, async (req, res) => {
     const design = await Design.findOne({ _id: designId, user: req.user.id });
     if (!design) return res.status(404).json({ message: 'Design not found or unauthorized.' });
 
-    if (useCloudinary && (design.publicId || design.publicUrl)) {
+    if (useCloudinary && design.publicUrl) {
       const pid = design.publicId || cloudinaryPublicIdFromUrl(design.publicUrl);
       if (pid) {
         try {
