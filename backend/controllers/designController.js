@@ -11,15 +11,32 @@ const STABILITY_BASE = 'https://api.stability.ai';
 const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '4096', 10);
 
 // ---------- helpers ----------
-function dataUrlToBuffer(dataUrl) {
+function parseDataUrl(dataUrl) {
+  // returns { buffer, mime, ext } or null
   if (!dataUrl) return null;
-  const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  try { return Buffer.from(b64, 'base64'); } catch { return null; }
+  try {
+    const [meta, b64] = dataUrl.split(',');
+    if (!meta || !b64) return null;
+    const m = /^data:([^;]+);base64$/i.exec(meta.trim());
+    const mime = (m && m[1]) || 'application/octet-stream';
+    const ext = (() => {
+      if (mime.includes('png')) return 'png';
+      if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+      if (mime.includes('webp')) return 'webp';
+      if (mime.includes('gif')) return 'gif';
+      return 'bin';
+    })();
+    const buffer = Buffer.from(b64, 'base64');
+    return { buffer, mime, ext };
+  } catch {
+    return null;
+  }
 }
 function bufferToDataUrl(buf, mime = 'image/png') {
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
 function getPngDims(buf) {
+  // Only call this on ACTUAL PNGs you generated (Stability returns PNG here)
   const w = buf.readUInt32BE(16);
   const h = buf.readUInt32BE(20);
   return { width: w, height: h };
@@ -36,7 +53,7 @@ async function stableGenerateUltra({
   prompt,
   negativePrompt,
   aspectRatio = '1:1',
-  initImageBuf = null,
+  initImage, // { buffer, mime, ext } | null
   imageStrength,
   cfgScale,
   steps,
@@ -50,39 +67,55 @@ async function stableGenerateUltra({
 
   // Shared
   form.append('prompt', String(prompt || '').slice(0, 2000)); // guard
-
-  if (negativePrompt) {
-    form.append('negative_prompt', String(negativePrompt).slice(0, 2000));
-  }
-
-  // Optional knobs (Stability v2beta accepts these; extras are ignored gracefully)
+  if (negativePrompt) form.append('negative_prompt', String(negativePrompt).slice(0, 2000));
   if (Number.isFinite(cfgScale)) form.append('cfg_scale', String(Math.max(1, Math.min(20, Math.round(cfgScale)))));
   if (Number.isFinite(steps))    form.append('steps', String(Math.max(10, Math.min(50, Math.round(steps)))));
 
-  if (initImageBuf) {
-    // I2I: do NOT send width/height/aspect; output = init size
-    form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
+  if (initImage?.buffer) {
+    // I2I mode — use correct MIME + filename
+    const filename = `init.${initImage.ext || 'png'}`;
+    form.append('image', initImage.buffer, { filename, contentType: initImage.mime || 'image/png' });
     form.append('output_format', 'png');
-    if (typeof imageStrength !== 'undefined' && imageStrength !== null) {
+    if (imageStrength !== undefined && imageStrength !== null) {
       const s = Math.max(0, Math.min(1, Number(imageStrength)));
       form.append('strength', String(Number.isFinite(s) ? s : 0.35));
     }
   } else {
-    // T2I
+    // T2I mode
     form.append('aspect_ratio', aspectRatio);
     form.append('output_format', 'png');
   }
 
-  const { data } = await axios.post(
-    `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
-    form,
-    {
-      headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
-      responseType: 'arraybuffer',
-      timeout: 90000,
+  try {
+    const { data, headers } = await axios.post(
+      `${STABILITY_BASE}/v2beta/stable-image/generate/ultra`,
+      form,
+      {
+        headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
+        responseType: 'arraybuffer',
+        timeout: 90000,
+        validateStatus: () => true, // we'll handle non-2xx below
+      }
+    );
+
+    // When the API returns an error, "data" is often JSON (text) — not an image
+    const contentType = String(headers['content-type'] || '');
+    if (!contentType.startsWith('image/')) {
+      const text = data?.toString?.('utf8') || '';
+      const msg = text.slice(0, 1000) || `Stability returned ${headers['content-type'] || 'non-image'} response`;
+      const err = new Error(msg);
+      err.status = 502;
+      throw err;
     }
-  );
-  return Buffer.from(data);
+
+    return Buffer.from(data);
+  } catch (e) {
+    // Re-throw a clean error for our handler
+    const err = new Error(e?.message || 'Stability request failed');
+    err.status = e?.status || e?.response?.status || 500;
+    err.details = e?.response?.data ? e.response.data.toString?.('utf8') : undefined;
+    throw err;
+  }
 }
 
 // ---------- Stability: Upscale ×2 (v2beta) ----------
@@ -92,15 +125,24 @@ async function stabilityUpscale2x(pngBuffer) {
   form.append('scale', '2');
   form.append('output_format', 'png');
 
-  const { data } = await axios.post(
+  const { data, headers } = await axios.post(
     `${STABILITY_BASE}/v2beta/stable-image/upscale/factor`,
     form,
     {
       headers: { Authorization: `Bearer ${STABILITY_API_KEY}`, ...form.getHeaders() },
       responseType: 'arraybuffer',
       timeout: 90000,
+      validateStatus: () => true,
     }
   );
+
+  const contentType = String(headers['content-type'] || '');
+  if (!contentType.startsWith('image/')) {
+    const text = data?.toString?.('utf8') || '';
+    const err = new Error(text.slice(0, 1000) || 'Upscale failed with non-image response');
+    err.status = 502;
+    throw err;
+  }
   return Buffer.from(data);
 }
 
@@ -160,19 +202,19 @@ export async function createDesign(req, res) {
   } = req.body || {};
 
   try {
-    const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
-    if (!prompt && !initBuf) {
+    const init = initImageBase64 ? parseDataUrl(initImageBase64) : null;
+    if (!prompt && !init?.buffer) {
       return res.status(400).json({ message: 'Either a prompt or an init image is required.' });
     }
 
-    console.log('[Generate] mode=%s, hasKey=%s', initBuf ? 'i2i' : 't2i', !!STABILITY_API_KEY);
+    console.log('[Generate] mode=%s, hasKey=%s', init?.buffer ? 'i2i' : 't2i', !!STABILITY_API_KEY);
 
     // 1) generate
     const basePng = await stableGenerateUltra({
       prompt,
       negativePrompt,
-      aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
-      initImageBuf: initBuf || null,
+      aspectRatio: init?.buffer ? undefined : (aspectRatio || '1:1'),
+      initImage: init || null,
       imageStrength,
       cfgScale,
       steps,
@@ -195,7 +237,7 @@ export async function createDesign(req, res) {
     const { masterUrl, previewUrl, thumbUrl, publicId } =
       await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() });
 
-    // 4) respond (we keep dataUrl for compatibility; frontend will prefer previewUrl)
+    // 4) respond
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
     res.json({
       imageDataUrl,
@@ -204,7 +246,7 @@ export async function createDesign(req, res) {
       thumbUrl,
       publicId,
       meta: {
-        mode: initBuf ? 'i2i' : 't2i',
+        mode: init?.buffer ? 'i2i' : 't2i',
         sourceWidth: width,
         sourceHeight: height,
         targetLongEdge: TARGET_LONG_EDGE,
@@ -212,15 +254,22 @@ export async function createDesign(req, res) {
         uploadedToCloudinary: !!masterUrl,
         cfgScale: Number.isFinite(cfgScale) ? Math.max(1, Math.min(20, Math.round(cfgScale))) : undefined,
         steps: Number.isFinite(steps) ? Math.max(10, Math.min(50, Math.round(steps))) : undefined,
-        aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
-        imageStrength: initBuf ? Math.max(0, Math.min(1, Number(imageStrength))) : undefined,
+        aspectRatio: init?.buffer ? undefined : (aspectRatio || '1:1'),
+        imageStrength: init?.buffer ? Math.max(0, Math.min(1, Number(imageStrength))) : undefined,
         negativePrompt: negativePrompt || undefined,
       },
     });
   } catch (err) {
-    const status = err.response?.status || 500;
-    const details = err.response?.data || err.message || 'Unknown error';
+    const status = err.status || err.response?.status || 500;
+    const details =
+      err.details ||
+      (err.response?.data && err.response.data.toString?.('utf8')) ||
+      err.message ||
+      'Unknown error';
     console.error('[createDesign][ERROR]', status, details);
-    res.status(500).json({ message: 'Failed to generate image.', error: details });
+    res.status(status >= 400 && status < 600 ? status : 500).json({
+      message: 'Failed to generate image.',
+      error: details,
+    });
   }
 }
