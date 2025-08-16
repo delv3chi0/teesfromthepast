@@ -7,10 +7,10 @@ const STABILITY_API_KEY =
   process.env.STABILITY_API_KEY || process.env.STABILITY_AI_API_KEY;
 const STABILITY_BASE = 'https://api.stability.ai';
 
-// Long-edge target for print-ready art (DTG safe: 4096–4800 typical)
+// Long-edge target for print-ready art
 const TARGET_LONG_EDGE = parseInt(process.env.GEN_TARGET_LONG_EDGE || '4096', 10);
 
-// ---------- Helpers ----------
+// ---------- helpers ----------
 function dataUrlToBuffer(dataUrl) {
   if (!dataUrl) return null;
   const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
@@ -31,17 +31,17 @@ function decideScale(longEdge) {
   return 1;
 }
 
-// ---------- Stability: Ultra generate (T2I or I2I) ----------
+// ---------- Stability: Ultra generate (T2I / I2I) ----------
 async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf = null, imageStrength }) {
   if (!STABILITY_API_KEY) {
-    const err = new Error('STABILITY_API_KEY is not set');
+    const err = new Error('STABILITY_API_KEY is not set on the server');
     err.status = 500; throw err;
   }
 
   const form = new FormData();
 
   if (initImageBuf) {
-    // I2I: do NOT send width/height/aspect; output matches init image
+    // I2I: do NOT send width/height/aspect; output = init size
     form.append('image', initImageBuf, { filename: 'init.png', contentType: 'image/png' });
     form.append('prompt', prompt);
     form.append('output_format', 'png');
@@ -68,7 +68,7 @@ async function stableGenerateUltra({ prompt, aspectRatio = '1:1', initImageBuf =
   return Buffer.from(data);
 }
 
-// ---------- Stability: v2beta upscale ×2 ----------
+// ---------- Stability: Upscale ×2 (v2beta) ----------
 async function stabilityUpscale2x(pngBuffer) {
   const form = new FormData();
   form.append('image', pngBuffer, { filename: 'in.png', contentType: 'image/png' });
@@ -106,7 +106,6 @@ if (useCloudinary) {
 
 async function uploadPngToCloudinary(buf, { userId }) {
   if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
-
   const uploadResult = await new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -133,18 +132,16 @@ async function uploadPngToCloudinary(buf, { userId }) {
 
 // ---------- PUBLIC HANDLER ----------
 export async function createDesign(req, res) {
+  const { prompt, initImageBase64, aspectRatio, imageStrength } = req.body || {};
   try {
-    const { prompt, initImageBase64, aspectRatio, imageStrength } = req.body || {};
-    if (!prompt && !initImageBase64) {
+    const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
+    if (!prompt && !initBuf) {
       return res.status(400).json({ message: 'Either a prompt or an init image is required.' });
     }
 
-    const initBuf = initImageBase64 ? dataUrlToBuffer(initImageBase64) : null;
-    if (initImageBase64 && !initBuf) {
-      return res.status(400).json({ message: 'initImageBase64 is not a valid base64 data URL.' });
-    }
+    console.log('[Generate] mode=%s, hasKey=%s', initBuf ? 'i2i' : 't2i', !!STABILITY_API_KEY);
 
-    // 1) Generate base
+    // 1) generate
     const basePng = await stableGenerateUltra({
       prompt,
       aspectRatio: initBuf ? undefined : (aspectRatio || '1:1'),
@@ -152,7 +149,7 @@ export async function createDesign(req, res) {
       imageStrength,
     });
 
-    // 2) Upscale to target
+    // 2) upscale to target long edge
     const { width, height } = getPngDims(basePng);
     const longEdge = Math.max(width, height);
     const scale = decideScale(longEdge);
@@ -165,13 +162,12 @@ export async function createDesign(req, res) {
       master = await stabilityUpscale2x(p1);
     }
 
-    // 3) Upload (optional)
+    // 3) upload (optional)
     const { masterUrl, previewUrl, thumbUrl, publicId } =
       await uploadPngToCloudinary(master, { userId: req.user?._id?.toString() });
 
-    // 4) Return preview + URLs
+    // 4) respond
     const imageDataUrl = bufferToDataUrl(master, 'image/png');
-
     res.json({
       imageDataUrl,
       masterUrl,

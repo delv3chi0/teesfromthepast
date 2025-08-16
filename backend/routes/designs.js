@@ -8,7 +8,10 @@ import 'dotenv/config';
 
 const router = express.Router();
 
-// ---------- Save a design (from Generate) ----------
+// Generate (T2I / I2I)
+router.post('/create', protect, createDesign);
+
+// Save a design (manual save from UI)
 router.post('/', protect, async (req, res) => {
   console.log('[Save Design] body:', Object.keys(req.body));
   const { prompt, imageDataUrl, masterUrl, previewUrl, thumbUrl, publicId } = req.body;
@@ -35,10 +38,7 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// ---------- Generate (T2I / I2I) ----------
-router.post('/create', protect, createDesign);
-
-// ---------- List (paged) ----------
+// List (paged)
 router.get('/', protect, async (req, res) => {
   try {
     const page  = Math.max(1, parseInt(req.query.page || '1', 10));
@@ -62,7 +62,7 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
-// ---------- Delete (+ Cloudinary best-effort) ----------
+// Delete (+ Cloudinary best-effort)
 let cloudinary = null;
 const useCloudinary =
   !!process.env.CLOUDINARY_CLOUD_NAME &&
