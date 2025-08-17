@@ -1,36 +1,59 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-const baseURL =
-  import.meta.env.VITE_API_BASE ||
-// prod API
-  "https://teesfromthepast.onrender.com/api";
-
+/**
+ * Axios instance used throughout the app.
+ * - baseURL '' lets you pass absolute paths like '/api/...'
+ * - withCredentials true for cookie reads (if any)
+ */
 export const client = axios.create({
-  baseURL,
-  withCredentials: true, // allow cookie on same origin / CORS "credentials: true"
-  timeout: 30000,
+  baseURL: "",
+  withCredentials: true,
+  // You can add a short timeout if you like:
+  // timeout: 30000,
 });
 
-// --- helpers expected by AuthProvider ---
+/**
+ * Set or clear the Authorization header for both axios and our client.
+ * Your AuthProvider imports these.
+ */
 export const setAuthHeader = (token) => {
-  if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
+  if (token) {
+    const v = `Bearer ${token}`;
+    axios.defaults.headers.common.Authorization = v;
+    client.defaults.headers.common.Authorization = v;
+  } else {
+    delete axios.defaults.headers.common.Authorization;
+    delete client.defaults.headers.common.Authorization;
+  }
 };
 
 export const clearAuthHeader = () => {
+  delete axios.defaults.headers.common.Authorization;
   delete client.defaults.headers.common.Authorization;
 };
 
-// frontend/src/api/client.js (pseudo)
-const { data } = await axios.get('/api/csrf', { withCredentials: true });
-axios.defaults.headers.common['X-CSRF-Token'] = data?.csrfToken || '';
+// --- Optional: best-effort CSRF token priming (no top-level await) ---
+// Our backend currently *skips* CSRF checks for JWT APIs, so this is not required,
+// but keeping it here future-proofs us if we later enforce CSRF on some routes.
+(async () => {
+  try {
+    const { data } = await axios.get("/api/csrf", { withCredentials: true });
+    const token = data?.csrfToken;
+    if (token) {
+      axios.defaults.headers.common["X-CSRF-Token"] = token;
+      client.defaults.headers.common["X-CSRF-Token"] = token;
+    }
+  } catch {
+    // Silently ignore; not required for today’s JWT auth flow
+  }
+})();
 
-// Optional: simple response error logging
+// Optional: Response interceptor to surface common auth errors consistently
 client.interceptors.response.use(
   (res) => res,
   (err) => {
-    // eslint-disable-next-line no-console
-    console.warn("[API Error]", err?.response?.status, err?.response?.data);
+    // You can customize this behavior if you want to auto-logout on 401, etc.
     return Promise.reject(err);
   }
 );
