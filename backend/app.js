@@ -11,13 +11,13 @@ import xss from "xss-clean";
 
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
-import designRoutes from "./routes/designRoutes.js";
-import myDesignRoutes from "./routes/myDesignRoutes.js";
+import designRoutes from "./routes/design.js";
+import myDesignRoutes from "./routes/design.js";
 import adminRouter from "./routes/adminRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 // IMPORTANT: this route must export a Router that uses express.raw on the webhook path
-import stripeWebhookRoutes from "./routes/stripeWebhookRoutes.js";
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";
 
 import { protect } from "./middleware/authMiddleware.js";
 
