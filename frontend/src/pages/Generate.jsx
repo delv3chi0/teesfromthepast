@@ -2,29 +2,46 @@
 import {
   Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon,
   Alert, AlertIcon, HStack, Slider, SliderTrack, SliderFilledTrack, SliderThumb,
-  useBoolean, Tooltip, Badge, Select
+  useBoolean, Tooltip, Badge, Select, Collapse, Kbd
 } from "@chakra-ui/react";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
-import { FaMagic, FaSave, FaPowerOff, FaPlay, FaFastForward, FaBackward, FaEject } from 'react-icons/fa';
+import {
+  FaMagic, FaSave, FaPowerOff, FaPlay, FaFastForward, FaBackward, FaEject,
+  FaSlidersH
+} from 'react-icons/fa';
 
 const ART_STYLES = ["Classic Art", "Stencil Art", "Embroidery Style"];
 const DECADES = ["1960s", "1970s", "1980s", "1990s"];
 const ARS = ["1:1","3:2","2:3","16:9","9:16"]; // T2I only
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 
+/**
+ * UX: "Resemblance to Photo" (0..100%)
+ * Model: "strength" (0..1) — higher = change more, lower = preserve more
+ * We map resemblance -> strength with a friendly bounded range.
+ * - resemblance 100%  => strength ~ 0.15 (keep most of the photo)
+ * - resemblance 0%    => strength ~ 0.85 (follow prompt, change a lot)
+ */
+function mapResemblanceToStrength(resemblance01) {
+  const MIN = 0.15, MAX = 0.85; // sensible range for Stability I2I Ultra
+  // resemblance01 1 -> MIN, 0 -> MAX
+  return clamp01(MIN + (1 - resemblance01) * (MAX - MIN));
+}
+
 export default function Generate() {
   const [powerOn, setPowerOn] = useBoolean(true);
   const [styleIx, setStyleIx] = useState(0);
   const [decadeIx, setDecadeIx] = useState(2);
 
-  // NEW: advanced controls
+  // Advanced controls
   const [aspectRatio, setAspectRatio] = useState("1:1"); // T2I only
   const [cfgScale, setCfgScale] = useState(7);           // 1..20
   const [steps, setSteps] = useState(30);                // 10..50
   const [negativePrompt, setNegativePrompt] = useState("");
+  const [showAdvanced, setShowAdvanced] = useBoolean(false);
 
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,7 +52,8 @@ export default function Generate() {
   // VCR / image-to-image
   const [initFile, setInitFile] = useState(null);
   const [initPreview, setInitPreview] = useState("");
-  const [imageInfluence, setImageInfluence] = useState(0.35); // 0..1
+  // NEW: Resemblance (user-facing). 0..1 → show as 0..100% in UI
+  const [resemblance, setResemblance] = useState(0.7); // start preserving most of the photo
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -104,7 +122,7 @@ export default function Generate() {
       // I2I attachments
       if (initPreview) {
         payload.initImageBase64 = initPreview;
-        payload.imageStrength = clamp01(imageInfluence);
+        payload.imageStrength = mapResemblanceToStrength(clamp01(resemblance));
       }
 
       const resp = await client.post('/designs/create', payload);
@@ -127,7 +145,7 @@ export default function Generate() {
           cfgScale,
           steps,
           aspectRatio: initPreview ? undefined : aspectRatio,
-          imageStrength: initPreview ? clamp01(imageInfluence) : undefined,
+          imageStrength: initPreview ? mapResemblanceToStrength(clamp01(resemblance)) : undefined,
           ...meta
         }
       };
@@ -157,7 +175,7 @@ export default function Generate() {
           cfgScale,
           steps,
           aspectRatio: initPreview ? undefined : aspectRatio,
-          imageStrength: initPreview ? clamp01(imageInfluence) : undefined
+          imageStrength: initPreview ? mapResemblanceToStrength(clamp01(resemblance)) : undefined
         }
       });
       toast({ title: 'Design Saved!', description: "Check “My Designs”.", status: 'success', isClosable: true });
@@ -290,14 +308,37 @@ export default function Generate() {
                 </Text>
               </Box>
 
-              {/* Influence */}
-              <HStack mt={1} spacing={3}>
-                <Text fontSize="xs" color="gray.300">Image Influence</Text>
-                <Slider value={imageInfluence} min={0} max={1} step={0.01} onChange={setImageInfluence}>
-                  <SliderTrack><SliderFilledTrack/></SliderTrack>
-                  <SliderThumb />
-                </Slider>
-                <Text fontSize="xs" color="gray.300">{Math.round(imageInfluence * 100)}%</Text>
+              {/* Resemblance (I2I only) */}
+              {initPreview && (
+                <HStack mt={1} spacing={3} align="center">
+                  <Tooltip
+                    label="How much the final image should resemble your photo. Left: exact photo. Right: follow the prompt."
+                    hasArrow
+                  >
+                    <Text fontSize="xs" color="gray.300">Resemblance</Text>
+                  </Tooltip>
+                  <Slider
+                    value={resemblance}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onChange={setResemblance}
+                    aria-label="Resemblance to source photo"
+                  >
+                    <SliderTrack><SliderFilledTrack/></SliderTrack>
+                    <SliderThumb />
+                  </Slider>
+                  <Text fontSize="xs" color="gray.300">{Math.round(resemblance * 100)}%</Text>
+                </HStack>
+              )}
+              {!initPreview && (
+                <Text mt={1} fontSize="xs" color="gray.400">
+                  Upload a photo to enable <em>Resemblance</em>.
+                </Text>
+              )}
+              <HStack justify="space-between" mt={1}>
+                <Text fontSize="xs" color="gray.400">← exact photo</Text>
+                <Text fontSize="xs" color="gray.400">follow prompt →</Text>
               </HStack>
             </Box>
 
@@ -345,7 +386,7 @@ export default function Generate() {
                   <Dial valueIx={decadeIx} setValueIx={setDecadeIx} labels={DECADES}/></VStack>
               </HStack>
 
-              {/* NEW: Aspect ratio picker (T2I only) */}
+              {/* Aspect ratio (T2I only) */}
               {!initPreview && (
                 <HStack spacing={2}>
                   <Text fontSize="xs" color="yellow.300">Aspect</Text>
@@ -363,46 +404,110 @@ export default function Generate() {
           </Box>
         </HStack>
 
-        {/* Prompt + Advanced */}
-        <Box mx="16px" mb="16px" bg="rgba(0,0,0,.35)" border="1px solid rgba(0,0,0,.6)" borderRadius="8px" p={3}>
+        {/* Prompt */}
+        <Box mx="16px" mb="8px" bg="rgba(0,0,0,.35)" border="1px solid rgba(0,0,0,.6)" borderRadius="8px" p={3}>
           <Text fontSize="sm" color="yellow.200" mb={2}>Describe your image idea</Text>
           <Textarea
-            placeholder="e.g. Make this cat a lion"
+            placeholder="e.g. Turn this cat into a regal lion with a majestic mane"
             value={userPrompt}
             onChange={(e) => setUserPrompt(e.target.value)}
             bg="rgba(0,0,0,.5)" color="white"
             _placeholder={{ color: 'whiteAlpha.700' }}
           />
+        </Box>
 
-          {/* NEW: Negative prompt */}
-          <Text fontSize="sm" color="yellow.200" mt={4} mb={2}>Things to avoid</Text>
-          <Textarea
-            placeholder="e.g. text, watermarks, extra limbs, artifacts"
-            value={negativePrompt}
-            onChange={(e) => setNegativePrompt(e.target.value)}
-            bg="rgba(0,0,0,.5)" color="white"
-            _placeholder={{ color: 'whiteAlpha.700' }}
-          />
+        {/* Flip-down Advanced Panel Trigger (retro service panel) */}
+        <Box mx="16px" mb="16px" position="relative">
+          <Box
+            as="button"
+            onClick={setShowAdvanced.toggle}
+            w="100%"
+            borderRadius="8px"
+            bgGradient="linear(to-b, #1a1f29, #0f141c)"
+            border="1px solid #2b3442"
+            boxShadow="inset 0 0 30px rgba(0,0,0,.6)"
+            py={2}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            position="relative"
+            _hover={{ filter: 'brightness(1.05)' }}
+          >
+            {/* decorative knobs */}
+            <Box
+              position="absolute" left="10px" top="50%" transform="translateY(-50%)"
+              w="26px" h="26px" borderRadius="50%"
+              bgGradient="linear(to-b, #2c3748, #1d2633)" border="2px solid #0d1118"
+              boxShadow="inset 0 3px 8px rgba(255,255,255,.05), inset 0 -4px 8px rgba(0,0,0,.6)"
+            />
+            <Box
+              position="absolute" right="10px" top="50%" transform="translateY(-50%)"
+              w="26px" h="26px" borderRadius="50%"
+              bgGradient="linear(to-b, #2c3748, #1d2633)" border="2px solid #0d1118"
+              boxShadow="inset 0 3px 8px rgba(255,255,255,.05), inset 0 -4px 8px rgba(0,0,0,.6)"
+            />
+            <HStack spacing={2} color="yellow.200">
+              <Icon as={FaSlidersH} />
+              <Text fontWeight="semibold">
+                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
+              </Text>
+            </HStack>
+          </Box>
 
-          {/* NEW: CFG & Steps */}
-          <HStack mt={4} spacing={6} align="center" flexWrap="wrap">
-            <HStack minW="280px" flex="1">
-              <Text fontSize="sm" color="whiteAlpha.800" w="90px">CFG Scale</Text>
-              <Slider value={cfgScale} min={1} max={20} step={1} onChange={setCfgScale}>
-                <SliderTrack><SliderFilledTrack/></SliderTrack>
-                <SliderThumb />
-              </Slider>
-              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{cfgScale}</Text>
-            </HStack>
-            <HStack minW="280px" flex="1">
-              <Text fontSize="sm" color="whiteAlpha.800" w="90px">Steps</Text>
-              <Slider value={steps} min={10} max={50} step={1} onChange={setSteps}>
-                <SliderTrack><SliderFilledTrack/></SliderTrack>
-                <SliderThumb />
-              </Slider>
-              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{steps}</Text>
-            </HStack>
-          </HStack>
+          {/* Flip-down content */}
+          <Collapse in={showAdvanced} animateOpacity>
+            <Box
+              mt={2} p={4}
+              bg="rgba(0,0,0,.35)" border="1px solid rgba(0,0,0,.6)" borderRadius="8px"
+            >
+              {/* Negative prompt */}
+              <Text fontSize="sm" color="yellow.200" mb={2}>Things to avoid</Text>
+              <Textarea
+                placeholder="e.g. cartoon, text, watermarks, extra limbs"
+                value={negativePrompt}
+                onChange={(e) => setNegativePrompt(e.target.value)}
+                bg="rgba(0,0,0,.5)" color="white"
+                _placeholder={{ color: 'whiteAlpha.700' }}
+              />
+
+              {/* CFG & Steps */}
+              <HStack mt={4} spacing={6} align="center" flexWrap="wrap">
+                <HStack minW="280px" flex="1">
+                  <Tooltip
+                    label="Prompt strictness: higher = follows your words more exactly (but can look overcooked). Try 7–9."
+                    hasArrow
+                  >
+                    <Text fontSize="sm" color="whiteAlpha.800" w="130px">CFG (Prompt Strictness)</Text>
+                  </Tooltip>
+                  <Slider value={cfgScale} min={1} max={20} step={1} onChange={setCfgScale}>
+                    <SliderTrack><SliderFilledTrack/></SliderTrack>
+                    <SliderThumb />
+                  </Slider>
+                  <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{cfgScale}</Text>
+                </HStack>
+                <HStack minW="280px" flex="1">
+                  <Tooltip
+                    label="Detail level: 25–40 is usually sharp and clean. Higher has diminishing returns."
+                    hasArrow
+                  >
+                    <Text fontSize="sm" color="whiteAlpha.800" w="130px">Steps (Detail)</Text>
+                  </Tooltip>
+                  <Slider value={steps} min={10} max={50} step={1} onChange={setSteps}>
+                    <SliderTrack><SliderFilledTrack/></SliderTrack>
+                    <SliderThumb />
+                  </Slider>
+                  <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{steps}</Text>
+                </HStack>
+              </HStack>
+
+              {/* Aspect hint */}
+              {!initPreview && (
+                <Text mt={3} fontSize="xs" color="whiteAlpha.700">
+                  <Kbd>Aspect</Kbd> is only used for text-to-image. For image-to-image we match your photo and upscale.
+                </Text>
+              )}
+            </Box>
+          </Collapse>
         </Box>
       </Box>
 
