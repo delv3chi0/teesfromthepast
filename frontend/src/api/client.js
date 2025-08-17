@@ -1,89 +1,83 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-/**
- * In production, set VITE_API_BASE_URL to your backend origin (no trailing slash), e.g.:
- *   VITE_API_BASE_URL=https://teesfromthepast.onrender.com
- * We append '/api' here, so callers can use relative paths like '/auth/login'.
- */
-const ORIGIN =
-  import.meta.env.VITE_API_BASE_URL ||
-  "https://teesfromthepast.onrender.com"; // sensible prod default
+export const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  "https://teesfromthepast.onrender.com";
 
 export const client = axios.create({
-  baseURL: `${ORIGIN.replace(/\/$/, "")}/api`,
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
+  baseURL: `${API_BASE}/api`,
+  // We do NOT send cookies for auth (you use Bearer JWT),
+  // but we need credentials when fetching /api/csrf to receive the cookie.
+  withCredentials: false,
 });
 
-// ---------- CSRF support ----------
-let csrfReady = false;
-let csrfInFlight = null;
-
-async function primeCsrf() {
-  if (csrfReady) return true;
-  if (csrfInFlight) { await csrfInFlight; return csrfReady; }
-  csrfInFlight = (async () => {
-    try {
-      const { data } = await client.get("/csrf");
-      const token = data?.csrfToken || "";
-      if (token) {
-        client.defaults.headers.common["X-CSRF-Token"] = token;
-        csrfReady = true;
-      } else {
-        csrfReady = false;
-      }
-    } catch {
-      csrfReady = false;
-    } finally {
-      csrfInFlight = null;
-    }
-  })();
-  await csrfInFlight;
-  return csrfReady;
-}
-
-function isUnsafe(m) {
-  const mm = String(m || "GET").toUpperCase();
-  return mm === "POST" || mm === "PUT" || mm === "PATCH" || mm === "DELETE";
-}
-
-client.interceptors.request.use(
-  async (config) => {
-    if (isUnsafe(config.method) && !csrfReady) {
-      await primeCsrf();
-    }
-    return config;
-  },
-  (e) => Promise.reject(e)
-);
-
-client.interceptors.response.use(
-  (r) => r,
-  async (error) => {
-    const original = error?.config;
-    const status = error?.response?.status;
-    const msg = error?.response?.data?.message;
-    const isCsrf = status === 403 && /csrf/i.test(String(msg || ""));
-    if (isCsrf && original && !original._retry) {
-      original._retry = true;
-      csrfReady = false;
-      await primeCsrf();
-      return client(original);
-    }
-    return Promise.reject(error);
-  }
-);
-
-// Optional helpers for Bearer auth after login
+// Attach/detach Bearer from outside (AuthProvider uses these):
 export const setAuthHeader = (token) => {
   if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
-  else delete client.defaults.headers.common.Authorization;
 };
 export const clearAuthHeader = () => {
   delete client.defaults.headers.common.Authorization;
 };
 
+// ---- CSRF bootstrap ----
+let csrfToken = "";
+let inflight; // promise to avoid double /api/csrf fetches
+
+async function fetchCsrf() {
+  // Use a bare axios call (NOT the client) so baseURL and headers don't interfere.
+  const { data } = await axios.get(`${API_BASE}/api/csrf`, {
+    withCredentials: true, // allow cross-site cookie set (SameSite=None)
+  });
+  csrfToken = data?.csrfToken || "";
+  return csrfToken;
+}
+
+// Add token to unsafe methods
+client.interceptors.request.use(async (config) => {
+  const method = (config.method || "get").toLowerCase();
+  const unsafe = method === "post" || method === "put" || method === "patch" || method === "delete";
+
+  if (unsafe) {
+    if (!csrfToken) {
+      inflight = inflight || fetchCsrf();
+      await inflight.catch(() => {}); // swallow; server will 403 if needed
+      inflight = undefined;
+    }
+    if (csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
+  }
+  return config;
+});
+
+// On 403 invalid CSRF, refresh once & retry
+client.interceptors.response.use(
+  (r) => r,
+  async (error) => {
+    const status = error?.response?.status;
+    const reason = error?.response?.data?.message || "";
+    const cfg = error?.config || {};
+    if (
+      status === 403 &&
+      /csrf/i.test(reason) &&
+      !cfg.__csrfRetried
+    ) {
+      try {
+        await fetchCsrf();
+        cfg.__csrfRetried = true;
+        cfg.headers = cfg.headers || {};
+        if (csrfToken) cfg.headers["X-CSRF-Token"] = csrfToken;
+        return client.request(cfg);
+      } catch (_) {
+        // fall through to reject
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Call this once at app startup (optional pre-warm)
 export async function initApi() {
-  await primeCsrf(); // optional eager prime
+  try { await fetchCsrf(); } catch { /* no-op, interceptor will refresh on demand */ }
 }

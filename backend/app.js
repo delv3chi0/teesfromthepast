@@ -15,22 +15,16 @@ import designRoutes from "./routes/designs.js";               // used for /api/d
 import adminRouter from "./routes/admin.js";                  // your existing “admin bundle”
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // route must use express.raw on /webhook
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside
 
 import { protect } from "./middleware/authMiddleware.js";
-import { csrfSelective, csrfTokenRoute } from "./middleware/csrfSelective.js";
+import { csrfStrict, csrfTokenRoute } from "./middleware/csrfStrict.js";
 
 const app = express();
-
-// If behind a proxy (Render), trust it so secure cookies & IPs behave
 app.set("trust proxy", 1);
 
 // ---- Security / Hardening ----
-app.use(
-  helmet({
-    crossOriginResourcePolicy: false, // allow images from other origins if needed
-  })
-);
+app.use(helmet());
 
 // ---- CORS ----
 const allowedOrigins = [
@@ -46,12 +40,6 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-CSRF-Token", // important for CSRF header from SPA
-  ],
-  exposedHeaders: [],
 };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
@@ -59,7 +47,6 @@ app.options("*", cors(corsOptions));
 app.use(cookieParser());
 
 // ---- Stripe webhook FIRST (needs raw body inside the route file) ----
-// routes/stripeWebhook.js should do: router.post('/webhook', express.raw({ type: 'application/json' }), handler)
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // ---- JSON body parsers AFTER webhook ----
@@ -80,8 +67,8 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// ---- CSRF (selective, double-submit cookie) ----
-app.use(csrfSelective);
+// ---- CSRF (strict; enforced on unsafe methods, with exemptions) ----
+app.use(csrfStrict);
 
 // ---- Debug log (optional) ----
 app.use((req, _res, next) => {
@@ -94,15 +81,15 @@ app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
 // ---- API Routers ----
-app.get("/api/csrf", csrfTokenRoute);      // token fetch endpoint
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
-app.use("/api/mydesigns", designRoutes);   // reuse same router
+app.use("/api/mydesigns", designRoutes);
+app.get("/api/csrf", csrfTokenRoute);
 
 // ---- Admin bundles ----
-app.use("/api/admin", protect, adminRouter);        // users/orders/designs, etc.
-app.use("/api/admin/sessions", adminSessionRoutes); // devices tab
-app.use("/api/admin/audit", adminAuditRoutes);      // audit logs tab
+app.use("/api/admin", protect, adminRouter);
+app.use("/api/admin/sessions", adminSessionRoutes);
+app.use("/api/admin/audit", adminAuditRoutes);
 
 // ---- Global error handler ----
 app.use((err, req, res, _next) => {
