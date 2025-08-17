@@ -11,14 +11,14 @@ import xss from "xss-clean";
 
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
-import designRoutes from "./routes/designs.js";            // reuse for /api/designs and /api/mydesigns
-import adminRouter from "./routes/admin.js";
+import designRoutes from "./routes/designs.js";               // used for /api/designs and /api/mydesigns
+import adminRouter from "./routes/admin.js";                  // your existing “admin bundle”
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js"; // must export router using express.raw on /webhook
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // route must use express.raw on /webhook
 
 import { protect } from "./middleware/authMiddleware.js";
-import { csrfSelective, csrfTokenRoute } from './middleware/csrfSelective.js';
+import csrfSelective, { csrfTokenRoute } from "./middleware/csrfSelective.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -58,7 +58,6 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
-app.use(csrfSelective);
 
 // ---- Rate limit on API ----
 const limiter = rateLimit({
@@ -68,6 +67,9 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api", limiter);
+
+// ---- CSRF (selective; currently non-blocking for your JWT API) ----
+app.use(csrfSelective);
 
 // ---- Debug log (optional) ----
 app.use((req, _res, next) => {
@@ -82,21 +84,17 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 // ---- API Routers ----
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
-app.use("/api/mydesigns", designRoutes);   // <-- fix: reuse same router, no undefined var
-app.get('/api/csrf', csrfTokenRoute);
+app.use("/api/mydesigns", designRoutes);   // reuse same router
+app.get("/api/csrf", csrfTokenRoute);      // (optional) endpoint to fetch a CSRF token if needed later
 
-// Admin bundles
+// ---- Admin bundles ----
 app.use("/api/admin", protect, adminRouter);        // users/orders/designs, etc.
 app.use("/api/admin/sessions", adminSessionRoutes); // devices tab
 app.use("/api/admin/audit", adminAuditRoutes);      // audit logs tab
 
-// ---- Global error handler (keep your existing implementation if different) ----
+// ---- Global error handler ----
 app.use((err, req, res, _next) => {
-  console.error(
-    "[Backend Error]",
-    err.message,
-    err.stack ? `\nStack: ${err.stack}` : ""
-  );
+  console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
   const status = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(status).json({
     message: err.message,

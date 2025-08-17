@@ -1,33 +1,50 @@
 // backend/middleware/csrfSelective.js
-import csrf from 'csurf';
+import csurf from "csurf";
 
-// Double-submit cookie style; cookie token is readable by client to set header.
-const csrfProtection = csrf({
+/**
+ * Best-practice CSRF posture for your app:
+ * - Your API is JWT/Bearer-based → CSRF protection is not required for those endpoints.
+ * - We keep a selective middleware that currently SKIPS everything.
+ *   When/if you add cookie-backed HTML forms, flip the default to enforce.
+ */
+
+const csrfProtection = csurf({
   cookie: {
-    httpOnly: false,               // allow frontend to read and send token
-    sameSite: 'none',
-    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    secure: process.env.NODE_ENV === "production",
   },
 });
 
-// Skip CSRF for routes where you don't need it (Bearer JWT APIs, auth)
-const SKIP = [
-  /^\/api\/auth\/login$/,
-  /^\/api\/auth\/register$/,
-  /^\/api\/auth\/logout$/,
-  /^\/api\/stripe\/webhook/,  // Stripe needs raw body + no CSRF
-];
+function shouldSkip(req) {
+  // Skip idempotent methods
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return true;
 
-export function csrfSelective(req, res, next) {
-  if (SKIP.some(rx => rx.test(req.path))) return next();
+  const p = req.path || req.originalUrl || "";
+
+  // Skip JWT auth API (Bearer tokens → not CSRF-sensitive)
+  if (p.startsWith("/api/auth")) return true;
+
+  // Skip third-party webhooks
+  if (p.startsWith("/api/stripe/webhook")) return true;
+
+  // Current app: pure API + JWT → skip everything.
+  // When you add cookie/form endpoints, change this to: `return false;`
+  // and keep only specific exceptions above.
+  return true;
+}
+
+export default function csrfSelective(req, res, next) {
+  if (shouldSkip(req)) return next();
   return csrfProtection(req, res, next);
 }
 
-// Small helper to expose a token if you ever need it
+// Optional helper to fetch a CSRF token (useful if you later enforce CSRF on some endpoints)
 export function csrfTokenRoute(req, res) {
-  // req.csrfToken() is available only when csrf middleware is in the chain
   try {
-    res.json({ csrfToken: req.csrfToken?.() });
+    // If csrfProtection isn't run, req.csrfToken may not exist; guard it.
+    const token = req.csrfToken ? req.csrfToken() : null;
+    res.json({ csrfToken: token });
   } catch {
     res.json({ csrfToken: null });
   }
