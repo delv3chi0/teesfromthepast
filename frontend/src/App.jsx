@@ -41,6 +41,8 @@ import MyOrdersPage from './pages/MyOrdersPage';
 import PrivateRoute from './components/PrivateRoute';
 import AdminRoute from './components/AdminRoute';
 import AdminPage from './pages/AdminPage';
+import AdminDevices from './pages/AdminDevices';
+import AdminAuditLogs from './pages/AdminAuditLogs';
 
 import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
 
@@ -183,6 +185,8 @@ const AppContent = () => {
         <Route path="/payment-success" element={<PrivateRoute><MainLayout><PaymentSuccessPage /></MainLayout></PrivateRoute>} />
         <Route path="/my-orders" element={<PrivateRoute><MainLayout><MyOrdersPage /></MainLayout></PrivateRoute>} />
         <Route path="/admin" element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>} />
+	<Route path="/admin/devices" element={<AdminDevices/>} />
+	<Route path="/admin/audit-logs" element={<AdminAuditLogs/>} />
 
         {/* Aliases */}
         <Route path="/studio" element={<Navigate to="/product-studio" replace />} />

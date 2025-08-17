@@ -1,3 +1,4 @@
+// frontend/src/pages/AdminPage.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -5,9 +6,13 @@ import {
   Button, useToast, Tag, Image, Select,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider, Tooltip, Grid, GridItem, Flex, SimpleGrid, Stat, StatLabel, StatNumber, HStack, Badge
+  Divider, Tooltip, Grid, GridItem, Flex, SimpleGrid, Stat, StatLabel, StatNumber, HStack, Badge, Code
 } from '@chakra-ui/react';
-import { FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash, FaWarehouse, FaTachometerAlt, FaDollarSign, FaUserPlus, FaBoxes, FaInfoCircle } from 'react-icons/fa';
+import {
+  FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash,
+  FaWarehouse, FaTachometerAlt, FaDollarSign, FaUserPlus, FaBoxes, FaInfoCircle,
+  FaSync, FaUserSlash
+} from 'react-icons/fa';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import InventoryPanel from '../components/admin/InventoryPanel.jsx';
@@ -126,6 +131,18 @@ const AdminPage = () => {
   const [designsError, setDesignsError] = useState('');
   const [selectedDesign, setSelectedDesign] = useState(null);
 
+  // NEW: sessions (devices)
+  const [sessions, setSessions] = useState([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [sessionsError, setSessionsError] = useState('');
+  const [sessionsPage] = useState(1);
+
+  // NEW: audit logs
+  const [audits, setAudits] = useState([]);
+  const [loadingAudits, setLoadingAudits] = useState(false);
+  const [auditsError, setAuditsError] = useState('');
+  const [auditFilters, setAuditFilters] = useState({ actor: '', action: '', targetType: '', targetId: '' });
+
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [designToDelete, setDesignToDelete] = useState(null);
   const [tabIndex, setTabIndex] = useState(0);
@@ -171,6 +188,32 @@ const AdminPage = () => {
         setLoadingDesigns(false);
       }
     }, [token, designs.length]),
+    // NEW: Devices
+    4: useCallback(async () => {
+      if (sessions.length > 0) return;
+      setLoadingSessions(true); setSessionsError('');
+      try {
+        const { data } = await client.get('/admin/sessions', { headers: { Authorization: `Bearer ${token}` }, params: { page: sessionsPage, limit: 100 }});
+        setSessions(data.items || []);
+      } catch (e) {
+        setSessionsError('Failed to fetch sessions');
+      } finally {
+        setLoadingSessions(false);
+      }
+    }, [token, sessions.length, sessionsPage]),
+    // NEW: Audit Logs
+    5: useCallback(async () => {
+      if (audits.length > 0) return;
+      setLoadingAudits(true); setAuditsError('');
+      try {
+        const { data } = await client.get('/admin/audit', { headers: { Authorization: `Bearer ${token}` }, params: { ...auditFilters, page: 1, limit: 100 }});
+        setAudits(data.items || []);
+      } catch (e) {
+        setAuditsError('Failed to fetch audit logs');
+      } finally {
+        setLoadingAudits(false);
+      }
+    }, [token, audits.length, auditFilters]),
   };
 
   const handleTabsChange = (index) => {
@@ -229,6 +272,29 @@ const AdminPage = () => {
       onCloseDeleteDesignModal();
     } catch(e) {
       toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
+    }
+  };
+
+  // --- Devices panel actions ---
+  const revokeSession = async (jti) => {
+    try {
+      await client.delete(`/admin/sessions/${jti}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: 'Session revoked', status: 'success' });
+      // refresh list
+      const { data } = await client.get('/admin/sessions', { headers: { Authorization: `Bearer ${token}` }, params: { page: sessionsPage, limit: 100 }});
+      setSessions(data.items || []);
+    } catch (e) {
+      toast({ title: 'Failed to revoke session', status: 'error' });
+    }
+  };
+  const revokeAllForUser = async (userId) => {
+    try {
+      await client.delete(`/admin/sessions/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: 'All sessions revoked for user', status: 'success' });
+      const { data } = await client.get('/admin/sessions', { headers: { Authorization: `Bearer ${token}` }, params: { page: sessionsPage, limit: 100 }});
+      setSessions(data.items || []);
+    } catch (e) {
+      toast({ title: 'Failed to revoke user sessions', status: 'error' });
     }
   };
 
@@ -396,6 +462,159 @@ const AdminPage = () => {
     </Box>
   );
 
+  // NEW: Devices panel
+  const DevicesPanel = () => (
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
+        <Heading size="md">Devices / Active Sessions</Heading>
+        <Button leftIcon={<FaSync/>}
+          size="sm"
+          onClick={async()=>{
+            setLoadingSessions(true);
+            try {
+              const { data } = await client.get('/admin/sessions', { headers: { Authorization: `Bearer ${token}` }, params: { page: sessionsPage, limit: 100 }});
+              setSessions(data.items || []);
+            } catch (e) {
+              toast({ title: 'Failed to refresh sessions', status: 'error' });
+            } finally { setLoadingSessions(false); }
+          }}
+          isLoading={loadingSessions}
+        >Refresh</Button>
+      </HStack>
+
+      {loadingSessions ? (
+        <VStack p={10}><Spinner/></VStack>
+      ) : sessionsError ? (
+        <Alert status="error"><AlertIcon/>{sessionsError}</Alert>
+      ) : (
+        <TableContainer w="100%">
+          <Table size="sm" variant="simple" w="100%">
+            <Thead>
+              <Tr>
+                <Th>User</Th>
+                <Th>JTI</Th>
+                <Th>IP</Th>
+                <Th>User Agent</Th>
+                <Th>Created</Th>
+                <Th>Expires</Th>
+                <Th>Status</Th>
+                <Th isNumeric>Actions</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {sessions.map((i)=>(
+                <Tr key={i.jti}>
+                  <Td>
+                    <Text fontWeight="bold">{i.user?.username || '(unknown)'}</Text>
+                    <Text fontSize="xs" color="gray.500">{i.user?.email}</Text>
+                    {i.user?._id && (
+                      <Tooltip label="Revoke ALL for this user">
+                        <ChakraIconButton
+                          ml={2}
+                          size="xs"
+                          icon={<FaUserSlash/>}
+                          aria-label="Revoke all"
+                          onClick={()=>revokeAllForUser(i.user?._id)}
+                        />
+                      </Tooltip>
+                    )}
+                  </Td>
+                  <Td><Text fontSize="xs" noOfLines={1} title={i.jti}>{i.jti}</Text></Td>
+                  <Td>{i.ip || '-'}</Td>
+                  <Td><Text maxW="360px" noOfLines={1} title={i.userAgent}>{i.userAgent || '-'}</Text></Td>
+                  <Td>{new Date(i.createdAt).toLocaleString()}</Td>
+                  <Td>{new Date(i.expiresAt).toLocaleString()}</Td>
+                  <Td>
+                    {i.revokedAt
+                      ? <Badge colorScheme="red">Revoked</Badge>
+                      : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)
+                    }
+                  </Td>
+                  <Td isNumeric>
+                    {!i.revokedAt && (
+                      <Tooltip label="Revoke this session">
+                        <ChakraIconButton size="sm" icon={<FaTrashAlt/>} aria-label="Revoke" onClick={()=>revokeSession(i.jti)} />
+                      </Tooltip>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  );
+
+  // NEW: Audit logs panel
+  const AuditLogsPanel = () => (
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
+        <Heading size="md">Admin Audit Logs</Heading>
+        <HStack>
+          <Input placeholder="Actor (User ID)" value={auditFilters.actor} onChange={e=>setAuditFilters(f=>({...f, actor:e.target.value}))} size="sm" w="220px"/>
+          <Input placeholder="Action (e.g. USER_DELETE)" value={auditFilters.action} onChange={e=>setAuditFilters(f=>({...f, action:e.target.value}))} size="sm" w="220px"/>
+          <Input placeholder="Target Type" value={auditFilters.targetType} onChange={e=>setAuditFilters(f=>({...f, targetType:e.target.value}))} size="sm" w="180px"/>
+          <Input placeholder="Target ID" value={auditFilters.targetId} onChange={e=>setAuditFilters(f=>({...f, targetId:e.target.value}))} size="sm" w="220px"/>
+          <Button leftIcon={<FaSync/>} size="sm" onClick={async()=>{
+            setLoadingAudits(true); setAuditsError('');
+            try {
+              const { data } = await client.get('/admin/audit', { headers: { Authorization: `Bearer ${token}` }, params: { ...auditFilters, page: 1, limit: 100 }});
+              setAudits(data.items || []);
+            } catch (e) {
+              setAuditsError('Failed to load audit logs');
+            } finally { setLoadingAudits(false); }
+          }} isLoading={loadingAudits}>Apply</Button>
+        </HStack>
+      </HStack>
+
+      {loadingAudits ? (
+        <VStack p={10}><Spinner/></VStack>
+      ) : auditsError ? (
+        <Alert status="error"><AlertIcon/>{auditsError}</Alert>
+      ) : (
+        <TableContainer w="100%">
+          <Table size="sm" variant="simple" w="100%">
+            <Thead>
+              <Tr>
+                <Th>When</Th>
+                <Th>Actor</Th>
+                <Th>Action</Th>
+                <Th>Target</Th>
+                <Th>IP</Th>
+                <Th>UA</Th>
+                <Th>Meta</Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {audits.map(i=>(
+                <Tr key={i._id}>
+                  <Td><Text fontSize="sm">{new Date(i.createdAt).toLocaleString()}</Text></Td>
+                  <Td>
+                    <Text fontWeight="bold">{i.actor?.username || '(unknown)'}</Text>
+                    <Text fontSize="xs" color="gray.500">{i.actor?.email}</Text>
+                  </Td>
+                  <Td><Code>{i.action}</Code></Td>
+                  <Td>
+                    <Text>{i.targetType || '-'}</Text>
+                    <Text fontSize="xs" color="gray.500">{i.targetId}</Text>
+                  </Td>
+                  <Td>{i.ip || '-'}</Td>
+                  <Td><Text maxW="300px" noOfLines={1} title={i.userAgent}>{i.userAgent || '-'}</Text></Td>
+                  <Td>
+                    <Text fontSize="xs" as="pre" whiteSpace="pre-wrap" maxW="380px">
+                      {JSON.stringify(i.meta || {}, null, 2)}
+                    </Text>
+                  </Td>
+                </Tr>
+              ))}
+            </Tbody>
+          </Table>
+        </TableContainer>
+      )}
+    </Box>
+  );
+
   return (
     <Box w="100%" pb={10}>
       <VStack spacing={6} align="stretch">
@@ -409,6 +628,9 @@ const AdminPage = () => {
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaBoxOpen} mr={2} /> Orders</Tab>
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaPalette} mr={2} /> Designs</Tab>
               <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
+              {/* NEW */}
+              <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaKey} mr={2} /> Devices</Tab>
+              <Tab _selected={{ color: 'white', bg: 'brand.primary' }}><Icon as={FaInfoCircle} mr={2} /> Audit Logs</Tab>
             </TabList>
             <TabPanels>
               <TabPanel px={0} py={2}><DashboardPanel token={token} onViewOrder={handleViewOrder} /></TabPanel>
@@ -416,6 +638,9 @@ const AdminPage = () => {
               <TabPanel px={0} py={2}>{loadingOrders ? <VStack p={10}><Spinner/></VStack> : ordersError ? <Alert status="error"><AlertIcon/>{ordersError}</Alert> : <OrdersPanel />}</TabPanel>
               <TabPanel px={0} py={2}>{loadingDesigns ? <VStack p={10}><Spinner/></VStack> : designsError ? <Alert status="error"><AlertIcon/>{designsError}</Alert> : <DesignsPanel />}</TabPanel>
               <TabPanel px={0} py={2}><InventoryPanel /></TabPanel>
+              {/* NEW */}
+              <TabPanel px={0} py={2}>{loadingSessions ? <VStack p={10}><Spinner/></VStack> : sessionsError ? <Alert status="error"><AlertIcon/>{sessionsError}</Alert> : <DevicesPanel />}</TabPanel>
+              <TabPanel px={0} py={2}>{loadingAudits ? <VStack p={10}><Spinner/></VStack> : auditsError ? <Alert status="error"><AlertIcon/>{auditsError}</Alert> : <AuditLogsPanel />}</TabPanel>
             </TabPanels>
           </Tabs>
         </Box>

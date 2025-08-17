@@ -10,8 +10,9 @@ import hpp from "hpp";
 import xss from "xss-clean";
 
 // Route imports ...
-import { protect } from "./middleware/authMiddleware.js"; // ⬅️ make sure this line exists
-// (rest of your imports unchanged)
+import { protect } from "./middleware/authMiddleware.js"; 
+import adminSessionRoutes from "./routes/adminSessionRoutes.js";
+import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -64,6 +65,10 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 // Routers (unchanged) ...
 // Admin (ensure protect import above exists)
 app.use('/admin', protect, adminRouter);
+
+// After your other admin mounts:
+app.use("/api/admin/sessions", adminSessionRoutes);
+app.use("/api/admin/audit", adminAuditRoutes);
 
 // Global error handler (unchanged)
 export default app;
