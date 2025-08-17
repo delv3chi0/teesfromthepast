@@ -12,12 +12,10 @@ import xss from "xss-clean";
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
 import designRoutes from "./routes/designs.js";
-import myDesignRoutes from "./routes/designs.js";
-import adminRouter from "./routes/adminRoutes.js";
+import adminRouter from "./routes/admin.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-// IMPORTANT: this route must export a Router that uses express.raw on the webhook path
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";
+import stripeWebhookRoutes from "./routes/stripeWebhook.js"; 
 
 import { protect } from "./middleware/authMiddleware.js";
 
@@ -82,6 +80,7 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", myDesignRoutes);
+app.use("/api/stripe", stripeWebhookRoutes);
 
 // Admin
 app.use("/api/admin", protect, adminRouter);           // core admin bundle (/users, /orders, /designs etc.)
