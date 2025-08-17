@@ -1,22 +1,24 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-/**
- * Axios instance used throughout the app.
- * - baseURL '' lets you pass absolute paths like '/api/...'
- * - withCredentials true for cookie reads (if any)
- */
+// 1) Resolve API base
+const envBase = (import.meta?.env?.VITE_API_BASE || "").trim().replace(/\/$/, "");
+const DEFAULT_PROD = "https://teesfromthepast.onrender.com/api";
+const DEFAULT_DEV  = "http://localhost:5000/api";
+
+const API_BASE =
+  envBase ||
+  (typeof window !== "undefined" && window.location.hostname.includes("localhost")
+    ? DEFAULT_DEV
+    : DEFAULT_PROD);
+
+// 2) Axios instance pointing to backend API (not the frontend origin)
 export const client = axios.create({
-  baseURL: "",
-  withCredentials: true,
-  // You can add a short timeout if you like:
-  // timeout: 30000,
+  baseURL: API_BASE,      // e.g. https://teesfromthepast.onrender.com/api
+  withCredentials: true,  // allow cookies if you ever use them
 });
 
-/**
- * Set or clear the Authorization header for both axios and our client.
- * Your AuthProvider imports these.
- */
+// 3) Auth header helpers (expected by AuthProvider)
 export const setAuthHeader = (token) => {
   if (token) {
     const v = `Bearer ${token}`;
@@ -27,33 +29,27 @@ export const setAuthHeader = (token) => {
     delete client.defaults.headers.common.Authorization;
   }
 };
-
 export const clearAuthHeader = () => {
   delete axios.defaults.headers.common.Authorization;
   delete client.defaults.headers.common.Authorization;
 };
 
-// --- Optional: best-effort CSRF token priming (no top-level await) ---
-// Our backend currently *skips* CSRF checks for JWT APIs, so this is not required,
-// but keeping it here future-proofs us if we later enforce CSRF on some routes.
+// 4) Optional: CSRF priming (no top-level await)
 (async () => {
   try {
-    const { data } = await axios.get("/api/csrf", { withCredentials: true });
+    const { data } = await client.get("/csrf"); // now hits API_BASE + /csrf
     const token = data?.csrfToken;
     if (token) {
       axios.defaults.headers.common["X-CSRF-Token"] = token;
       client.defaults.headers.common["X-CSRF-Token"] = token;
     }
   } catch {
-    // Silently ignore; not required for today’s JWT auth flow
+    // ignore; JWT APIs don't require it right now
   }
 })();
 
-// Optional: Response interceptor to surface common auth errors consistently
+// 5) Simple pass-through interceptor
 client.interceptors.response.use(
   (res) => res,
-  (err) => {
-    // You can customize this behavior if you want to auto-logout on 401, etc.
-    return Promise.reject(err);
-  }
+  (err) => Promise.reject(err)
 );
