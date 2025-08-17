@@ -58,7 +58,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await client.post("/auth/login", { email, password });
+      const res = await client.post("/api/auth/login", { email, password });
       const token = pickToken(res.data);
       if (!token) throw new Error("Login succeeded but no token was returned.");
       setSession(token);

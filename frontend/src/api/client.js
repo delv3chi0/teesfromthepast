@@ -1,36 +1,31 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-// --- Base URL ---
-// Prefer an env var at build time; fallback to same-origin
-const API_BASE =
+/**
+ * In production, set VITE_API_BASE_URL to your backend origin (no trailing slash), e.g.:
+ *   VITE_API_BASE_URL=https://teesfromthepast.onrender.com
+ * We append '/api' here, so callers can use relative paths like '/auth/login'.
+ */
+const ORIGIN =
   import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== "undefined" ? `${window.location.origin}` : "");
+  "https://teesfromthepast.onrender.com"; // sensible prod default
 
-// Create an axios instance pointed at your backend domain
 export const client = axios.create({
-  baseURL: API_BASE.replace(/\/$/, ""), // no trailing slash
-  withCredentials: true,                // send/receive cookies (CSRF, session, etc.)
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: `${ORIGIN.replace(/\/$/, "")}/api`,
+  withCredentials: true,
+  headers: { "Content-Type": "application/json" },
 });
 
-// Track whether we have a token set
+// ---------- CSRF support ----------
 let csrfReady = false;
 let csrfInFlight = null;
 
-// Fetch a fresh CSRF token and set the default header
 async function primeCsrf() {
   if (csrfReady) return true;
-  if (csrfInFlight) {
-    await csrfInFlight;
-    return csrfReady;
-  }
+  if (csrfInFlight) { await csrfInFlight; return csrfReady; }
   csrfInFlight = (async () => {
     try {
-      // IMPORTANT: hit the backend path (it’s mounted at /api/csrf on the backend)
-      const { data } = await client.get("/api/csrf");
+      const { data } = await client.get("/csrf");
       const token = data?.csrfToken || "";
       if (token) {
         client.defaults.headers.common["X-CSRF-Token"] = token;
@@ -48,13 +43,11 @@ async function primeCsrf() {
   return csrfReady;
 }
 
-// Helper to decide if a request is "unsafe"
-function isUnsafe(method) {
-  const m = (method || "GET").toUpperCase();
-  return m === "POST" || m === "PUT" || m === "PATCH" || m === "DELETE";
+function isUnsafe(m) {
+  const mm = String(m || "GET").toUpperCase();
+  return mm === "POST" || mm === "PUT" || mm === "PATCH" || mm === "DELETE";
 }
 
-// Request interceptor: for unsafe requests, ensure we have a token first
 client.interceptors.request.use(
   async (config) => {
     if (isUnsafe(config.method) && !csrfReady) {
@@ -62,44 +55,35 @@ client.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (e) => Promise.reject(e)
 );
 
-// Response interceptor: if CSRF fails once, re-prime and retry **once**
 client.interceptors.response.use(
-  (res) => res,
+  (r) => r,
   async (error) => {
     const original = error?.config;
     const status = error?.response?.status;
     const msg = error?.response?.data?.message;
-
-    const isCsrfError = status === 403 && /csrf/i.test(String(msg || ""));
-    const notRetriedYet = !original?._retry;
-
-    if (isCsrfError && notRetriedYet) {
+    const isCsrf = status === 403 && /csrf/i.test(String(msg || ""));
+    if (isCsrf && original && !original._retry) {
       original._retry = true;
-      csrfReady = false; // force refresh
+      csrfReady = false;
       await primeCsrf();
       return client(original);
     }
-
     return Promise.reject(error);
   }
 );
 
-// Optional helpers if you also carry a Bearer token after login
+// Optional helpers for Bearer auth after login
 export const setAuthHeader = (token) => {
-  if (token) {
-    client.defaults.headers.common.Authorization = `Bearer ${token}`;
-  } else {
-    delete client.defaults.headers.common.Authorization;
-  }
+  if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
+  else delete client.defaults.headers.common.Authorization;
 };
 export const clearAuthHeader = () => {
   delete client.defaults.headers.common.Authorization;
 };
 
-// Export a manual init called by your app root if you want to prime early (not required)
 export async function initApi() {
-  await primeCsrf();
+  await primeCsrf(); // optional eager prime
 }
