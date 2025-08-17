@@ -1,70 +1,76 @@
 // backend/middleware/csrfSelective.js
-import crypto from "crypto";
+import csurf from "csurf";
 
 /**
- * Double-submit CSRF:
- *  - GET /api/csrf issues a fresh token:
- *      - sets cookie: csrfToken=<random>; SameSite=None; Secure in prod; HttpOnly
- *      - returns { csrfToken } in JSON
- *  - For unsafe methods (POST/PUT/PATCH/DELETE):
- *      - middleware checks header 'x-csrf-token' equals cookie value
- *  - Safe methods (GET/HEAD/OPTIONS) are allowed
+ * We use cookie-based CSRF protection. The cookie contains the secret (HTTP-only),
+ * and clients fetch a per-request token via GET /api/csrf and send it back in the
+ * "X-CSRF-Token" header for state-changing requests (POST/PUT/PATCH/DELETE).
  *
- * Notes:
- *  - Works across origins with CORS+credentials
- *  - Cookie is HttpOnly (client cannot read it) — client sends token via header from the JSON body
+ * Mount order in app.js:
+ *   cookieParser -> JSON body parser -> csrfSelective -> routes...
  */
 
-const CSRF_COOKIE = "csrfToken";
-const CSRF_HEADER = "x-csrf-token";
-
-function issueToken() {
-  return crypto.randomBytes(24).toString("hex");
-}
-
-export function csrfTokenRoute(req, res) {
-  const token = issueToken();
-
-  // Cookie flags
-  const isProd = process.env.NODE_ENV === "production";
-  res.cookie(CSRF_COOKIE, token, {
-    httpOnly: true,                 // server-only cookie
-    sameSite: isProd ? "none" : "lax",
-    secure: isProd,                 // required for SameSite=None
-    path: "/",
-    maxAge: 2 * 60 * 60 * 1000,     // 2 hours
-  });
-
-  res.status(200).json({ csrfToken: token });
-}
+// Create csurf middleware with cookie storage
+const csrf = csurf({
+  cookie: {
+    key: "__Host-csrf",
+    httpOnly: true,          // not readable by JS (safer)
+    sameSite: "none",        // because your frontend is on a different domain
+    secure: true,            // required for sameSite: 'none'
+  },
+});
 
 /**
- * Paths that do NOT require CSRF (idempotent, or external callbacks):
- *  - Stripe webhook (it uses its own signature verification)
+ * We only want CSRF on "unsafe" methods (POST/PUT/PATCH/DELETE) under /api,
+ * and we need to skip a few paths such as the token endpoint itself and Stripe webhooks.
+ *
+ * NOTE: This file exports **named** exports only.
  */
-const CSRF_EXEMPT_PREFIXES = [
-  "/api/stripe/",     // your webhook router
-];
-
-/**
- * Methods that DO require CSRF check
- */
-const PROTECTED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-
 export function csrfSelective(req, res, next) {
-  // Allow safe methods
-  if (!PROTECTED_METHODS.has(req.method)) return next();
+  const method = (req.method || "GET").toUpperCase();
+  const url = req.originalUrl || req.url || "";
 
-  // Allow exempt routes
-  const path = req.originalUrl || req.url || "";
-  if (CSRF_EXEMPT_PREFIXES.some((p) => path.startsWith(p))) return next();
+  // 1) Skip Stripe webhooks (they use raw body and are verified by Stripe signature)
+  if (url.startsWith("/api/stripe/")) return next();
 
-  // Require header to match cookie
-  const header = (req.headers[CSRF_HEADER] || "").toString();
-  const cookie = (req.cookies?.[CSRF_COOKIE] || "").toString();
+  // 2) Skip fetching the token itself
+  if (method === "GET" && url === "/api/csrf") return next();
 
-  if (!header || !cookie || header !== cookie) {
-    return res.status(403).json({ message: "CSRF token missing or invalid" });
-  }
-  return next();
+  // 3) Only enforce CSRF on unsafe methods
+  const unsafe = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
+  if (!unsafe) return next();
+
+  // Run csurf for unsafe requests
+  return csrf(req, res, (err) => {
+    if (err) {
+      // csurf throws a specific error for bad/missing token
+      if (err.code === "EBADCSRFTOKEN") {
+        return res.status(403).json({ message: "Invalid CSRF token" });
+      }
+      return next(err);
+    }
+    next();
+  });
+}
+
+/**
+ * GET /api/csrf
+ * Issues a fresh token tied to the HTTP-only secret cookie.
+ * Client must put this token in "X-CSRF-Token" for subsequent unsafe requests.
+ */
+export function csrfTokenRoute(req, res) {
+  // We must run csurf here to ensure the secret cookie exists before calling req.csrfToken()
+  csrf(req, res, (err) => {
+    if (err) {
+      const status = err.code === "EBADCSRFTOKEN" ? 403 : 500;
+      return res.status(status).json({ message: "Could not issue CSRF token" });
+    }
+    try {
+      const token = req.csrfToken();
+      // You can also echo sameSite & secure cookie advice here if needed
+      return res.status(200).json({ csrfToken: token });
+    } catch (e) {
+      return res.status(500).json({ message: "Could not issue CSRF token" });
+    }
+  });
 }
