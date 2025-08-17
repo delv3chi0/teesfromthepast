@@ -18,7 +18,7 @@ import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // route must use express.raw on /webhook
 
 import { protect } from "./middleware/authMiddleware.js";
-import csrfSelective, { csrfTokenRoute } from "./middleware/csrfSelective.js";
+import { csrfSelective, csrfTokenRoute } from "./middleware/csrfSelective.js";
 
 const app = express();
 app.set("trust proxy", 1);
