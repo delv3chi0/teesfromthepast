@@ -1,0 +1,42 @@
+// backend/middleware/authMiddleware.js
+import jwt from 'jsonwebtoken';
+import User from '../models/User.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me';
+const COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'token';
+
+const protect = async (req, res, next) => {
+  let token;
+
+  // 1) Prefer cookie
+  if (req.cookies && req.cookies[COOKIE_NAME]) {
+    token = req.cookies[COOKIE_NAME];
+  }
+
+  // 2) Fallback: Authorization header
+  if (!token && req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  if (!token) {
+    return res.status(401).json({ message: 'Not authorized, no token' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    // Your payload: { user: { id } }
+    const userId = decoded?.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Not authorized, malformed token' });
+
+    const user = await User.findById(userId).select('-password');
+    if (!user) return res.status(401).json({ message: 'Not authorized, user not found' });
+
+    req.user = { id: user._id, ...user.toObject() };
+    return next();
+  } catch (err) {
+    console.error('[protect] token verify error:', err?.message || err);
+    return res.status(401).json({ message: 'Not authorized, token failed or expired' });
+  }
+};
+
+export { protect };
