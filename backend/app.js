@@ -11,8 +11,8 @@ import xss from "xss-clean";
 
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
-import designRoutes from "./routes/design.js";
-import myDesignRoutes from "./routes/design.js";
+import designRoutes from "./routes/designs.js";
+import myDesignRoutes from "./routes/designs.js";
 import adminRouter from "./routes/adminRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
