@@ -1,4 +1,4 @@
-// backend/app.js (only showing the CORS block & admin fix from your earlier error)
+// backend/app.js
 import express from "express";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
@@ -9,27 +9,34 @@ import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 import xss from "xss-clean";
 
-// Route imports ...
-import { protect } from "./middleware/authMiddleware.js"; 
+// ---- ROUTES (IMPORTS) ----
+import authRoutes from "./routes/auth.js";
+import designRoutes from "./routes/designRoutes.js";
+import myDesignRoutes from "./routes/myDesignRoutes.js";
+import adminRouter from "./routes/adminRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
+// IMPORTANT: this route must export a Router that uses express.raw on the webhook path
+import stripeWebhookRoutes from "./routes/stripeWebhookRoutes.js";
+
+import { protect } from "./middleware/authMiddleware.js";
 
 const app = express();
 app.set("trust proxy", 1);
+
+// ---- Security / Hardening ----
 app.use(helmet());
 
-// CORS
 const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
-  // Add any preview URLs or custom domains here:
-  // "https://your-custom-domain.com",
+  // "https://<your-custom-domain>"
 ];
 const corsOptions = {
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+  origin(origin, cb) {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
     console.warn(`[CORS] Blocked origin: ${origin}`);
-    return callback(new Error("Not allowed by CORS"));
+    return cb(new Error("Not allowed by CORS"));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
@@ -39,36 +46,47 @@ app.options("*", cors(corsOptions));
 
 app.use(cookieParser());
 
-// Stripe webhook first (raw body) ...
+// ---- Stripe webhook FIRST (needs raw body) ----
+// The route file should internally do something like:
+// router.post('/webhook', express.raw({ type: 'application/json' }), handler)
 app.use("/api/stripe", stripeWebhookRoutes);
 
-// Body parsers
+// ---- JSON body parsers AFTER webhook ----
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// Hardening
 app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
 
-// Rate limit on /api
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
+// ---- Rate limit on API ----
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 app.use("/api", limiter);
 
-// Debug log
-app.use((req, _res, next) => { console.log(`[App] ${req.method} ${req.originalUrl}`); next(); });
+// ---- Debug log (optional) ----
+app.use((req, _res, next) => {
+  console.log(`[App] ${req.method} ${req.originalUrl}`);
+  next();
+});
 
-// Health
+// ---- Health ----
 app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
-// Routers (unchanged) ...
-// Admin (ensure protect import above exists)
-app.use('/admin', protect, adminRouter);
+// ---- API Routers (ensure /api prefix consistency) ----
+app.use("/api/auth", authRoutes);
+app.use("/api/designs", designRoutes);
+app.use("/api/mydesigns", myDesignRoutes);
 
-// After your other admin mounts:
-app.use("/api/admin/sessions", adminSessionRoutes);
-app.use("/api/admin/audit", adminAuditRoutes);
+// Admin
+app.use("/api/admin", protect, adminRouter);           // core admin bundle (/users, /orders, /designs etc.)
+app.use("/api/admin/sessions", adminSessionRoutes);    // devices tab
+app.use("/api/admin/audit", adminAuditRoutes);         // audit logs tab
 
-// Global error handler (unchanged)
+// ---- Global error handler (keep your existing one) ----
 export default app;
