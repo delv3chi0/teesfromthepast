@@ -1,83 +1,103 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-export const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  "https://teesfromthepast.onrender.com";
+// ---------- Base URL ----------
+// Prefer VITE_API_BASE if you set it (e.g. https://teesfromthepast.onrender.com)
+// We'll append /api if it's missing.
+const RAW_BASE =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE?.trim()) ||
+  (typeof window !== "undefined" && window.location?.hostname?.includes("localhost")
+    ? "http://localhost:5000"
+    : "https://teesfromthepast.onrender.com");
 
+const API_BASE = RAW_BASE.endsWith("/api") ? RAW_BASE : `${RAW_BASE}/api`;
+
+// One axios instance for the whole app
 export const client = axios.create({
-  baseURL: `${API_BASE}/api`,
-  // We do NOT send cookies for auth (you use Bearer JWT),
-  // but we need credentials when fetching /api/csrf to receive the cookie.
-  withCredentials: false,
+  baseURL: API_BASE,
+  withCredentials: true, // send cookies (needed for CSRF cookie)
+  timeout: 30000,
 });
 
-// Attach/detach Bearer from outside (AuthProvider uses these):
-export const setAuthHeader = (token) => {
-  if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
-};
-export const clearAuthHeader = () => {
-  delete client.defaults.headers.common.Authorization;
-};
+// Axios XSRF conventions (helps in some setups)
+client.defaults.xsrfCookieName = "XSRF-TOKEN";
+client.defaults.xsrfHeaderName = "X-CSRF-Token";
 
-// ---- CSRF bootstrap ----
-let csrfToken = "";
-let inflight; // promise to avoid double /api/csrf fetches
+// Keep a local copy of the csrf token (optional but handy)
+let csrfTokenCache = "";
 
-async function fetchCsrf() {
-  // Use a bare axios call (NOT the client) so baseURL and headers don't interfere.
-  const { data } = await axios.get(`${API_BASE}/api/csrf`, {
-    withCredentials: true, // allow cross-site cookie set (SameSite=None)
-  });
-  csrfToken = data?.csrfToken || "";
-  return csrfToken;
+// Normalize any accidental leading "/api" in paths when you already have baseURL=/api
+function normalizePath(url) {
+  if (!url) return url;
+  // If someone calls client.get('/api/auth/login'), strip the duplicate prefix
+  return url.replace(/^\/api(\/|$)/, "/");
 }
 
-// Add token to unsafe methods
-client.interceptors.request.use(async (config) => {
-  const method = (config.method || "get").toLowerCase();
-  const unsafe = method === "post" || method === "put" || method === "patch" || method === "delete";
+// ----- Request interceptor: normalize path & attach CSRF for unsafe methods -----
+client.interceptors.request.use((config) => {
+  config.url = normalizePath(config.url || "");
 
-  if (unsafe) {
-    if (!csrfToken) {
-      inflight = inflight || fetchCsrf();
-      await inflight.catch(() => {}); // swallow; server will 403 if needed
-      inflight = undefined;
-    }
-    if (csrfToken) {
-      config.headers["X-CSRF-Token"] = csrfToken;
+  const method = (config.method || "get").toLowerCase();
+  const needsCsrf = method === "post" || method === "put" || method === "patch" || method === "delete";
+
+  if (needsCsrf) {
+    // Attach cached token if we have it
+    if (csrfTokenCache && !config.headers?.["X-CSRF-Token"]) {
+      config.headers = { ...(config.headers || {}), "X-CSRF-Token": csrfTokenCache };
     }
   }
   return config;
 });
 
-// On 403 invalid CSRF, refresh once & retry
+// ----- Response interceptor: if CSRF fails, refresh once and retry -----
 client.interceptors.response.use(
-  (r) => r,
+  (res) => res,
   async (error) => {
-    const status = error?.response?.status;
-    const reason = error?.response?.data?.message || "";
-    const cfg = error?.config || {};
-    if (
+    const { config, response } = error || {};
+    const status = response?.status;
+
+    // Retry once on 403 CSRF failures
+    const isCsrfFailure =
       status === 403 &&
-      /csrf/i.test(reason) &&
-      !cfg.__csrfRetried
-    ) {
+      (response?.data?.message?.toLowerCase?.().includes("csrf") ||
+        response?.data?.error?.toLowerCase?.().includes("csrf"));
+
+    if (isCsrfFailure && config && !config.__retriedCsrf) {
       try {
-        await fetchCsrf();
-        cfg.__csrfRetried = true;
-        cfg.headers = cfg.headers || {};
-        if (csrfToken) cfg.headers["X-CSRF-Token"] = csrfToken;
-        return client.request(cfg);
-      } catch (_) {
+        await initApi(); // refresh CSRF token
+        config.__retriedCsrf = true;
+        return client(config); // retry original request
+      } catch {
         // fall through to reject
       }
     }
+
     return Promise.reject(error);
   }
 );
 
-// Call this once at app startup (optional pre-warm)
+// ---------- Public helpers ----------
+export function setAuthHeader(token) {
+  if (token) {
+    client.defaults.headers.common.Authorization = `Bearer ${token}`;
+  }
+}
+
+export function clearAuthHeader() {
+  delete client.defaults.headers.common.Authorization;
+}
+
+// Call this once at app start (we call it from main.jsx)
 export async function initApi() {
-  try { await fetchCsrf(); } catch { /* no-op, interceptor will refresh on demand */ }
+  try {
+    // IMPORTANT: use '/csrf' (NOT '/api/csrf') because baseURL already includes /api
+    const { data } = await client.get("/csrf");
+    csrfTokenCache = data?.csrfToken || "";
+
+    // Also place on axios defaults so future requests have it even without manual header
+    client.defaults.headers.common["X-CSRF-Token"] = csrfTokenCache;
+  } catch (e) {
+    // Not fatal — first unsafe request will trigger the interceptor refresh path
+    // console.warn('[initApi] CSRF pre-warm failed', e);
+  }
 }
