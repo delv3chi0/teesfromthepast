@@ -18,6 +18,7 @@ import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js"; // must export router using express.raw on /webhook
 
 import { protect } from "./middleware/authMiddleware.js";
+import { csrfSelective, csrfTokenRoute } from './middleware/csrfSelective.js';
 
 const app = express();
 app.set("trust proxy", 1);
@@ -57,6 +58,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(mongoSanitize());
 app.use(xss());
 app.use(hpp());
+app.use(csrfSelective);
 
 // ---- Rate limit on API ----
 const limiter = rateLimit({
@@ -81,7 +83,7 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);   // <-- fix: reuse same router, no undefined var
-// (Do NOT mount /api/stripe again here)
+app.get('/api/csrf', csrfTokenRoute);
 
 // Admin bundles
 app.use("/api/admin", protect, adminRouter);        // users/orders/designs, etc.

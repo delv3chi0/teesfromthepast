@@ -3,7 +3,7 @@ import axios from "axios";
 
 const baseURL =
   import.meta.env.VITE_API_BASE ||
-  // prod API
+// prod API
   "https://teesfromthepast.onrender.com/api";
 
 export const client = axios.create({
@@ -20,6 +20,10 @@ export const setAuthHeader = (token) => {
 export const clearAuthHeader = () => {
   delete client.defaults.headers.common.Authorization;
 };
+
+// frontend/src/api/client.js (pseudo)
+const { data } = await axios.get('/api/csrf', { withCredentials: true });
+axios.defaults.headers.common['X-CSRF-Token'] = data?.csrfToken || '';
 
 // Optional: simple response error logging
 client.interceptors.response.use(
