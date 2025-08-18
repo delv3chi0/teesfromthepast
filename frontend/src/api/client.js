@@ -1,66 +1,72 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-const API_BASE = import.meta.env.VITE_API_BASE || ""; // e.g. "https://teesfromthepast.onrender.com"
-// We'll call endpoints like "/auth/login" and axios will hit `${API_BASE}/api/auth/login`
+/**
+ * API base:
+ * - Prefer VITE_API_BASE (set this in Vercel env to your Render URL, e.g. https://teesfromthepast.onrender.com)
+ * - Fallback to Render domain if app runs on vercel.app
+ * - Final fallback to same-origin "/api"
+ */
+const envBase = (import.meta.env && import.meta.env.VITE_API_BASE) || "";
+const vercelFallback = (typeof window !== "undefined" && window.location.hostname.includes("vercel.app"))
+  ? "https://teesfromthepast.onrender.com"
+  : "";
+const rootBase = (envBase || vercelFallback || "").replace(/\/$/, "");
+const API_BASE = rootBase ? `${rootBase}/api` : "/api";
 
+// Create axios instance used across the app
 export const client = axios.create({
-  baseURL: `${API_BASE}/api`,
-  withCredentials: true, // send/receive cookies (CSRF secret, auth cookie if you use one)
+  baseURL: API_BASE,
+  withCredentials: true, // send/receive cookies (CSRF cookie, etc.)
+  timeout: 30000,
 });
 
-// ---- Auth header helpers (frontend stores JWT in memory/localStorage) ----
-export const setAuthHeader = (token) => {
-  if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
-};
-export const clearAuthHeader = () => {
-  delete client.defaults.headers.common.Authorization;
-};
-
-// ---- CSRF bootstrap (lazy, no top-level await) ----
-let csrfReady = null;
-
-async function fetchCsrf() {
-  // GET /api/csrf returns { csrfToken }
-  const { data } = await client.get("/csrf");
-  const token = data?.csrfToken || "";
-  client.defaults.headers.common["X-CSRF-Token"] = token;
-  return token;
-}
-
-function ensureCsrf() {
-  if (!csrfReady) csrfReady = fetchCsrf().catch((e) => { csrfReady = null; throw e; });
-  return csrfReady;
-}
-
-function isUnsafe(method) {
-  const m = String(method || "GET").toUpperCase();
-  return m !== "GET" && m !== "HEAD" && m !== "OPTIONS";
-}
-
-client.interceptors.request.use(async (config) => {
-  // If this is an unsafe method and we don't yet have a token header, fetch one (once)
-  if (isUnsafe(config.method) && !client.defaults.headers.common["X-CSRF-Token"]) {
-    await ensureCsrf();
+// ---- Auth header helpers ----
+export function setAuthHeader(token) {
+  if (!token) {
+    delete client.defaults.headers.common.Authorization;
+    return;
   }
-  return config;
-});
+  client.defaults.headers.common.Authorization = `Bearer ${token}`;
+}
 
-// Optional: handle 403 Invalid CSRF token by refreshing once
+export function clearAuthHeader() {
+  delete client.defaults.headers.common.Authorization;
+}
+
+// ---- CSRF bootstrap ----
+// Fetches a CSRF token from backend (/api/csrf) and sets it on axios default headers.
+// Non-blocking: safe to call without await. Return promise if you want to await it.
+export async function initApi() {
+  try {
+    const { data } = await client.get("/csrf"); // backend: app.get('/api/csrf', csrfTokenRoute)
+    const token = data?.csrfToken || data?.token;
+    if (token) {
+      client.defaults.headers.common["X-CSRF-Token"] = token;
+      // Keep a readable cookie for frameworks if backend set one — nothing to do here on the client.
+      console.log("[client] CSRF initialized");
+    } else {
+      console.warn("[client] CSRF endpoint returned no token");
+    }
+  } catch (err) {
+    // Don't hard-fail the app — auth flows can still work if server exempts certain routes.
+    console.warn("[client] CSRF init failed:", err?.response?.status, err?.response?.data || err?.message);
+  }
+}
+
+// Response interceptor: surface auth/CSRF errors nicely in the console
 client.interceptors.response.use(
   (res) => res,
-  async (err) => {
-    const status = err?.response?.status;
-    const original = err?.config;
-    if (status === 403 && original && !original.__retriedCsrf) {
-      try {
-        await fetchCsrf();
-        original.__retriedCsrf = true;
-        return client.request(original);
-      } catch (_e) {
-        // fall through to rejection
-      }
+  (error) => {
+    const status = error?.response?.status;
+    if (status === 401) {
+      console.warn("[API] 401 Unauthorized — token may be expired");
+    } else if (status === 403) {
+      console.warn("[API] 403 Forbidden — possible CSRF/token issue:", error?.response?.data);
     }
-    return Promise.reject(err);
+    return Promise.reject(error);
   }
 );
+
+// Optional: immediately kick off CSRF init (safe if you also call initApi() in main.jsx)
+try { initApi(); } catch {}
