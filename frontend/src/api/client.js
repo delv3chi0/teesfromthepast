@@ -2,22 +2,30 @@
 import axios from "axios";
 
 /**
- * API base:
- * - Prefer VITE_API_BASE (set this in Vercel env to your Render URL, e.g. https://teesfromthepast.onrender.com)
- * - Fallback to Render domain if app runs on vercel.app
- * - Final fallback to same-origin "/api"
+ * Build a correct API base URL without double `/api`.
+ * Rules:
+ * - If VITE_API_BASE is set, use it and only append `/api` if it's not already present.
+ * - If running on a vercel.app domain, default to your Render backend origin.
+ * - Otherwise fallback to same-origin "/api".
  */
-const envBase = (import.meta.env && import.meta.env.VITE_API_BASE) || "";
-const vercelFallback = (typeof window !== "undefined" && window.location.hostname.includes("vercel.app"))
-  ? "https://teesfromthepast.onrender.com"
-  : "";
-const rootBase = (envBase || vercelFallback || "").replace(/\/$/, "");
-const API_BASE = rootBase ? `${rootBase}/api` : "/api";
+function withApiPath(base) {
+  const b = (base || "").replace(/\/+$/, ""); // strip trailing slash
+  return /\/api$/i.test(b) ? b : `${b}/api`;
+}
 
-// Create axios instance used across the app
+const envBase = import.meta.env?.VITE_API_BASE || "";
+const isVercel = typeof window !== "undefined" && window.location.hostname.includes("vercel.app");
+const vercelFallbackOrigin = "https://teesfromthepast.onrender.com";
+
+const API_BASE = envBase
+  ? withApiPath(envBase)
+  : isVercel
+  ? withApiPath(vercelFallbackOrigin)
+  : "/api";
+
 export const client = axios.create({
   baseURL: API_BASE,
-  withCredentials: true, // send/receive cookies (CSRF cookie, etc.)
+  withCredentials: true, // required for CSRF cookie round-trip
   timeout: 30000,
 });
 
@@ -34,25 +42,44 @@ export function clearAuthHeader() {
   delete client.defaults.headers.common.Authorization;
 }
 
-// ---- CSRF bootstrap ----
-// Fetches a CSRF token from backend (/api/csrf) and sets it on axios default headers.
-// Non-blocking: safe to call without await. Return promise if you want to await it.
+// ---- Small cookie reader for csrfToken cookie (non-HttpOnly) ----
+function getCookie(name) {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// ---- CSRF bootstrap (GET /api/csrf) ----
 export async function initApi() {
   try {
-    const { data } = await client.get("/csrf"); // backend: app.get('/api/csrf', csrfTokenRoute)
-    const token = data?.csrfToken || data?.token;
+    // This call should set the csrfToken cookie and return a token in JSON
+    const { data } = await client.get("/csrf");
+    const token = data?.csrfToken || data?.token || getCookie("csrfToken");
     if (token) {
       client.defaults.headers.common["X-CSRF-Token"] = token;
-      // Keep a readable cookie for frameworks if backend set one — nothing to do here on the client.
       console.log("[client] CSRF initialized");
     } else {
       console.warn("[client] CSRF endpoint returned no token");
     }
   } catch (err) {
-    // Don't hard-fail the app — auth flows can still work if server exempts certain routes.
+    // Don't hard-fail the app — backend may exempt some routes.
     console.warn("[client] CSRF init failed:", err?.response?.status, err?.response?.data || err?.message);
   }
 }
+
+// Always attach CSRF header if we have the cookie and header is missing.
+// This covers any requests made before/without explicit initApi await.
+client.interceptors.request.use((config) => {
+  const headerAlready = config.headers?.["X-CSRF-Token"] || config.headers?.["x-csrf-token"];
+  if (!headerAlready) {
+    const token = getCookie("csrfToken");
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers["X-CSRF-Token"] = token;
+    }
+  }
+  return config;
+});
 
 // Response interceptor: surface auth/CSRF errors nicely in the console
 client.interceptors.response.use(
@@ -68,5 +95,6 @@ client.interceptors.response.use(
   }
 );
 
-// Optional: immediately kick off CSRF init (safe if you also call initApi() in main.jsx)
+// Fire-and-forget bootstrap so the app has a CSRF token ASAP.
+// Safe even if you also call initApi() elsewhere.
 try { initApi(); } catch {}
