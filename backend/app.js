@@ -27,22 +27,43 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
-// Allow your Vercel frontend; add any preview/custom domains if needed.
-const allowedOrigins = [
+// Allow prod, localhost, and any Vercel preview *.vercel.app
+const STATIC_ALLOWED = new Set([
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
-];
+]);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // server-to-server, curl, etc.
+  if (STATIC_ALLOWED.has(origin)) return true;
+  try {
+    const u = new URL(origin);
+    // allow *.vercel.app previews
+    if (u.hostname.endsWith(".vercel.app")) return true;
+  } catch (_) {}
+  return false;
+}
+
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    const ok = isAllowedOrigin(origin);
+    if (ok) return cb(null, true);
     console.warn(`[CORS] Blocked origin: ${origin}`);
     return cb(new Error("Not allowed by CORS"));
   },
-  credentials: true,
+  credentials: true, // allow cookies/credentials
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-CSRF-Token",
+    "X-Requested-With",
+  ],
+  exposedHeaders: ["Set-Cookie"],
+  optionsSuccessStatus: 204,
 };
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+app.options("*", cors(corsOptions)); // handle all preflights
 
 app.use(cookieParser());
 
@@ -70,7 +91,7 @@ app.use("/api", limiter);
 // ---- CSRF (strict; enforced on unsafe methods, with exemptions) ----
 app.use(csrfStrict);
 
-// ---- Debug log (quiet in production) ----
+// ---- Debug log (quiet in prod) ----
 app.use((req, _res, next) => {
   if (process.env.NODE_ENV !== "production") {
     console.log(`[App] ${req.method} ${req.originalUrl}`);
@@ -85,8 +106,8 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 // ---- API Routers ----
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
-app.use("/api/mydesigns", designRoutes); // reuse same router
-app.get("/api/csrf", csrfTokenRoute);    // SPA can fetch CSRF token here
+app.use("/api/mydesigns", designRoutes); // reuse router
+app.get("/api/csrf", csrfTokenRoute);    // SPA fetches CSRF here
 
 // ---- Admin bundles ----
 app.use("/api/admin", protect, adminRouter);
@@ -97,6 +118,13 @@ app.use("/api/admin/audit", adminAuditRoutes);
 app.use((err, req, res, _next) => {
   console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
   const status = res.statusCode === 200 ? 500 : res.statusCode;
+  // Important: still send CORS headers on errors when origin is allowed
+  const origin = req.get("Origin");
+  if (isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
   res.status(status).json({
     message: err.message,
     stack: process.env.NODE_ENV === "production" ? "🥞" : err.stack,
