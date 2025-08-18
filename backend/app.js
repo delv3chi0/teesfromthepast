@@ -12,7 +12,7 @@ import xss from "xss-clean";
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
 import designRoutes from "./routes/designs.js";               // used for /api/designs and /api/mydesigns
-import adminRouter from "./routes/admin.js";                  // your existing “admin bundle”
+import adminRouter from "./routes/admin.js";                  // admin bundle
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside
@@ -27,6 +27,7 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
+// Allow your Vercel frontend; add any preview/custom domains if needed.
 const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
@@ -69,9 +70,11 @@ app.use("/api", limiter);
 // ---- CSRF (strict; enforced on unsafe methods, with exemptions) ----
 app.use(csrfStrict);
 
-// ---- Debug log (optional) ----
+// ---- Debug log (quiet in production) ----
 app.use((req, _res, next) => {
-  console.log(`[App] ${req.method} ${req.originalUrl}`);
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[App] ${req.method} ${req.originalUrl}`);
+  }
   next();
 });
 
@@ -82,8 +85,8 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 // ---- API Routers ----
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
-app.use("/api/mydesigns", designRoutes);
-app.get("/api/csrf", csrfTokenRoute);
+app.use("/api/mydesigns", designRoutes); // reuse same router
+app.get("/api/csrf", csrfTokenRoute);    // SPA can fetch CSRF token here
 
 // ---- Admin bundles ----
 app.use("/api/admin", protect, adminRouter);
