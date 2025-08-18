@@ -12,10 +12,10 @@ import xss from "xss-clean";
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
 import designRoutes from "./routes/designs.js";               // used for /api/designs and /api/mydesigns
-import adminRouter from "./routes/admin.js";                  // your existing “admin bundle”
+import adminRouter from "./routes/admin.js";                  // your existing admin bundle
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside its file
 
 import { protect } from "./middleware/authMiddleware.js";
 import { csrfStrict, csrfTokenRoute } from "./middleware/csrfStrict.js";
@@ -26,11 +26,11 @@ app.set("trust proxy", 1);
 // ---- Security / Hardening ----
 app.use(helmet());
 
-// ---- CORS ----
+// ---- CORS (credentials) ----
 const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
-  // add preview/custom domains here if needed
+  // add any preview/custom domains here
 ];
 const corsOptions = {
   origin(origin, cb) {
@@ -47,6 +47,8 @@ app.options("*", cors(corsOptions));
 app.use(cookieParser());
 
 // ---- Stripe webhook FIRST (needs raw body inside the route file) ----
+// routes/stripeWebhook.js should internally do:
+// router.post('/webhook', express.raw({ type: 'application/json' }), handler)
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // ---- JSON body parsers AFTER webhook ----
@@ -59,13 +61,15 @@ app.use(xss());
 app.use(hpp());
 
 // ---- Rate limit on API ----
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use("/api", limiter);
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
 // ---- CSRF (strict; enforced on unsafe methods, with exemptions) ----
 app.use(csrfStrict);
@@ -80,11 +84,13 @@ app.use((req, _res, next) => {
 app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
+// ---- CSRF token fetch ----
+app.get("/api/csrf", csrfTokenRoute);
+
 // ---- API Routers ----
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
-app.get("/api/csrf", csrfTokenRoute);
 
 // ---- Admin bundles ----
 app.use("/api/admin", protect, adminRouter);

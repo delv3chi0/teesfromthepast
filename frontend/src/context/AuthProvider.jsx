@@ -1,17 +1,20 @@
 // frontend/src/context/AuthProvider.jsx
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import { client, setAuthHeader, clearAuthHeader } from "../api/client";
 
 const AuthContext = createContext(null);
-export function useAuth() { return useContext(AuthContext); }
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
+// Support legacy/local keys
 const TOKEN_KEYS = ["tftp_token", "token"];
 const PRIMARY_TOKEN_KEY = "tftp_token";
 
 function readToken() {
-  for (const key of TOKEN_KEYS) {
-    const v = localStorage.getItem(key);
+  for (const k of TOKEN_KEYS) {
+    const v = localStorage.getItem(k);
     if (v && v !== "undefined") return v;
   }
   return null;
@@ -30,12 +33,41 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // Fetch full user (includes isAdmin) once we have a valid token
+  // Prevent race if we clear while a hydrate is mid-flight
+  const clearingRef = useRef(false);
+
+  const setSession = async (newToken) => {
+    if (!newToken) {
+      clearingRef.current = true;
+      writeToken(null);
+      clearAuthHeader();
+      setToken(null);
+      setUser(null);
+      clearingRef.current = false;
+      return;
+    }
+    try {
+      // sanity check token and set it
+      const decoded = jwtDecode(newToken);
+      if (!decoded?.exp) throw new Error("Token missing exp");
+      writeToken(newToken);
+      setToken(newToken);
+      setAuthHeader(newToken);
+      await hydrateUser(newToken);
+    } catch {
+      // bad token
+      writeToken(null);
+      clearAuthHeader();
+      setToken(null);
+      setUser(null);
+    }
+  };
+
   const hydrateUser = async (activeToken) => {
     try {
-      setAuthHeader(activeToken);
+      if (activeToken) setAuthHeader(activeToken);
       const { data } = await client.get("/auth/profile");
-      // data from your backend already excludes password and includes isAdmin
+      if (clearingRef.current) return;
       setUser({
         _id: data._id || data.id,
         id: data._id || data.id,
@@ -47,13 +79,13 @@ export function AuthProvider({ children }) {
         shippingAddress: data.shippingAddress,
         billingAddress: data.billingAddress,
       });
-    } catch (err) {
-      // Token probably expired or invalid; clear session
-      setSession(null);
+    } catch {
+      // profile failed -> clear session
+      await setSession(null);
     }
   };
 
-  // Init from localStorage once
+  // Init once from localStorage
   useEffect(() => {
     (async () => {
       try {
@@ -63,13 +95,14 @@ export function AuthProvider({ children }) {
           return;
         }
         const decoded = jwtDecode(stored);
-        const now = Math.floor(Date.now() / 1000);
-        if (!decoded?.exp || decoded.exp <= now) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (!decoded?.exp || decoded.exp <= nowSec) {
           writeToken(null);
           clearAuthHeader();
           return;
         }
         setToken(stored);
+        setAuthHeader(stored);
         await hydrateUser(stored);
       } catch {
         writeToken(null);
@@ -80,13 +113,13 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-  // Keep Authorization header synchronized if token changes
+  // Keep Authorization header in sync if token changes externally
   useEffect(() => {
     if (token) setAuthHeader(token);
     else clearAuthHeader();
   }, [token]);
 
-  // Auto-logout at expiry (best effort)
+  // Auto-logout at exp (best-effort)
   useEffect(() => {
     if (!token) return;
     let timer;
@@ -96,52 +129,35 @@ export function AuthProvider({ children }) {
         const ms = Math.max(0, exp * 1000 - Date.now() - 500);
         timer = setTimeout(() => setSession(null), ms);
       }
-    } catch {}
+    } catch {
+      // noop
+    }
     return () => clearTimeout(timer);
   }, [token]);
-
-  // Session setter used by LoginPage after successful login
-  const setSession = async (newToken) => {
-    if (!newToken) {
-      writeToken(null);
-      clearAuthHeader();
-      setToken(null);
-      setUser(null);
-      return;
-    }
-    try {
-      const decoded = jwtDecode(newToken); // sanity-check token
-      writeToken(newToken);
-      setToken(newToken);
-      await hydrateUser(newToken); // <-- ensures isAdmin is populated
-    } catch {
-      writeToken(null);
-      clearAuthHeader();
-      setToken(null);
-      setUser(null);
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await client.post("/auth/logout").catch(() => {});
-    } finally {
-      setSession(null);
-    }
-  };
 
   // Cross-tab sync
   useEffect(() => {
     const onStorage = async (e) => {
       if (e.key && !TOKEN_KEYS.includes(e.key)) return;
       const fresh = readToken();
-      if (!fresh) setSession(null);
+      if (!fresh) await setSession(null);
       else if (fresh !== token) await setSession(fresh);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [token]);
 
-  const value = useMemo(() => ({ token, user, loadingAuth, setSession, logout }), [token, user, loadingAuth]);
+  const logout = async () => {
+    try {
+      await client.post("/auth/logout"); // ok if this 401s
+    } catch {}
+    await setSession(null);
+  };
+
+  const value = useMemo(
+    () => ({ token, user, loadingAuth, setSession, logout }),
+    [token, user, loadingAuth]
+  );
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
