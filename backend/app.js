@@ -2,7 +2,6 @@
 import express from "express";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
-import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import mongoSanitize from "express-mongo-sanitize";
@@ -12,7 +11,7 @@ import xss from "xss-clean";
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
 import designRoutes from "./routes/designs.js";               // used for /api/designs and /api/mydesigns
-import adminRouter from "./routes/admin.js";                  // admin bundle
+import adminRouter from "./routes/admin.js";                  // your existing “admin bundle”
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside
@@ -25,40 +24,38 @@ app.set("trust proxy", 1);
 // ---- Security / Hardening ----
 app.use(helmet());
 
-// ---- CORS ----
-// Allow prod, localhost, and any Vercel preview *.vercel.app
-const STATIC_ALLOWED = new Set([
+// ---- CORS (explicit + credentials + proper OPTIONS short-circuit) ----
+const ALLOWED_ORIGINS = new Set([
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
+  // Add any preview URLs if you use them, e.g.:
+  // "https://teesfromthepast-git-somehash.vercel.app",
 ]);
 
-function isAllowedOrigin(origin) {
-  if (!origin) return true; // server-to-server, curl, etc.
-  if (STATIC_ALLOWED.has(origin)) return true;
-  try {
-    const u = new URL(origin);
-    if (u.hostname.endsWith(".vercel.app")) return true; // preview domains
-  } catch {} // ignore bad origins
-  return false;
-}
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin"); // so caches don’t collapse responses across origins
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      // Allow typical SPA headers; add others if you use them
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, X-CSRF-Token"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    );
+  }
 
-const corsOptions = {
-  origin(origin, cb) {
-    if (isAllowedOrigin(origin)) return cb(null, true);
-    console.warn(`[CORS] Blocked origin: ${origin}`);
-    return cb(new Error("Not allowed by CORS"));
-  },
-  credentials: true, // safe to leave on; we don't set session cookies
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "X-Requested-With",
-  ],
-  optionsSuccessStatus: 204,
-};
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+  if (req.method === "OPTIONS") {
+    // Preflight should return 204 quickly
+    return res.status(204).end();
+  }
+
+  return next();
+});
 
 app.use(cookieParser());
 
@@ -83,11 +80,9 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// ---- Debug log (quiet in prod) ----
+// ---- Debug log (optional) ----
 app.use((req, _res, next) => {
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[App] ${req.method} ${req.originalUrl}`);
-  }
+  console.log(`[App] ${req.method} ${req.originalUrl} — Origin: ${req.headers.origin || "N/A"}`);
   next();
 });
 
@@ -109,15 +104,6 @@ app.use("/api/admin/audit", adminAuditRoutes);
 app.use((err, req, res, _next) => {
   console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
   const status = res.statusCode === 200 ? 500 : res.statusCode;
-
-  // keep CORS headers on errors for allowed origins
-  const origin = req.get("Origin");
-  if (isAllowedOrigin(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin || "*");
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-
   res.status(status).json({
     message: err.message,
     stack: process.env.NODE_ENV === "production" ? "🥞" : err.stack,
