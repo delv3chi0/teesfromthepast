@@ -15,7 +15,7 @@ import designRoutes from "./routes/designs.js";               // used for /api/d
 import adminRouter from "./routes/admin.js";                  // your existing admin bundle
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside route file
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside file
 
 import { protect } from "./middleware/authMiddleware.js";
 
@@ -26,22 +26,29 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
-// We are using JWT in the Authorization header (no cookies), so CSRF is not required.
-// Make CORS permissive for now so the Vercel frontend can call the Render API reliably.
+// Using JWT in the Authorization header (no cookies) => CSRF not needed.
+// Allow cross-origin calls from your Vercel app.
+const allowed = new Set([
+  "https://teesfromthepast.vercel.app",
+  "http://localhost:5173",
+]);
 const corsOptions = {
-  origin: (_origin, cb) => cb(null, true), // reflect any origin
-  credentials: false,                      // IMPORTANT: no cookies used for auth
+  origin(origin, cb) {
+    // allow same-origin/no-origin (curl) and our whitelisted origins
+    if (!origin || allowed.has(origin)) return cb(null, true);
+    // loosen if you prefer: return cb(null, true);
+    return cb(new Error("Not allowed by CORS: " + origin));
+  },
+  credentials: false, // IMPORTANT: we are NOT using cookies for auth
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
-  exposedHeaders: [],
+  allowedHeaders: ["Authorization", "Content-Type"],
 };
 app.use(cors(corsOptions));
-// Make sure preflight always succeeds:
-app.options("*", cors(corsOptions));
+app.options("*", cors(corsOptions)); // preflight
 
 app.use(cookieParser());
 
-// ---- Stripe webhook FIRST (needs raw body inside the route file) ----
+// ---- Stripe webhook FIRST (needs raw body inside route file) ----
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // ---- JSON body parsers AFTER webhook ----
@@ -62,7 +69,7 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// ---- Debug log (optional) ----
+// ---- Debug log (kept to trace requests) ----
 app.use((req, _res, next) => {
   console.log(`[App] ${req.method} ${req.originalUrl}`);
   next();
@@ -73,7 +80,7 @@ app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
 // ---- API Routers ----
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authRoutes);        // includes /login
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
 
