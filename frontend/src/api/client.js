@@ -8,7 +8,7 @@ const API_BASE = RAW_BASE.replace(/\/+$/, "");
 export const client = axios.create({
   baseURL: API_BASE ? `${API_BASE}/api` : "/api",
   headers: { "Content-Type": "application/json" },
-  withCredentials: false, // <-- CRITICAL: no cookies; avoids CSRF/CORS headaches
+  withCredentials: false, // CRITICAL: no cookies; avoids CSRF/CORS issues
 });
 
 // ---- Auth header helpers ----
@@ -19,11 +19,8 @@ export function setAuthHeader(token) {
 export const clearAuthHeader = () => setAuthHeader(null);
 
 // No-op; kept for compatibility
-export async function initApi() {
-  return;
-}
+export async function initApi() { return; }
 
-// Optional: central error logging
 client.interceptors.response.use(
   (r) => r,
   (error) => {

@@ -26,29 +26,26 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
-// Using JWT in the Authorization header (no cookies) => CSRF not needed.
-// Allow cross-origin calls from your Vercel app.
+// We use JWT in headers (no cookies) => CSRF not needed.
 const allowed = new Set([
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
 ]);
 const corsOptions = {
   origin(origin, cb) {
-    // allow same-origin/no-origin (curl) and our whitelisted origins
     if (!origin || allowed.has(origin)) return cb(null, true);
-    // loosen if you prefer: return cb(null, true);
     return cb(new Error("Not allowed by CORS: " + origin));
   },
-  credentials: false, // IMPORTANT: we are NOT using cookies for auth
+  credentials: false, // IMPORTANT: no cookies for auth
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Authorization", "Content-Type"],
 };
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // preflight
+app.options("*", cors(corsOptions));
 
 app.use(cookieParser());
 
-// ---- Stripe webhook FIRST (needs raw body inside route file) ----
+// ---- Stripe webhook FIRST (needs raw body inside the route file) ----
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // ---- JSON body parsers AFTER webhook ----
@@ -69,7 +66,7 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
-// ---- Debug log (kept to trace requests) ----
+// ---- Debug log ----
 app.use((req, _res, next) => {
   console.log(`[App] ${req.method} ${req.originalUrl}`);
   next();
@@ -80,7 +77,7 @@ app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
 // ---- API Routers ----
-app.use("/api/auth", authRoutes);        // includes /login
+app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
 
