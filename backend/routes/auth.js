@@ -2,7 +2,6 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { protect } from "../middleware/authMiddleware.js";
-import { ensureCsrfCookie, requireCsrf } from "../middleware/csrfMiddleware.js";
 import { body } from "express-validator";
 
 import {
@@ -60,35 +59,35 @@ const byIPLoginLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many login attempts from this IP. Try again later.',
+  message: "Too many login attempts from this IP. Try again later.",
 });
 
 const loginPerEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  keyGenerator: (req) => (req.body?.email || req.ip),
+  keyGenerator: (req) => req.body?.email || req.ip,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: 'Too many login attempts for this email. Try again later.',
+  message: "Too many login attempts for this email. Try again later.",
 });
 
-// Always set a CSRF cookie (safe on GET)
-router.use(ensureCsrfCookie);
+// --- Auth endpoints (NO CSRF middleware here) ---
+router.post("/register", registerValidationRules, registerUser);
+router.post("/login", byIPLoginLimiter, loginPerEmailLimiter, loginValidationRules, loginUser);
+router.post("/logout", logoutUser);
 
-// --- Routes ---
-router.post("/register", requireCsrf, registerValidationRules, registerUser);
-router.post("/login", requireCsrf, byIPLoginLimiter, loginPerEmailLimiter, loginValidationRules, loginUser);
-router.post("/logout", requireCsrf, logoutUser);
+// Refresh current JWT (requires valid token)
+router.post("/refresh", protect, refreshSession);
 
-router.post("/refresh", requireCsrf, refreshSession); // ⬅️ new
-
+// Profile
 router
   .route("/profile")
   .get(protect, getUserProfile)
-  .put(protect, requireCsrf, updateUserProfileRules, updateUserProfile);
+  .put(protect, updateUserProfileRules, updateUserProfile);
 
-router.post("/request-password-reset", requireCsrf, requestPasswordResetRules, requestPasswordReset);
-router.post("/reset-password", requireCsrf, resetPasswordRules, resetPassword);
-router.put("/change-password", protect, requireCsrf, changePasswordRules, changePassword);
+// Password flows
+router.post("/request-password-reset", requestPasswordResetRules, requestPasswordReset);
+router.post("/reset-password", resetPasswordRules, resetPassword);
+router.put("/change-password", protect, changePasswordRules, changePassword);
 
 export default router;
