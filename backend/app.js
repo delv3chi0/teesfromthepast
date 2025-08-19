@@ -12,14 +12,12 @@ import xss from "xss-clean";
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
 import designRoutes from "./routes/designs.js";               // used for /api/designs and /api/mydesigns
-import adminRouter from "./routes/admin.js";                  // your existing “admin bundle”
+import adminRouter from "./routes/admin.js";                  // your existing admin bundle
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside route file
 
 import { protect } from "./middleware/authMiddleware.js";
-// CSRF disabled (no-op), but we keep the import so /api/csrf still responds OK
-import { csrfStrict, csrfTokenRoute } from "./middleware/csrfStrict.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -28,22 +26,17 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
-const allowedOrigins = [
-  "https://teesfromthepast.vercel.app",
-  "http://localhost:5173",
-  // add preview/custom domains here if needed
-];
+// We are using JWT in the Authorization header (no cookies), so CSRF is not required.
+// Make CORS permissive for now so the Vercel frontend can call the Render API reliably.
 const corsOptions = {
-  origin(origin, cb) {
-    // Allow same-origin (no origin header) and the whitelisted frontends
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    console.warn(`[CORS] Blocked origin: ${origin}`);
-    return cb(new Error("Not allowed by CORS"));
-  },
-  credentials: false, // IMPORTANT: we are NOT using cookies for auth
+  origin: (_origin, cb) => cb(null, true), // reflect any origin
+  credentials: false,                      // IMPORTANT: no cookies used for auth
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
+  exposedHeaders: [],
 };
 app.use(cors(corsOptions));
+// Make sure preflight always succeeds:
 app.options("*", cors(corsOptions));
 
 app.use(cookieParser());
@@ -63,14 +56,11 @@ app.use(hpp());
 // ---- Rate limit on API ----
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use("/api", limiter);
-
-// ---- CSRF (disabled) ----
-app.use(csrfStrict);
 
 // ---- Debug log (optional) ----
 app.use((req, _res, next) => {
@@ -86,7 +76,6 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
-app.get("/api/csrf", csrfTokenRoute); // returns { csrfToken: null } now
 
 // ---- Admin bundles ----
 app.use("/api/admin", protect, adminRouter);
@@ -96,7 +85,7 @@ app.use("/api/admin/audit", adminAuditRoutes);
 // ---- Global error handler ----
 app.use((err, req, res, _next) => {
   console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
-  const status = res.statusCode === 200 ? 500 : res.statusCode;
+  const status = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
   res.status(status).json({
     message: err.message,
     stack: process.env.NODE_ENV === "production" ? "🥞" : err.stack,
