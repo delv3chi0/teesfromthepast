@@ -1,7 +1,6 @@
 // backend/app.js
 import express from "express";
 import "dotenv/config";
-import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -11,11 +10,11 @@ import xss from "xss-clean";
 
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
-import designRoutes from "./routes/designs.js";               // used for /api/designs and /api/mydesigns
-import adminRouter from "./routes/admin.js";                  // your existing admin bundle
+import designRoutes from "./routes/designs.js";               // /api/designs + /api/mydesigns
+import adminRouter from "./routes/admin.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside file
+import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // uses express.raw inside file
 
 import { protect } from "./middleware/authMiddleware.js";
 
@@ -26,11 +25,21 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
-// We use JWT in headers (no cookies) => CSRF not needed.
+// JWT in headers (no cookies) => CSRF not needed.
 const allowed = new Set([
-  "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://teesfromthepast.vercel.app",
 ]);
+
+// allow comma-separated extras via env if you have preview URLs
+for (const extra of (process.env.FRONTEND_ORIGINS || process.env.FRONTEND_URL || "")
+  .split(",")
+  .map(s => s.trim())
+  .filter(Boolean)) {
+  allowed.add(extra);
+}
+
 const corsOptions = {
   origin(origin, cb) {
     if (!origin || allowed.has(origin)) return cb(null, true);
@@ -42,8 +51,6 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
-
-app.use(cookieParser());
 
 // ---- Stripe webhook FIRST (needs raw body inside the route file) ----
 app.use("/api/stripe", stripeWebhookRoutes);
@@ -81,10 +88,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
 
-// ---- Admin bundles ----
+// ---- Admin bundles (guarded) ----
 app.use("/api/admin", protect, adminRouter);
-app.use("/api/admin/sessions", adminSessionRoutes);
-app.use("/api/admin/audit", adminAuditRoutes);
+app.use("/api/admin/sessions", protect, adminSessionRoutes);
+app.use("/api/admin/audit", protect, adminAuditRoutes);
 
 // ---- Global error handler ----
 app.use((err, req, res, _next) => {

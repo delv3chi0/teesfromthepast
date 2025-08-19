@@ -16,13 +16,11 @@ export const signAccessToken = (userId) =>
     }
   );
 
-const protect = async (req, res, next) => {
-  let token;
+export const protect = async (req, res, next) => {
+  let token = null;
 
   if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.split(" ")[1];
-  } else if (req.cookies?.token) {
-    token = req.cookies.token; // supported but not required
   }
 
   if (!token) return res.status(401).json({ message: "Not authorized, no token" });
@@ -32,17 +30,16 @@ const protect = async (req, res, next) => {
       audience: ACCESS_TOKEN_AUDIENCE,
       issuer: ACCESS_TOKEN_ISSUER,
     });
+
     const userId = decoded?.sub;
     if (!userId) return res.status(401).json({ message: "Not authorized" });
 
     const user = await User.findById(userId).select("-password");
     if (!user) return res.status(401).json({ message: "Not authorized, user not found" });
 
-    req.user = user; // attach full user doc (without password)
+    req.user = user;
     next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({ message: "Not authorized, token failed" });
   }
 };
-
-export { protect };
