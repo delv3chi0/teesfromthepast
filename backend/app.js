@@ -2,6 +2,7 @@
 import express from "express";
 import "dotenv/config";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import mongoSanitize from "express-mongo-sanitize";
@@ -17,42 +18,37 @@ import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // must use express.raw inside
 
 import { protect } from "./middleware/authMiddleware.js";
+// CSRF disabled (no-op), but we keep the import so /api/csrf still responds OK
 import { csrfStrict, csrfTokenRoute } from "./middleware/csrfStrict.js";
 
 const app = express();
 app.set("trust proxy", 1);
-app.disable("x-powered-by");
 
 // ---- Security / Hardening ----
 app.use(helmet());
 
-// ---- CORS (no cookies/credentials; JWT is sent in Authorization header) ----
-const ALLOWED = new Set([
+// ---- CORS ----
+const allowedOrigins = [
   "https://teesfromthepast.vercel.app",
   "http://localhost:5173",
-]);
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-    );
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    );
-    // No credentials because we are not using cookies for auth
-  }
-  if (req.method === "OPTIONS") return res.status(204).end();
-  next();
-});
+  // add preview/custom domains here if needed
+];
+const corsOptions = {
+  origin(origin, cb) {
+    // Allow same-origin (no origin header) and the whitelisted frontends
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    return cb(new Error("Not allowed by CORS"));
+  },
+  credentials: false, // IMPORTANT: we are NOT using cookies for auth
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(cookieParser());
 
-// ---- Stripe webhook FIRST (raw body is configured inside the route file) ----
+// ---- Stripe webhook FIRST (needs raw body inside the route file) ----
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // ---- JSON body parsers AFTER webhook ----
@@ -65,17 +61,15 @@ app.use(xss());
 app.use(hpp());
 
 // ---- Rate limit on API ----
-app.use(
-  "/api",
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api", limiter);
 
-// ---- CSRF (no-op) ----
+// ---- CSRF (disabled) ----
 app.use(csrfStrict);
 
 // ---- Debug log (optional) ----
@@ -92,7 +86,7 @@ app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
-app.get("/api/csrf", csrfTokenRoute); // returns { csrfToken: null, csrf: "disabled" }
+app.get("/api/csrf", csrfTokenRoute); // returns { csrfToken: null } now
 
 // ---- Admin bundles ----
 app.use("/api/admin", protect, adminRouter);
@@ -101,11 +95,7 @@ app.use("/api/admin/audit", adminAuditRoutes);
 
 // ---- Global error handler ----
 app.use((err, req, res, _next) => {
-  console.error(
-    "[Backend Error]",
-    err.message,
-    err.stack ? `\nStack: ${err.stack}` : ""
-  );
+  console.error("[Backend Error]", err.message, err.stack ? `\nStack: ${err.stack}` : "");
   const status = res.statusCode === 200 ? 500 : res.statusCode;
   res.status(status).json({
     message: err.message,
