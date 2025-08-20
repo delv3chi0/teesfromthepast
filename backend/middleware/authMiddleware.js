@@ -17,7 +17,7 @@ export const signAccessToken = (userId) =>
   );
 
 export const protect = async (req, res, next) => {
-  let token;
+  let token = null;
 
   if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.split(" ")[1];

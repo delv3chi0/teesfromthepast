@@ -3,6 +3,7 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { protect } from "../middleware/authMiddleware.js";
 import { body } from "express-validator";
+import { logAudit } from "../utils/audit.js";
 
 import {
   registerUser,
@@ -61,7 +62,6 @@ const byIPLoginLimiter = rateLimit({
   legacyHeaders: false,
   message: "Too many login attempts from this IP. Try again later.",
 });
-
 const loginPerEmailLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   keyGenerator: (req) => req.body?.email || req.ip,
@@ -74,7 +74,17 @@ const loginPerEmailLimiter = rateLimit({
 // --- Auth endpoints (NO CSRF middleware here) ---
 router.post("/register", registerValidationRules, registerUser);
 router.post("/login", byIPLoginLimiter, loginPerEmailLimiter, loginValidationRules, loginUser);
-router.post("/logout", logoutUser);
+
+// Protect logout so we can attribute the actor, and audit it.
+router.post("/logout", protect, async (req, res, next) => {
+  try {
+    await logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: req.user?._id, meta: {} });
+  } catch (e) {
+    // non-blocking
+    console.warn("[auth/logout] audit failed:", e?.message);
+  }
+  return logoutUser(req, res, next);
+});
 
 // Refresh current JWT (requires valid token)
 router.post("/refresh", protect, refreshSession);

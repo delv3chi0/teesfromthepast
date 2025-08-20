@@ -1,15 +1,24 @@
 // backend/models/AuditLog.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const auditLogSchema = new mongoose.Schema(
   {
-    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // may be null for unauth ops
-    action: { type: String, required: true },                     // e.g. USER_UPDATE
-    targetType: { type: String },                                 // e.g. User, Order, Design
-    targetId: { type: String },
-    ip: { type: String },
-    userAgent: { type: String },
-    meta: { type: mongoose.Schema.Types.Mixed },
+    // Who performed the action (nullable for system events)
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+
+    // High-level action code, e.g. LOGIN, LOGOUT, USER_UPDATE, ORDER_STATUS_UPDATE, etc.
+    action: { type: String, required: true, trim: true, uppercase: true },
+
+    // Target (optional): what object the action touched
+    targetType: { type: String, default: null, trim: true },
+    targetId: { type: String, default: null, trim: true },
+
+    // Freeform metadata you want to keep
+    meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+
+    // Request context
+    ip: { type: String, default: null },
+    userAgent: { type: String, default: null },
   },
   { timestamps: true }
 );
@@ -17,4 +26,5 @@ const auditLogSchema = new mongoose.Schema(
 auditLogSchema.index({ createdAt: -1 });
 auditLogSchema.index({ action: 1, createdAt: -1 });
 
-export default mongoose.model('AuditLog', auditLogSchema);
+const AuditLog = mongoose.model("AuditLog", auditLogSchema);
+export default AuditLog;
