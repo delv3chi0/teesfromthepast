@@ -1,30 +1,21 @@
 // backend/models/AuditLog.js
 import mongoose from "mongoose";
 
-const auditLogSchema = new mongoose.Schema(
+const AuditLogSchema = new mongoose.Schema(
   {
-    // Who performed the action (nullable for system events)
     actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-
-    // High-level action code, e.g. LOGIN, LOGOUT, USER_UPDATE, ORDER_STATUS_UPDATE, etc.
-    action: { type: String, required: true, trim: true, uppercase: true },
-
-    // Target (optional): what object the action touched
-    targetType: { type: String, default: null, trim: true },
-    targetId: { type: String, default: null, trim: true },
-
-    // Freeform metadata you want to keep
+    action: { type: String, required: true }, // e.g., LOGIN, LOGOUT, USER_UPDATE, ORDER_DELETE...
+    targetType: { type: String, default: "" }, // e.g., User, Order, Design, Auth
+    targetId: { type: String, default: "" },   // id string for quick linking
+    ip: { type: String, default: "" },
+    userAgent: { type: String, default: "" },
     meta: { type: mongoose.Schema.Types.Mixed, default: {} },
-
-    // Request context
-    ip: { type: String, default: null },
-    userAgent: { type: String, default: null },
   },
-  { timestamps: true }
+  { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } }
 );
 
-auditLogSchema.index({ createdAt: -1 });
-auditLogSchema.index({ action: 1, createdAt: -1 });
+AuditLogSchema.index({ createdAt: -1 });
+AuditLogSchema.index({ action: 1, createdAt: -1 });
 
-const AuditLog = mongoose.model("AuditLog", auditLogSchema);
+const AuditLog = mongoose.model("AuditLog", AuditLogSchema);
 export default AuditLog;

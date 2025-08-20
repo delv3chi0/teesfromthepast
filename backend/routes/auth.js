@@ -3,7 +3,6 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { protect } from "../middleware/authMiddleware.js";
 import { body } from "express-validator";
-import { logAudit } from "../utils/audit.js";
 
 import {
   registerUser,
@@ -47,13 +46,6 @@ const changePasswordRules = [
   body("newPassword", "New password must be at least 6 characters").isLength({ min: 6 }),
 ];
 
-const updateUserProfileRules = [
-  body("username").optional({ checkFalsy: true }).trim().escape(),
-  body("email").optional().isEmail().withMessage("Please provide a valid email").normalizeEmail(),
-  body("firstName").optional().trim().escape(),
-  body("lastName").optional().trim().escape(),
-];
-
 // --- Rate limiting ---
 const byIPLoginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -71,31 +63,17 @@ const loginPerEmailLimiter = rateLimit({
   message: "Too many login attempts for this email. Try again later.",
 });
 
-// --- Auth endpoints (NO CSRF middleware here) ---
+// --- Auth endpoints ---
 router.post("/register", registerValidationRules, registerUser);
 router.post("/login", byIPLoginLimiter, loginPerEmailLimiter, loginValidationRules, loginUser);
-
-// Protect logout so we can attribute the actor, and audit it.
-router.post("/logout", protect, async (req, res, next) => {
-  try {
-    await logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: req.user?._id, meta: {} });
-  } catch (e) {
-    // non-blocking
-    console.warn("[auth/logout] audit failed:", e?.message);
-  }
-  return logoutUser(req, res, next);
-});
-
-// Refresh current JWT (requires valid token)
+router.post("/logout", protect, logoutUser);
 router.post("/refresh", protect, refreshSession);
 
-// Profile
 router
   .route("/profile")
   .get(protect, getUserProfile)
-  .put(protect, updateUserProfileRules, updateUserProfile);
+  .put(protect, updateUserProfile);
 
-// Password flows
 router.post("/request-password-reset", requestPasswordResetRules, requestPasswordReset);
 router.post("/reset-password", resetPasswordRules, resetPassword);
 router.put("/change-password", protect, changePasswordRules, changePassword);

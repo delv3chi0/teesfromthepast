@@ -1,65 +1,63 @@
 // backend/utils/audit.js
 import AuditLog from "../models/AuditLog.js";
 
+/** Utility: get IP and UA safely */
+function getClientNet(req) {
+  const ip =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    "";
+  const userAgent = req.headers["user-agent"] || "";
+  return { ip, userAgent };
+}
+
 /**
- * Generic audit helper.
- * Stays compatible with prior `logAdminAction(req, {...})` usage.
- *
- * Example:
- *   await logAdminAction(req, {
- *     action: 'USER_UPDATE',
- *     targetType: 'User',
- *     targetId: user._id,
- *     meta: { before, after }
- *   });
+ * Generic audit logger for any action.
+ * Use this when no special helper applies.
  */
-export async function logAdminAction(req, { action, targetType = null, targetId = null, meta = {} }) {
+export async function logAudit(req, { action, targetType = "", targetId = "", meta = {} }) {
   try {
+    const { ip, userAgent } = getClientNet(req);
+    const actor = req.user?._id || null;
     await AuditLog.create({
-      actor: req?.user?._id || null,
-      action: String(action || "").toUpperCase(),
+      actor,
+      action,
       targetType,
-      targetId: targetId ? String(targetId) : null,
-      meta: meta || {},
-      ip: req?.ip || req?.headers?.["x-forwarded-for"] || null,
-      userAgent: req?.headers?.["user-agent"] || null,
+      targetId: targetId?.toString?.() ?? String(targetId ?? ""),
+      ip,
+      userAgent,
+      meta,
     });
   } catch (err) {
-    console.error("[Audit] Failed to write audit log:", err?.message);
+    console.warn("[audit] logAudit failed:", err?.message);
   }
 }
 
 /**
- * Convenience wrappers for auth-centric events.
+ * Admin-specific helper.
+ */
+export async function logAdminAction(req, { action, targetType = "", targetId = "", meta = {} }) {
+  return logAudit(req, { action, targetType, targetId, meta });
+}
+
+/**
+ * Auth helpers for consistent action names.
  */
 export async function logAuthLogin(req, user, meta = {}) {
-  try {
-    await AuditLog.create({
-      actor: user?._id || null,
-      action: "LOGIN",
-      targetType: "User",
-      targetId: user?._id ? String(user._id) : null,
-      meta,
-      ip: req?.ip || req?.headers?.["x-forwarded-for"] || null,
-      userAgent: req?.headers?.["user-agent"] || null,
-    });
-  } catch (err) {
-    console.error("[Audit] Failed to write LOGIN audit:", err?.message);
-  }
+  return logAudit(req, {
+    action: "LOGIN",
+    targetType: "Auth",
+    targetId: user?._id,
+    meta: { email: user?.email, ...meta },
+  });
 }
 
 export async function logAuthLogout(req, user, meta = {}) {
-  try {
-    await AuditLog.create({
-      actor: user?._id || req?.user?._id || null,
-      action: "LOGOUT",
-      targetType: "User",
-      targetId: (user?._id || req?.user?._id) ? String(user._id || req.user._id) : null,
-      meta,
-      ip: req?.ip || req?.headers?.["x-forwarded-for"] || null,
-      userAgent: req?.headers?.["user-agent"] || null,
-    });
-  } catch (err) {
-    console.error("[Audit] Failed to write LOGOUT audit:", err?.message);
-  }
+  return logAudit(req, {
+    action: "LOGOUT",
+    targetType: "Auth",
+    targetId: user?._id,
+    meta: { email: user?.email, ...meta },
+  });
 }

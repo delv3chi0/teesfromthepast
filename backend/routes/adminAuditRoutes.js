@@ -1,69 +1,47 @@
 // backend/routes/adminAuditRoutes.js
 import express from "express";
-import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware.js";
 import { admin } from "../middleware/adminMiddleware.js";
 import AuditLog from "../models/AuditLog.js";
+import User from "../models/User.js";
 
 const router = express.Router();
 
-/**
- * GET /api/admin/audit
- * Query params:
- *  - actor (UserId) optional
- *  - action (string, case-insensitive)
- *  - targetType (string)
- *  - targetId (string)
- *  - page (default 1), limit (default 25, max 100)
- */
+// GET /api/admin/audit?actor=&action=&targetType=&targetId=&page=&limit=
 router.get("/", protect, admin, async (req, res) => {
-  const {
-    actor,
-    action,
-    targetType,
-    targetId,
-    page = 1,
-    limit = 25,
-  } = req.query;
-
+  const { actor, action, targetType, targetId, page = 1, limit = 25 } = req.query;
   const q = {};
-  if (actor && mongoose.isValidObjectId(actor)) q.actor = actor;
-  if (action) q.action = String(action).toUpperCase();
+  if (actor) q.actor = actor;
+  if (action) q.action = action;
   if (targetType) q.targetType = targetType;
   if (targetId) q.targetId = targetId;
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const lim = Math.min(100, Math.max(1, parseInt(limit, 10) || 25));
-  const skip = (pageNum - 1) * lim;
+  const perPage = Math.min(100, Math.max(1, parseInt(limit)));
+  const skip = (Math.max(1, parseInt(page)) - 1) * perPage;
 
-  const [items, total] = await Promise.all([
-    AuditLog.find(q)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(lim)
-      .populate("actor", "_id email username")
-      .lean(),
-    AuditLog.countDocuments(q),
-  ]);
+  const items = await AuditLog.find(q).sort({ createdAt: -1 }).skip(skip).limit(perPage).lean();
+
+  // attach actor basic info
+  const actorIds = [...new Set(items.map((i) => String(i.actor)).filter(Boolean))];
+  const actors = actorIds.length
+    ? await User.find({ _id: { $in: actorIds } }).select("_id email username").lean()
+    : [];
+  const actorsById = Object.fromEntries(actors.map((u) => [String(u._id), u]));
 
   res.json({
     items: items.map((i) => ({
       _id: i._id,
-      when: i.createdAt,
-      // Friendly actor presentation
-      actor: i.actor
-        ? { id: i.actor._id, label: i.actor.username || i.actor.email || String(i.actor._id), email: i.actor.email || null, username: i.actor.username || null }
-        : null,
+      actor: actorsById[String(i.actor)] || null,
       action: i.action,
-      target: i.targetType || i.targetId ? { type: i.targetType, id: i.targetId } : null,
-      ip: i.ip || null,
-      userAgent: i.userAgent || null,
-      meta: i.meta || {},
+      targetType: i.targetType,
+      targetId: i.targetId,
+      ip: i.ip,
+      userAgent: i.userAgent,
+      meta: i.meta,
+      createdAt: i.createdAt,
     })),
-    page: pageNum,
-    limit: lim,
-    total,
-    hasMore: skip + items.length < total,
+    page: Number(page),
+    hasMore: items.length === perPage,
   });
 });
 

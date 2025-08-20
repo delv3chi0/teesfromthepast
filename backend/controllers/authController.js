@@ -3,42 +3,65 @@ import asyncHandler from "express-async-handler";
 import crypto from "crypto";
 import { validationResult } from "express-validator";
 import User from "../models/User.js";
+import RefreshToken from "../models/RefreshToken.js";
 import { signAccessToken } from "../middleware/authMiddleware.js";
-import { logAudit } from "../utils/audit.js";
+import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 
-/**
- * Helper: standardize validation response
- */
-const ensureValid = (req) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    const first = errors.array()[0];
-    const err = new Error(first.msg);
-    err.statusCode = 400;
-    throw err;
-  }
-};
+/** helpers */
+function clientNet(req) {
+  const ip =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    "";
+  const userAgent = req.headers["user-agent"] || "";
+  return { ip, userAgent };
+}
+function sessionExpiry(days = 30) {
+  return new Date(Date.now() + days * 86400000);
+}
 
 /**
  * POST /api/auth/register
  */
 export const registerUser = asyncHandler(async (req, res) => {
-  ensureValid(req);
-  const { username, email, password, firstName, lastName } = req.body;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
+  }
 
-  const exists = await User.findOne({ email });
-  if (exists) { res.status(400); throw new Error("User already exists"); }
+  const { username, email, password, firstName = "", lastName = "" } = req.body;
+
+  const exists = await User.findOne({ $or: [{ email }, { username }] });
+  if (exists) {
+    res.status(400);
+    throw new Error("User with that email or username already exists");
+  }
 
   const user = await User.create({ username, email, password, firstName, lastName });
+
   const token = signAccessToken(user._id);
 
-  // Audit
+  // create a device/session record (for Admin > Devices view)
+  const jti = crypto.randomUUID();
+  const { ip, userAgent } = clientNet(req);
+  await RefreshToken.create({
+    jti,
+    user: user._id,
+    ip,
+    userAgent,
+    expiresAt: sessionExpiry(30),
+  });
+
+  // optional audit: REGISTER + LOGIN
   await logAudit(req, {
     action: "REGISTER",
     targetType: "User",
-    targetId: user._id,
-    meta: { email, username },
-  }).catch(() => {});
+    targetId: String(user._id),
+    meta: { email: user.email },
+  });
+  await logAuthLogin(req, user, { via: "register" });
 
   res.status(201).json({
     token,
@@ -57,23 +80,34 @@ export const registerUser = asyncHandler(async (req, res) => {
  * POST /api/auth/login
  */
 export const loginUser = asyncHandler(async (req, res) => {
-  ensureValid(req);
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
+  }
 
   const { email, password } = req.body;
   const user = await User.findOne({ email }).select("+password");
   if (!user || !(await user.matchPassword(password))) {
-    res.status(401); throw new Error("Invalid email or password");
+    res.status(401);
+    throw new Error("Invalid email or password");
   }
 
   const token = signAccessToken(user._id);
 
-  // Audit
-  await logAudit(req, {
-    action: "LOGIN",
-    targetType: "User",
-    targetId: user._id,
-    meta: { email },
-  }).catch(() => {});
+  // record a session for Devices panel
+  const jti = crypto.randomUUID();
+  const { ip, userAgent } = clientNet(req);
+  await RefreshToken.create({
+    jti,
+    user: user._id,
+    ip,
+    userAgent,
+    expiresAt: sessionExpiry(30),
+  });
+
+  // fire-and-forget audit
+  await logAuthLogin(req, user, { email });
 
   res.json({
     token,
@@ -89,116 +123,119 @@ export const loginUser = asyncHandler(async (req, res) => {
 });
 
 /**
- * POST /api/auth/logout
- * (Stateless JWT — nothing to revoke here; still log the event upstream in the route.)
+ * POST /api/auth/logout  (stateless JWT)
+ * We still audit, and attempt to revoke the most-recent session for this client.
  */
-export const logoutUser = asyncHandler(async (_req, res) => {
+export const logoutUser = asyncHandler(async (req, res) => {
+  const user = req.user || null;
+  await logAuthLogout(req, user, {});
+
+  if (user?._id) {
+    const { ip, userAgent } = clientNet(req);
+    // Revoke the most recent active session for this user+client
+    const rt = await RefreshToken.findOne({
+      user: user._id,
+      revokedAt: { $eq: null },
+    })
+      .sort({ createdAt: -1 })
+      .exec();
+    if (rt) {
+      rt.revokedAt = new Date();
+      await rt.save();
+    }
+  }
+
   res.json({ message: "Logged out" });
 });
 
 /**
- * POST /api/auth/refresh  (requires protect)
- * Returns a fresh short-lived access token for the same user.
- */
-export const refreshSession = asyncHandler(async (req, res) => {
-  const userId = req.user?._id;
-  if (!userId) { res.status(401); throw new Error("Not authorized"); }
-
-  const token = signAccessToken(userId);
-
-  await logAudit(req, {
-    action: "TOKEN_REFRESH",
-    targetType: "User",
-    targetId: userId,
-    meta: {},
-  }).catch(() => {});
-
-  res.json({ token });
-});
-
-/**
- * GET /api/auth/profile  (requires protect)
+ * GET /api/auth/profile
  */
 export const getUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select("-password");
-  if (!user) { res.status(404); throw new Error("User not found"); }
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
   res.json(user);
 });
 
 /**
- * PUT /api/auth/profile  (requires protect)
+ * PUT /api/auth/profile
  */
 export const updateUserProfile = asyncHandler(async (req, res) => {
-  ensureValid(req);
+  const user = await User.findById(req.user._id).select("+password");
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
 
-  const user = await User.findById(req.user._id);
-  if (!user) { res.status(404); throw new Error("User not found"); }
+  const { username, email, firstName, lastName, shippingAddress, billingAddress } = req.body;
 
-  const before = {
-    username: user.username,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-  };
-
-  if (req.body.username != null) user.username = req.body.username;
-  if (req.body.email != null)    user.email = req.body.email;
-  if (req.body.firstName != null) user.firstName = req.body.firstName;
-  if (req.body.lastName != null)  user.lastName = req.body.lastName;
+  if (username !== undefined) user.username = username;
+  if (email !== undefined) user.email = email;
+  if (firstName !== undefined) user.firstName = firstName;
+  if (lastName !== undefined) user.lastName = lastName;
+  if (shippingAddress !== undefined) user.shippingAddress = shippingAddress;
+  if (billingAddress !== undefined) user.billingAddress = billingAddress;
 
   const updated = await user.save();
-  const out = { ...updated.toObject() }; delete out.password;
 
   await logAudit(req, {
     action: "PROFILE_UPDATE",
     targetType: "User",
-    targetId: user._id,
-    meta: { before, after: { username: updated.username, email: updated.email, firstName: updated.firstName, lastName: updated.lastName } },
-  }).catch(() => {});
+    targetId: String(user._id),
+    meta: {},
+  });
 
-  res.json(out);
+  const toSend = updated.toObject();
+  delete toSend.password;
+  res.json(toSend);
 });
 
 /**
  * POST /api/auth/request-password-reset
- * Generates a short-lived reset token and stores a hashed version on the user.
- * (Email sending not included here.)
  */
 export const requestPasswordReset = asyncHandler(async (req, res) => {
-  ensureValid(req);
-
-  const { email } = req.body;
-  const user = await User.findOne({ email });
-  // For privacy, never disclose whether user exists.
-  if (user) {
-    const token = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    user.passwordResetToken = tokenHash;
-    user.passwordResetExpires = expiresAt;
-    await user.save();
-
-    await logAudit(req, {
-      action: "PASSWORD_RESET_REQUEST",
-      targetType: "User",
-      targetId: user._id,
-      meta: { email },
-    }).catch(() => {});
-
-    // In a real app you'd email `token` to the user. For now we return it so you can wire the UI.
-    return res.json({ message: "If the account exists, a reset link was created.", token });
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
   }
 
-  res.json({ message: "If the account exists, a reset link was created." });
+  const { email } = req.body;
+  const user = await User.findOne({ email }).select("+passwordResetToken +passwordResetExpires");
+  if (!user) {
+    // Don't leak presence — still return OK
+    return res.json({ message: "If the email exists, a reset link has been sent." });
+  }
+
+  const raw = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
+  user.passwordResetToken = tokenHash;
+  user.passwordResetExpires = new Date(Date.now() + 3600 * 1000); // 1 hour
+  await user.save();
+
+  await logAudit(req, {
+    action: "PASSWORD_RESET_REQUEST",
+    targetType: "User",
+    targetId: String(user._id),
+    meta: {},
+  });
+
+  // You would email `raw` to the user here. For now we just respond.
+  res.json({ message: "If the email exists, a reset link has been sent." });
 });
 
 /**
  * POST /api/auth/reset-password
- * Body: { token, password }
  */
 export const resetPassword = asyncHandler(async (req, res) => {
-  ensureValid(req);
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
+  }
 
   const { token, password } = req.body;
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -207,8 +244,10 @@ export const resetPassword = asyncHandler(async (req, res) => {
     passwordResetToken: tokenHash,
     passwordResetExpires: { $gt: new Date() },
   }).select("+password");
-
-  if (!user) { res.status(400); throw new Error("Invalid or expired reset token."); }
+  if (!user) {
+    res.status(400);
+    throw new Error("Invalid or expired reset token");
+  }
 
   user.password = password;
   user.passwordResetToken = undefined;
@@ -216,31 +255,36 @@ export const resetPassword = asyncHandler(async (req, res) => {
   await user.save();
 
   await logAudit(req, {
-    action: "PASSWORD_RESET_COMPLETE",
+    action: "PASSWORD_RESET",
     targetType: "User",
-    targetId: user._id,
+    targetId: String(user._id),
     meta: {},
-  }).catch(() => {});
+  });
 
-  res.json({ message: "Password reset successful." });
+  res.json({ message: "Password updated" });
 });
 
 /**
- * PUT /api/auth/change-password  (requires protect)
- * Body: { currentPassword, newPassword }
+ * PUT /api/auth/change-password  (auth required)
  */
 export const changePassword = asyncHandler(async (req, res) => {
-  ensureValid(req);
-
-  const userId = req.user?._id;
-  if (!userId) { res.status(401); throw new Error("Not authorized"); }
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400);
+    throw new Error(errors.array()[0].msg);
+  }
 
   const { currentPassword, newPassword } = req.body;
-  const user = await User.findById(userId).select("+password");
-  if (!user) { res.status(404); throw new Error("User not found."); }
-
-  const ok = await user.matchPassword?.(currentPassword);
-  if (!ok) { res.status(400); throw new Error("Current password is incorrect."); }
+  const user = await User.findById(req.user._id).select("+password");
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+  const ok = await user.matchPassword(currentPassword);
+  if (!ok) {
+    res.status(400);
+    throw new Error("Current password is incorrect");
+  }
 
   user.password = newPassword;
   await user.save();
@@ -248,9 +292,27 @@ export const changePassword = asyncHandler(async (req, res) => {
   await logAudit(req, {
     action: "PASSWORD_CHANGE",
     targetType: "User",
-    targetId: user._id,
-    meta: { selfService: true },
-  }).catch(() => {});
+    targetId: String(user._id),
+    meta: {},
+  });
 
-  res.json({ message: "Password changed successfully." });
+  res.json({ message: "Password changed" });
+});
+
+/**
+ * POST /api/auth/refresh  (auth required)
+ */
+export const refreshSession = asyncHandler(async (req, res) => {
+  const token = signAccessToken(req.user._id);
+
+  // light touch: extend the most recent session
+  const rt = await RefreshToken.findOne({ user: req.user._id, revokedAt: null })
+    .sort({ createdAt: -1 })
+    .exec();
+  if (rt) {
+    rt.expiresAt = sessionExpiry(30);
+    await rt.save();
+  }
+
+  res.json({ token });
 });
