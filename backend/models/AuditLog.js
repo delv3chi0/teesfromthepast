@@ -3,22 +3,18 @@ import mongoose from 'mongoose';
 
 const auditLogSchema = new mongoose.Schema(
   {
-    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // admin user
-    action: { type: String, required: true },                    // e.g., ORDER_DELETE
-    targetType: { type: String },                                // e.g., Order
-    targetId: { type: String },                                  // target _id as string
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // may be null for unauth ops
+    action: { type: String, required: true },                     // e.g. USER_UPDATE
+    targetType: { type: String },                                 // e.g. User, Order, Design
+    targetId: { type: String },
     ip: { type: String },
     userAgent: { type: String },
-    meta: { type: Object },
+    meta: { type: mongoose.Schema.Types.Mixed },
   },
   { timestamps: true }
 );
 
-// Useful indexes for filtering
 auditLogSchema.index({ createdAt: -1 });
 auditLogSchema.index({ action: 1, createdAt: -1 });
-auditLogSchema.index({ actor: 1, createdAt: -1 });
-auditLogSchema.index({ targetType: 1, targetId: 1 });
 
-const AuditLog = mongoose.model('AuditLog', auditLogSchema);
-export default AuditLog;
+export default mongoose.model('AuditLog', auditLogSchema);
