@@ -32,7 +32,7 @@ const allowed = new Set([
   "https://teesfromthepast.vercel.app",
 ]);
 
-// allow comma-separated extras via env if you have preview URLs
+// Allow extra origins via env (comma-separated) for Vercel previews, etc.
 for (const extra of (process.env.FRONTEND_ORIGINS || process.env.FRONTEND_URL || "")
   .split(",")
   .map(s => s.trim())
@@ -48,7 +48,11 @@ const corsOptions = {
   credentials: false, // IMPORTANT: no cookies for auth
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Authorization", "Content-Type"],
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
 };
+
+// Global CORS
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
@@ -88,8 +92,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
 
-// ---- Admin bundles (guarded) ----
-app.use("/api/admin", protect, adminRouter);
+// ---- Admin bundles ----
+// Ensure CORS preflight for admin hits BEFORE protect, so OPTIONS never gets a 401.
+app.use("/api/admin", cors(corsOptions));           // add CORS specifically for admin scope
+app.options("/api/admin/*", cors(corsOptions));     // handle admin preflight explicitly
+
+app.use("/api/admin", protect, adminRouter);        // main admin bundle (users/orders/designs/etc.)
 app.use("/api/admin/sessions", protect, adminSessionRoutes);
 app.use("/api/admin/audit", protect, adminAuditRoutes);
 
