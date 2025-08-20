@@ -17,7 +17,7 @@ export const signAccessToken = (userId) =>
   );
 
 export const protect = async (req, res, next) => {
-  let token = null;
+  let token;
 
   if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.split(" ")[1];
@@ -30,7 +30,6 @@ export const protect = async (req, res, next) => {
       audience: ACCESS_TOKEN_AUDIENCE,
       issuer: ACCESS_TOKEN_ISSUER,
     });
-
     const userId = decoded?.sub;
     if (!userId) return res.status(401).json({ message: "Not authorized" });
 
@@ -39,7 +38,7 @@ export const protect = async (req, res, next) => {
 
     req.user = user;
     next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ message: "Not authorized, token failed" });
   }
 };

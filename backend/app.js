@@ -10,12 +10,18 @@ import xss from "xss-clean";
 
 // ---- ROUTES (IMPORTS) ----
 import authRoutes from "./routes/auth.js";
-import designRoutes from "./routes/designs.js";               // /api/designs + /api/mydesigns
+import designRoutes from "./routes/designs.js";
+
+// Admin route bundles (mount ALL explicitly so /api/admin/* exists)
 import adminRouter from "./routes/admin.js";
+import adminUserRoutes from "./routes/adminUserRoutes.js";
+import adminOrderRoutes from "./routes/adminOrderRoutes.js";
+import adminDesignRoutes from "./routes/adminDesignRoutes.js";
+import adminProductRoutes from "./routes/adminProductRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
-import stripeWebhookRoutes from "./routes/stripeWebhook.js";  // uses express.raw inside file
 
+import stripeWebhookRoutes from "./routes/stripeWebhook.js"; // uses express.raw inside file
 import { protect } from "./middleware/authMiddleware.js";
 
 const app = express();
@@ -25,34 +31,33 @@ app.set("trust proxy", 1);
 app.use(helmet());
 
 // ---- CORS ----
-// JWT in headers (no cookies) => CSRF not needed.
-const allowed = new Set([
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
+// We use JWT in headers (no cookies) => CSRF not needed.
+const STATIC_ALLOW = new Set([
   "https://teesfromthepast.vercel.app",
+  "http://localhost:5173",
 ]);
 
-// Allow extra origins via env (comma-separated) for Vercel previews, etc.
-for (const extra of (process.env.FRONTEND_ORIGINS || process.env.FRONTEND_URL || "")
-  .split(",")
-  .map(s => s.trim())
-  .filter(Boolean)) {
-  allowed.add(extra);
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // curl/postman
+  if (STATIC_ALLOW.has(origin)) return true;
+  // allow Vercel preview branches like https://<branch>-teesfromthepast.vercel.app
+  try {
+    const u = new URL(origin);
+    return u.hostname.endsWith("-teesfromthepast.vercel.app");
+  } catch {
+    return false;
+  }
 }
 
 const corsOptions = {
   origin(origin, cb) {
-    if (!origin || allowed.has(origin)) return cb(null, true);
+    if (isAllowedOrigin(origin)) return cb(null, true);
     return cb(new Error("Not allowed by CORS: " + origin));
   },
   credentials: false, // IMPORTANT: no cookies for auth
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type"],
-  optionsSuccessStatus: 204,
-  preflightContinue: false,
+  allowedHeaders: ["Authorization", "Content-Type", "X-Requested-With"],
 };
-
-// Global CORS
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
@@ -87,17 +92,19 @@ app.use((req, _res, next) => {
 app.get("/", (_req, res) => res.send("Tees From The Past Backend API"));
 app.get("/health", (_req, res) => res.status(200).json({ status: "OK" }));
 
-// ---- API Routers ----
+// ---- Public API Routers ----
 app.use("/api/auth", authRoutes);
 app.use("/api/designs", designRoutes);
 app.use("/api/mydesigns", designRoutes);
 
-// ---- Admin bundles ----
-// Ensure CORS preflight for admin hits BEFORE protect, so OPTIONS never gets a 401.
-app.use("/api/admin", cors(corsOptions));           // add CORS specifically for admin scope
-app.options("/api/admin/*", cors(corsOptions));     // handle admin preflight explicitly
-
-app.use("/api/admin", protect, adminRouter);        // main admin bundle (users/orders/designs/etc.)
+// ---- Admin API Routers (mount ALL explicit sub-routers) ----
+// Each sub-router already applies protect/admin internally, but mounting behind
+// /api/admin + protect ensures no accidental exposure if a file forgets it.
+app.use("/api/admin", protect, adminRouter);
+app.use("/api/admin/users", protect, adminUserRoutes);
+app.use("/api/admin/orders", protect, adminOrderRoutes);
+app.use("/api/admin/designs", protect, adminDesignRoutes);
+app.use("/api/admin/products", protect, adminProductRoutes);
 app.use("/api/admin/sessions", protect, adminSessionRoutes);
 app.use("/api/admin/audit", protect, adminAuditRoutes);
 
