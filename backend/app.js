@@ -1,16 +1,18 @@
-// backend/app.js
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
-import morgan from "morgan";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import dotenv from "dotenv";
+import connectDB from "./config/db.js";
 
-// Import routes
+// Routes
 import authRoutes from "./routes/auth.js";
 import designRoutes from "./routes/designs.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import storefrontProductRoutes from "./routes/storefrontProductRoutes.js";
 import checkoutRoutes from "./routes/checkout.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";
+import printfulRoutes from "./routes/printful.js";
 import ordersRoutes from "./routes/orders.js";
 import adminUserRoutes from "./routes/adminUserRoutes.js";
 import adminOrderRoutes from "./routes/adminOrderRoutes.js";
@@ -18,35 +20,54 @@ import adminDesignRoutes from "./routes/adminDesignRoutes.js";
 import adminProductRoutes from "./routes/adminProductRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
-import generateImageRoutes from "./routes/generateImage.js";
-import printfulRoutes from "./routes/printful.js";
+
+dotenv.config();
+connectDB();
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(cookieParser());
-app.use(morgan("dev"));
+// Security middleware
+app.use(helmet());
 
-// ✅ Health check endpoint for Render
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
+// CORS allowlist
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+].filter(Boolean);
 
-// Webhook (Stripe requires raw body)
 app.use(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  stripeWebhookRoutes
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  })
 );
 
-// Normal JSON routes
+// Raw body parser for Stripe webhook BEFORE express.json()
+app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
+
+// JSON body parser
+app.use(express.json({ limit: "10mb" }));
+
+// Rate limiter
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 200,
+  })
+);
+
+// Health check
+app.get("/health", (req, res) => res.json({ status: "ok" }));
+
+// Mount routes
 app.use("/api/auth", authRoutes);
 app.use("/api/mydesigns", designRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/storefront/product", storefrontProductRoutes);
 app.use("/api/checkout", checkoutRoutes);
+app.use("/api/stripe", stripeWebhookRoutes);
+app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
@@ -54,20 +75,11 @@ app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
-app.use("/api/generate", generateImageRoutes);
-app.use("/api/printful", printfulRoutes);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ message: "Not Found" });
-});
-
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
-  console.error("[Backend Error]", err.stack);
-  res.status(err.status || 500).json({
-    message: err.message || "Internal Server Error",
-  });
+  console.error("Unhandled error:", err);
+  res.status(500).json({ message: "Server Error" });
 });
 
 export default app;
