@@ -19,16 +19,57 @@ import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 
 dotenv.config();
+
+// --- DB ---
 connectDB();
 
+// --- App ---
 const app = express();
 
-// Health check for Render
+// --- Health check for Render ---
 app.get("/health", (req, res) => res.send("OK"));
 
+// --- Tiny built-in CORS middleware (no dependency) ---
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
+  "https://teesfromthepast.vercel.app,http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    // Dynamically reflect the requesting allowed origin
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    // Let proxies/CDNs know response varies by Origin
+    res.setHeader("Vary", "Origin");
+    // If you ever use cookies, keep this true; it's harmless for bearer tokens
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+
+  // Methods & headers your app needs
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With"
+  );
+
+  // Short-circuit preflight
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
+
+// --- Body parser (JSON) ---
+// NOTE: If your Stripe webhook requires raw body, that route should mount BEFORE this json()
+// with express.raw({ type: 'application/json' }) inside stripeWebhookRoutes.
 app.use(express.json({ limit: "10mb" }));
 
-// Routes
+// --- Routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
