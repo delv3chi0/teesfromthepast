@@ -5,67 +5,59 @@ import cors from "cors";
 // Routes
 import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
-// If you have other route modules, import & mount them here too
 
 const app = express();
 
-// --- Trust proxy (so req.ip works on Render/behind proxies) ---
+// Trust proxy (needed on Render/behind proxies)
 app.set("trust proxy", 1);
 
-// --- Body parsers ---
+// Body parsers
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// --- CORS (fixes your Vercel → Render requests & preflights) ---
+// --- CORS ---
 const allowedOrigins = [
-  process.env.FRONTEND_ORIGIN,                 // optional override via env
-  "https://teesfromthepast.vercel.app",        // your deployed frontend
-  "http://localhost:5173",                     // local dev (vite)
-  "http://localhost:3000",                     // alt local dev
+  process.env.FRONTEND_ORIGIN,
+  "https://teesfromthepast.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
 ].filter(Boolean);
 
 const corsOptions = {
   origin(origin, cb) {
-    // Allow non-browser/SSR or same-origin requests with no Origin header
-    if (!origin) return cb(null, true);
+    if (!origin) return cb(null, true);                 // SSR / same-origin / curl
     if (allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(new Error(`CORS: ${origin} not allowed`));
+    return cb(new Error(`CORS: ${origin} not allowed`)); // will be turned into 403 below
   },
   credentials: true,
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
-
-// Apply CORS & handle preflights early
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// --- Health check (nice for Render) ---
+// --- Health & root (so Render health check passes) ---
+app.get("/", (_req, res) => res.status(200).send("OK"));
+app.head("/", (_req, res) => res.status(200).end());
 app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));
 
 // --- API routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
-// Mount other routes here, e.g.:
-// app.use("/api/orders", ordersRoutes);
-// app.use("/api/products", productRoutes);
 
 // --- 404 ---
 app.use((req, res) => {
-  return res.status(404).json({ message: "Not Found" });
+  res.status(404).json({ message: "Not Found" });
 });
 
 // --- Error handler ---
 app.use((err, req, res, _next) => {
+  const isCors = err?.message?.startsWith?.("CORS:");
+  if (isCors) return res.status(403).json({ message: err.message });
+
   const status = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
-  // If CORS blocked, force 403 so client UX is clearer than a network error
-  if (err?.message?.startsWith("CORS:")) {
-    return res.status(403).json({ message: err.message });
-  }
   console.error("[Error]", err?.stack || err);
-  res.status(status).json({
-    message: err?.message || "Server Error",
-  });
+  res.status(status).json({ message: err?.message || "Server Error" });
 });
 
 export default app;
