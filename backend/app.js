@@ -2,38 +2,35 @@
 import express from "express";
 import cors from "cors";
 
-// Route modules
+// Route modules (keep these imports even if they 404 now; they won't be used by health checks)
 import authRoutes from "./routes/auth.js";
 import adminRoutes from "./routes/admin.js";
 
 const app = express();
 
-// Trust Render proxy for correct IPs
+// Trust Render's proxy so req.ip is accurate
 app.set("trust proxy", 1);
 
-// Body parsing
+// Body parsers
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 /**
- * CORS — permissive but scoped.
- * Never throw inside origin() — preflights must succeed or the browser will block.
+ * CORS — allow your deployed frontend + local dev.
+ * Never throw inside origin() so preflights don't fail with a network error.
  */
 const allowedOrigins = [
-  process.env.FRONTEND_ORIGIN,                  // optional env override
-  "https://teesfromthepast.vercel.app",         // your deployed frontend
-  "http://localhost:5173",                      // Vite dev
-  "http://localhost:3000",                      // CRA/Next dev
+  process.env.FRONTEND_ORIGIN,                  // optional override
+  "https://teesfromthepast.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
 ].filter(Boolean);
 
 const corsOptions = {
   origin(origin, cb) {
-    // Allow same-origin, SSR, curl, health checks (no origin header)
-    if (!origin) return cb(null, true);
-    // Allow listed origins; deny others without throwing (so preflight gets a 200 and the browser decides)
+    if (!origin) return cb(null, true);                 // health checks, curl, SSR
     if (allowedOrigins.includes(origin)) return cb(null, true);
-    // Not allowed: still callback with false (no CORS headers) instead of throwing an error
-    return cb(null, false);
+    return cb(null, false);                              // disallowed origin: respond without CORS headers
   },
   credentials: true,
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
@@ -41,17 +38,23 @@ const corsOptions = {
   preflightContinue: false,
   optionsSuccessStatus: 204,
 };
-
 app.use(cors(corsOptions));
-// Make sure every path responds to OPTIONS for preflight
-app.options("*", cors(corsOptions));
+app.options("*", cors(corsOptions)); // respond to all preflights
 
 /**
- * Health & root — ensure Render sees HTTP 200 on "/" and "/healthz"
+ * Health + root — must be 200 for Render.
+ * We also log these so you can confirm the probe is reaching the app.
  */
-app.get("/", (_req, res) => res.status(200).send("OK"));
+app.get("/", (req, res) => {
+  console.log(`[Health] GET / from ${req.ip || "unknown"}`);
+  res.status(200).send("OK");
+});
 app.head("/", (_req, res) => res.status(200).end());
-app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));
+
+app.get("/healthz", (req, res) => {
+  console.log(`[Health] GET /healthz from ${req.ip || "unknown"}`);
+  res.status(200).json({ ok: true, ts: new Date().toISOString() });
+});
 
 /**
  * API routes
@@ -60,14 +63,14 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 
 /**
- * 404 handler
+ * 404
  */
 app.use((req, res) => {
   res.status(404).json({ message: "Not Found" });
 });
 
 /**
- * Error handler — log and send JSON
+ * Error handler
  */
 app.use((err, req, res, _next) => {
   const status = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
