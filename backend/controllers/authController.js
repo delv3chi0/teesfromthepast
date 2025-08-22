@@ -10,17 +10,6 @@ import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 
 const RefreshToken = mongoose.models.RefreshToken || RefreshTokenModel;
 
-function parseClientInfoHeader(req) {
-  // Optional JSON header we log in audit utils as well
-  try {
-    const raw = req.headers["x-client-info"];
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
 function clientNet(req) {
   const h = req.headers || {};
   const ip =
@@ -28,26 +17,22 @@ function clientNet(req) {
     req.ip ||
     req.connection?.remoteAddress ||
     "";
-
   const userAgent = h["x-client-ua"] || h["user-agent"] || "";
-
-  // Merge structured x-client-info (if given) with your individual x-client-* hints
-  const infoFromJson = parseClientInfoHeader(req) || {};
-  const hints = {
-    ...infoFromJson,
-    tz: h["x-client-timezone"] || infoFromJson.tz || "",
-    lang: h["x-client-lang"] || infoFromJson.lang || "",
-    viewport: h["x-client-viewport"] || infoFromJson.viewport || "",
-    platform: h["x-client-platform"] || infoFromJson.platform || "",
-    ua: userAgent || infoFromJson.ua || "",
-    localTime: h["x-client-localtime"] || infoFromJson.localTime || "",
-    deviceMemory: h["x-client-devicememory"] || infoFromJson.deviceMemory || "",
-    cpuCores: h["x-client-cpucores"] || infoFromJson.cpuCores || "",
+  return {
+    ip,
+    userAgent,
+    hints: {
+      tz: h["x-client-timezone"] || "",
+      lang: h["x-client-lang"] || "",
+      viewport: h["x-client-viewport"] || "",
+      platform: h["x-client-platform"] || "",
+      ua: userAgent,
+      localTime: h["x-client-localtime"] || "",
+      deviceMemory: h["x-client-devicememory"] || "",
+      cpuCores: h["x-client-cpucores"] || "",
+    },
   };
-
-  return { ip, userAgent, hints };
 }
-
 function sessionExpiry(days = 30) {
   return new Date(Date.now() + days * 86400000);
 }
@@ -61,7 +46,6 @@ export const registerUser = asyncHandler(async (req, res) => {
   }
 
   const { username, email, password, firstName = "", lastName = "" } = req.body;
-
   const exists = await User.findOne({ $or: [{ email }, { username }] });
   if (exists) {
     res.status(400);
@@ -69,7 +53,6 @@ export const registerUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({ username, email, password, firstName, lastName });
-
   const token = signAccessToken(user._id);
 
   const jti = crypto.randomUUID();
@@ -88,11 +71,9 @@ export const registerUser = asyncHandler(async (req, res) => {
     action: "REGISTER",
     targetType: "User",
     targetId: String(user._id),
-    meta: { email: user.email },
+    meta: { email: user.email, sessionJti: jti },
   });
-
-  // Important: include sessionJti so LOGIN ties to this session, and actor is set
-  await logAuthLogin(req, user, { via: "register" }, jti);
+  await logAuthLogin(req, user, { via: "register", sessionJti: jti });
 
   res.status(201).json({
     token,
@@ -137,8 +118,8 @@ export const loginUser = asyncHandler(async (req, res) => {
     lastSeenAt: new Date(),
   });
 
-  // Important: include sessionJti so the LOGIN audit shows proper actor and correlates to device
-  await logAuthLogin(req, user, { email }, jti);
+  // include session id so UI can show it
+  await logAuthLogin(req, user, { email, sessionJti: jti });
 
   res.json({
     token,
@@ -157,23 +138,15 @@ export const loginUser = asyncHandler(async (req, res) => {
 /** POST /api/auth/logout */
 export const logoutUser = asyncHandler(async (req, res) => {
   const user = req.user || null;
-  const sessionId = req.headers["x-session-id"] || ""; // jti provided by the client
-
-  // Include sessionJti so the LOGOUT audit correlates to the same device/session
-  await logAuthLogout(req, user, {}, sessionId);
-
+  await logAuthLogout(req, user, {});
+  const sessionId = req.headers["x-session-id"];
   if (user?._id && sessionId) {
-    const rt = await RefreshToken.findOne({
-      jti: sessionId,
-      user: user._id,
-      revokedAt: null,
-    }).exec();
+    const rt = await RefreshToken.findOne({ jti: sessionId, user: user._id, revokedAt: null }).exec();
     if (rt) {
       rt.revokedAt = new Date();
       await rt.save();
     }
   }
-
   res.json({ message: "Logged out" });
 });
 
@@ -226,11 +199,10 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
   }
 
   const { email } = req.body;
-  const user = await User.findOne({ email }).select(
-    "+passwordResetToken +passwordResetExpires"
-  );
-  // Always respond success (privacy)
-  if (!user) return res.json({ message: "If the email exists, a reset link has been sent." });
+  const user = await User.findOne({ email }).select("+passwordResetToken +passwordResetExpires");
+  if (!user) {
+    return res.json({ message: "If the email exists, a reset link has been sent." });
+  }
 
   const raw = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
@@ -245,7 +217,6 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     meta: {},
   });
 
-  // You’ll email `raw` to the user in your mailer layer.
   res.json({ message: "If the email exists, a reset link has been sent." });
 });
 
@@ -298,7 +269,6 @@ export const changePassword = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error("User not found");
   }
-
   const ok = await user.matchPassword(currentPassword);
   if (!ok) {
     res.status(400);
@@ -324,11 +294,7 @@ export const refreshSession = asyncHandler(async (req, res) => {
 
   const sessionId = req.headers["x-session-id"];
   if (sessionId) {
-    const rt = await RefreshToken.findOne({
-      jti: sessionId,
-      user: req.user._id,
-      revokedAt: null,
-    }).exec();
+    const rt = await RefreshToken.findOne({ jti: sessionId, user: req.user._id, revokedAt: null }).exec();
     if (rt) {
       rt.expiresAt = sessionExpiry(30);
       rt.lastSeenAt = new Date();

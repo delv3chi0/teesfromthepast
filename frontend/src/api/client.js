@@ -7,65 +7,56 @@ const API_BASE = RAW_BASE.replace(/\/+$/, "");
 export const client = axios.create({
   baseURL: API_BASE ? `${API_BASE}/api` : "/api",
   headers: { "Content-Type": "application/json" },
-  withCredentials: false, // no cross-site cookies needed
+  withCredentials: false,
 });
 
+// ---- Auth header helpers ----
 export function setAuthHeader(token) {
   if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
   else delete client.defaults.headers.common.Authorization;
 }
 export const clearAuthHeader = () => setAuthHeader(null);
 
-// Collect client hints for richer auditing (header-based, cheap to attach)
-function computeClientHeaders() {
-  if (typeof window === "undefined") return {};
-  const d = window.document;
-  // viewport might change; we recompute on each boot
-  const viewport = `${window.innerWidth || 0}x${window.innerHeight || 0}`;
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-  const langs = Array.isArray(navigator.languages) ? navigator.languages.join(",") : (navigator.language || "");
-  const platform = navigator.platform || "";
-  const ua = navigator.userAgent || "";
-  const localTime = new Date().toISOString();
-  const deviceMemory = typeof navigator.deviceMemory !== "undefined" ? String(navigator.deviceMemory) : "";
-  const cpuCores = typeof navigator.hardwareConcurrency !== "undefined" ? String(navigator.hardwareConcurrency) : "";
-
-  return {
-    "X-Client-Viewport": viewport,
-    "X-Client-Timezone": tz,
-    "X-Client-Lang": langs,
-    "X-Client-Platform": platform,
-    "X-Client-UA": ua,
-    "X-Client-LocalTime": localTime,
-    "X-Client-DeviceMemory": deviceMemory,
-    "X-Client-CPUCores": cpuCores,
-  };
+// ---- Session header helper ----
+export function setSessionId(jti) {
+  if (jti) {
+    localStorage.setItem("tftp_session_jti", jti);
+    client.defaults.headers.common["X-Session-Id"] = jti;
+  } else {
+    localStorage.removeItem("tftp_session_jti");
+    delete client.defaults.headers.common["X-Session-Id"];
+  }
 }
 
-// set once on load; also refresh on focus (viewport may change)
-function applyClientHeaders() {
-  const h = computeClientHeaders();
-  Object.entries(h).forEach(([k, v]) => {
-    if (v) client.defaults.headers.common[k] = v;
-  });
-}
-applyClientHeaders();
-if (typeof window !== "undefined") {
-  window.addEventListener("focus", applyClientHeaders);
-}
+// ---- Client hints on every request ----
+client.interceptors.request.use((config) => {
+  try {
+    const jti = localStorage.getItem("tftp_session_jti");
+    if (jti) config.headers["X-Session-Id"] = jti;
 
-export async function initApi() {
-  // no-op; headers are already set at module init
-  return;
-}
+    const d = window?.document;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    const lang = navigator.language || "";
+    const viewport = `${window.innerWidth}x${window.innerHeight}`;
+    const platform = navigator.platform || "";
+    const ua = navigator.userAgent || "";
+    const localTime = new Date().toISOString();
+    const deviceMemory = navigator.deviceMemory || "";
+    const cpuCores = navigator.hardwareConcurrency || "";
 
-// Store X-Session-ID header when we get it from /auth login/register responses
-export function setSessionHeader(jti) {
-  if (jti) client.defaults.headers.common["X-Session-ID"] = jti;
-  else delete client.defaults.headers.common["X-Session-ID"];
-}
+    config.headers["X-Client-Timezone"] = tz;
+    config.headers["X-Client-Lang"] = lang;
+    config.headers["X-Client-Viewport"] = viewport;
+    config.headers["X-Client-Platform"] = platform;
+    config.headers["X-Client-UA"] = ua;
+    config.headers["X-Client-LocalTime"] = localTime;
+    config.headers["X-Client-DeviceMemory"] = deviceMemory;
+    config.headers["X-Client-CPUCores"] = cpuCores;
+  } catch {}
+  return config;
+});
 
-// Global 401/403 handler
+// ---- Unauthorized redirect ----
 client.interceptors.response.use(
   (r) => r,
   (error) => {
@@ -74,12 +65,23 @@ client.interceptors.response.use(
       try {
         localStorage.removeItem("tftp_token");
         localStorage.removeItem("token");
+        localStorage.removeItem("tftp_session_jti");
       } catch {}
-      delete client.defaults.headers.common.Authorization;
-      delete client.defaults.headers.common["X-Session-ID"];
+      clearAuthHeader();
+      setSessionId(null);
       const redirect = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.assign(`/login?redirect=${redirect}`);
     }
     return Promise.reject(error);
   }
 );
+
+// init from localStorage on first import
+(() => {
+  try {
+    const token = localStorage.getItem("tftp_token") || localStorage.getItem("token");
+    const jti = localStorage.getItem("tftp_session_jti");
+    if (token) setAuthHeader(token);
+    if (jti) setSessionId(jti);
+  } catch {}
+})();
