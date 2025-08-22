@@ -71,9 +71,10 @@ export const registerUser = asyncHandler(async (req, res) => {
     action: "REGISTER",
     targetType: "User",
     targetId: String(user._id),
-    meta: { email: user.email, sessionJti: jti },
+    meta: { email: user.email, sessionId: jti },
+    actor: user._id,
   });
-  await logAuthLogin(req, user, { via: "register", sessionJti: jti });
+  await logAuthLogin(req, user, { via: "register", sessionId: jti });
 
   res.status(201).json({
     token,
@@ -118,8 +119,7 @@ export const loginUser = asyncHandler(async (req, res) => {
     lastSeenAt: new Date(),
   });
 
-  // include session id so UI can show it
-  await logAuthLogin(req, user, { email, sessionJti: jti });
+  await logAuthLogin(req, user, { email, sessionId: jti });
 
   res.json({
     token,
@@ -138,8 +138,9 @@ export const loginUser = asyncHandler(async (req, res) => {
 /** POST /api/auth/logout */
 export const logoutUser = asyncHandler(async (req, res) => {
   const user = req.user || null;
-  await logAuthLogout(req, user, {});
-  const sessionId = req.headers["x-session-id"];
+  const sessionId = req.headers["x-session-id"] || "";
+  await logAuthLogout(req, user, { sessionId });
+
   if (user?._id && sessionId) {
     const rt = await RefreshToken.findOne({ jti: sessionId, user: user._id, revokedAt: null }).exec();
     if (rt) {
@@ -183,6 +184,7 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
     targetType: "User",
     targetId: String(user._id),
     meta: {},
+    actor: user._id,
   });
 
   const toSend = updated.toObject();
@@ -215,6 +217,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     targetType: "User",
     targetId: String(user._id),
     meta: {},
+    actor: user._id,
   });
 
   res.json({ message: "If the email exists, a reset link has been sent." });
@@ -250,6 +253,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     targetType: "User",
     targetId: String(user._id),
     meta: {},
+    actor: user._id,
   });
 
   res.json({ message: "Password updated" });
@@ -283,6 +287,7 @@ export const changePassword = asyncHandler(async (req, res) => {
     targetType: "User",
     targetId: String(user._id),
     meta: {},
+    actor: user._id,
   });
 
   res.json({ message: "Password changed" });

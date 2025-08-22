@@ -10,53 +10,26 @@ export const client = axios.create({
   withCredentials: false,
 });
 
-// ---- Auth header helpers ----
 export function setAuthHeader(token) {
   if (token) client.defaults.headers.common.Authorization = `Bearer ${token}`;
   else delete client.defaults.headers.common.Authorization;
 }
+export function setSessionIdHeader(sessionId) {
+  if (sessionId) client.defaults.headers.common["X-Session-Id"] = sessionId;
+  else delete client.defaults.headers.common["X-Session-Id"];
+}
 export const clearAuthHeader = () => setAuthHeader(null);
 
-// ---- Session header helper ----
-export function setSessionId(jti) {
-  if (jti) {
-    localStorage.setItem("tftp_session_jti", jti);
-    client.defaults.headers.common["X-Session-Id"] = jti;
-  } else {
-    localStorage.removeItem("tftp_session_jti");
-    delete client.defaults.headers.common["X-Session-Id"];
-  }
+// initialize headers from storage on app boot
+export async function initApi() {
+  try {
+    const token = localStorage.getItem("tftp_token") || localStorage.getItem("token");
+    const sessionId = localStorage.getItem("tftp_session");
+    if (token) setAuthHeader(token);
+    if (sessionId) setSessionIdHeader(sessionId);
+  } catch {}
 }
 
-// ---- Client hints on every request ----
-client.interceptors.request.use((config) => {
-  try {
-    const jti = localStorage.getItem("tftp_session_jti");
-    if (jti) config.headers["X-Session-Id"] = jti;
-
-    const d = window?.document;
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-    const lang = navigator.language || "";
-    const viewport = `${window.innerWidth}x${window.innerHeight}`;
-    const platform = navigator.platform || "";
-    const ua = navigator.userAgent || "";
-    const localTime = new Date().toISOString();
-    const deviceMemory = navigator.deviceMemory || "";
-    const cpuCores = navigator.hardwareConcurrency || "";
-
-    config.headers["X-Client-Timezone"] = tz;
-    config.headers["X-Client-Lang"] = lang;
-    config.headers["X-Client-Viewport"] = viewport;
-    config.headers["X-Client-Platform"] = platform;
-    config.headers["X-Client-UA"] = ua;
-    config.headers["X-Client-LocalTime"] = localTime;
-    config.headers["X-Client-DeviceMemory"] = deviceMemory;
-    config.headers["X-Client-CPUCores"] = cpuCores;
-  } catch {}
-  return config;
-});
-
-// ---- Unauthorized redirect ----
 client.interceptors.response.use(
   (r) => r,
   (error) => {
@@ -65,23 +38,13 @@ client.interceptors.response.use(
       try {
         localStorage.removeItem("tftp_token");
         localStorage.removeItem("token");
-        localStorage.removeItem("tftp_session_jti");
+        localStorage.removeItem("tftp_session");
       } catch {}
-      clearAuthHeader();
-      setSessionId(null);
+      delete client.defaults.headers.common.Authorization;
+      delete client.defaults.headers.common["X-Session-Id"];
       const redirect = encodeURIComponent(window.location.pathname + window.location.search);
       window.location.assign(`/login?redirect=${redirect}`);
     }
     return Promise.reject(error);
   }
 );
-
-// init from localStorage on first import
-(() => {
-  try {
-    const token = localStorage.getItem("tftp_token") || localStorage.getItem("token");
-    const jti = localStorage.getItem("tftp_session_jti");
-    if (token) setAuthHeader(token);
-    if (jti) setSessionId(jti);
-  } catch {}
-})();

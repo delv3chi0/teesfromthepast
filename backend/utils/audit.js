@@ -1,30 +1,39 @@
 // backend/utils/audit.js
 import mongoose from "mongoose";
-import AuditLogModel from "../models/AuditLog.js";
 
-const AuditLog = mongoose.models.AuditLog || AuditLogModel;
+let AuditLog;
+try {
+  AuditLog = mongoose.model("AuditLog");
+} catch {
+  const AuditLogSchema = new mongoose.Schema(
+    {
+      action: { type: String, required: true, index: true },
+      actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+      actorDisplay: { type: String, default: "" },
+      targetType: { type: String, default: "", index: true },
+      targetId: { type: String, default: "", index: true },
+      ip: { type: String, default: "" },
+      userAgent: { type: String, default: "" },
+      meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+    },
+    { timestamps: true }
+  );
+  AuditLogSchema.index({ createdAt: -1, action: 1, targetType: 1 });
+  AuditLog = mongoose.model("AuditLog", AuditLogSchema);
+}
 
 /**
  * Generic audit logger.
- * You may pass `actor` (ObjectId or string) to override req.user; otherwise falls back to req.user?._id.
- *
- * Example:
- *   await logAudit(req, { action: 'LOGIN', targetType: 'Auth', targetId: user._id, actor: user._id, meta: {...} })
+ * NEW: accepts optional `actor` to override req.user (for login/logout).
  */
 export async function logAudit(
   req,
   { action, targetType = "", targetId = "", meta = {}, actor = null }
 ) {
   try {
-    const actorId = actor || req.user?._id || null;
-    const ip =
-      (req.headers["x-forwarded-for"] || "")
-        .toString()
-        .split(",")[0]
-        .trim() ||
-      req.ip ||
-      "";
+    const ip = (req.headers["x-forwarded-for"] || "").toString().split(",")[0].trim() || req.ip || "";
     const userAgent = req.headers["user-agent"] || "";
+    const actorId = actor || req.user?._id || null;
 
     await AuditLog.create({
       action,
@@ -36,7 +45,6 @@ export async function logAudit(
       meta,
     });
   } catch (err) {
-    // never throw from audit logging
     console.warn("[audit] failed:", err?.message);
   }
 }
@@ -45,20 +53,8 @@ export async function logAdminAction(req, payload) {
   return logAudit(req, payload);
 }
 export async function logAuthLogin(req, user, meta = {}) {
-  return logAudit(req, {
-    action: "LOGIN",
-    targetType: "Auth",
-    targetId: user?._id,
-    actor: user?._id,   // <- important so actor isn’t (unknown)
-    meta,
-  });
+  return logAudit(req, { action: "LOGIN", targetType: "Auth", targetId: user?._id, meta, actor: user?._id });
 }
 export async function logAuthLogout(req, user, meta = {}) {
-  return logAudit(req, {
-    action: "LOGOUT",
-    targetType: "Auth",
-    targetId: user?._id,
-    actor: user?._id,   // <- important
-    meta,
-  });
+  return logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: user?._id, meta, actor: user?._id });
 }
