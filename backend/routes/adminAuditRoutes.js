@@ -5,58 +5,36 @@ import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-/**
- * Admin gate that relies ONLY on `protect` + `req.user.isAdmin`,
- * so we don’t depend on a specific middleware export name.
- */
 function requireAdmin(req, res, next) {
   if (req?.user?.isAdmin) return next();
   return res.status(403).json({ message: "Admin access required" });
 }
 
-/**
- * Create or reuse a lightweight AuditLog model **inline** so we don’t require
- * any new files. If a model with the same name already exists (e.g. you have
- * a dedicated model file elsewhere), we reuse it and do NOT redefine it.
- */
+// Reuse existing AuditLog model if already registered
 let AuditLog;
 try {
   AuditLog = mongoose.model("AuditLog");
 } catch {
   const AuditLogSchema = new mongoose.Schema(
     {
+      action: { type: String, required: true, index: true },
       actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-      actorDisplay: { type: String, default: "" }, // fallback when actor doc isn’t populated
-      action: { type: String, index: true, required: true }, // e.g. USER_DELETE, ORDER_UPDATE
-      actionLabel: { type: String, default: "" },
-      targetType: { type: String, index: true, default: "" }, // e.g. "User", "Order", "Design"
-      targetId: { type: String, index: true, default: "" },   // string so we can store non-ObjectId ids too
-      message: { type: String, default: "" },
-      meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+      targetType: { type: String, index: true, default: "" },
+      targetId: { type: String, index: true, default: "" },
       ip: { type: String, default: "" },
       userAgent: { type: String, default: "" },
+      meta: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
-    { timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" } }
+    { timestamps: true }
   );
-
-  // Helpful compound index for common admin filters
   AuditLogSchema.index({ createdAt: -1, action: 1, targetType: 1 });
-
-  AuditLog = mongoose.model("AuditLog", AuditLogSchema);
+  mongoose.model("AuditLog", AuditLogSchema);
+  AuditLog = mongoose.model("AuditLog");
 }
 
 /**
  * GET /api/admin/audit
- * Query params:
- *  - actor: string (User _id)
- *  - action: string
- *  - targetType: string
- *  - targetId: string
- *  - page: number (default 1)
- *  - limit: number (default 100, max 200)
- *
- * Responds:
- *  { items: [], page, limit, total }
+ * Query: actor, action, targetType, targetId, page, limit
  */
 router.get("/", protect, requireAdmin, async (req, res) => {
   try {
@@ -74,12 +52,11 @@ router.get("/", protect, requireAdmin, async (req, res) => {
     const skip = (page - 1) * limit;
 
     const q = {};
-    if (actor) q.actor = actor; // expecting a User _id string
+    if (actor) q.actor = actor;
     if (action) q.action = action;
     if (targetType) q.targetType = targetType;
     if (targetId) q.targetId = targetId;
 
-    // Sort newest first; populate light actor info if present
     const [items, total] = await Promise.all([
       AuditLog.find(q)
         .sort({ createdAt: -1 })
@@ -91,25 +68,39 @@ router.get("/", protect, requireAdmin, async (req, res) => {
       AuditLog.countDocuments(q),
     ]);
 
-    // Normalize a couple of fields the UI expects (actor display fallback)
     const normalized = items.map((i) => ({
       ...i,
       actorDisplay:
-        i.actorDisplay ||
-        i.actor?.username ||
-        i.actor?.email ||
-        (typeof i.actor === "string" ? i.actor : "(unknown)"),
-      actionLabel: i.actionLabel || i.action,
+        i.actor?.username || i.actor?.email || (typeof i.actor === "string" ? i.actor : "(unknown)"),
+      actionLabel: i.action,
       meta: i.meta || {},
     }));
 
     return res.json({ items: normalized, page, limit, total });
   } catch (err) {
-    // Return a safe, CORS-honoring error body (no opaque failures)
     console.error("[admin/audit] list error:", err);
-    return res
-      .status(500)
-      .json({ message: "Failed to fetch audit logs", error: String(err?.message || err) });
+    return res.status(500).json({ message: "Failed to fetch audit logs" });
+  }
+});
+
+/**
+ * DELETE /api/admin/audit
+ * Clears all audit logs OR filtered by the same query params as GET (actor, action, targetType, targetId).
+ */
+router.delete("/", protect, requireAdmin, async (req, res) => {
+  try {
+    const { actor = "", action = "", targetType = "", targetId = "" } = req.query;
+    const q = {};
+    if (actor) q.actor = actor;
+    if (action) q.action = action;
+    if (targetType) q.targetType = targetType;
+    if (targetId) q.targetId = targetId;
+
+    await AuditLog.deleteMany(q).exec();
+    return res.status(204).end();
+  } catch (err) {
+    console.error("[admin/audit] delete error:", err);
+    return res.status(500).json({ message: "Failed to clear audit logs" });
   }
 });
 
