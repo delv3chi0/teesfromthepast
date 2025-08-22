@@ -1,4 +1,3 @@
-// backend/routes/adminAuditRoutes.js
 import express from "express";
 import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware.js";
@@ -18,25 +17,38 @@ try {
     {
       action: { type: String, required: true, index: true },
       actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-      targetType: { type: String, index: true, default: "" },
-      targetId: { type: String, index: true, default: "" },
+      actorDisplay: { type: String, default: "" },
+      targetType: { type: String, default: "", index: true },
+      targetId: { type: String, default: "", index: true },
       ip: { type: String, default: "" },
       userAgent: { type: String, default: "" },
+      message: { type: String, default: "" },
       meta: { type: mongoose.Schema.Types.Mixed, default: {} },
     },
     { timestamps: true }
   );
   AuditLogSchema.index({ createdAt: -1, action: 1, targetType: 1 });
-  mongoose.model("AuditLog", AuditLogSchema);
-  AuditLog = mongoose.model("AuditLog");
+  AuditLog = mongoose.model("AuditLog", AuditLogSchema);
 }
 
-/** LIST */
+/**
+ * GET /api/admin/audit
+ * Query: actor, action, targetType, targetId, page=1, limit<=200
+ * Resp: { items, page, limit, total }
+ */
 router.get("/", protect, requireAdmin, async (req, res) => {
   try {
-    const { actor = "", action = "", targetType = "", targetId = "", page: pageRaw = "1", limit: limitRaw = "100" } = req.query;
+    const {
+      actor = "",
+      action = "",
+      targetType = "",
+      targetId = "",
+      page: pageRaw = "1",
+      limit: limitRaw = "50",
+    } = req.query;
+
     const page = Math.max(parseInt(pageRaw, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 100, 1), 200);
+    const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 200);
     const skip = (page - 1) * limit;
 
     const q = {};
@@ -51,39 +63,52 @@ router.get("/", protect, requireAdmin, async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate({ path: "actor", select: "username email" })
-        .lean(),
+        .lean()
+        .exec(),
       AuditLog.countDocuments(q),
     ]);
 
     const normalized = items.map((i) => ({
       ...i,
-      actorDisplay: i.actor?.username || i.actor?.email || (typeof i.actor === "string" ? i.actor : "(unknown)"),
-      actionLabel: i.action,
+      actorDisplay:
+        i.actorDisplay ||
+        i.actor?.username ||
+        i.actor?.email ||
+        (typeof i.actor === "string" ? i.actor : "(unknown)"),
       meta: i.meta || {},
     }));
 
-    res.json({ items: normalized, page, limit, total });
+    return res.json({ items: normalized, page, limit, total });
   } catch (err) {
     console.error("[admin/audit] list error:", err);
-    res.status(500).json({ message: "Failed to fetch audit logs" });
+    return res.status(500).json({ message: "Failed to fetch audit logs" });
   }
 });
 
-/** DETAILS (full meta) */
+/** GET /api/admin/audit/:id  — full details for modal */
 router.get("/:id", protect, requireAdmin, async (req, res) => {
   try {
-    const item = await AuditLog.findById(req.params.id)
-      .populate({ path: "actor", select: "username email firstName lastName" })
-      .lean();
-    if (!item) return res.status(404).json({ message: "Not found" });
-    res.json(item);
-  } catch (err) {
-    console.error("[admin/audit] details error:", err);
-    res.status(500).json({ message: "Failed to fetch audit item" });
+    const doc = await AuditLog.findById(req.params.id)
+      .populate({ path: "actor", select: "username email" })
+      .lean()
+      .exec();
+    if (!doc) return res.status(404).json({ message: "Not found" });
+    doc.actorDisplay =
+      doc.actorDisplay ||
+      doc.actor?.username ||
+      doc.actor?.email ||
+      (typeof doc.actor === "string" ? doc.actor : "(unknown)");
+    res.json(doc);
+  } catch (e) {
+    res.status(500).json({ message: "Failed to load details" });
   }
 });
 
-/** CLEAR (optionally filtered) */
+/**
+ * DELETE /api/admin/audit
+ * Body/Query: same filters as GET. Deletes matching logs.
+ * Used by “Clear logs” with current filters.
+ */
 router.delete("/", protect, requireAdmin, async (req, res) => {
   try {
     const { actor = "", action = "", targetType = "", targetId = "" } = req.query;
@@ -93,11 +118,10 @@ router.delete("/", protect, requireAdmin, async (req, res) => {
     if (targetType) q.targetType = targetType;
     if (targetId) q.targetId = targetId;
 
-    await AuditLog.deleteMany(q).exec();
-    res.status(204).end();
-  } catch (err) {
-    console.error("[admin/audit] delete error:", err);
-    res.status(500).json({ message: "Failed to clear audit logs" });
+    const result = await AuditLog.deleteMany(q);
+    res.json({ deleted: result.deletedCount || 0 });
+  } catch (e) {
+    res.status(500).json({ message: "Failed to clear logs" });
   }
 });
 

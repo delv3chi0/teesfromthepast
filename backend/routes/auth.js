@@ -1,15 +1,13 @@
-// backend/routes/auth.js
 import express from "express";
-import rateLimit from "express-rate-limit";
-import { protect } from "../middleware/authMiddleware.js";
 import { body } from "express-validator";
+import { protect } from "../middleware/authMiddleware.js";
 
 import {
   registerUser,
   loginUser,
+  logoutUser,
   getUserProfile,
   updateUserProfile,
-  logoutUser,
   requestPasswordReset,
   resetPassword,
   changePassword,
@@ -18,64 +16,42 @@ import {
 
 const router = express.Router();
 
-// --- Validation Rule Sets ---
-const registerValidationRules = [
-  body("username", "Username is required").not().isEmpty().trim().escape(),
-  body("email", "Please include a valid email").isEmail().normalizeEmail(),
-  body("password", "Password must be 6 or more characters").isLength({ min: 6 }),
-  body("firstName").optional().trim().escape(),
-  body("lastName").optional().trim().escape(),
+/** validators */
+const vRegister = [
+  body("username").trim().notEmpty().withMessage("Username is required"),
+  body("email").isEmail().withMessage("Valid email required"),
+  body("password").isLength({ min: 6 }).withMessage("Password min 6 chars"),
 ];
 
-const loginValidationRules = [
-  body("email", "Please include a valid email").isEmail().normalizeEmail(),
-  body("password", "Password is required").not().isEmpty(),
+const vLogin = [
+  body("email").isEmail().withMessage("Valid email required"),
+  body("password").notEmpty().withMessage("Password is required"),
 ];
 
-const requestPasswordResetRules = [
-  body("email", "Please provide a valid email").isEmail().normalizeEmail(),
+const vReqReset = [body("email").isEmail().withMessage("Valid email required")];
+
+const vReset = [
+  body("token").notEmpty().withMessage("Reset token required"),
+  body("password").isLength({ min: 6 }).withMessage("Password min 6 chars"),
 ];
 
-const resetPasswordRules = [
-  body("token", "Reset token is required").not().isEmpty(),
-  body("password", "New password must be at least 6 characters").isLength({ min: 6 }),
+const vChange = [
+  body("currentPassword").notEmpty().withMessage("Current password required"),
+  body("newPassword").isLength({ min: 6 }).withMessage("New password min 6 chars"),
 ];
 
-const changePasswordRules = [
-  body("currentPassword", "Current password is required").not().isEmpty(),
-  body("newPassword", "New password must be at least 6 characters").isLength({ min: 6 }),
-];
-
-// --- Rate limiting ---
-const byIPLoginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many login attempts from this IP. Try again later.",
-});
-const loginPerEmailLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  keyGenerator: (req) => req.body?.email || req.ip,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many login attempts for this email. Try again later.",
-});
-
-// --- Auth endpoints ---
-router.post("/register", registerValidationRules, registerUser);
-router.post("/login", byIPLoginLimiter, loginPerEmailLimiter, loginValidationRules, loginUser);
+/** routes */
+router.post("/register", vRegister, registerUser);
+router.post("/login", vLogin, loginUser);
 router.post("/logout", protect, logoutUser);
+
+router.get("/profile", protect, getUserProfile);
+router.put("/profile", protect, updateUserProfile);
+
+router.post("/request-password-reset", vReqReset, requestPasswordReset);
+router.post("/reset-password", vReset, resetPassword);
+router.put("/change-password", protect, vChange, changePassword);
+
 router.post("/refresh", protect, refreshSession);
-
-router
-  .route("/profile")
-  .get(protect, getUserProfile)
-  .put(protect, updateUserProfile);
-
-router.post("/request-password-reset", requestPasswordResetRules, requestPasswordReset);
-router.post("/reset-password", resetPasswordRules, resetPassword);
-router.put("/change-password", protect, changePasswordRules, changePassword);
 
 export default router;
