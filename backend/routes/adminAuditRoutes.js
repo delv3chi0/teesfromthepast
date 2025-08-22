@@ -10,7 +10,6 @@ function requireAdmin(req, res, next) {
   return res.status(403).json({ message: "Admin access required" });
 }
 
-// Reuse existing AuditLog model if already registered
 let AuditLog;
 try {
   AuditLog = mongoose.model("AuditLog");
@@ -32,21 +31,10 @@ try {
   AuditLog = mongoose.model("AuditLog");
 }
 
-/**
- * GET /api/admin/audit
- * Query: actor, action, targetType, targetId, page, limit
- */
+/** LIST */
 router.get("/", protect, requireAdmin, async (req, res) => {
   try {
-    const {
-      actor = "",
-      action = "",
-      targetType = "",
-      targetId = "",
-      page: pageRaw = "1",
-      limit: limitRaw = "100",
-    } = req.query;
-
+    const { actor = "", action = "", targetType = "", targetId = "", page: pageRaw = "1", limit: limitRaw = "100" } = req.query;
     const page = Math.max(parseInt(pageRaw, 10) || 1, 1);
     const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 100, 1), 200);
     const skip = (page - 1) * limit;
@@ -63,30 +51,39 @@ router.get("/", protect, requireAdmin, async (req, res) => {
         .skip(skip)
         .limit(limit)
         .populate({ path: "actor", select: "username email" })
-        .lean()
-        .exec(),
+        .lean(),
       AuditLog.countDocuments(q),
     ]);
 
     const normalized = items.map((i) => ({
       ...i,
-      actorDisplay:
-        i.actor?.username || i.actor?.email || (typeof i.actor === "string" ? i.actor : "(unknown)"),
+      actorDisplay: i.actor?.username || i.actor?.email || (typeof i.actor === "string" ? i.actor : "(unknown)"),
       actionLabel: i.action,
       meta: i.meta || {},
     }));
 
-    return res.json({ items: normalized, page, limit, total });
+    res.json({ items: normalized, page, limit, total });
   } catch (err) {
     console.error("[admin/audit] list error:", err);
-    return res.status(500).json({ message: "Failed to fetch audit logs" });
+    res.status(500).json({ message: "Failed to fetch audit logs" });
   }
 });
 
-/**
- * DELETE /api/admin/audit
- * Clears all audit logs OR filtered by the same query params as GET (actor, action, targetType, targetId).
- */
+/** DETAILS (full meta) */
+router.get("/:id", protect, requireAdmin, async (req, res) => {
+  try {
+    const item = await AuditLog.findById(req.params.id)
+      .populate({ path: "actor", select: "username email firstName lastName" })
+      .lean();
+    if (!item) return res.status(404).json({ message: "Not found" });
+    res.json(item);
+  } catch (err) {
+    console.error("[admin/audit] details error:", err);
+    res.status(500).json({ message: "Failed to fetch audit item" });
+  }
+});
+
+/** CLEAR (optionally filtered) */
 router.delete("/", protect, requireAdmin, async (req, res) => {
   try {
     const { actor = "", action = "", targetType = "", targetId = "" } = req.query;
@@ -97,10 +94,10 @@ router.delete("/", protect, requireAdmin, async (req, res) => {
     if (targetId) q.targetId = targetId;
 
     await AuditLog.deleteMany(q).exec();
-    return res.status(204).end();
+    res.status(204).end();
   } catch (err) {
     console.error("[admin/audit] delete error:", err);
-    return res.status(500).json({ message: "Failed to clear audit logs" });
+    res.status(500).json({ message: "Failed to clear audit logs" });
   }
 });
 
