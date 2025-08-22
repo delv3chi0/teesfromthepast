@@ -1,64 +1,96 @@
 // frontend/src/pages/AdminPage.jsx
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel,
-  Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner,
-  Alert, AlertIcon, Button, useToast, Badge, HStack, IconButton, Tooltip,
+  Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
+  Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner, Alert, AlertIcon,
+  Button, useToast, Tag, Image, Select,
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
+  FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
+  Divider, Tooltip, Grid, GridItem, Flex, SimpleGrid, HStack, Badge
 } from "@chakra-ui/react";
-import { FaSync, FaTrashAlt } from "react-icons/fa";
+import {
+  FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey,
+  FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash
+} from "react-icons/fa";
+
 import { client, setAuthHeader } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
 import InventoryPanel from "../components/admin/InventoryPanel.jsx";
-import AdminAuditLogs from "./admin/AdminAuditLogs.jsx";
+import AdminDashboard from "./admin/AdminDashboard.jsx";
+import AdminAuditLogs from "./AdminAuditLogs.jsx"; // lives at frontend/src/pages/AdminAuditLogs.jsx
 
-// Helper to format datetimes safely
-const fmt = (d) => (d ? new Date(d).toLocaleString() : "—");
+// helper
+const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
+const money = (cents) => (typeof cents === "number" ? `$${(cents / 100).toFixed(2)}` : "—");
+const monthName = (yyyymm) => {
+  if (!yyyymm || typeof yyyymm !== "string" || yyyymm.length !== 7) return "N/A";
+  const [y, m] = yyyymm.split("-");
+  const date = new Date(parseInt(y), parseInt(m) - 1, 1);
+  return date.toLocaleString("default", { month: "short", year: "numeric" });
+};
 
 export default function AdminPage() {
   const toast = useToast();
   const { token } = useAuth();
-
-  // Keep axios auth header synced with our token
   useEffect(() => { setAuthHeader(token); }, [token]);
 
-  // -------- STATE (declare BEFORE any callbacks that use them) --------
   const [tabIndex, setTabIndex] = useState(0);
 
   // Users
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState("");
+  const [selectedUser, setSelectedUser] = useState(null);
 
   // Orders
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [loadingSelectedOrder, setLoadingSelectedOrder] = useState(false);
 
   // Designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(false);
   const [designsError, setDesignsError] = useState("");
 
-  // Sessions / Devices
+  // Devices / Sessions
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sessionsError, setSessionsError] = useState("");
+  const [sessionsPage] = useState(1);
 
-  // Audit tab (no data stored here; component fetches)
+  // Audit logs
   const [auditsLoaded, setAuditsLoaded] = useState(false);
 
-  // -------- FETCHERS (now safe to reference the state above) --------
+  // Modals open/close
+  const { isOpen: isViewUserModalOpen, onOpen: onViewUserModalOpen, onClose: onViewUserModalClose } = useDisclosure();
+  const { isOpen: isEditModalOpen, onOpen: onEditModalOpen, onClose: onEditModalClose } = useDisclosure();
+  const { isOpen: isDeleteUserModalOpen, onOpen: onDeleteUserModalOpen, onClose: onDeleteUserModalClose } = useDisclosure();
+  const { isOpen: isViewOrderModalOpen, onOpen: onOpenViewOrderModal, onClose: onCloseViewOrderModal } = useDisclosure();
+  const { isOpen: isDeleteOrderModalOpen, onOpen: onDeleteOrderModalOpen, onClose: onDeleteOrderModalClose } = useDisclosure();
+  const { isOpen: isViewDesignModalOpen, onOpen: onOpenViewDesignModal, onClose: onCloseViewDesignModal } = useDisclosure();
+  const { isOpen: isDeleteDesignModalOpen, onOpen: onOpenDeleteDesignModal, onClose: onCloseDeleteDesignModal } = useDisclosure();
+
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [designToDelete, setDesignToDelete] = useState(null);
+
+  const [editFormData, setEditFormData] = useState({
+    username: "", email: "", firstName: "", lastName: "", isAdmin: false, newPassword: "", confirmNewPassword: ""
+  });
+  const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
+  const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
+
+  // ---------- Fetchers ----------
   const fetchUsers = useCallback(async () => {
     if (users.length > 0) return;
     setLoadingUsers(true); setUsersError("");
     try {
       const { data } = await client.get("/admin/users", { headers: { Authorization: `Bearer ${token}` } });
-      setUsers(Array.isArray(data) ? data : data?.items || []);
-    } catch (e) {
+      setUsers(Array.isArray(data) ? data : (data?.items || []));
+    } catch {
       setUsersError("Failed to fetch users");
-    } finally {
-      setLoadingUsers(false);
-    }
+    } finally { setLoadingUsers(false); }
   }, [token, users.length]);
 
   const fetchOrders = useCallback(async () => {
@@ -66,12 +98,10 @@ export default function AdminPage() {
     setLoadingOrders(true); setOrdersError("");
     try {
       const { data } = await client.get("/admin/orders", { headers: { Authorization: `Bearer ${token}` } });
-      setOrders(Array.isArray(data) ? data : data?.items || []);
-    } catch (e) {
+      setOrders(Array.isArray(data) ? data : (data?.items || []));
+    } catch {
       setOrdersError("Failed to fetch orders");
-    } finally {
-      setLoadingOrders(false);
-    }
+    } finally { setLoadingOrders(false); }
   }, [token, orders.length]);
 
   const fetchDesigns = useCallback(async () => {
@@ -79,12 +109,10 @@ export default function AdminPage() {
     setLoadingDesigns(true); setDesignsError("");
     try {
       const { data } = await client.get("/admin/designs", { headers: { Authorization: `Bearer ${token}` } });
-      setDesigns(Array.isArray(data) ? data : data?.items || []);
-    } catch (e) {
-      setLoadingDesigns("Failed to fetch designs");
-    } finally {
-      setLoadingDesigns(false);
-    }
+      setDesigns(Array.isArray(data) ? data : (data?.items || []));
+    } catch {
+      setDesignsError("Failed to fetch designs");
+    } finally { setLoadingDesigns(false); }
   }, [token, designs.length]);
 
   const fetchSessions = useCallback(async () => {
@@ -92,56 +120,187 @@ export default function AdminPage() {
     try {
       const { data } = await client.get("/admin/sessions", {
         headers: { Authorization: `Bearer ${token}` },
-        params: { page: 1, limit: 100, activeOnly: true },
+        params: { page: sessionsPage, limit: 100, activeOnly: true }, // only active
       });
       setSessions(data?.items || []);
-    } catch (e) {
+    } catch {
       setSessionsError("Failed to fetch sessions");
-    } finally {
-      setLoadingSessions(false);
-    }
-  }, [token]);
+    } finally { setLoadingSessions(false); }
+  }, [token, sessionsPage]);
 
-  // Map tab index to loader
-  // 0 Dashboard, 1 Users, 2 Orders, 3 Designs, 4 Inventory, 5 Devices, 6 Audit Logs
+  // Tab -> loader
   const dataFetchers = {
-    0: null,
+    0: null,          // Dashboard handles itself
     1: fetchUsers,
     2: fetchOrders,
     3: fetchDesigns,
-    4: null,        // Inventory panel fetches internally
-    5: fetchSessions,
+    4: null,          // Inventory loads internally
+    5: fetchSessions, // Devices
     6: () => setAuditsLoaded(true),
   };
-
   const handleTabsChange = (index) => {
     setTabIndex(index);
     const f = dataFetchers[index];
     if (typeof f === "function") f();
   };
 
-  // -------- PANELS --------
+  // ---------- Users ----------
+  const handleViewUser = (user) => { setSelectedUser(user); onViewUserModalOpen(); };
+  const handleOpenEditUser = (user) => {
+    setSelectedUser(user);
+    setEditFormData({
+      username: user.username, email: user.email, firstName: user.firstName || "", lastName: user.lastName || "",
+      isAdmin: user.isAdmin, newPassword: "", confirmNewPassword: ""
+    });
+    onEditModalOpen();
+  };
+  const handleEditFormChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setEditFormData((prev) => ({ ...prev, [name]: type === "checkbox" || type === "switch" ? checked : value }));
+  };
+  const handleSaveChanges = async () => {
+    if (!selectedUser) return;
+    if (editFormData.newPassword && editFormData.newPassword !== editFormData.confirmNewPassword) {
+      toast({ title: "Password Mismatch", status: "error" }); return;
+    }
+    const payload = { ...editFormData };
+    if (!payload.newPassword) delete payload.newPassword;
+    delete payload.confirmNewPassword;
+    try {
+      const { data: updatedUser } = await client.put(`/admin/users/${selectedUser._id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "User Updated", status: "success" });
+      setUsers((prev) => prev.map((u) => (u._id === updatedUser._id ? updatedUser : u)));
+      onEditModalClose();
+    } catch (e) {
+      toast({ title: "Update Failed", description: e.response?.data?.message, status: "error" });
+    }
+  };
+  const handleOpenDeleteUser = (user) => { setSelectedUser(user); onDeleteUserModalOpen(); };
+  const confirmDeleteUser = async () => {
+    if (!selectedUser) return;
+    try {
+      await client.delete(`/admin/users/${selectedUser._id}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "User Deleted", status: "success" });
+      setUsers((prev) => prev.filter((u) => u._id !== selectedUser._id));
+      onDeleteUserModalClose();
+    } catch (e) {
+      toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
+    }
+  };
+
+  // ---------- Orders ----------
+  const handleOpenDeleteOrderDialog = (order) => { setOrderToDelete(order); onDeleteOrderModalOpen(); };
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    try {
+      await client.delete(`/admin/orders/${orderToDelete._id}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "Order Deleted", status: "success" });
+      setOrders((prev) => prev.filter((o) => o._id !== orderToDelete._id));
+      onDeleteOrderModalClose();
+    } catch (e) {
+      toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
+      onDeleteOrderModalOpen();
+    }
+  };
+  const handleViewOrder = async (orderId) => {
+    setLoadingSelectedOrder(true); onOpenViewOrderModal();
+    try {
+      const { data } = await client.get(`/admin/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+      setSelectedOrder(data);
+    } catch (e) {
+      toast({ title: "Error Fetching Order", description: e.response?.data?.message, status: "error" });
+      onCloseViewOrderModal();
+    } finally {
+      setLoadingSelectedOrder(false);
+    }
+  };
+  const handleStatusChange = async (orderId, newStatus) => {
+    const original = [...orders];
+    setOrders((prev) => prev.map((o) => (o._id === orderId ? { ...o, orderStatus: newStatus } : o)));
+    try {
+      await client.put(`/admin/orders/${orderId}/status`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "Status Updated", status: "success", duration: 2000 });
+    } catch (e) {
+      setOrders(original);
+      toast({ title: "Update Failed", description: e.response?.data?.message, status: "error" });
+    }
+  };
+
+  // ---------- Designs ----------
+  const handleViewDesign = (design) => { setSelectedDesign(design); onOpenViewDesignModal(); };
+  const [selectedDesign, setSelectedDesign] = useState(null);
+  const handleOpenDeleteDesignDialog = (design) => { setDesignToDelete(design); onOpenDeleteDesignModal(); };
+  const confirmDeleteDesign = async () => {
+    if (!designToDelete) return;
+    try {
+      await client.delete(`/admin/designs/${designToDelete._id}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "Design Deleted", status: "success" });
+      setDesigns((prev) => prev.filter((d) => d._id !== designToDelete._id));
+      onCloseDeleteDesignModal();
+    } catch (e) {
+      toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
+    }
+  };
+
+  // ---------- Devices actions ----------
+  const revokeSession = async (jti) => {
+    try {
+      await client.delete(`/admin/sessions/${jti}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "Session revoked", status: "success" });
+      await fetchSessions();
+    } catch {
+      toast({ title: "Failed to revoke session", status: "error" });
+    }
+  };
+  const revokeAllForUser = async (userId) => {
+    try {
+      await client.delete(`/admin/sessions/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+      toast({ title: "All sessions revoked for user", status: "success" });
+      await fetchSessions();
+    } catch {
+      toast({ title: "Failed to revoke user sessions", status: "error" });
+    }
+  };
+
+  // ---------- Panels (restored styling/format) ----------
   const UsersPanel = () => (
-    <Box layerStyle="cardBlue" p={{ base: 2, md: 4 }}>
-      <HStack justify="space-between" mb={3}>
-        <Heading size="md">Users</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setUsers([]); fetchUsers(); }} isLoading={loadingUsers}>Refresh</Button>
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
+        <Heading size="md">User Management</Heading>
+        <Button size="sm" leftIcon={<FaSync/>} onClick={() => { setUsers([]); fetchUsers(); }} isLoading={loadingUsers}>Refresh</Button>
       </HStack>
       {loadingUsers ? (
-        <VStack p={8}><Spinner/></VStack>
+        <VStack p={10}><Spinner/></VStack>
       ) : usersError ? (
         <Alert status="error"><AlertIcon/>{usersError}</Alert>
       ) : (
-        <TableContainer>
-          <Table size="sm" variant="simple">
-            <Thead><Tr><Th>Username</Th><Th>Email</Th><Th>Created</Th><Th>Admin</Th></Tr></Thead>
+        <TableContainer w="100%">
+          <Table variant="simple" size="sm" w="100%">
+            <Thead>
+              <Tr>
+                <Th>ID</Th>
+                <Th>Username</Th>
+                <Th>Email</Th>
+                <Th>Name</Th>
+                <Th>Admin</Th>
+                <Th>Joined</Th>
+                <Th>Actions</Th>
+              </Tr>
+            </Thead>
             <Tbody>
-              {users.map(u => (
-                <Tr key={u._id}>
-                  <Td><Text fontWeight="bold">{u.username}</Text></Td>
-                  <Td>{u.email}</Td>
-                  <Td>{fmt(u.createdAt)}</Td>
-                  <Td>{u.isAdmin ? <Badge colorScheme="purple">Yes</Badge> : "No"}</Td>
+              {users.map((user) => (
+                <Tr key={user._id}>
+                  <Td fontSize="xs" title={user._id}>{String(user._id).substring(0, 8)}...</Td>
+                  <Td>{user.username}</Td>
+                  <Td>{user.email}</Td>
+                  <Td>{`${user.firstName || ""} ${user.lastName || ""}`.trim()}</Td>
+                  <Td><Tag size="sm" colorScheme={user.isAdmin ? "green" : "gray"}>{user.isAdmin ? "Yes" : "No"}</Tag></Td>
+                  <Td>{fmtDate(user.createdAt)}</Td>
+                  <Td>
+                    <Tooltip label="View User Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)} /></Tooltip>
+                    <Tooltip label="Edit User"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)} /></Tooltip>
+                    <Tooltip label="Delete User"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteUser(user)} /></Tooltip>
+                  </Td>
                 </Tr>
               ))}
             </Tbody>
@@ -151,59 +310,142 @@ export default function AdminPage() {
     </Box>
   );
 
-  const OrdersPanel = () => (
-    <Box layerStyle="cardBlue" p={{ base: 2, md: 4 }}>
-      <HStack justify="space-between" mb={3}>
-        <Heading size="md">Orders</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setOrders([]); fetchOrders(); }} isLoading={loadingOrders}>Refresh</Button>
-      </HStack>
-      {loadingOrders ? (
-        <VStack p={8}><Spinner/></VStack>
-      ) : ordersError ? (
-        <Alert status="error"><AlertIcon/>{ordersError}</Alert>
-      ) : (
-        <TableContainer>
-          <Table size="sm" variant="simple">
-            <Thead><Tr><Th>ID</Th><Th>User</Th><Th>Total</Th><Th>Status</Th><Th>Created</Th></Tr></Thead>
-            <Tbody>
-              {orders.map(o => (
-                <Tr key={o._id || o.id}>
-                  <Td>{(o._id || o.id || "").toString().slice(0,8)}…</Td>
-                  <Td>{o.user?.username || o.user?.email || "—"}</Td>
-                  <Td>{o.total != null ? `$${Number(o.total).toFixed(2)}` : "—"}</Td>
-                  <Td>{o.status || "—"}</Td>
-                  <Td>{fmt(o.createdAt)}</Td>
+  const OrdersPanel = () => {
+    const getStatusColor = (status) => {
+      if (status === "Delivered") return "green.200";
+      if (status === "Shipped") return "blue.200";
+      if (status === "Cancelled") return "red.200";
+      return "gray.200";
+    };
+    return (
+      <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+        <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
+          <Heading size="md">Order Management</Heading>
+          <Button size="sm" leftIcon={<FaSync/>} onClick={() => { setOrders([]); fetchOrders(); }} isLoading={loadingOrders}>Refresh</Button>
+        </HStack>
+        {loadingOrders ? (
+          <VStack p={10}><Spinner/></VStack>
+        ) : ordersError ? (
+          <Alert status="error"><AlertIcon/>{ordersError}</Alert>
+        ) : (
+          <TableContainer w="100%">
+            <Table variant="simple" size="sm" w="100%">
+              <Thead>
+                <Tr>
+                  <Th>ID</Th>
+                  <Th>User</Th>
+                  <Th>Date</Th>
+                  <Th>Total</Th>
+                  <Th>Pay Status</Th>
+                  <Th>Order Status</Th>
+                  <Th>Items</Th>
+                  <Th>Actions</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      )}
-    </Box>
-  );
+              </Thead>
+              <Tbody>
+                {orders.map((order) => (
+                  <Tr key={order._id}>
+                    <Td fontSize="xs">{String(order._id).substring(0, 8)}...</Td>
+                    <Td>{order.user?.email}</Td>
+                    <Td>{fmtDate(order.createdAt)}</Td>
+                    <Td>{money(order.totalAmount)}</Td>
+                    <Td><Tag size="sm" colorScheme={order.paymentStatus === "Succeeded" ? "green" : "orange"}>{order.paymentStatus}</Tag></Td>
+                    <Td>
+                      <Select size="xs" variant="outline" color="brand.textDark" value={order.orderStatus} onChange={(e) => handleStatusChange(order._id, e.target.value)} bg={getStatusColor(order.orderStatus)} borderRadius="md" maxW="140px">
+                        <option value="Processing">Processing</option>
+                        <option value="Shipped">Shipped</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </Select>
+                    </Td>
+                    <Td>{order.orderItems?.length || 0}</Td>
+                    <Td>
+                      <Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewOrder(order._id)} /></Tooltip>
+                      <Tooltip label="Delete Order"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)} /></Tooltip>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
+    );
+  };
 
   const DesignsPanel = () => (
-    <Box layerStyle="cardBlue" p={{ base: 2, md: 4 }}>
-      <HStack justify="space-between" mb={3}>
-        <Heading size="md">Designs</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setDesigns([]); fetchDesigns(); }} isLoading={loadingDesigns}>Refresh</Button>
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
+        <Heading size="md">Design Management</Heading>
+        <Button size="sm" leftIcon={<FaSync/>} onClick={() => { setDesigns([]); fetchDesigns(); }} isLoading={loadingDesigns}>Refresh</Button>
       </HStack>
       {loadingDesigns ? (
-        <VStack p={8}><Spinner/></VStack>
+        <VStack p={10}><Spinner/></VStack>
       ) : designsError ? (
         <Alert status="error"><AlertIcon/>{designsError}</Alert>
       ) : (
-        <TableContainer>
-          <Table size="sm" variant="simple">
-            <Thead><Tr><Th>Title</Th><Th>Owner</Th><Th>Created</Th></Tr></Thead>
+        <TableContainer w="100%">
+          <Table variant="simple" size="sm" w="100%">
+            <Thead>
+              <Tr>
+                <Th>Preview</Th>
+                <Th>Prompt</Th>
+                <Th>Meta</Th>
+                <Th>Creator</Th>
+                <Th>Created</Th>
+                <Th>Votes (Month)</Th>
+                <Th>Actions</Th>
+              </Tr>
+            </Thead>
             <Tbody>
-              {designs.map(d => (
-                <Tr key={d._id || d.id}>
-                  <Td>{d.title || d.name || "—"}</Td>
-                  <Td>{d.user?.username || d.user?.email || "—"}</Td>
-                  <Td>{fmt(d.createdAt)}</Td>
-                </Tr>
-              ))}
+              {designs.map((design) => {
+                const meta = design.settings || {};
+                const mode = meta.mode || (meta.imageStrength != null ? "i2i" : "t2i");
+                const ar = meta.aspectRatio || "—";
+                const cfg = meta.cfgScale ?? "—";
+                const stp = meta.steps ?? "—";
+                const str = meta.imageStrength != null ? Math.round(meta.imageStrength * 100) + "%" : "—";
+                const previewSrc = design.thumbUrl || design.publicUrl || design.imageDataUrl || "";
+                return (
+                  <Tr key={design._id}>
+                    <Td>
+                      {previewSrc ? (
+                        <Image src={previewSrc} boxSize="56px" objectFit="cover" borderRadius="md" />
+                      ) : (
+                        <Box boxSize="56px" borderWidth="1px" borderRadius="md" />
+                      )}
+                    </Td>
+                    <Td fontSize="xs" maxW="380px" whiteSpace="normal">{design.prompt}</Td>
+                    <Td>
+                      <VStack align="start" spacing={0}>
+                        <HStack spacing={2}>
+                          <Badge colorScheme={mode === "i2i" ? "purple" : "blue"}>{mode.toUpperCase()}</Badge>
+                          <Badge>{ar}</Badge>
+                        </HStack>
+                        <HStack spacing={3} fontSize="xs" color="whiteAlpha.800">
+                          <Text>CFG {cfg}</Text>
+                          <Text>Steps {stp}</Text>
+                          <Text>Strength {str}</Text>
+                        </HStack>
+                      </VStack>
+                    </Td>
+                    <Td>{design.user?.username || "N/A"}</Td>
+                    <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
+                    <Td>
+                      {design.isSubmittedForContest && design.contestSubmissionMonth ? (
+                        <VStack align="center" spacing={0}>
+                          <Tag size="sm" colorScheme="blue" borderRadius="full">{design.votes || 0} Votes</Tag>
+                          <Text fontSize="xs" color="brand.textMuted">{monthName(design.contestSubmissionMonth)}</Text>
+                        </VStack>
+                      ) : (<Text fontSize="xs" color="brand.textMuted">N/A</Text>)}
+                    </Td>
+                    <Td>
+                      <Tooltip label="View Design"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} /></Tooltip>
+                      <Tooltip label="Delete Design"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} /></Tooltip>
+                    </Td>
+                  </Tr>
+                );
+              })}
             </Tbody>
           </Table>
         </TableContainer>
@@ -212,13 +454,13 @@ export default function AdminPage() {
   );
 
   const DevicesPanel = () => (
-    <Box layerStyle="cardBlue" p={{ base: 2, md: 4 }}>
-      <HStack justify="space-between" mb={3}>
+    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
+      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
         <Heading size="md">Devices / Active Sessions</Heading>
         <Button
-          size="sm"
           leftIcon={<FaSync />}
-          onClick={() => fetchSessions()}
+          size="sm"
+          onClick={fetchSessions}
           isLoading={loadingSessions}
         >
           Refresh
@@ -226,12 +468,12 @@ export default function AdminPage() {
       </HStack>
 
       {loadingSessions ? (
-        <VStack p={8}><Spinner/></VStack>
+        <VStack p={10}><Spinner/></VStack>
       ) : sessionsError ? (
         <Alert status="error"><AlertIcon/>{sessionsError}</Alert>
       ) : (
-        <TableContainer>
-          <Table size="sm" variant="simple">
+        <TableContainer w="100%">
+          <Table size="sm" variant="simple" w="100%">
             <Thead>
               <Tr>
                 <Th>User</Th>
@@ -246,39 +488,38 @@ export default function AdminPage() {
               </Tr>
             </Thead>
             <Tbody>
-              {sessions.map(s => (
-                <Tr key={s.jti}>
+              {sessions.map((i) => (
+                <Tr key={i.jti}>
                   <Td>
-                    <Text fontWeight="bold">{s.user?.username || "(unknown)"}</Text>
-                    <Text fontSize="xs" color="gray.500">{s.user?.email}</Text>
+                    <Text fontWeight="bold">{i.user?.username || "(unknown)"}</Text>
+                    <Text fontSize="xs" color="gray.500">{i.user?.email}</Text>
+                    {i.user?._id && (
+                      <Tooltip label="Revoke ALL for this user">
+                        <ChakraIconButton
+                          ml={2}
+                          size="xs"
+                          icon={<FaUserSlash />}
+                          aria-label="Revoke all"
+                          onClick={() => revokeAllForUser(i.user?._id)}
+                        />
+                      </Tooltip>
+                    )}
                   </Td>
-                  <Td>{s.ip || "—"}</Td>
-                  <Td><Text maxW="360px" noOfLines={1} title={s.userAgent}>{s.userAgent || "—"}</Text></Td>
-                  <Td>{fmt(s.createdAt)}</Td>
-                  <Td>{fmt(s.lastSeenAt || s.createdAt)}</Td>
-                  <Td>{fmt(s.expiresAt)}</Td>
+                  <Td>{i.ip || "—"}</Td>
+                  <Td><Text maxW="360px" noOfLines={1} title={i.userAgent}>{i.userAgent || "—"}</Text></Td>
+                  <Td>{fmtDate(i.createdAt)}</Td>
+                  <Td>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
+                  <Td>{fmtDate(i.expiresAt)}</Td>
                   <Td>
-                    {s.status === "active" ? <Badge colorScheme="green">Active</Badge> :
-                     s.status === "expired" ? <Badge>Expired</Badge> :
-                     <Badge colorScheme="red">Revoked</Badge>}
+                    {i.revokedAt
+                      ? <Badge colorScheme="red">Revoked</Badge>
+                      : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)
+                    }
                   </Td>
                   <Td isNumeric>
-                    {s.status === "active" && (
+                    {!i.revokedAt && (
                       <Tooltip label="Revoke this session">
-                        <IconButton
-                          size="sm"
-                          icon={<FaTrashAlt />}
-                          aria-label="Revoke"
-                          onClick={async () => {
-                            try {
-                              await client.delete(`/admin/sessions/${s.jti}`, { headers: { Authorization: `Bearer ${token}` } });
-                              await fetchSessions();
-                              toast({ title: "Session revoked", status: "success" });
-                            } catch {
-                              toast({ title: "Failed to revoke session", status: "error" });
-                            }
-                          }}
-                        />
+                        <ChakraIconButton size="sm" icon={<FaTrashAlt />} aria-label="Revoke" onClick={() => revokeSession(i.jti)} />
                       </Tooltip>
                     )}
                   </Td>
@@ -291,7 +532,7 @@ export default function AdminPage() {
     </Box>
   );
 
-  // Auto-load Devices when its tab is first visited
+  // Auto-populate devices when visiting the tab the first time
   useEffect(() => {
     if (tabIndex === 5 && sessions.length === 0 && !loadingSessions) {
       fetchSessions();
@@ -299,43 +540,234 @@ export default function AdminPage() {
   }, [tabIndex, sessions.length, loadingSessions, fetchSessions]);
 
   return (
-    <Box p={{ base: 2, md: 4 }}>
-      <Heading size="lg" mb={4}>Admin</Heading>
-      <Tabs index={tabIndex} onChange={handleTabsChange} isFitted colorScheme="brandAccentOrange">
-        <TabList>
-          <Tab>Dashboard</Tab>
-          <Tab>Users</Tab>
-          <Tab>Orders</Tab>
-          <Tab>Designs</Tab>
-          <Tab>Inventory</Tab>
-          <Tab>Devices</Tab>
-          <Tab>Audit Logs</Tab>
-        </TabList>
-        <TabPanels mt={4}>
-          <TabPanel>
-            <Box layerStyle="cardBlue" p={{ base: 3, md: 5 }}>
-              <Heading size="md" mb={2}>Overview</Heading>
-              <Text color="gray.300">Welcome to the admin dashboard.</Text>
+    <Box w="100%" pb={10}>
+      <VStack spacing={6} align="stretch">
+        <Heading as="h1" size="pageTitle" color="brand.textLight" w="100%">Admin Console</Heading>
+
+        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }} w="100%">
+          <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy onChange={handleTabsChange} index={tabIndex}>
+            <TabList mb="1em" flexWrap="wrap">
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaTachometerAlt} mr={2}/> Dashboard</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaUsersCog} mr={2} /> Users</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaBoxOpen} mr={2} /> Orders</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaPalette} mr={2} /> Designs</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaKey} mr={2} /> Devices</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Audit Logs</Tab>
+            </TabList>
+
+            <TabPanels>
+              {/* Dashboard (unchanged — your component renders itself) */}
+              <TabPanel px={0} py={2}><AdminDashboard token={token} onViewOrder={handleViewOrder} /></TabPanel>
+
+              {/* Restored rich panels */}
+              <TabPanel px={0} py={2}><UsersPanel /></TabPanel>
+              <TabPanel px={0} py={2}><OrdersPanel /></TabPanel>
+              <TabPanel px={0} py={2}><DesignsPanel /></TabPanel>
+
+              {/* Inventory as-is */}
+              <TabPanel px={0} py={2}><InventoryPanel /></TabPanel>
+
+              {/* Updated devices */}
+              <TabPanel px={0} py={2}><DevicesPanel /></TabPanel>
+
+              {/* Audit logs (styled to match) */}
+              <TabPanel px={0} py={2}><AdminAuditLogs token={token} /></TabPanel>
+            </TabPanels>
+          </Tabs>
+        </Box>
+      </VStack>
+
+      {/* --- MODALS (unchanged styling) --- */}
+      <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>User: {selectedUser?.username}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={3} align="start">
+              <Text><strong>ID:</strong> {selectedUser?._id}</Text>
+              <Text><strong>Username:</strong> {selectedUser?.username}</Text>
+              <Text><strong>Email:</strong> {selectedUser?.email}</Text>
+            </VStack>
+          </ModalBody>
+          <ModalFooter><Button onClick={onViewUserModalClose}>Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit User: {selectedUser?.username}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody overflowY="auto" maxHeight="70vh">
+            <Box layerStyle="darkModalInnerSection">
+              <VStack spacing={4} align="stretch">
+                <FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} /></FormControl>
+                <FormControl><FormLabel>Email</FormLabel><Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} /></FormControl>
+                <FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} /></FormControl>
+                <FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} /></FormControl>
+                <FormControl display="flex" alignItems="center">
+                  <FormLabel htmlFor="isAdmin" mb="0">Admin Status</FormLabel>
+                  <Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} />
+                </FormControl>
+                <Divider my={4} />
+                <Heading size="sm">Change Password</Heading>
+                <FormControl>
+                  <FormLabel>New Password</FormLabel>
+                  <InputGroup>
+                    <Input name="newPassword" type={showNewPasswordInModal ? "text" : "password"} value={editFormData.newPassword} onChange={handleEditFormChange} />
+                    <InputRightElement>
+                      <ChakraIconButton variant="ghost" icon={showNewPasswordInModal ? <FaEyeSlash /> : <FaEye />} onClick={() => setShowNewPasswordInModal(!showNewPasswordInModal)} />
+                    </InputRightElement>
+                  </InputGroup>
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Confirm New Password</FormLabel>
+                  <InputGroup>
+                    <Input name="confirmNewPassword" type={showConfirmNewPasswordInModal ? "text" : "password"} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} />
+                    <InputRightElement>
+                      <ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal ? <FaEyeSlash /> : <FaEye />} onClick={() => setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)} />
+                    </InputRightElement>
+                  </InputGroup>
+                </FormControl>
+              </VStack>
             </Box>
-          </TabPanel>
+          </ModalBody>
+          <ModalFooter><Button onClick={onEditModalClose} mr={3}>Cancel</Button><Button onClick={handleSaveChanges} colorScheme="brandAccentOrange">Save</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
 
-          <TabPanel><UsersPanel/></TabPanel>
-          <TabPanel><OrdersPanel/></TabPanel>
-          <TabPanel><DesignsPanel/></TabPanel>
+      <Modal isOpen={isDeleteUserModalOpen} onClose={onDeleteUserModalClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Deletion</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text>Delete <strong>{selectedUser?.username}</strong>?</Text>
+            <Text mt={2} color="red.500">This action cannot be undone.</Text>
+          </ModalBody>
+          <ModalFooter><Button onClick={onDeleteUserModalClose} mr={3}>Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
 
-          <TabPanel>
-            {/* Your Inventory panel handles its own data */}
-            <InventoryPanel />
-          </TabPanel>
+      <Modal isOpen={isDeleteOrderModalOpen} onClose={onDeleteOrderModalClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Deletion</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text>Delete order <strong>{orderToDelete?._id}</strong>?</Text>
+            <Alert mt={4} status="warning"><AlertIcon/>This does not issue a refund in Stripe.</Alert>
+          </ModalBody>
+          <ModalFooter><Button onClick={onDeleteOrderModalClose} mr={3}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteOrder}>Delete</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
 
-          <TabPanel><DevicesPanel/></TabPanel>
+      <Modal isOpen={isViewOrderModalOpen} onClose={() => { onCloseViewOrderModal(); setSelectedOrder(null); }} size="4xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Order Details</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {loadingSelectedOrder ? (<VStack justifyContent="center" minH="300px"><Spinner size="xl" /></VStack>) : selectedOrder && (
+              <VStack spacing={6} align="stretch">
+                <Box layerStyle="darkModalInnerSection">
+                  <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={6}>
+                    <GridItem>
+                      <Heading size="sm" mb={2}>Customer</Heading>
+                      <Text><strong>ID:</strong> {selectedOrder._id}</Text>
+                      <Text><strong>Username:</strong> {selectedOrder.user?.username || "N/A"}</Text>
+                      <Text><strong>Email:</strong> {selectedOrder.user?.email}</Text>
+                    </GridItem>
+                    <GridItem>
+                      <Heading size="sm" mb={2}>Summary</Heading>
+                      <Text><strong>ID:</strong> {selectedOrder._id}</Text>
+                      <Text><strong>Date:</strong> {fmtDate(selectedOrder.createdAt)}</Text>
+                      <Text><strong>Total:</strong> <Tag colorScheme="green">{money(selectedOrder.totalAmount)}</Tag></Text>
+                      <Text><strong>Payment:</strong> {selectedOrder.paymentStatus}</Text>
+                      <Text><strong>Status:</strong> {selectedOrder.orderStatus}</Text>
+                    </GridItem>
+                  </Grid>
+                </Box>
 
-          <TabPanel>
-            {/* Matches brand card style/colors; the component fetches on demand */}
-            <AdminAuditLogs token={token}/>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
+                <Box layerStyle="darkModalInnerSection">
+                  <Heading size="sm" mb={2}>Shipping Address</Heading>
+                  <Text>{selectedOrder.shippingAddress?.recipientName}</Text>
+                  <Text>{selectedOrder.shippingAddress?.street1}</Text>
+                  {selectedOrder.shippingAddress?.street2 && <Text>{selectedOrder.shippingAddress.street2}</Text>}
+                  <Text>{selectedOrder.shippingAddress?.city}, {selectedOrder.shippingAddress?.state} {selectedOrder.shippingAddress?.zipCode}</Text>
+                  <Text>{selectedOrder.shippingAddress?.country}</Text>
+                </Box>
+                <Divider />
+                <Box layerStyle="darkModalInnerSection">
+                  <Heading size="sm" mb={4}>Items ({selectedOrder.orderItems?.length || 0})</Heading>
+                  <VStack spacing={4} align="stretch">
+                    {selectedOrder.orderItems?.map((item, index) => {
+                      const thumb = item.designId?.thumbUrl || item.designId?.publicUrl || item.designId?.imageDataUrl;
+                      return (
+                        <Flex key={index} p={3} borderWidth="1px" borderRadius="md" alignItems="center" flexWrap="wrap">
+                          <Image src={thumb || "https://via.placeholder.com/100"} boxSize="100px" objectFit="cover" borderRadius="md" mr={4} mb={{ base: 2, md: 0 }} />
+                          <VStack align="start" spacing={1} fontSize="sm">
+                            <Text fontWeight="bold">{item.productName}</Text>
+                            <Text><strong>SKU:</strong> {item.variantSku}</Text>
+                            <Text><strong>Color:</strong> {item.color} | <strong>Size:</strong> {item.size}</Text>
+                            <Text><strong>Quantity:</strong> {item.quantity}</Text>
+                            <Text><strong>Price/Item:</strong> {money(item.priceAtPurchase)}</Text>
+                            <Tooltip label={item.designId?.prompt}>
+                              <Text isTruncated maxW="400px"><strong>Prompt:</strong> {item.designId?.prompt || "N/A"}</Text>
+                            </Tooltip>
+                          </VStack>
+                        </Flex>
+                      );
+                    })}
+                  </VStack>
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter><Button onClick={() => { onCloseViewOrderModal(); setSelectedOrder(null); }}>Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isViewDesignModalOpen} onClose={onCloseViewDesignModal} size="xl" isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Design Preview</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {selectedDesign && (
+              <VStack layerStyle="darkModalInnerSection">
+                <Image src={selectedDesign.publicUrl || selectedDesign.imageDataUrl || selectedDesign.thumbUrl} maxW="100%" maxH="60vh" objectFit="contain" />
+                <VStack align="start" spacing={1} w="100%">
+                  <Text fontSize="md" mt={2} p={2} borderRadius="md"><strong>Prompt:</strong> {selectedDesign.prompt}</Text>
+                  {selectedDesign.negativePrompt && (
+                    <Text fontSize="sm" color="whiteAlpha.800"><strong>Negative:</strong> {selectedDesign.negativePrompt}</Text>
+                  )}
+                  <HStack spacing={3} fontSize="sm" color="whiteAlpha.800">
+                    <Badge>{(selectedDesign.settings?.mode || "t2i").toUpperCase()}</Badge>
+                    {selectedDesign.settings?.aspectRatio && <Badge>{selectedDesign.settings.aspectRatio}</Badge>}
+                    {selectedDesign.settings?.cfgScale != null && <Badge>CFG {selectedDesign.settings.cfgScale}</Badge>}
+                    {selectedDesign.settings?.steps != null && <Badge>Steps {selectedDesign.settings.steps}</Badge>}
+                    {selectedDesign.settings?.imageStrength != null && <Badge>Strength {Math.round(selectedDesign.settings.imageStrength * 100)}%</Badge>}
+                  </HStack>
+                </VStack>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter><Button onClick={onCloseViewDesignModal}>Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isDeleteDesignModalOpen} onClose={onCloseDeleteDesignModal} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Deletion</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody>
+          <ModalFooter><Button variant="ghost" mr={3} onClick={onCloseDeleteDesignModal}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
