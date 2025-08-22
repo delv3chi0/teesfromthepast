@@ -1,7 +1,6 @@
-// backend/routes/adminSessionRoutes.js
 import express from "express";
-import mongoose from "mongoose";
 import { protect } from "../middleware/authMiddleware.js";
+import RefreshToken from "../models/RefreshToken.js";
 
 const router = express.Router();
 
@@ -10,32 +9,27 @@ function requireAdmin(req, res, next) {
   return res.status(403).json({ message: "Admin access required" });
 }
 
-let RefreshToken;
-try {
-  RefreshToken = mongoose.model("RefreshToken");
-} catch {
-  const mod = await import("../models/RefreshToken.js");
-  RefreshToken = mod.default || mod;
-}
-
-// GET /api/admin/sessions?active=1&page=&limit=
+/**
+ * GET /api/admin/sessions
+ * Query: page, limit, activeOnly (default 1)
+ * Returns only active by default: revokedAt == null AND expiresAt > now
+ */
 router.get("/", protect, requireAdmin, async (req, res) => {
   try {
-    const { active = "0", page: pageRaw = "1", limit: limitRaw = "100" } = req.query;
-    const page = Math.max(parseInt(pageRaw, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 100, 1), 200);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 200);
     const skip = (page - 1) * limit;
+    const activeOnly = req.query.activeOnly !== "0";
 
-    const now = new Date();
     const q = {};
-    if (String(active) === "1") {
+    if (activeOnly) {
       q.revokedAt = null;
-      q.expiresAt = { $gt: now };
+      q.expiresAt = { $gt: new Date() };
     }
 
     const [items, total] = await Promise.all([
       RefreshToken.find(q)
-        .sort({ lastSeenAt: -1, createdAt: -1 })
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate({ path: "user", select: "username email" })
@@ -44,48 +38,57 @@ router.get("/", protect, requireAdmin, async (req, res) => {
       RefreshToken.countDocuments(q),
     ]);
 
+    // no jti column requirement is UI-side; API still returns it for actions
     res.json({
-      items,
+      items: items.map((i) => ({
+        jti: i.jti,
+        user: i.user || null,
+        ip: i.ip || "",
+        userAgent: i.userAgent || "",
+        createdAt: i.createdAt,
+        expiresAt: i.expiresAt,
+        revokedAt: i.revokedAt || null,
+      })),
       page,
       limit,
       total,
-      hasMore: page * limit < total,
+      hasMore: skip + items.length < total,
     });
   } catch (err) {
     console.error("[admin/sessions] list error:", err);
-    res.status(500).json({ message: "Failed to fetch sessions" });
+    res.status(500).json({ message: "Failed to fetch sessions", error: String(err?.message || err) });
   }
 });
 
-// DELETE /api/admin/sessions/:jti  -> revoke one
+/**
+ * DELETE /api/admin/sessions/:jti  -> revoke one
+ */
 router.delete("/:jti", protect, requireAdmin, async (req, res) => {
   try {
-    const { jti } = req.params;
-    const doc = await RefreshToken.findOne({ jti }).exec();
-    if (!doc) return res.status(204).end();
-    if (!doc.revokedAt) {
-      doc.revokedAt = new Date();
-      await doc.save();
-    }
-    return res.status(204).end();
+    const jti = req.params.jti;
+    const r = await RefreshToken.updateOne(
+      { jti, revokedAt: null },
+      { $set: { revokedAt: new Date() } }
+    );
+    if (r.matchedCount === 0) return res.status(404).json({ message: "Session not found or already revoked" });
+    res.status(204).end();
   } catch (err) {
-    console.error("[admin/sessions] revoke error:", err);
-    res.status(500).json({ message: "Failed to revoke session" });
+    res.status(500).json({ message: "Failed to revoke session", error: String(err?.message || err) });
   }
 });
 
-// DELETE /api/admin/sessions/user/:userId  -> revoke all for a user
+/**
+ * DELETE /api/admin/sessions/user/:userId -> revoke all for a user
+ */
 router.delete("/user/:userId", protect, requireAdmin, async (req, res) => {
   try {
-    const { userId } = req.params;
     await RefreshToken.updateMany(
-      { user: userId, revokedAt: null },
+      { user: req.params.userId, revokedAt: null },
       { $set: { revokedAt: new Date() } }
-    ).exec();
-    return res.status(204).end();
+    );
+    res.status(204).end();
   } catch (err) {
-    console.error("[admin/sessions] revoke all error:", err);
-    res.status(500).json({ message: "Failed to revoke user sessions" });
+    res.status(500).json({ message: "Failed to revoke user sessions", error: String(err?.message || err) });
   }
 });
 

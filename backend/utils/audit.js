@@ -1,68 +1,68 @@
-// backend/utils/audit.js
-import mongoose from "mongoose";
+import AuditLog from "../models/AuditLog.js";
 
-let AuditLog;
-try {
-  AuditLog = mongoose.model("AuditLog");
-} catch {
-  // fall back to your existing model file if present
-  const mod = await import("../models/AuditLog.js");
-  AuditLog = mod.default || mod;
+/**
+ * Pulls best-effort client info from request.
+ * If your frontend sends a `client` object (locale, tz, screen, hints),
+ * we’ll merge it under `client`.
+ */
+function extractRequestContext(req) {
+  const ip =
+    (req.headers["x-forwarded-for"] || "").toString().split(",")[0].trim() ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    "";
+
+  const userAgent = req.headers["user-agent"] || "";
+  const method = req.method || "";
+  const url = req.originalUrl || req.url || "";
+  const referrer = req.headers["referer"] || req.headers["referrer"] || "";
+  const origin = req.headers["origin"] || "";
+  return { ip, userAgent, method, url, referrer, origin };
 }
 
 /**
- * Generic audit logger that captures server + client hints.
- * Supply { action, targetType, targetId, meta }.
+ * Generic audit logger (fire-and-forget friendly).
+ * Supply `sessionJti` in meta to tie entries to a session if you have it.
  */
-export async function logAudit(req, { action, targetType = "", targetId = "", meta = {} }) {
+export async function logAudit(req, {
+  action,
+  targetType = "",
+  targetId = "",
+  meta = {},
+}) {
   try {
     const actorId = req.user?._id || null;
+    const { ip, userAgent, method, url, referrer, origin } = extractRequestContext(req);
 
-    // Merge client hints into meta; also compute actorDisplay
-    const h = (req && req.clientInfo) ? req.clientInfo : {};
-    const ip = h.ip || (req.headers?.["x-forwarded-for"] || "").toString().split(",")[0]?.trim() || req.ip || "";
-    const userAgent = h.ua || req.headers?.["user-agent"] || "";
+    // Optional front-end provided client blob (locale, tz, screen, hints…)
+    const client = req.body?.client || req.clientInfo || {};
 
-    const actorDisplay =
-      req.user?.username ||
-      req.user?.email ||
-      meta.actorDisplay ||
-      "";
-
-    const mergedMeta = {
-      ...meta,
-      actorDisplay,
-      client: {
-        tz: h.tz || req.headers?.["x-client-timezone"] || "",
-        lang: h.lang || req.headers?.["x-client-lang"] || "",
-        viewport: h.viewport || req.headers?.["x-client-viewport"] || "",
-        platform: h.platform || req.headers?.["x-client-platform"] || "",
-        ua: userAgent,
-        localTime: h.localTime || req.headers?.["x-client-localtime"] || "",
-        deviceMemory: h.deviceMemory || req.headers?.["x-client-devicememory"] || "",
-        cpuCores: h.cpuCores || req.headers?.["x-client-cpucores"] || "",
-      },
-    };
-
-    await AuditLog.create({
+    const doc = {
       action,
       actor: actorId,
+      actorDisplay: req.user?.username || req.user?.email || "",
       targetType,
       targetId: String(targetId || ""),
       ip,
       userAgent,
-      meta: mergedMeta,
-    });
+      method,
+      url,
+      referrer,
+      origin,
+      sessionJti: meta?.sessionJti || "",
+      client,
+      meta: meta || {},
+    };
+
+    await AuditLog.create(doc);
   } catch (err) {
+    // Never throw from audit logging
     console.warn("[audit] failed:", err?.message);
   }
 }
 
-// convenience wrappers
-export async function logAdminAction(req, payload) { return logAudit(req, payload); }
-export async function logAuthLogin(req, user, meta = {}) {
-  return logAudit(req, { action: "LOGIN", targetType: "Auth", targetId: user?._id, meta });
-}
-export async function logAuthLogout(req, user, meta = {}) {
-  return logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: user?._id, meta });
-}
+export const logAdminAction = (req, payload) => logAudit(req, payload);
+export const logAuthLogin = (req, user, meta = {}) =>
+  logAudit(req, { action: "LOGIN", targetType: "Auth", targetId: user?._id, meta });
+export const logAuthLogout = (req, user, meta = {}) =>
+  logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: user?._id, meta });
