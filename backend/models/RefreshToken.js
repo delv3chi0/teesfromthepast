@@ -3,19 +3,28 @@ import mongoose from "mongoose";
 
 const RefreshTokenSchema = new mongoose.Schema(
   {
-    jti: { type: String, required: true, unique: true }, // session id
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    jti: { type: String, index: true, unique: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, required: true },
     ip: { type: String, default: "" },
     userAgent: { type: String, default: "" },
-    replaceOf: { type: String, default: null }, // optional jti this replaces
-    expiresAt: { type: Date, required: true },
+    // client hints / telemetry (filled progressively)
+    client: {
+      tz: String,
+      lang: String,
+      viewport: String,
+      platform: String,
+      ua: String,
+      localTime: String,
+      deviceMemory: String,
+      cpuCores: String,
+    },
+    // session lifecycle
+    expiresAt: { type: Date, index: true },
     revokedAt: { type: Date, default: null },
+    lastSeenAt: { type: Date, default: null }, // updated on authenticated requests
   },
   { timestamps: true }
 );
 
-RefreshTokenSchema.index({ user: 1, createdAt: -1 });
-RefreshTokenSchema.index({ expiresAt: 1 });
-
-const RefreshToken = mongoose.model("RefreshToken", RefreshTokenSchema);
-export default RefreshToken;
+export default mongoose.models.RefreshToken ||
+  mongoose.model("RefreshToken", RefreshTokenSchema);

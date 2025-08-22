@@ -19,7 +19,7 @@ import adminProductRoutes from "./routes/adminProductRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 
-// NEW admin utilities
+// Admin utilities
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 
@@ -51,13 +51,27 @@ app.use((req, res, next) => {
   );
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-Requested-With"
+    [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      // client-hint / telemetry headers we add from the FE:
+      "X-Client-Timezone",
+      "X-Client-Lang",
+      "X-Client-Viewport",
+      "X-Client-Platform",
+      "X-Client-UA",
+      "X-Client-LocalTime",
+      "X-Client-DeviceMemory",
+      "X-Client-CPUCores",
+      "X-Session-ID",
+    ].join(", ")
   );
   if (req.method === "OPTIONS") return res.status(204).end();
   next();
 });
 
-// JSON body parsing (keep Stripe webhook raw inside its router)
+// JSON body parsing
 app.use(express.json({ limit: "10mb" }));
 
 // --- Routes ---
@@ -75,8 +89,6 @@ app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin/products", adminProductRoutes);
-
-// NEW: Admin utilities now mounted
 app.use("/api/admin/sessions", adminSessionRoutes);
 app.use("/api/admin/audit", adminAuditRoutes);
 

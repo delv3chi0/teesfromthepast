@@ -1,3 +1,4 @@
+// frontend/src/pages/RegistrationPage.jsx
 import { useState } from 'react';
 import {
   Box,
@@ -15,13 +16,31 @@ import {
   IconButton,
   Image,
   Link as ChakraLink,
-  Center,
   Flex
 } from '@chakra-ui/react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import Footer from '../components/Footer.jsx';
+import { client, setSessionHeader } from '../api/client';
+
+// Helpers to accept multiple backend response shapes
+function pickToken(payload) {
+  if (!payload) return null;
+  if (typeof payload === 'string') return payload;
+  return (
+    payload.token ||
+    payload.accessToken ||
+    payload.jwt ||
+    payload.data?.token ||
+    payload.data?.accessToken ||
+    null
+  );
+}
+function pickSessionJti(payload) {
+  if (!payload) return null;
+  return payload.sessionJti || payload.data?.sessionJti || null;
+}
 
 const RegistrationPage = () => {
   const [formData, setFormData] = useState({
@@ -33,40 +52,67 @@ const RegistrationPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth();
+
+  // We’ll set the token directly after a successful register
+  const { setSession } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.password !== formData.confirmPassword) {
-      toast({
-        title: 'Passwords do not match',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+
+    // quick client-side validation
+    if (!formData.username.trim()) {
+      toast({ title: 'Username is required', status: 'error', duration: 4000, isClosable: true });
       return;
     }
+    if (!formData.email.trim()) {
+      toast({ title: 'Email is required', status: 'error', duration: 4000, isClosable: true });
+      return;
+    }
+    if (formData.password.length < 6) {
+      toast({ title: 'Password must be at least 6 characters', status: 'error', duration: 4000, isClosable: true });
+      return;
+    }
+    if (formData.password !== formData.confirmPassword) {
+      toast({ title: 'Passwords do not match', status: 'error', duration: 4000, isClosable: true });
+      return;
+    }
+
     setLoading(true);
     try {
-      await register(formData.username, formData.email, formData.password);
+      // Call your backend directly so we can capture token + sessionJti
+      const res = await client.post('/auth/register', {
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+      });
+
+      const token = pickToken(res.data);
+      const jti = pickSessionJti(res.data);
+
+      if (token) setSession(token);
+      if (jti) setSessionHeader(jti); // powers Devices + richer audit logs
+
       toast({
         title: 'Registration Successful',
-        description: 'You can now log in.',
+        description: 'Welcome! Your account is ready.',
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
-      navigate('/login');
+
+      // Take them straight into the app (they’re authenticated now)
+      navigate('/', { replace: true });
     } catch (error) {
+      const msg = error?.response?.data?.message || 'An unexpected error occurred.';
       toast({
         title: 'Registration Failed',
-        description: error.response?.data?.message || 'An unexpected error occurred.',
+        description: msg,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -78,11 +124,26 @@ const RegistrationPage = () => {
 
   return (
     <Flex direction="column" minH="100vh" bg="brand.primary">
-      <Container maxW="container.sm" centerContent flex="1" display="flex" flexDirection="column" justifyContent="center" py={{ base: 8, md: 12 }}>
+      <Container
+        maxW="container.sm"
+        centerContent
+        flex="1"
+        display="flex"
+        flexDirection="column"
+        justifyContent="center"
+        py={{ base: 8, md: 12 }}
+      >
         <VStack spacing={6} w="100%">
           <RouterLink to="/">
-            <Image src="/logo.png" alt="Tees From The Past Logo" maxH="100px" mb={4} objectFit="contain" />
+            <Image
+              src="/logo.png"
+              alt="Tees From The Past Logo"
+              maxH="100px"
+              mb={4}
+              objectFit="contain"
+            />
           </RouterLink>
+
           <VStack
             as="form"
             onSubmit={handleSubmit}
@@ -99,12 +160,27 @@ const RegistrationPage = () => {
 
             <FormControl isRequired>
               <FormLabel>Username</FormLabel>
-              <Input name="username" onChange={handleChange} placeholder="Choose a unique username" size="lg"/>
+              <Input
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                placeholder="Choose a unique username"
+                size="lg"
+                autoComplete="username"
+              />
             </FormControl>
 
             <FormControl isRequired>
               <FormLabel>Email Address</FormLabel>
-              <Input type="email" name="email" onChange={handleChange} placeholder="you@example.com" size="lg"/>
+              <Input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                size="lg"
+                autoComplete="email"
+              />
             </FormControl>
 
             <FormControl isRequired>
@@ -113,14 +189,16 @@ const RegistrationPage = () => {
                 <Input
                   type={showPassword ? 'text' : 'password'}
                   name="password"
+                  value={formData.password}
                   onChange={handleChange}
                   placeholder="Create a password (min. 6 characters)"
+                  autoComplete="new-password"
                 />
                 <InputRightElement>
                   <IconButton
                     variant="ghost"
                     icon={showPassword ? <FaEyeSlash /> : <FaEye />}
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() => setShowPassword((s) => !s)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   />
                 </InputRightElement>
@@ -133,14 +211,16 @@ const RegistrationPage = () => {
                 <Input
                   type={showConfirmPassword ? 'text' : 'password'}
                   name="confirmPassword"
+                  value={formData.confirmPassword}
                   onChange={handleChange}
                   placeholder="Confirm your password"
+                  autoComplete="new-password"
                 />
                 <InputRightElement>
                   <IconButton
                     variant="ghost"
                     icon={showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    onClick={() => setShowConfirmPassword((s) => !s)}
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   />
                 </InputRightElement>
@@ -161,7 +241,13 @@ const RegistrationPage = () => {
 
             <Text pt={2} textAlign="center" color="brand.textMuted">
               Already have an account?{' '}
-              <ChakraLink as={RouterLink} to="/login" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
+              <ChakraLink
+                as={RouterLink}
+                to="/login"
+                color="brand.accentYellow"
+                fontWeight="bold"
+                _hover={{ textDecoration: 'underline' }}
+              >
                 Log in
               </ChakraLink>
             </Text>

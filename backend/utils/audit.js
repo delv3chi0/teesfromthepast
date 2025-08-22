@@ -1,42 +1,48 @@
 // backend/utils/audit.js
-import AuditLog from "../models/AuditLog.js";
+import mongoose from "mongoose";
 
-/**
- * Pull a compact fingerprint of the client from the request.
- */
-function clientSnapshot(req) {
-  const headers = req.headers || {};
-  const ip =
-    headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-    req.ip ||
-    req.connection?.remoteAddress ||
-    "";
-  const ua = headers["user-agent"] || "";
-
-  // Useful-but-safe header subset (add/remove to taste)
-  const headersSubset = {
-    "accept-language": headers["accept-language"] || "",
-    "sec-ch-ua": headers["sec-ch-ua"] || "",
-    "sec-ch-ua-platform": headers["sec-ch-ua-platform"] || "",
-    "sec-ch-ua-mobile": headers["sec-ch-ua-mobile"] || "",
-    referer: headers["referer"] || "",
-    origin: headers["origin"] || "",
-  };
-
-  return { ip, userAgent: ua, headers: headersSubset };
+let AuditLog;
+try {
+  AuditLog = mongoose.model("AuditLog");
+} catch {
+  // fall back to your existing model file if present
+  const mod = await import("../models/AuditLog.js");
+  AuditLog = mod.default || mod;
 }
 
 /**
- * Generic audit logger.
- * You can pass actor explicitly; otherwise we fall back to req.user._id.
+ * Generic audit logger that captures server + client hints.
+ * Supply { action, targetType, targetId, meta }.
  */
-export async function logAudit(
-  req,
-  { action, targetType = "", targetId = "", meta = {}, actor = null }
-) {
+export async function logAudit(req, { action, targetType = "", targetId = "", meta = {} }) {
   try {
-    const { ip, userAgent, headers } = clientSnapshot(req);
-    const actorId = actor || req.user?._id || null;
+    const actorId = req.user?._id || null;
+
+    // Merge client hints into meta; also compute actorDisplay
+    const h = (req && req.clientInfo) ? req.clientInfo : {};
+    const ip = h.ip || (req.headers?.["x-forwarded-for"] || "").toString().split(",")[0]?.trim() || req.ip || "";
+    const userAgent = h.ua || req.headers?.["user-agent"] || "";
+
+    const actorDisplay =
+      req.user?.username ||
+      req.user?.email ||
+      meta.actorDisplay ||
+      "";
+
+    const mergedMeta = {
+      ...meta,
+      actorDisplay,
+      client: {
+        tz: h.tz || req.headers?.["x-client-timezone"] || "",
+        lang: h.lang || req.headers?.["x-client-lang"] || "",
+        viewport: h.viewport || req.headers?.["x-client-viewport"] || "",
+        platform: h.platform || req.headers?.["x-client-platform"] || "",
+        ua: userAgent,
+        localTime: h.localTime || req.headers?.["x-client-localtime"] || "",
+        deviceMemory: h.deviceMemory || req.headers?.["x-client-devicememory"] || "",
+        cpuCores: h.cpuCores || req.headers?.["x-client-cpucores"] || "",
+      },
+    };
 
     await AuditLog.create({
       action,
@@ -45,33 +51,18 @@ export async function logAudit(
       targetId: String(targetId || ""),
       ip,
       userAgent,
-      meta: { ...meta, client: headers },
+      meta: mergedMeta,
     });
   } catch (err) {
     console.warn("[audit] failed:", err?.message);
   }
 }
 
-// Convenience helpers
-export async function logAdminAction(req, payload) {
-  return logAudit(req, payload);
-}
+// convenience wrappers
+export async function logAdminAction(req, payload) { return logAudit(req, payload); }
 export async function logAuthLogin(req, user, meta = {}) {
-  // pass actor explicitly so it’s never “(unknown)”
-  return logAudit(req, {
-    action: "LOGIN",
-    targetType: "Auth",
-    targetId: user?._id,
-    meta,
-    actor: user?._id,
-  });
+  return logAudit(req, { action: "LOGIN", targetType: "Auth", targetId: user?._id, meta });
 }
 export async function logAuthLogout(req, user, meta = {}) {
-  return logAudit(req, {
-    action: "LOGOUT",
-    targetType: "Auth",
-    targetId: user?._id,
-    meta,
-    actor: user?._id,
-  });
+  return logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: user?._id, meta });
 }

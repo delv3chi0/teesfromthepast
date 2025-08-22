@@ -21,7 +21,7 @@ import {
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
 import Footer from "../components/Footer.jsx";
-import { client } from "../api/client";
+import { client, setSessionHeader } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
 
 // Accept a variety of backend shapes for the token
@@ -36,6 +36,12 @@ function pickToken(payload) {
     payload.data?.accessToken ||
     null
   );
+}
+
+// Safely pull the session JTI the backend returns
+function pickSessionJti(payload) {
+  if (!payload) return null;
+  return payload.sessionJti || payload.data?.sessionJti || null;
 }
 
 export default function LoginPage() {
@@ -60,8 +66,14 @@ export default function LoginPage() {
     try {
       const res = await client.post("/auth/login", { email, password });
       const token = pickToken(res.data);
+      const jti = pickSessionJti(res.data);
       if (!token) throw new Error("Login succeeded but no token was returned.");
+
+      // Store auth token using your auth context
       setSession(token);
+
+      // ALSO set the X-Session-ID header so the server can update lastSeen/client hints
+      if (jti) setSessionHeader(jti);
 
       toast({
         title: "Login Successful",
@@ -109,7 +121,6 @@ export default function LoginPage() {
               maxH={{ base: "70px", md: "100px" }}
               mb={2}
               objectFit="contain"
-              // keep aspect ratio and center
               htmlWidth="auto"
               htmlHeight="auto"
             />
