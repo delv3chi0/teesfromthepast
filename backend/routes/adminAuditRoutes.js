@@ -1,116 +1,140 @@
-// backend/utils/audit.js
-import AuditLog from "../models/AuditLog.js";
+// backend/routes/adminAuditRoutes.js
+import express from "express";
+import mongoose from "mongoose";
+import { protect } from "../middleware/authMiddleware.js";
+import AuditLogModel from "../models/AuditLog.js";
 
-/**
- * Extract client info from a custom header (JSON string), plus hints.
- */
-function extractClientInfo(req) {
-  let client = {};
-  try {
-    const hdr = req.headers["x-client-info"];
-    if (hdr) {
-      client = JSON.parse(hdr);
-    }
-  } catch {
-    // ignore bad JSON
-  }
+const router = express.Router();
+const AuditLog = mongoose.models.AuditLog || AuditLogModel;
 
-  // Also capture some extra CH hints if present
-  const hints = {
-    secChUa: req.headers["sec-ch-ua"] || "",
-    secChUaMobile: req.headers["sec-ch-ua-mobile"] || "",
-    secChUaPlatform: req.headers["sec-ch-ua-platform"] || "",
-    acceptLanguage: req.headers["accept-language"] || "",
-  };
-
-  return { ...client, hints };
+function requireAdmin(req, res, next) {
+  if (req?.user?.isAdmin) return next();
+  return res.status(403).json({ message: "Admin access required" });
 }
 
 /**
- * Generic audit logger (safe).
- * You can provide `actorId` to override req.user fallbacks.
- *
- * Example:
- * await logAudit(req, { action:'LOGIN', targetType:'Auth', targetId:user._id, actorId:user._id, meta:{ email:user.email } })
+ * GET /api/admin/audit
+ * Query:
+ *  - actor, action, targetType, targetId
+ *  - page (default 1), limit (default 50, max 200)
+ * Returns: { items, page, limit, total, hasMore }
  */
-export async function logAudit(
-  req,
-  {
-    action,
-    actionLabel = "",
-    targetType = "",
-    targetId = "",
-    meta = {},
-    actorId = null,
-    sessionJti = "",
-  }
-) {
+router.get("/", protect, requireAdmin, async (req, res) => {
   try {
-    const actor = actorId || req.user?._id || null;
+    const {
+      actor = "",
+      action = "",
+      targetType = "",
+      targetId = "",
+      page: pageRaw = "1",
+      limit: limitRaw = "50",
+    } = req.query;
 
-    const ip =
-      (req.headers["x-forwarded-for"] || "")
-        .toString()
-        .split(",")[0]
-        .trim() ||
-      req.ip ||
-      req.connection?.remoteAddress ||
-      "";
+    const page = Math.max(parseInt(pageRaw, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 200);
+    const skip = (page - 1) * limit;
 
-    const userAgent = req.headers["user-agent"] || "";
-    const method = req.method || "";
-    const url = req.originalUrl || req.url || "";
-    const origin = req.headers.origin || "";
-    const referrer = req.headers.referer || req.headers.referrer || "";
+    const q = {};
+    if (actor) q.actor = actor;
+    if (action) q.action = action;
+    if (targetType) q.targetType = targetType;
+    if (targetId) q.targetId = targetId;
 
-    const client = extractClientInfo(req);
+    const [items, total] = await Promise.all([
+      AuditLog.find(q)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate({ path: "actor", select: "username email firstName lastName" })
+        .lean()
+        .exec(),
+      AuditLog.countDocuments(q),
+    ]);
 
-    await AuditLog.create({
-      action,
-      actionLabel,
-      actor,
-      actorDisplay:
-        req.user?.username ||
-        req.user?.email ||
-        (typeof actor === "string" ? actor : ""),
-      targetType,
-      targetId: String(targetId || ""),
-      ip,
-      userAgent,
-      method,
-      url,
-      origin,
-      referrer,
-      sessionJti,
-      meta,
-      client,
+    const normalized = items.map((i) => {
+      const actorDisplay =
+        i.actor?.username ||
+        i.actor?.email ||
+        i.actorDisplay ||
+        "(unknown)";
+
+      return {
+        ...i,
+        actorDisplay,
+        actionLabel: i.action || "",
+        meta: i.meta || {},
+      };
     });
-  } catch (err) {
-    console.warn("[audit] failed:", err?.message);
-  }
-}
 
-// Convenience helpers
-export async function logAdminAction(req, payload) {
-  return logAudit(req, payload);
-}
-export async function logAuthLogin(req, user, meta = {}, sessionJti = "") {
-  return logAudit(req, {
-    action: "LOGIN",
-    targetType: "Auth",
-    targetId: user?._id,
-    meta,
-    actorId: user?._id,
-    sessionJti,
-  });
-}
-export async function logAuthLogout(req, user, meta = {}, sessionJti = "") {
-  return logAudit(req, {
-    action: "LOGOUT",
-    targetType: "Auth",
-    targetId: user?._id,
-    meta,
-    actorId: user?._id,
-    sessionJti,
-  });
-}
+    const hasMore = page * limit < total;
+    return res.json({ items: normalized, page, limit, total, hasMore });
+  } catch (err) {
+    console.error("[admin/audit] list error:", err);
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch audit logs", error: String(err?.message || err) });
+  }
+});
+
+/**
+ * GET /api/admin/audit/:id
+ * Returns a single log with a friendlier payload for your “Details” modal.
+ */
+router.get("/:id", protect, requireAdmin, async (req, res) => {
+  try {
+    const log = await AuditLog.findById(req.params.id)
+      .populate({ path: "actor", select: "username email firstName lastName" })
+      .lean()
+      .exec();
+
+    if (!log) return res.status(404).json({ message: "Audit log not found" });
+
+    const actor = log.actor || {};
+    const payload = {
+      id: log._id,
+      when: log.createdAt,
+      action: log.action,
+      actor: {
+        id: actor._id || null,
+        username: actor.username || "(unknown)",
+        email: actor.email || null,
+        name:
+          [actor.firstName, actor.lastName].filter(Boolean).join(" ") || null,
+      },
+      target: {
+        type: log.targetType || "",
+        id: log.targetId || "",
+      },
+      network: {
+        ip: log.ip || "",
+        userAgent: log.userAgent || "",
+      },
+      meta: log.meta || {},
+    };
+
+    return res.json(payload);
+  } catch (err) {
+    console.error("[admin/audit] get error:", err);
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch audit entry", error: String(err?.message || err) });
+  }
+});
+
+/**
+ * DELETE /api/admin/audit
+ * Clears ALL audit logs.
+ */
+router.delete("/", protect, requireAdmin, async (_req, res) => {
+  try {
+    await AuditLog.deleteMany({});
+    return res.status(204).end();
+  } catch (err) {
+    console.error("[admin/audit] clear error:", err);
+    return res
+      .status(500)
+      .json({ message: "Failed to clear audit logs", error: String(err?.message || err) });
+  }
+});
+
+export default router;
