@@ -1,4 +1,3 @@
-// frontend/src/pages/AdminPage.jsx
 import React, { useCallback, useState } from "react";
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -6,19 +5,19 @@ import {
   Button, useToast, Tag, Image, Select,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider, Tooltip, Grid, GridItem, Flex, SimpleGrid, HStack, Badge, Spacer
+  Divider, Tooltip, Grid, GridItem, Flex, SimpleGrid, HStack, Badge
 } from "@chakra-ui/react";
 import {
-  FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey, FaEyeSlash,
+  FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye, FaKey,
   FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash
 } from "react-icons/fa";
-import { client, setSessionHeader } from "../api/client";
+import { client } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
 import InventoryPanel from "../components/admin/InventoryPanel.jsx";
 import AdminDashboard from "./admin/AdminDashboard.jsx";
-import AdminAuditLogs from "./AdminAuditLogs.jsx"; // NOTE: your file path
+import AdminAuditLogs from "./admin/AdminAuditLogs.jsx";
 
-// Helper for month formatting
+// Helper function for month formatting (copied from contest/MyDesigns)
 const getMonthDisplayName = (yyyymm) => {
   if (!yyyymm || typeof yyyymm !== "string" || yyyymm.length !== 7) return "N/A";
   const [year, month] = yyyymm.split("-");
@@ -45,14 +44,14 @@ const AdminPage = () => {
   const [designsError, setDesignsError] = useState("");
   const [selectedDesign, setSelectedDesign] = useState(null);
 
-  // Devices
+  // Devices (Sessions)
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sessionsError, setSessionsError] = useState("");
   const [sessionsPage] = useState(1);
 
   // Audit logs
-  const [auditsLoaded, setAuditsLoaded] = useState(false);
+  const [auditsLoaded, setAuditsLoaded] = useState(false); // just to avoid double load
 
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [designToDelete, setDesignToDelete] = useState(null);
@@ -72,6 +71,7 @@ const AdminPage = () => {
   const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
   const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
 
+  // ---- Lazy data loaders per-tab ----
   const dataFetchers = {
     0: useCallback(async () => {/* dashboard loads itself */}, []),
     1: useCallback(async () => {
@@ -101,23 +101,26 @@ const AdminPage = () => {
       } catch (e) { setDesignsError("Failed to fetch designs"); }
       finally { setLoadingDesigns(false); }
     }, [token, designs.length]),
+
+    // Devices tab — fetch ONLY ACTIVE sessions by default
     4: useCallback(async () => {
       if (sessions.length > 0) return;
       setLoadingSessions(true); setSessionsError("");
       try {
         const { data } = await client.get("/admin/sessions", {
           headers: { Authorization: `Bearer ${token}` },
-          params: { page: sessionsPage, limit: 100, active: 1 }
+          params: { page: sessionsPage, limit: 100, activeOnly: 1 }
         });
-        const now = Date.now();
-        const items = (data.items || []).filter(i => !i.revokedAt && new Date(i.expiresAt).getTime() > now);
-        setSessions(items);
-      } catch {
+        setSessions((data.items || []).filter(i => !i.revokedAt && new Date(i.expiresAt) > new Date()));
+      } catch (e) {
         setSessionsError("Failed to fetch sessions");
-      } finally { setLoadingSessions(false); }
+      } finally {
+        setLoadingSessions(false);
+      }
     }, [token, sessions.length, sessionsPage]),
+
     5: useCallback(async () => {
-      if (!auditsLoaded) setAuditsLoaded(true);
+      if (!auditsLoaded) setAuditsLoaded(true); // component fetches itself
     }, [auditsLoaded]),
   };
 
@@ -224,13 +227,22 @@ const AdminPage = () => {
     }
   };
 
-  // Devices panel actions (no JTI column; active only; instant UI removal on revoke)
+  // Devices panel actions
+  const pullActiveSessions = async () => {
+    const { data } = await client.get("/admin/sessions", {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { page: sessionsPage, limit: 100, activeOnly: 1 },
+    });
+    return (data.items || []).filter(i => !i.revokedAt && new Date(i.expiresAt) > new Date());
+  };
+
   const revokeSession = async (jti) => {
     try {
       await client.delete(`/admin/sessions/${jti}`, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: "Session revoked", status: "success" });
-      setSessions(prev => prev.filter(s => s.jti !== jti));
-    } catch {
+      const fresh = await pullActiveSessions();
+      setSessions(fresh);
+    } catch (e) {
       toast({ title: "Failed to revoke session", status: "error" });
     }
   };
@@ -238,8 +250,9 @@ const AdminPage = () => {
     try {
       await client.delete(`/admin/sessions/user/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
       toast({ title: "All sessions revoked for user", status: "success" });
-      setSessions(prev => prev.filter(s => String(s.user?._id) !== String(userId)));
-    } catch {
+      const fresh = await pullActiveSessions();
+      setSessions(fresh);
+    } catch (e) {
       toast({ title: "Failed to revoke user sessions", status: "error" });
     }
   };
@@ -436,13 +449,8 @@ const AdminPage = () => {
           onClick={async () => {
             setLoadingSessions(true);
             try {
-              const { data } = await client.get("/admin/sessions", {
-                headers: { Authorization: `Bearer ${token}` },
-                params: { page: sessionsPage, limit: 100, active: 1 },
-              });
-              const now = Date.now();
-              const items = (data.items || []).filter(i => !i.revokedAt && new Date(i.expiresAt).getTime() > now);
-              setSessions(items);
+              const fresh = await pullActiveSessions();
+              setSessions(fresh);
             } catch (e) {
               toast({ title: "Failed to refresh sessions", status: "error" });
             } finally { setLoadingSessions(false); }
@@ -465,7 +473,7 @@ const AdminPage = () => {
                 <Th>User</Th>
                 <Th>IP</Th>
                 <Th>User Agent</Th>
-                <Th>Last Seen</Th>
+                <Th>Created</Th>
                 <Th>Expires</Th>
                 <Th>Status</Th>
                 <Th isNumeric>Actions</Th>
@@ -491,15 +499,20 @@ const AdminPage = () => {
                   </Td>
                   <Td>{i.ip || "-"}</Td>
                   <Td><Text maxW="360px" noOfLines={1} title={i.userAgent}>{i.userAgent || "-"}</Text></Td>
-                  <Td>{i.lastSeenAt ? new Date(i.lastSeenAt).toLocaleString() : "-"}</Td>
+                  <Td>{new Date(i.createdAt).toLocaleString()}</Td>
                   <Td>{new Date(i.expiresAt).toLocaleString()}</Td>
                   <Td>
-                    <Badge colorScheme="green">Active</Badge>
+                    {i.revokedAt
+                      ? <Badge colorScheme="red">Revoked</Badge>
+                      : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)
+                    }
                   </Td>
                   <Td isNumeric>
-                    <Tooltip label="Revoke this session">
-                      <ChakraIconButton size="sm" icon={<FaTrashAlt />} aria-label="Revoke" onClick={() => revokeSession(i.jti)} />
-                    </Tooltip>
+                    {!i.revokedAt && (
+                      <Tooltip label="Revoke this session">
+                        <ChakraIconButton size="sm" icon={<FaTrashAlt />} aria-label="Revoke" onClick={() => revokeSession(i.jti)} />
+                      </Tooltip>
+                    )}
                   </Td>
                 </Tr>
               ))}
@@ -539,8 +552,208 @@ const AdminPage = () => {
         </Box>
       </VStack>
 
-      {/* Modals below (unchanged except where needed) */}
-      {/* ... keep your existing modal code ... */}
+      {/* --- MODALS (unchanged) --- */}
+      <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>User: {selectedUser?.username}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={3} align="start">
+              <Text><strong>ID:</strong> {selectedUser?._id}</Text>
+              <Text><strong>Username:</strong> {selectedUser?.username}</Text>
+              <Text><strong>Email:</strong> {selectedUser?.email}</Text>
+            </VStack>
+          </ModalBody>
+          <ModalFooter><Button onClick={onViewUserModalClose}>Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Edit User: {selectedUser?.username}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody overflowY="auto" maxHeight="70vh">
+            <Box layerStyle="darkModalInnerSection">
+              <VStack spacing={4} align="stretch">
+                <FormControl>
+                  <FormLabel>Username</FormLabel>
+                  <Input name="username" value={editFormData.username} onChange={handleEditFormChange} />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Email</FormLabel>
+                  <Input type="email" name="email" value={editFormData.email} onChange={handleEditFormChange} />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>First Name</FormLabel>
+                  <Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} />
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Last Name</FormLabel>
+                  <Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} />
+                </FormControl>
+                <FormControl display="flex" alignItems="center">
+                  <FormLabel htmlFor="isAdmin" mb="0">Admin Status</FormLabel>
+                  <Switch id="isAdmin" name="isAdmin" isChecked={editFormData.isAdmin} onChange={handleEditFormChange} />
+                </FormControl>
+                <Divider my={4} />
+                <Heading size="sm">Change Password</Heading>
+                <FormControl>
+                  <FormLabel>New Password</FormLabel>
+                  <InputGroup>
+                    <Input name="newPassword" type={showNewPasswordInModal ? "text" : "password"} value={editFormData.newPassword} onChange={handleEditFormChange} />
+                    <InputRightElement>
+                      <ChakraIconButton variant="ghost" icon={showNewPasswordInModal ? <FaEyeSlash /> : <FaEye />} onClick={() => setShowNewPasswordInModal(!showNewPasswordInModal)} />
+                    </InputRightElement>
+                  </InputGroup>
+                </FormControl>
+                <FormControl>
+                  <FormLabel>Confirm New Password</FormLabel>
+                  <InputGroup>
+                    <Input name="confirmNewPassword" type={showConfirmNewPasswordInModal ? "text" : "password"} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} />
+                    <InputRightElement>
+                      <ChakraIconButton variant="ghost" icon={showConfirmNewPasswordInModal ? <FaEyeSlash /> : <FaEye />} onClick={() => setShowConfirmNewPasswordInModal(!showConfirmNewPasswordInModal)} />
+                    </InputRightElement>
+                  </InputGroup>
+                </FormControl>
+              </VStack>
+            </Box>
+          </ModalBody>
+          <ModalFooter><Button onClick={onEditModalClose} mr={3}>Cancel</Button><Button onClick={handleSaveChanges} colorScheme="brandAccentOrange">Save</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isDeleteUserModalOpen} onClose={onDeleteUserModalClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Deletion</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text>Delete <strong>{selectedUser?.username}</strong>?</Text>
+            <Text mt={2} color="red.500">This action cannot be undone.</Text>
+          </ModalBody>
+          <ModalFooter><Button onClick={onDeleteUserModalClose} mr={3}>Cancel</Button><Button onClick={confirmDeleteUser} colorScheme="red">Delete</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isDeleteOrderModalOpen} onClose={onDeleteOrderModalClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Deletion</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text>Delete order <strong>{orderToDelete?._id}</strong>?</Text>
+            <Alert mt={4} status="warning"><AlertIcon/>This does not issue a refund in Stripe.</Alert>
+          </ModalBody>
+          <ModalFooter><Button onClick={onDeleteOrderModalClose} mr={3}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteOrder}>Delete</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isViewOrderModalOpen} onClose={() => { onCloseViewOrderModal(); setSelectedOrder(null); }} size="4xl" scrollBehavior="inside">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Order Details</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {loadingSelectedOrder ? (<VStack justifyContent="center" minH="300px"><Spinner size="xl" /></VStack>) : selectedOrder && (
+              <VStack spacing={6} align="stretch">
+                <Box layerStyle="darkModalInnerSection">
+                  <Grid templateColumns={{ base: "1fr", md: "repeat(2, 1fr)" }} gap={6}>
+                    <GridItem>
+                      <Heading size="sm" mb={2}>Customer</Heading>
+                      <Text><strong>ID:</strong> {selectedOrder._id}</Text>
+                      <Text><strong>Username:</strong> {selectedOrder.user?.username || "N/A"}</Text>
+                      <Text><strong>Email:</strong> {selectedOrder.user?.email}</Text>
+                    </GridItem>
+                    <GridItem>
+                      <Heading size="sm" mb={2}>Summary</Heading>
+                      <Text><strong>ID:</strong> {selectedOrder._id}</Text>
+                      <Text><strong>Date:</strong> {new Date(selectedOrder.createdAt).toLocaleString()}</Text>
+                      <Text><strong>Total:</strong> <Tag colorScheme="green">${(selectedOrder.totalAmount / 100).toFixed(2)}</Tag></Text>
+                      <Text><strong>Payment:</strong> {selectedOrder.paymentStatus}</Text>
+                      <Text><strong>Status:</strong> {selectedOrder.orderStatus}</Text>
+                    </GridItem>
+                  </Grid>
+                </Box>
+
+                <Box layerStyle="darkModalInnerSection">
+                  <Heading size="sm" mb={2}>Shipping Address</Heading>
+                  <Text>{selectedOrder.shippingAddress?.recipientName}</Text>
+                  <Text>{selectedOrder.shippingAddress?.street1}</Text>
+                  {selectedOrder.shippingAddress?.street2 && <Text>{selectedOrder.shippingAddress.street2}</Text>}
+                  <Text>{selectedOrder.shippingAddress?.city}, {selectedOrder.shippingAddress?.state} {selectedOrder.shippingAddress?.zipCode}</Text>
+                  <Text>{selectedOrder.shippingAddress?.country}</Text>
+                </Box>
+                <Divider />
+                <Box layerStyle="darkModalInnerSection">
+                  <Heading size="sm" mb={4}>Items ({selectedOrder.orderItems?.length || 0})</Heading>
+                  <VStack spacing={4} align="stretch">
+                    {selectedOrder.orderItems?.map((item, index) => {
+                      const thumb = item.designId?.thumbUrl || item.designId?.publicUrl || item.designId?.imageDataUrl;
+                      return (
+                        <Flex key={index} p={3} borderWidth="1px" borderRadius="md" alignItems="center" flexWrap="wrap">
+                          <Image src={thumb || "https://via.placeholder.com/100"} boxSize="100px" objectFit="cover" borderRadius="md" mr={4} mb={{ base: 2, md: 0 }} />
+                          <VStack align="start" spacing={1} fontSize="sm">
+                            <Text fontWeight="bold">{item.productName}</Text>
+                            <Text><strong>SKU:</strong> {item.variantSku}</Text>
+                            <Text><strong>Color:</strong> {item.color} | <strong>Size:</strong> {item.size}</Text>
+                            <Text><strong>Quantity:</strong> {item.quantity}</Text>
+                            <Text><strong>Price/Item:</strong> ${(item.priceAtPurchase / 100).toFixed(2)}</Text>
+                            <Tooltip label={item.designId?.prompt}>
+                              <Text isTruncated maxW="400px"><strong>Prompt:</strong> {item.designId?.prompt || "N/A"}</Text>
+                            </Tooltip>
+                          </VStack>
+                        </Flex>
+                      );
+                    })}
+                  </VStack>
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter><Button onClick={() => { onCloseViewOrderModal(); setSelectedOrder(null); }}>Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isViewDesignModalOpen} onClose={onCloseViewDesignModal} size="xl" isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Design Preview</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {selectedDesign && (
+              <VStack layerStyle="darkModalInnerSection">
+                <Image src={selectedDesign.publicUrl || selectedDesign.imageDataUrl || selectedDesign.thumbUrl} maxW="100%" maxH="60vh" objectFit="contain" />
+                <VStack align="start" spacing={1} w="100%">
+                  <Text fontSize="md" mt={2} p={2} borderRadius="md"><strong>Prompt:</strong> {selectedDesign.prompt}</Text>
+                  {selectedDesign.negativePrompt && (
+                    <Text fontSize="sm" color="whiteAlpha.800"><strong>Negative:</strong> {selectedDesign.negativePrompt}</Text>
+                  )}
+                  <HStack spacing={3} fontSize="sm" color="whiteAlpha.800">
+                    <Badge>{(selectedDesign.settings?.mode || "t2i").toUpperCase()}</Badge>
+                    {selectedDesign.settings?.aspectRatio && <Badge>{selectedDesign.settings.aspectRatio}</Badge>}
+                    {selectedDesign.settings?.cfgScale != null && <Badge>CFG {selectedDesign.settings.cfgScale}</Badge>}
+                    {selectedDesign.settings?.steps != null && <Badge>Steps {selectedDesign.settings.steps}</Badge>}
+                    {selectedDesign.settings?.imageStrength != null && <Badge>Strength {Math.round(selectedDesign.settings.imageStrength * 100)}%</Badge>}
+                  </HStack>
+                </VStack>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter><Button onClick={onCloseViewDesignModal}>Close</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isDeleteDesignModalOpen} onClose={onCloseDeleteDesignModal} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Confirm Deletion</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>Are you sure you want to delete this design? This cannot be undone.</ModalBody>
+          <ModalFooter><Button variant="ghost" mr={3} onClick={onCloseDeleteDesignModal}>Cancel</Button><Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };
