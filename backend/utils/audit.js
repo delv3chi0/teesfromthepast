@@ -1,68 +1,116 @@
+// backend/utils/audit.js
 import AuditLog from "../models/AuditLog.js";
 
 /**
- * Pulls best-effort client info from request.
- * If your frontend sends a `client` object (locale, tz, screen, hints),
- * we’ll merge it under `client`.
+ * Extract client info from a custom header (JSON string), plus hints.
  */
-function extractRequestContext(req) {
-  const ip =
-    (req.headers["x-forwarded-for"] || "").toString().split(",")[0].trim() ||
-    req.ip ||
-    req.connection?.remoteAddress ||
-    "";
+function extractClientInfo(req) {
+  let client = {};
+  try {
+    const hdr = req.headers["x-client-info"];
+    if (hdr) {
+      client = JSON.parse(hdr);
+    }
+  } catch {
+    // ignore bad JSON
+  }
 
-  const userAgent = req.headers["user-agent"] || "";
-  const method = req.method || "";
-  const url = req.originalUrl || req.url || "";
-  const referrer = req.headers["referer"] || req.headers["referrer"] || "";
-  const origin = req.headers["origin"] || "";
-  return { ip, userAgent, method, url, referrer, origin };
+  // Also capture some extra CH hints if present
+  const hints = {
+    secChUa: req.headers["sec-ch-ua"] || "",
+    secChUaMobile: req.headers["sec-ch-ua-mobile"] || "",
+    secChUaPlatform: req.headers["sec-ch-ua-platform"] || "",
+    acceptLanguage: req.headers["accept-language"] || "",
+  };
+
+  return { ...client, hints };
 }
 
 /**
- * Generic audit logger (fire-and-forget friendly).
- * Supply `sessionJti` in meta to tie entries to a session if you have it.
+ * Generic audit logger (safe).
+ * You can provide `actorId` to override req.user fallbacks.
+ *
+ * Example:
+ * await logAudit(req, { action:'LOGIN', targetType:'Auth', targetId:user._id, actorId:user._id, meta:{ email:user.email } })
  */
-export async function logAudit(req, {
-  action,
-  targetType = "",
-  targetId = "",
-  meta = {},
-}) {
+export async function logAudit(
+  req,
+  {
+    action,
+    actionLabel = "",
+    targetType = "",
+    targetId = "",
+    meta = {},
+    actorId = null,
+    sessionJti = "",
+  }
+) {
   try {
-    const actorId = req.user?._id || null;
-    const { ip, userAgent, method, url, referrer, origin } = extractRequestContext(req);
+    const actor = actorId || req.user?._id || null;
 
-    // Optional front-end provided client blob (locale, tz, screen, hints…)
-    const client = req.body?.client || req.clientInfo || {};
+    const ip =
+      (req.headers["x-forwarded-for"] || "")
+        .toString()
+        .split(",")[0]
+        .trim() ||
+      req.ip ||
+      req.connection?.remoteAddress ||
+      "";
 
-    const doc = {
+    const userAgent = req.headers["user-agent"] || "";
+    const method = req.method || "";
+    const url = req.originalUrl || req.url || "";
+    const origin = req.headers.origin || "";
+    const referrer = req.headers.referer || req.headers.referrer || "";
+
+    const client = extractClientInfo(req);
+
+    await AuditLog.create({
       action,
-      actor: actorId,
-      actorDisplay: req.user?.username || req.user?.email || "",
+      actionLabel,
+      actor,
+      actorDisplay:
+        req.user?.username ||
+        req.user?.email ||
+        (typeof actor === "string" ? actor : ""),
       targetType,
       targetId: String(targetId || ""),
       ip,
       userAgent,
       method,
       url,
-      referrer,
       origin,
-      sessionJti: meta?.sessionJti || "",
+      referrer,
+      sessionJti,
+      meta,
       client,
-      meta: meta || {},
-    };
-
-    await AuditLog.create(doc);
+    });
   } catch (err) {
-    // Never throw from audit logging
     console.warn("[audit] failed:", err?.message);
   }
 }
 
-export const logAdminAction = (req, payload) => logAudit(req, payload);
-export const logAuthLogin = (req, user, meta = {}) =>
-  logAudit(req, { action: "LOGIN", targetType: "Auth", targetId: user?._id, meta });
-export const logAuthLogout = (req, user, meta = {}) =>
-  logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: user?._id, meta });
+// Convenience helpers
+export async function logAdminAction(req, payload) {
+  return logAudit(req, payload);
+}
+export async function logAuthLogin(req, user, meta = {}, sessionJti = "") {
+  return logAudit(req, {
+    action: "LOGIN",
+    targetType: "Auth",
+    targetId: user?._id,
+    meta,
+    actorId: user?._id,
+    sessionJti,
+  });
+}
+export async function logAuthLogout(req, user, meta = {}, sessionJti = "") {
+  return logAudit(req, {
+    action: "LOGOUT",
+    targetType: "Auth",
+    targetId: user?._id,
+    meta,
+    actorId: user?._id,
+    sessionJti,
+  });
+}

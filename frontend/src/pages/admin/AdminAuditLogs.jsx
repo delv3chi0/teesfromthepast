@@ -1,10 +1,11 @@
+// frontend/src/pages/admin/AdminAuditLogs.jsx
 import { useEffect, useState, useCallback } from "react";
 import { client } from "../../api/client";
 import {
   Box, Heading, HStack, Input, Button, Table, Thead, Tbody, Tr, Th, Td,
   Text, Code, useToast, Tooltip, IconButton, VStack, Badge,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
-  Select
+  Select, Stack, Divider
 } from "@chakra-ui/react";
 import { FaSync, FaInfoCircle, FaBroom } from "react-icons/fa";
 import { useAuth } from "../../context/AuthProvider";
@@ -17,12 +18,12 @@ export default function AdminAuditLogs() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Details modal state
+  // Details modal
   const [detail, setDetail] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
   // Clear controls
-  const [clearMode, setClearMode] = useState("none"); // none | before | all
+  const [clearMode, setClearMode] = useState("none");
   const [clearBefore, setClearBefore] = useState("");
 
   const toast = useToast();
@@ -51,7 +52,7 @@ export default function AdminAuditLogs() {
       const res = await client.get(`/admin/audit/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setDetail(res.data);
       setDetailOpen(true);
-    } catch (e) {
+    } catch {
       toast({ title: "Failed to load details", status: "error" });
     }
   };
@@ -78,7 +79,7 @@ export default function AdminAuditLogs() {
       setClearMode("none");
       setClearBefore("");
       load(1);
-    } catch (e) {
+    } catch {
       toast({ title: "Failed to clear logs", status: "error" });
     }
   };
@@ -86,13 +87,13 @@ export default function AdminAuditLogs() {
   return (
     <Box>
       <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
-        <Heading size="lg">Admin Audit Logs</Heading>
+        <Heading size="lg" color="brand.textLight">Admin Audit Logs</Heading>
         <HStack>
-          <Input placeholder="Actor (User ID)" value={filters.actor} onChange={(e)=>setFilters(f=>({...f, actor:e.target.value}))} size="sm" w="220px"/>
+          <Input placeholder="Actor (User ID)" value={filters.actor} onChange={(e)=>setFilters(f=>({...f, actor:e.target.value}))} size="sm" w="220px" />
           <Input placeholder="Action (e.g. LOGIN)" value={filters.action} onChange={(e)=>setFilters(f=>({...f, action:e.target.value}))} size="sm" w="220px"/>
           <Input placeholder="Target Type" value={filters.targetType} onChange={(e)=>setFilters(f=>({...f, targetType:e.target.value}))} size="sm" w="180px"/>
           <Input placeholder="Target ID" value={filters.targetId} onChange={(e)=>setFilters(f=>({...f, targetId:e.target.value}))} size="sm" w="220px"/>
-          <Button leftIcon={<FaSync/>} size="sm" onClick={()=>load(1)} isLoading={loading}>Apply</Button>
+          <Button leftIcon={<FaSync/>} size="sm" onClick={()=>load(1)} isLoading={loading} colorScheme="brandAccentOrange">Apply</Button>
         </HStack>
       </HStack>
 
@@ -103,22 +104,14 @@ export default function AdminAuditLogs() {
           <option value="all">Clear ALL logs</option>
         </Select>
         {clearMode === "before" && (
-          <Input
-            size="sm"
-            type="datetime-local"
-            value={clearBefore}
-            onChange={(e)=>setClearBefore(e.target.value)}
-            w="260px"
-          />
+          <Input size="sm" type="datetime-local" value={clearBefore} onChange={(e)=>setClearBefore(e.target.value)} w="260px" />
         )}
         {clearMode !== "none" && (
-          <Button size="sm" colorScheme="red" leftIcon={<FaBroom/>} onClick={doClear}>
-            Confirm Clear
-          </Button>
+          <Button size="sm" colorScheme="red" leftIcon={<FaBroom/>} onClick={doClear}>Confirm Clear</Button>
         )}
       </HStack>
 
-      <Table size="sm" variant="striped">
+      <Table size="sm" variant="simple">
         <Thead>
           <Tr>
             <Th>When</Th>
@@ -136,33 +129,24 @@ export default function AdminAuditLogs() {
             <Tr key={i._id}>
               <Td><Text fontSize="sm">{new Date(i.createdAt).toLocaleString()}</Text></Td>
               <Td>
-                <Text fontWeight="bold">{i.actor?.username || i.actorDisplay || "(unknown)"}</Text>
-                <Text fontSize="xs" color="gray.500">{i.actor?.email}</Text>
+                <Text fontWeight="bold" color="brand.textLight">{i.actor?.username || i.actorDisplay || "(unknown)"}</Text>
+                <Text fontSize="xs" color="brand.textMuted">{i.actor?.email}</Text>
               </Td>
+              <Td><Badge colorScheme="purple">{i.actionLabel || i.action}</Badge></Td>
               <Td>
-                <HStack>
-                  <Badge>{i.actionLabel || i.action}</Badge>
-                </HStack>
-              </Td>
-              <Td>
-                <Text>{i.targetType || "-"}</Text>
-                <Text fontSize="xs" color="gray.500">{i.targetId || ""}</Text>
+                <Text color="brand.textLight">{i.targetType || "-"}</Text>
+                <Text fontSize="xs" color="brand.textMuted">{i.targetId || ""}</Text>
               </Td>
               <Td>{i.ip || "-"}</Td>
               <Td><Text maxW="300px" noOfLines={1} title={i.userAgent}>{i.userAgent || "-"}</Text></Td>
               <Td>
-                <Text fontSize="xs" as="pre" whiteSpace="pre-wrap" maxW="360px">
-                  {JSON.stringify(i.meta || {}, null, 2)}
-                </Text>
+                <Box maxW="360px" p={2} bg="blackAlpha.500" borderRadius="md" overflow="hidden">
+                  <Text fontSize="xs" as="pre" whiteSpace="pre-wrap">{JSON.stringify(i.meta || {}, null, 2)}</Text>
+                </Box>
               </Td>
               <Td isNumeric>
                 <Tooltip label="Session / Request Details">
-                  <IconButton
-                    aria-label="Details"
-                    size="sm"
-                    icon={<FaInfoCircle/>}
-                    onClick={() => openDetails(i._id)}
-                  />
+                  <IconButton aria-label="Details" size="sm" icon={<FaInfoCircle/>} onClick={() => openDetails(i._id)} />
                 </Tooltip>
               </Td>
             </Tr>
@@ -179,12 +163,14 @@ export default function AdminAuditLogs() {
       {/* Details Modal */}
       <Modal isOpen={detailOpen} onClose={()=>setDetailOpen(false)} size="4xl" scrollBehavior="inside">
         <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Audit Entry Details</ModalHeader>
+        <ModalContent bg="brand.secondary">
+          <ModalHeader color="brand.textLight">
+            Session / Audit Details <Badge ml={2}>{detail?.action}</Badge>
+          </ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {detail ? (
-              <VStack align="stretch" spacing={4}>
+              <Stack spacing={5}>
                 <Box>
                   <Heading size="sm" mb={2}>Who / When</Heading>
                   <Text><strong>Actor:</strong> {detail.actor?.username || detail.actor?.email || detail.actorDisplay || "(unknown)"} {detail.actor?._id ? `(${detail.actor._id})` : ""}</Text>
@@ -192,6 +178,8 @@ export default function AdminAuditLogs() {
                   <Text><strong>Time:</strong> {new Date(detail.createdAt).toLocaleString()}</Text>
                   <Text><strong>Target:</strong> {detail.targetType || "-"} {detail.targetId ? `(${detail.targetId})` : ""}</Text>
                 </Box>
+
+                <Divider/>
 
                 <Box>
                   <Heading size="sm" mb={2}>Request</Heading>
@@ -201,6 +189,8 @@ export default function AdminAuditLogs() {
                   <Text><strong>Referrer:</strong> {detail.referrer || "-"}</Text>
                 </Box>
 
+                <Divider/>
+
                 <Box>
                   <Heading size="sm" mb={2}>Network / Client</Heading>
                   <Text><strong>IP:</strong> {detail.ip || "-"}</Text>
@@ -208,20 +198,22 @@ export default function AdminAuditLogs() {
                   <Text><strong>Session JTI:</strong> {detail.sessionJti || "-"}</Text>
                 </Box>
 
+                <Divider/>
+
                 <Box>
                   <Heading size="sm" mb={2}>Client Blob</Heading>
-                  <Text fontSize="sm" as="pre" whiteSpace="pre-wrap">
-                    {JSON.stringify(detail.client || {}, null, 2)}
-                  </Text>
+                  <Box p={3} bg="blackAlpha.500" borderRadius="md">
+                    <Text as="pre" fontSize="sm" whiteSpace="pre-wrap">{JSON.stringify(detail.client || {}, null, 2)}</Text>
+                  </Box>
                 </Box>
 
                 <Box>
                   <Heading size="sm" mb={2}>Meta</Heading>
-                  <Text fontSize="sm" as="pre" whiteSpace="pre-wrap">
-                    {JSON.stringify(detail.meta || {}, null, 2)}
-                  </Text>
+                  <Box p={3} bg="blackAlpha.500" borderRadius="md">
+                    <Text as="pre" fontSize="sm" whiteSpace="pre-wrap">{JSON.stringify(detail.meta || {}, null, 2)}</Text>
+                  </Box>
                 </Box>
-              </VStack>
+              </Stack>
             ) : (
               <VStack minH="200px" justify="center"><Text>Loading…</Text></VStack>
             )}

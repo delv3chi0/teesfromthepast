@@ -1,111 +1,116 @@
-import express from "express";
-import { protect } from "../middleware/authMiddleware.js";
+// backend/utils/audit.js
 import AuditLog from "../models/AuditLog.js";
 
-const router = express.Router();
+/**
+ * Extract client info from a custom header (JSON string), plus hints.
+ */
+function extractClientInfo(req) {
+  let client = {};
+  try {
+    const hdr = req.headers["x-client-info"];
+    if (hdr) {
+      client = JSON.parse(hdr);
+    }
+  } catch {
+    // ignore bad JSON
+  }
 
-function requireAdmin(req, res, next) {
-  if (req?.user?.isAdmin) return next();
-  return res.status(403).json({ message: "Admin access required" });
+  // Also capture some extra CH hints if present
+  const hints = {
+    secChUa: req.headers["sec-ch-ua"] || "",
+    secChUaMobile: req.headers["sec-ch-ua-mobile"] || "",
+    secChUaPlatform: req.headers["sec-ch-ua-platform"] || "",
+    acceptLanguage: req.headers["accept-language"] || "",
+  };
+
+  return { ...client, hints };
 }
 
 /**
- * GET /api/admin/audit
- * Query: actor, action, targetType, targetId, page, limit
- * Responds: { items, page, limit, total, hasMore }
+ * Generic audit logger (safe).
+ * You can provide `actorId` to override req.user fallbacks.
+ *
+ * Example:
+ * await logAudit(req, { action:'LOGIN', targetType:'Auth', targetId:user._id, actorId:user._id, meta:{ email:user.email } })
  */
-router.get("/", protect, requireAdmin, async (req, res) => {
+export async function logAudit(
+  req,
+  {
+    action,
+    actionLabel = "",
+    targetType = "",
+    targetId = "",
+    meta = {},
+    actorId = null,
+    sessionJti = "",
+  }
+) {
   try {
-    const {
-      actor = "",
-      action = "",
-      targetType = "",
-      targetId = "",
-      page: pageRaw = "1",
-      limit: limitRaw = "100",
-    } = req.query;
+    const actor = actorId || req.user?._id || null;
 
-    const page = Math.max(parseInt(pageRaw, 10) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(limitRaw, 10) || 100, 1), 200);
-    const skip = (page - 1) * limit;
+    const ip =
+      (req.headers["x-forwarded-for"] || "")
+        .toString()
+        .split(",")[0]
+        .trim() ||
+      req.ip ||
+      req.connection?.remoteAddress ||
+      "";
 
-    const q = {};
-    if (actor) q.actor = actor;
-    if (action) q.action = action;
-    if (targetType) q.targetType = targetType;
-    if (targetId) q.targetId = targetId;
+    const userAgent = req.headers["user-agent"] || "";
+    const method = req.method || "";
+    const url = req.originalUrl || req.url || "";
+    const origin = req.headers.origin || "";
+    const referrer = req.headers.referer || req.headers.referrer || "";
 
-    const [items, total] = await Promise.all([
-      AuditLog.find(q)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .populate({ path: "actor", select: "username email" })
-        .lean()
-        .exec(),
-      AuditLog.countDocuments(q),
-    ]);
+    const client = extractClientInfo(req);
 
-    const normalized = items.map((i) => ({
-      ...i,
+    await AuditLog.create({
+      action,
+      actionLabel,
+      actor,
       actorDisplay:
-        i.actorDisplay ||
-        i.actor?.username ||
-        i.actor?.email ||
-        "(unknown)",
-      actionLabel: i.action, // reserved for future pretty labels
-      meta: i.meta || {},
-      client: i.client || {},
-    }));
-
-    const hasMore = skip + items.length < total;
-    return res.json({ items: normalized, page, limit, total, hasMore });
+        req.user?.username ||
+        req.user?.email ||
+        (typeof actor === "string" ? actor : ""),
+      targetType,
+      targetId: String(targetId || ""),
+      ip,
+      userAgent,
+      method,
+      url,
+      origin,
+      referrer,
+      sessionJti,
+      meta,
+      client,
+    });
   } catch (err) {
-    console.error("[admin/audit] list error:", err);
-    return res
-      .status(500)
-      .json({ message: "Failed to fetch audit logs", error: String(err?.message || err) });
+    console.warn("[audit] failed:", err?.message);
   }
-});
+}
 
-/**
- * GET /api/admin/audit/:id  - “Session Details”/full log detail view
- */
-router.get("/:id", protect, requireAdmin, async (req, res) => {
-  try {
-    const doc = await AuditLog.findById(req.params.id)
-      .populate({ path: "actor", select: "username email firstName lastName" })
-      .lean()
-      .exec();
-    if (!doc) return res.status(404).json({ message: "Not found" });
-    doc.actorDisplay =
-      doc.actorDisplay ||
-      doc.actor?.username ||
-      doc.actor?.email ||
-      "(unknown)";
-    res.json(doc);
-  } catch (err) {
-    console.error("[admin/audit] detail error:", err);
-    res.status(500).json({ message: "Failed to fetch log", error: String(err?.message || err) });
-  }
-});
-
-/**
- * DELETE /api/admin/audit  - bulk clear (optional)
- * Body: { before?: ISOString, everything?: boolean }
- */
-router.delete("/", protect, requireAdmin, async (req, res) => {
-  try {
-    const { before = "", everything = false } = req.body || {};
-    if (!everything && !before) {
-      return res.status(400).json({ message: "Provide {everything:true} or a {before} timestamp." });
-    }
-    const q = everything ? {} : { createdAt: { $lt: new Date(before) } };
-    const r = await AuditLog.deleteMany(q);
-    res.json({ deleted: r.deletedCount || 0 });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to clear logs", error: String(err?.message || err) });
-  }
-});
-
-export default router;
+// Convenience helpers
+export async function logAdminAction(req, payload) {
+  return logAudit(req, payload);
+}
+export async function logAuthLogin(req, user, meta = {}, sessionJti = "") {
+  return logAudit(req, {
+    action: "LOGIN",
+    targetType: "Auth",
+    targetId: user?._id,
+    meta,
+    actorId: user?._id,
+    sessionJti,
+  });
+}
+export async function logAuthLogout(req, user, meta = {}, sessionJti = "") {
+  return logAudit(req, {
+    action: "LOGOUT",
+    targetType: "Auth",
+    targetId: user?._id,
+    meta,
+    actorId: user?._id,
+    sessionJti,
+  });
+}

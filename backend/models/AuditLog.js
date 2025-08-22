@@ -1,59 +1,38 @@
+// backend/models/AuditLog.js
 import mongoose from "mongoose";
 
-/**
- * Rich audit schema:
- * - action: short verb ("LOGIN", "ORDER_DELETE", etc.)
- * - actor: ObjectId of User (nullable if anonymous)
- * - actorDisplay: cached text fallback for when actor doc isn't populated
- * - targetType/targetId: the object this action touched
- * - ip/userAgent: network + UA
- * - url/method/referrer/origin: request context
- * - sessionJti: ties an entry to a session (RefreshToken.jti) when available
- * - client: optional browser-collected info (locale, tz, screen, platform, etc.)
- * - meta: freeform extra data
- */
 const AuditLogSchema = new mongoose.Schema(
   {
-    action: { type: String, required: true, index: true },
+    // Who/what
+    action: { type: String, required: true, index: true },      // e.g., LOGIN, LOGOUT, ORDER_CREATE
+    actionLabel: { type: String, default: "" },                  // pretty label for UI (optional)
+    actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+    actorDisplay: { type: String, default: "" },                 // fallback text when actor not populated
 
-    actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, default: null },
-    actorDisplay: { type: String, default: "" }, // fallback if user doc isn't available
+    // Target of the action
+    targetType: { type: String, default: "", index: true },      // "User", "Order", "Design", "Auth", ...
+    targetId: { type: String, default: "", index: true },        // may be non-ObjectId (string)
 
-    targetType: { type: String, index: true, default: "" },
-    targetId:   { type: String, index: true, default: "" },
-
+    // Network / request context
     ip: { type: String, default: "" },
     userAgent: { type: String, default: "" },
-
     method: { type: String, default: "" },
     url: { type: String, default: "" },
-    referrer: { type: String, default: "" },
     origin: { type: String, default: "" },
+    referrer: { type: String, default: "" },
 
-    sessionJti: { type: String, index: true, default: "" },
+    // Session correlation
+    sessionJti: { type: String, default: "" },
 
-    client: {
-      locale: { type: String, default: "" },
-      timezone: { type: String, default: "" },
-      platform: { type: String, default: "" },
-      vendor: { type: String, default: "" },
-      screen: {
-        width: { type: Number, default: 0 },
-        height: { type: Number, default: 0 },
-        pixelRatio: { type: Number, default: 0 },
-      },
-      // room for Client Hints or anything else
-      hints: { type: mongoose.Schema.Types.Mixed, default: {} },
-    },
-
-    meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+    // Arbitrary structured blobs
+    meta: { type: mongoose.Schema.Types.Mixed, default: {} },     // app-specific info
+    client: { type: mongoose.Schema.Types.Mixed, default: {} },   // client fingerprint info sent from frontend
   },
   { timestamps: true }
 );
 
-// Helpful compound indexes
+// Helpful compound index
 AuditLogSchema.index({ createdAt: -1, action: 1, targetType: 1 });
-AuditLogSchema.index({ createdAt: -1, actor: 1 });
 
 export default mongoose.models.AuditLog ||
   mongoose.model("AuditLog", AuditLogSchema);
