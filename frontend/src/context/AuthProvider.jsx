@@ -5,7 +5,8 @@ import {
   client,
   setAuthHeader,
   clearAuthHeader,
-  setSessionIdHeader,
+  setSessionId,        // <— add: persists + sets header
+  setSessionIdHeader,  // (still used on boot via client.js IIFE)
   clearSessionIdHeader,
 } from "../api/client";
 
@@ -41,12 +42,16 @@ export function AuthProvider({ children }) {
 
   const clearingRef = useRef(false);
 
-  const setSession = async (newToken) => {
+  /**
+   * IMPORTANT: Accept sessionId so we can set BOTH headers
+   * before the first authenticated request (hydrateUser).
+   */
+  const setSession = async (newToken, newSessionId) => {
     if (!newToken) {
       clearingRef.current = true;
       writeToken(null);
       clearAuthHeader();
-      clearSessionIdHeader(); // NEW: clear JTI header too
+      clearSessionIdHeader(); // clear JTI header too
       setToken(null);
       setUser(null);
       clearingRef.current = false;
@@ -55,9 +60,17 @@ export function AuthProvider({ children }) {
     try {
       const decoded = jwtDecode(newToken);
       if (!decoded?.exp) throw new Error("Token missing exp");
+
+      // Persist & set headers BEFORE hydrating
       writeToken(newToken);
       setToken(newToken);
       setAuthHeader(newToken);
+
+      if (newSessionId) {
+        // Persist to localStorage AND set default header
+        setSessionId(newSessionId);
+      }
+
       await hydrateUser(newToken);
     } catch {
       writeToken(null);
@@ -71,6 +84,7 @@ export function AuthProvider({ children }) {
   const hydrateUser = async (activeToken) => {
     try {
       if (activeToken) setAuthHeader(activeToken);
+      // session id header is already set by setSessionId() above
       const { data } = await client.get("/auth/profile");
       if (clearingRef.current) return;
       setUser({
@@ -89,6 +103,7 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Init once from localStorage
   useEffect(() => {
     (async () => {
       try {
@@ -108,6 +123,7 @@ export function AuthProvider({ children }) {
         }
         setToken(stored);
         setAuthHeader(stored);
+        // client.js IIFE already restored x-session-id from storage if present
         await hydrateUser(stored);
       } catch {
         writeToken(null);
@@ -119,6 +135,7 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
+  // Keep Authorization header in sync if token changes externally
   useEffect(() => {
     if (token) setAuthHeader(token);
     else {
@@ -127,6 +144,7 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
+  // Auto-logout at exp (best-effort)
   useEffect(() => {
     if (!token) return;
     let timer;
@@ -140,6 +158,7 @@ export function AuthProvider({ children }) {
     return () => clearTimeout(timer);
   }, [token]);
 
+  // Cross-tab sync (token only; session id persistence handled in client.js IIFE)
   useEffect(() => {
     const onStorage = async (e) => {
       if (e.key && !TOKEN_KEYS.includes(e.key)) return;
@@ -152,9 +171,7 @@ export function AuthProvider({ children }) {
   }, [token]);
 
   const logout = async () => {
-    try {
-      await client.post("/auth/logout");
-    } catch {}
+    try { await client.post("/auth/logout"); } catch {}
     await setSession(null);
   };
 
