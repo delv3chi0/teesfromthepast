@@ -1,7 +1,7 @@
 | Path | Size | Purpose |
 |------|------|---------|
 | `./backend/app.bak` | 4.6KB | backend/app.js |
-| `./backend/app.js` | 4.0KB | backend/app.js |
+| `./backend/app.js` | 3.6KB | backend/app.js |
 | `./backend/babel.config.cjs` | 0.1KB | backend/babel.config.js |
 | `./backend/backend@1.0.0` | 0.0KB | — |
 | `./backend/config/db.js` | 0.4KB | backend/config/db.js |
@@ -32,7 +32,7 @@
 | `./backend/models/Product.js` | 2.1KB | — |
 | `./backend/models/RefreshToken.js` | 0.9KB | backend/models/RefreshToken.js |
 | `./backend/models/User.js` | 2.9KB | backend/models/User.js |
-| `./backend/models/WebhookEvent.js` | 0.3KB | backend/models/WebhookEvent.js |
+| `./backend/models/WebhookEvent.js` | 0.4KB | backend/models/WebhookEvent.js |
 | `./backend/node` | 0.0KB | — |
 | `./backend/node_modules/abort-controller/browser.js` | 0.4KB | globals self, window */ |
 | `./backend/node_modules/abort-controller/browser.mjs` | 0.3KB | globals self, window */ |
@@ -2752,6 +2752,52 @@
 | `./backend/node_modules/cross-spawn/LICENSE` | 1.1KB | — |
 | `./backend/node_modules/cross-spawn/package.json` | 1.6KB | — |
 | `./backend/node_modules/cross-spawn/README.md` | 4.0KB | cross-spawn |
+| `./backend/node_modules/csrf/HISTORY.md` | 2.2KB | — |
+| `./backend/node_modules/csrf/index.d.ts` | 0.9KB | * |
+| `./backend/node_modules/csrf/index.js` | 3.0KB | ! |
+| `./backend/node_modules/csrf/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csrf/package.json` | 1.4KB | — |
+| `./backend/node_modules/csrf/README.md` | 3.8KB | CSRF |
+| `./backend/node_modules/csurf/HISTORY.md` | 4.3KB | — |
+| `./backend/node_modules/csurf/index.js` | 5.9KB | ! |
+| `./backend/node_modules/csurf/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/cookie/HISTORY.md` | 2.6KB | — |
+| `./backend/node_modules/csurf/node_modules/cookie/index.js` | 3.9KB | ! |
+| `./backend/node_modules/csurf/node_modules/cookie/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/cookie/package.json` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/cookie/README.md` | 8.6KB | cookie |
+| `./backend/node_modules/csurf/node_modules/depd/History.md` | 2.0KB | — |
+| `./backend/node_modules/csurf/node_modules/depd/index.js` | 10.4KB | ! |
+| `./backend/node_modules/csurf/node_modules/depd/lib/browser/index.js` | 1.5KB | ! |
+| `./backend/node_modules/csurf/node_modules/depd/lib/compat/callsite-tostring.js` | 2.2KB | ! |
+| `./backend/node_modules/csurf/node_modules/depd/lib/compat/event-listener-count.js` | 0.3KB | ! |
+| `./backend/node_modules/csurf/node_modules/depd/lib/compat/index.js` | 1.4KB | ! |
+| `./backend/node_modules/csurf/node_modules/depd/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/depd/package.json` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/depd/Readme.md` | 9.8KB | depd |
+| `./backend/node_modules/csurf/node_modules/http-errors/HISTORY.md` | 3.1KB | — |
+| `./backend/node_modules/csurf/node_modules/http-errors/index.js` | 5.7KB | ! |
+| `./backend/node_modules/csurf/node_modules/http-errors/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/http-errors/package.json` | 1.3KB | — |
+| `./backend/node_modules/csurf/node_modules/http-errors/README.md` | 5.4KB | http-errors |
+| `./backend/node_modules/csurf/node_modules/setprototypeof/index.d.ts` | 0.1KB | — |
+| `./backend/node_modules/csurf/node_modules/setprototypeof/index.js` | 0.4KB | eslint no-proto: 0 */ |
+| `./backend/node_modules/csurf/node_modules/setprototypeof/LICENSE` | 0.7KB | — |
+| `./backend/node_modules/csurf/node_modules/setprototypeof/package.json` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/setprototypeof/README.md` | 0.8KB | Polyfill for `Object.setPrototypeOf` |
+| `./backend/node_modules/csurf/node_modules/setprototypeof/test/index.js` | 0.7KB | eslint-env mocha */ |
+| `./backend/node_modules/csurf/node_modules/statuses/codes.json` | 1.8KB | — |
+| `./backend/node_modules/csurf/node_modules/statuses/HISTORY.md` | 1.0KB | — |
+| `./backend/node_modules/csurf/node_modules/statuses/index.js` | 2.0KB | ! |
+| `./backend/node_modules/csurf/node_modules/statuses/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/statuses/package.json` | 1.4KB | — |
+| `./backend/node_modules/csurf/node_modules/statuses/README.md` | 3.4KB | Statuses |
+| `./backend/node_modules/csurf/node_modules/toidentifier/index.js` | 0.5KB | ! |
+| `./backend/node_modules/csurf/node_modules/toidentifier/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/csurf/node_modules/toidentifier/package.json` | 1.0KB | — |
+| `./backend/node_modules/csurf/node_modules/toidentifier/README.md` | 1.7KB | toidentifier |
+| `./backend/node_modules/csurf/package.json` | 1.3KB | — |
+| `./backend/node_modules/csurf/README.md` | 10.6KB | csurf |
 | `./backend/node_modules/debug/CHANGELOG.md` | 11.4KB | — |
 | `./backend/node_modules/debug/component.json` | 0.3KB | — |
 | `./backend/node_modules/debug/.coveralls.yml` | 0.0KB | — |
@@ -3169,9 +3215,9 @@
 | `./backend/node_modules/express/node_modules/cookie/SECURITY.md` | 1.2KB | Security Policies and Procedures |
 | `./backend/node_modules/express/package.json` | 2.7KB | — |
 | `./backend/node_modules/express-rate-limit/dist/index.cjs` | 28.0KB | source/index.ts |
-| `./backend/node_modules/express-rate-limit/dist/index.d.cts` | 17.8KB | Generated by dts-bundle-generator v8.0.1 |
-| `./backend/node_modules/express-rate-limit/dist/index.d.mts` | 17.8KB | Generated by dts-bundle-generator v8.0.1 |
-| `./backend/node_modules/express-rate-limit/dist/index.d.ts` | 17.8KB | Generated by dts-bundle-generator v8.0.1 |
+| `./backend/node_modules/express-rate-limit/dist/index.d.cts` | 17.9KB | Generated by dts-bundle-generator v8.0.1 |
+| `./backend/node_modules/express-rate-limit/dist/index.d.mts` | 17.9KB | Generated by dts-bundle-generator v8.0.1 |
+| `./backend/node_modules/express-rate-limit/dist/index.d.ts` | 17.9KB | Generated by dts-bundle-generator v8.0.1 |
 | `./backend/node_modules/express-rate-limit/dist/index.mjs` | 26.7KB | source/headers.ts |
 | `./backend/node_modules/express-rate-limit/license.md` | 1.1KB | — |
 | `./backend/node_modules/express-rate-limit/package.json` | 3.6KB | — |
@@ -9981,7 +10027,7 @@
 | `./backend/node_modules/openai/version.d.ts` | 0.1KB | # sourceMappingURL=version.d.ts.map |
 | `./backend/node_modules/openai/version.js` | 0.2KB | # sourceMappingURL=version.js.map |
 | `./backend/node_modules/openai/version.mjs` | 0.1KB | # sourceMappingURL=version.mjs.map |
-| `./backend/node_modules/.package-lock.json` | 350.3KB | — |
+| `./backend/node_modules/.package-lock.json` | 354.6KB | — |
 | `./backend/node_modules/@paralleldrive/cuid2/index.d.ts` | 0.4KB | — |
 | `./backend/node_modules/@paralleldrive/cuid2/index.js` | 0.2KB | — |
 | `./backend/node_modules/@paralleldrive/cuid2/LICENSE` | 1.0KB | — |
@@ -10321,6 +10367,11 @@
 | `./backend/node_modules/qs/test/parse.js` | 45.8KB | — |
 | `./backend/node_modules/qs/test/stringify.js` | 51.7KB | — |
 | `./backend/node_modules/qs/test/utils.js` | 5.0KB | — |
+| `./backend/node_modules/random-bytes/HISTORY.md` | 0.1KB | — |
+| `./backend/node_modules/random-bytes/index.js` | 1.9KB | ! |
+| `./backend/node_modules/random-bytes/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/random-bytes/package.json` | 0.9KB | — |
+| `./backend/node_modules/random-bytes/README.md` | 2.1KB | random-bytes |
 | `./backend/node_modules/range-parser/HISTORY.md` | 0.9KB | — |
 | `./backend/node_modules/range-parser/index.js` | 2.8KB | ! |
 | `./backend/node_modules/range-parser/LICENSE` | 1.2KB | — |
@@ -11065,6 +11116,10 @@
 | `./backend/node_modules/resolve/test/shadowed_core/node_modules/util/index.js` | 0.0KB | — |
 | `./backend/node_modules/resolve/test/subdirs.js` | 0.3KB | — |
 | `./backend/node_modules/resolve/test/symlinks.js` | 6.4KB | — |
+| `./backend/node_modules/rndm/index.js` | 0.7KB | — |
+| `./backend/node_modules/rndm/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/rndm/package.json` | 0.7KB | — |
+| `./backend/node_modules/rndm/README.md` | 0.5KB | RNDM |
 | `./backend/node_modules/safe-buffer/index.d.ts` | 8.5KB | — |
 | `./backend/node_modules/safe-buffer/index.js` | 1.6KB | ! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */ |
 | `./backend/node_modules/safe-buffer/LICENSE` | 1.1KB | — |
@@ -13361,6 +13416,14 @@
 | `./backend/node_modules/tslib/tslib.es6.mjs` | 17.2KB | ***************************************************************************** |
 | `./backend/node_modules/tslib/tslib.html` | 0.0KB | — |
 | `./backend/node_modules/tslib/tslib.js` | 22.8KB | ***************************************************************************** |
+| `./backend/node_modules/tsscmp/appveyor.yml` | 0.7KB | Test against this version of Node.js |
+| `./backend/node_modules/tsscmp/lib/index.js` | 1.1KB | Implements Brad Hill's Double HMAC pattern from |
+| `./backend/node_modules/tsscmp/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/tsscmp/package.json` | 0.6KB | — |
+| `./backend/node_modules/tsscmp/README.md` | 1.9KB | Timing safe string compare using double HMAC |
+| `./backend/node_modules/tsscmp/test/benchmark/index.js` | 0.7KB | — |
+| `./backend/node_modules/tsscmp/test/unit/index.js` | 1.8KB | lets also do a parity check with the strict equal to operator |
+| `./backend/node_modules/tsscmp/.travis.yml` | 0.2KB | — |
 | `./backend/node_modules/type-detect/index.js` | 14.9KB | ! |
 | `./backend/node_modules/type-detect/LICENSE` | 1.1KB | — |
 | `./backend/node_modules/type-detect/package.json` | 2.7KB | — |
@@ -13548,6 +13611,11 @@
 | `./backend/node_modules/@types/yargs-parser/README.md` | 0.5KB | Installation |
 | `./backend/node_modules/@types/yargs/README.md` | 0.9KB | Installation |
 | `./backend/node_modules/@types/yargs/yargs.d.ts` | 0.2KB | — |
+| `./backend/node_modules/uid-safe/HISTORY.md` | 0.9KB | — |
+| `./backend/node_modules/uid-safe/index.js` | 1.9KB | ! |
+| `./backend/node_modules/uid-safe/LICENSE` | 1.1KB | — |
+| `./backend/node_modules/uid-safe/package.json` | 1.2KB | — |
+| `./backend/node_modules/uid-safe/README.md` | 2.1KB | uid-safe |
 | `./backend/node_modules/undici-types/agent.d.ts` | 1.0KB | * `true` after `dispatcher.close()` has been called. */ |
 | `./backend/node_modules/undici-types/api.d.ts` | 1.4KB | * Performs an HTTP request. */ |
 | `./backend/node_modules/undici-types/balanced-pool.d.ts` | 0.6KB | * `true` after `pool.close()` has been called. */ |
@@ -14146,7 +14214,7 @@
 | `./backend/node_modules/yocto-queue/package.json` | 0.7KB | — |
 | `./backend/node_modules/yocto-queue/readme.md` | 2.0KB | yocto-queue [![](https://badgen.net/bundlephobia/minzip/yocto-queue)](https://bundlephobia.com/result?p=yocto-queue) |
 | `./backend/package.json` | 1.3KB | — |
-| `./backend/package-lock.json` | 364.6KB | — |
+| `./backend/package-lock.json` | 368.9KB | — |
 | `./backend/raw-test.js` | 0.3KB | — |
 | `./backend/routes/adminAuditRoutes.js` | 3.8KB | backend/routes/adminAuditRoutes.js |
 | `./backend/routes/adminDesignRoutes.js` | 0.5KB | backend/routes/adminDesignRoutes.js |
@@ -14155,7 +14223,7 @@
 | `./backend/routes/adminProductRoutes.js` | 3.0KB | Assuming this is your main adminRoutes.js file that gathers other admin sub-routers. |
 | `./backend/routes/adminSessionRoutes.js` | 3.5KB | backend/routes/adminSessionRoutes.js |
 | `./backend/routes/adminUserRoutes.js` | 1.4KB | backend/routes/adminUserRoutes.js |
-| `./backend/routes/auth.js` | 2.0KB | Namespace import avoids hard-failing if a single named export is missing |
+| `./backend/routes/auth.js` | 3.6KB | backend/routes/auth.js |
 | `./backend/routes/checkout.js` | 8.9KB | backend/routes/checkout.js |
 | `./backend/routes/contest.js` | 4.9KB | backend/routes/contest.js |
 | `./backend/routes/designs.bak` | 4.4KB | backend/routes/designs.js |
@@ -14166,7 +14234,7 @@
 | `./backend/routes/orders.js` | 4.3KB | backend/routes/orders.js |
 | `./backend/routes/printful.js` | 0.4KB | backend/routes/printful.js |
 | `./backend/routes/storefrontProductRoutes.js` | 0.7KB | * |
-| `./backend/routes/stripeWebhook.js` | 5.3KB | backend/routes/stripeWebhook.js |
+| `./backend/routes/stripeWebhook.js` | 5.4KB | backend/routes/stripeWebhook.js |
 | `./backend/routes/uploadRoutes.js` | 0.3KB | POST /api/upload/printfile — Upload print-ready + thumbnail |
 | `./backend/routes/userDesignRoutes.js` | 0.3KB | — |
 | `./backend/services/printful.js` | 1.5KB | ESM - uses Node 18+ global fetch |
@@ -14184,11 +14252,33 @@
 | `./backend/utils/pickPrintfulImage.js` | 0.4KB | — |
 | `./backend/utils/slugify.js` | 0.1KB | — |
 | `./.chatgptignore` | 0.1KB | things never to include in chat packs |
+| `./chatpack/context.md` | 146.4KB | Context (generated) |
+| `./chatpack/diff.patch` | 2002.8KB | — |
+| `./chatpack/docs/ARCHITECTURE.md` | 0.0KB | — |
+| `./chatpack/docs/CHANGELOG.md` | 0.0KB | — |
+| `./chatpack/docs/CHAT-CONTRACT.md` | 0.0KB | — |
+| `./chatpack/docs/DECISIONS.md` | 0.0KB | — |
+| `./chatpack/docs/FILEMAP.md` | 1942.3KB | — |
+| `./chatpack/files/.chatgptignore` | 0.1KB | things never to include in chat packs |
+| `./chatpack/slices/backend__package.json` | 1.3KB | — |
+| `./chatpack/slices/backend__utils__audit.js` | 2.0KB | backend/utils/audit.js |
+| `./chatpack/slices/docs__ARCHITECTURE.md` | 0.0KB | — |
+| `./chatpack/slices/docs__CHANGELOG.md` | 0.0KB | — |
+| `./chatpack/slices/docs__CHAT-CONTRACT.md` | 0.0KB | — |
+| `./chatpack/slices/docs__DECISIONS.md` | 0.0KB | — |
+| `./chatpack/slices/docs__FILEMAP.md` | 82.1KB | — |
+| `./chatpack/slices/frontend__package.json` | 1.0KB | — |
+| `./chatpack/slices/frontend__src__pages__AdminAuditLogs.jsx` | 8.6KB | 8-char readable (or chunked like xxxx-xxxx) |
+| `./chatpack/slices/frontend__src__pages__AdminPage.jsx` | 30.1KB | — |
+| `./chatpack/slices/package.json` | 0.1KB | — |
+| `./chatpack/slices/scripts__gen_filemap.sh` | 1.0KB | !/usr/bin/env bash |
+| `./chatpack/slices/tools__prepare_chat_context.sh` | 3.5KB | !/usr/bin/env bash |
+| `./chatpack/slices/tools__scan_for_secrets.sh` | 0.2KB | !/usr/bin/env bash |
 | `./docs/ARCHITECTURE.md` | 0.0KB | — |
 | `./docs/CHANGELOG.md` | 0.0KB | — |
 | `./docs/CHAT-CONTRACT.md` | 0.0KB | — |
 | `./docs/DECISIONS.md` | 0.0KB | — |
-| `./docs/FILEMAP.md` | 1413.8KB | — |
+| `./docs/FILEMAP.md` | 1420.3KB | — |
 | `./frontend/.env` | 0.3KB | — |
 | `./frontend/eslint.config.js` | 0.8KB | — |
 | `./frontend/frontend@0.0.0` | 0.0KB | — |
