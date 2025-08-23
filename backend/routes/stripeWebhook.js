@@ -16,13 +16,12 @@ if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-// MUST be before express.json() (done in app.js)
+// MUST be mounted BEFORE global express.json() in app.js
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  let event;
-
   if (!stripe || !webhookSecret) return res.status(500).send("Stripe not configured");
 
+  const sig = req.headers["stripe-signature"];
+  let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
@@ -37,6 +36,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     await WebhookEvent.create({ _id: event.id, type: event.type });
   } catch (e) {
     console.error("[Webhook] Failed to record event id:", e.message);
+    // do not bail; still try to process once
   }
 
   if (event.type === "payment_intent.succeeded") {
@@ -48,8 +48,11 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
       const { userId } = pi.metadata || {};
       let itemsFromMeta = [];
-      try { itemsFromMeta = JSON.parse(pi.metadata?.orderDetails || "[]"); }
-      catch { throw new Error("orderDetails metadata JSON parse failed"); }
+      try {
+        itemsFromMeta = JSON.parse(pi.metadata?.orderDetails || "[]");
+      } catch {
+        throw new Error("orderDetails metadata JSON parse failed");
+      }
       if (!userId || !Array.isArray(itemsFromMeta) || itemsFromMeta.length === 0) {
         throw new Error("Missing userId or orderDetails in metadata");
       }
@@ -108,7 +111,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
       });
       await newOrder.save();
 
-      // stock decrement (old/new variant shapes)
+      // stock decrement (supports both old and new variant shapes)
       for (const item of itemsFromMeta) {
         const product = await Product.findById(item.productId);
         if (!product) continue;

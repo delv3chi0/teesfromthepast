@@ -1,0 +1,11 @@
+# things never to include in chat packs
+node_modules/
+dist/
+build/
+.env
+*.pem
+*.key
+*.crt
+*.png
+*.jpg
+*.pdf

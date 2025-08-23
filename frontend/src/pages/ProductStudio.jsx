@@ -87,6 +87,9 @@ export default function ProductStudio() {
   const undoStack = useRef([]); const redoStack = useRef([]);
   const guideVRef = useRef(null); const guideHRef = useRef(null);
   const warnedRef = useRef(false);
+  const zoomRef = useRef(zoom);
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  const drawBackgroundRef = useRef(() => {});
 
   // ---------- data fetch ----------
   useEffect(() => {
@@ -117,63 +120,67 @@ export default function ProductStudio() {
     return () => { cancelled = true; };
   }, [slugParam, colorParam, sizeParam]);
 
-  // ---------- init Fabric ----------
+  // ---------- init Fabric (run once) ----------
   useEffect(() => {
     if (!window.fabric || !wrapRef.current || !canvasRef.current) return;
 
-    if (!fabricRef.current) {
-      const parentW = wrapRef.current.clientWidth;
-      const parentH = parentW / CANVAS_ASPECT;
+    const parentW = wrapRef.current.clientWidth;
+    const parentH = parentW / CANVAS_ASPECT;
 
-      const fc = new window.fabric.Canvas(canvasRef.current, {
-        width: parentW,
-        height: parentH,
-        preserveObjectStacking: true,
-        selection: true,
-      });
-      fabricRef.current = fc;
+    const fc = new window.fabric.Canvas(canvasRef.current, {
+      width: parentW,
+      height: parentH,
+      preserveObjectStacking: true,
+      selection: true,
+    });
+    fabricRef.current = fc;
 
-      const onChange = () => {
-        setHasObjects(
-          fc.getObjects().some(o => !["printArea","gridOverlay","guide"].includes(o.id))
-        );
-        setLayerTick((t) => t + 1);
-      };
-      fc.on("object:added", onChange);
-      fc.on("object:removed", onChange);
-      fc.on("object:modified", onChange);
+    const onChange = () => {
+      setHasObjects(
+        fc.getObjects().some(o => !["printArea","gridOverlay","guide"].includes(o.id))
+      );
+      setLayerTick((t) => t + 1);
+    };
+    fc.on("object:added", onChange);
+    fc.on("object:removed", onChange);
+    fc.on("object:modified", onChange);
 
-      // Keybindings
-      const onKey = (e) => {
-        const active = fc.getActiveObject();
-        if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) { e.preventDefault(); setZoomSafe(zoom + 0.1); return; }
-        if ((e.ctrlKey || e.metaKey) && e.key === "-") { e.preventDefault(); setZoomSafe(zoom - 0.1); return; }
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") { setShowGrid((v)=>!v); drawBackground(); return; }
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") { setMockupVisible((v)=>!v); applyMockupVisibility(); return; }
-        if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") { autoFit(); return; }
-        if (!active) return;
-        const step = e.shiftKey ? 5 : 1;
-        if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); del(); return; }
-        if (e.key === "ArrowLeft")  { active.left -= step; }
-        if (e.key === "ArrowRight") { active.left += step; }
-        if (e.key === "ArrowUp")    { active.top  -= step; }
-        if (e.key === "ArrowDown")  { active.top  += step; }
-        active.setCoords(); fc.requestRenderAll();
-      };
-      window.addEventListener("keydown", onKey);
+    // Keybindings
+    const onKey = (e) => {
+      const active = fc.getActiveObject();
+      const z = zoomRef.current;
+      if ((e.ctrlKey || e.metaKey) && (e.key === "+" || e.key === "=")) { e.preventDefault(); setZoomSafe(z + 0.1); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key === "-") { e.preventDefault(); setZoomSafe(z - 0.1); return; }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "g") { setShowGrid((v)=>!v); drawBackgroundRef.current(); return; }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") { setMockupVisible((v)=>!v); applyMockupVisibility(); return; }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "f") { autoFit(); return; }
+      if (!active) return;
+      const step = e.shiftKey ? 5 : 1;
+      if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); del(); return; }
+      if (e.key === "ArrowLeft")  { active.left -= step; }
+      if (e.key === "ArrowRight") { active.left += step; }
+      if (e.key === "ArrowUp")    { active.top  -= step; }
+      if (e.key === "ArrowDown")  { active.top  += step; }
+      active.setCoords(); fc.requestRenderAll();
+    };
+    window.addEventListener("keydown", onKey);
 
-      const ro = new ResizeObserver(() => {
-        if (!fabricRef.current) return;
-        const w = wrapRef.current.clientWidth;
-        const h = w / CANVAS_ASPECT;
-        fabricRef.current.setWidth(w); fabricRef.current.setHeight(h);
-        drawBackground();
-      });
-      ro.observe(wrapRef.current);
+    const ro = new ResizeObserver(() => {
+      if (!fabricRef.current) return;
+      const w = wrapRef.current.clientWidth;
+      const h = w / CANVAS_ASPECT;
+      fabricRef.current.setWidth(w); fabricRef.current.setHeight(h);
+      drawBackgroundRef.current();
+    });
+    ro.observe(wrapRef.current);
 
-      return () => { window.removeEventListener("keydown", onKey); ro.disconnect(); };
-    }
-  }, [zoom]); // eslint-disable-line
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      ro.disconnect();
+      fc.dispose();
+      fabricRef.current = null;
+    };
+  }, []); // initialize once
 
   // ---------- utility: grid overlay ----------
   const makeGridDataUrl = useCallback((fc) => {
@@ -190,16 +197,21 @@ export default function ProductStudio() {
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
   }, []);
 
-  // ---------- load image (mockup) from candidates with fallbacks ----------
+  // ---------- robust image loader with fallbacks ----------
   const loadImageFromCandidates = useCallback((candidates, onSuccess, onFail) => {
     const tryIndex = (i) => {
       if (i >= candidates.length) { onFail && onFail(); return; }
       const url = candidates[i];
-      window.fabric.Image.fromURL(
+      window.fabric.util.loadImage(
         url,
-        (img) => onSuccess(img, url),
-        { crossOrigin: "anonymous" }
-      , (err) => { console.warn("Error loading", url, err); tryIndex(i + 1); });
+        (imgEl) => {
+          if (!imgEl) { tryIndex(i + 1); return; }
+          const img = new window.fabric.Image(imgEl, { crossOrigin: "anonymous" });
+          onSuccess(img, url);
+        },
+        null,
+        "anonymous"
+      );
     };
     tryIndex(0);
   }, []);
@@ -257,11 +269,9 @@ export default function ProductStudio() {
 
         // print area from normalized fractions
         const { x, y, w, h } = getPlacement({ slug, view, productType });
-        const px = (fx) => bgImgInfoRef.current.left + fx * bgImgInfoRef.current.width;
-        const py = (fy) => bgImgInfoRef.current.top  + fy * bgImgInfoRef.current.height;
 
-        const rectLeft = px(x);
-        const rectTop  = py(y);
+        const rectLeft = bgImgInfoRef.current.left + x * bgImgInfoRef.current.width;
+        const rectTop  = bgImgInfoRef.current.top  + y * bgImgInfoRef.current.height;
         const rectW    = w * bgImgInfoRef.current.width;
         const rectH    = h * bgImgInfoRef.current.height;
 
@@ -306,6 +316,7 @@ export default function ProductStudio() {
           id: "printArea", left: rectLeft, top: rectTop, width: rectW, height: rectH,
           originX: "left", originY: "top", fill: "", stroke: "#FFFFFF",
           strokeDashArray: [6,6], strokeWidth: 2, selectable:false, evented:false,
+          excludeFromExport: true,
         });
         fc.add(rect);
         printRectRef.current = rect;
@@ -319,14 +330,15 @@ export default function ProductStudio() {
     );
   }, [product, slugParam, color, view, mockupOpacity, mockupVisible, showGrid, makeGridDataUrl, productType, loadImageFromCandidates]);
 
+  drawBackgroundRef.current = drawBackground;
+  useEffect(() => { drawBackground(); }, [drawBackground]);
+
   const applyMockupVisibility = useCallback(() => {
     const fc = fabricRef.current, info = bgImgInfoRef.current;
     if (!fc || !info || !info.img) return;
     info.img.opacity = mockupVisible ? mockupOpacity : 0;
     fc.requestRenderAll();
   }, [mockupVisible, mockupOpacity]);
-
-  useEffect(() => { drawBackground(); }, [drawBackground]);
   useEffect(() => { applyMockupVisibility(); }, [applyMockupVisibility]);
 
   // ---------- snap, clamp, guides ----------
@@ -472,39 +484,46 @@ export default function ProductStudio() {
   const uploadLocal = (file) => {
     if (!file) return;
     const fc = fabricRef.current;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = reader.result;
-      if (/\.svg$/i.test(file.name)) {
-        window.fabric.loadSVGFromString(url, (objects, options) => {
+
+    if (/\.svg$/i.test(file.name)) {
+      const r = new FileReader();
+      r.onload = () => {
+        const svgText = r.result;
+        window.fabric.loadSVGFromString(svgText, (objects, options) => {
           const grp = window.fabric.util.groupSVGElements(objects, options);
           fitInsidePrintArea(grp, 0.90);
           pushHistory(); fc.add(grp); fc.setActiveObject(grp); fc.requestRenderAll();
         });
-      } else {
-        window.fabric.Image.fromURL(url, (img) => {
-          fitInsidePrintArea(img, 0.90);
-          pushHistory(); fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
-        });
-      }
+      };
+      r.readAsText(file);
+      return;
+    }
+
+    const r = new FileReader();
+    r.onload = () => {
+      window.fabric.Image.fromURL(r.result, (img) => {
+        fitInsidePrintArea(img, 0.90);
+        pushHistory(); fc.add(img); fc.setActiveObject(img); fc.requestRenderAll();
+      });
     };
-    reader.readAsDataURL(file);
+    r.readAsDataURL(file);
   };
 
   function fitInsidePrintArea(obj, fraction = 0.90) {
     const fc = fabricRef.current; if (!fc) return;
     const area = printRectRef.current; if (!area) return;
-    const a = area.getBoundingRect(true,true);
+
+    const ab = { left: area.left, top: area.top, width: area.width, height: area.height };
 
     const ow = obj.getScaledWidth(), oh = obj.getScaledHeight();
-    const maxW = a.width * fraction, maxH = a.height * fraction;
+    const maxW = ab.width * fraction, maxH = ab.height * fraction;
     const s = Math.min(maxW/ow, maxH/oh);
     obj.scaleX *= s; obj.scaleY *= s;
 
     const bb = obj.getBoundingRect(true,true);
     obj.set({
-      left: obj.left + (a.left + a.width/2 - (bb.left + bb.width/2)),
-      top:  obj.top  + (a.top  + a.height/2 - (bb.top  + bb.height/2)),
+      left: obj.left + (ab.left + ab.width/2 - (bb.left + bb.width/2)),
+      top:  obj.top  + (ab.top  + ab.height/2 - (bb.top  + bb.height/2)),
       originX: "left", originY: "top",
       clipPath: clipRef.current || null,
     });
@@ -521,7 +540,7 @@ export default function ProductStudio() {
   const centerX = () => {
     const fc = fabricRef.current; if (!fc) return;
     const o = fc.getActiveObject(); const a = printRectRef.current; if (!o || !a) return;
-    const ab = a.getBoundingRect(true,true);
+    const ab = { left: a.left, top: a.top, width: a.width, height: a.height };
     const bb = o.getBoundingRect(true,true);
     o.left += ab.left + ab.width/2 - (bb.left + bb.width/2);
     o.setCoords(); fc.requestRenderAll();
@@ -533,11 +552,51 @@ export default function ProductStudio() {
     fitInsidePrintArea(o, 0.90);
   };
 
-  // ---- High-res export + upload for print provider ----
-  async function cloneForExport(o) {
-    return new Promise((resolve) => {
-      o.clone((cl) => resolve(cl));
+  // ---- High-res export (cropped + scaled) ----
+  function exportPrintPNG() {
+    const fc = fabricRef.current; if (!fc) return null;
+    const area = printRectRef.current; if (!area) return null;
+
+    const left = area.left;
+    const top = area.top;
+    const width = area.width;
+    const height = area.height;
+
+    const { width: exportW } = getExportPixelSize(product?.slug || slugParam, view, productType);
+    const multiplier = exportW / width;
+
+    // Hide editor-only visuals
+    const origBg = fc.backgroundImage;
+    const origOverlay = fc.overlayImage;
+
+    if (origBg) origBg.opacity = 0;
+    if (origOverlay) fc.setOverlayImage(null, fc.renderAll.bind(fc));
+
+    // Hide guide & printArea objects during export
+    const hidden = [];
+    fc.getObjects().forEach((o) => {
+      if (o.id === "printArea" || o.id === "guide") {
+        hidden.push([o, o.visible]);
+        o.visible = false;
+      }
     });
+    fc.requestRenderAll();
+
+    const png = fc.toDataURL({
+      format: "png",
+      left, top, width, height,
+      multiplier,
+      withoutTransform: true,
+      enableRetinaScaling: false,
+    });
+
+    // Restore visuals
+    hidden.forEach(([o, vis]) => { o.visible = vis; });
+    if (origBg) origBg.opacity = (mockupVisible ? mockupOpacity : 0);
+    if (origOverlay) fc.setOverlayImage(origOverlay, fc.renderAll.bind(fc));
+    fc.requestRenderAll();
+
+    return png;
   }
 
   const makePrintReadyAndUpload = async () => {
@@ -547,65 +606,18 @@ export default function ProductStudio() {
     const objs = fc.getObjects().filter(o => !["printArea","gridOverlay","guide"].includes(o.id));
     if (!objs.length) { toast({ title:"Nothing to print", status:"warning"}); return; }
 
-    // Export size in pixels (print-ready)
-    const { width: exportW, height: exportH } = getExportPixelSize(product?.slug || slugParam, view, productType);
-
-    // Bounding rect of the print area on the editor canvas (screen pixels)
-    const ab = area.getBoundingRect(true,true);
-
-    // Scale factor from editor “print rect” → export pixels
-    const sX = exportW / ab.width;
-    const sY = exportH / ab.height;
-
-    // Create an offscreen Fabric canvas at export resolution
-    const tmp = new window.fabric.Canvas(null, {
-      width: Math.round(exportW),
-      height: Math.round(exportH),
-      enableRetinaScaling: false,
-      selection: false,
-      backgroundColor: null,
-    });
-
-    // Clone & place each object into export canvas
-    const clones = await Promise.all(objs.map(cloneForExport));
-    clones.forEach((cl, idx) => {
-      const src = objs[idx];
-      const bb = src.getBoundingRect(true,true);
-
-      // Position relative to print area, center-based
-      const relCenterX = (bb.left - ab.left) + bb.width/2;
-      const relCenterY = (bb.top  - ab.top ) + bb.height/2;
-
-      cl.set({
-        originX: "center",
-        originY: "center",
-        left: relCenterX * sX,
-        top:  relCenterY * sY,
-        clipPath: null,
-      });
-
-      cl.scaleX = (src.scaleX || 1) * sX;
-      cl.scaleY = (src.scaleY || 1) * sY;
-      cl.angle = src.angle || 0;
-      cl.opacity = src.opacity ?? 1;
-
-      tmp.add(cl);
-    });
-
-    tmp.requestRenderAll();
-
-    // Export PNG (full quality, transparent BG)
-    const png = tmp.toDataURL({ format: "png", quality: 1 });
-    tmp.dispose();
+    const png = exportPrintPNG();
+    if (!png) { toast({ title: "Export failed", status: "error" }); return; }
 
     // Also keep a lower-res preview of the whole editor for cart/checkout thumbnails
+    const savedOverlay = fc.overlayImage;
+    if (savedOverlay) fc.setOverlayImage(null, fc.renderAll.bind(fc));
     const previewPNG = fc.toDataURL({ format: "png", quality: 0.92 });
+    if (savedOverlay) fc.setOverlayImage(savedOverlay, fc.renderAll.bind(fc));
 
     setUploading(true);
     toast({ title: "Uploading print file…", status: "info", duration: 2000 });
     try {
-      // NOTE: your backend exposes both /api/upload-print-file and /api/upload/printfile in different places.
-      // This one expects /api/upload/printfile returning { publicUrl, thumbUrl, publicId }.
       const upload = await client.post("/upload/printfile", {
         dataUrl: png,
         productSlug: product?.slug || slugParam,

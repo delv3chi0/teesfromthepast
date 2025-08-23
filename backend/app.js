@@ -32,14 +32,13 @@ const app = express();
 app.set("trust proxy", true);
 
 // --- Health check for Render ---
-app.get("/health", (req, res) => res.send("OK"));
+app.get("/health", (_req, res) => res.send("OK"));
 
 /**
- * Tiny dependency-free CORS that:
+ * Dependency-free CORS:
  *  - Allows your Vercel app + localhost
  *  - Handles preflight properly (reflects Access-Control-Request-Headers)
  *  - Whitelists the custom telemetry/session headers you use
- *  - Works whether the browser sends lowercase or PascalCase names
  */
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
   "https://teesfromthepast.vercel.app,http://localhost:5173,http://localhost:3000")
@@ -48,12 +47,9 @@ const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
   .filter(Boolean);
 
 const DEFAULT_ALLOWED_HEADERS = [
-  // standard
   "content-type",
   "authorization",
   "x-requested-with",
-
-  // your session & telemetry headers (lowercase for preflight consistency)
   "x-session-id",
   "x-client-info",
   "x-client-timezone",
@@ -68,35 +64,28 @@ const DEFAULT_ALLOWED_HEADERS = [
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
-    // allow sharing the response across varying origins
     res.setHeader("Vary", "Origin");
   }
-
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-
-  // If the browser sent a preflight header list, reflect it back.
-  // Otherwise, send our default, which includes all custom headers we use.
   const requested = req.headers["access-control-request-headers"];
   res.setHeader(
     "Access-Control-Allow-Headers",
     (requested && String(requested)) || DEFAULT_ALLOWED_HEADERS.join(", ")
   );
-
-  // We use Bearer tokens (not cookies), so credentials are not required.
-  // Flip to true if you later use cookies.
-  res.setHeader("Access-Control-Allow-Credentials", "false");
-
-  if (req.method === "OPTIONS") {
-    // End preflight quickly
-    return res.status(204).end();
-  }
+  // We use Bearer tokens (not cookies) → do not set Access-Control-Allow-Credentials
+  if (req.method === "OPTIONS") return res.status(204).end();
   next();
 });
 
-// JSON body parsing
+/**
+ * IMPORTANT: Mount Stripe webhook BEFORE any JSON body parser
+ * so `express.raw()` in the route can read the untouched body.
+ */
+app.use("/api/stripe", stripeWebhookRoutes);
+
+// JSON body parsing (after Stripe)
 app.use(express.json({ limit: "10mb" }));
 
 // --- Routes ---
@@ -105,7 +94,6 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
 app.use("/api/storefront/product", storefrontProductRoutes);
 app.use("/api/checkout", checkoutRoutes);
-app.use("/api/stripe", stripeWebhookRoutes);
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
 

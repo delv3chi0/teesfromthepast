@@ -1,11 +1,11 @@
-// frontend/src/pages/AdminPage.jsx
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
   Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner, Alert, AlertIcon,
   Button, useToast, Tag, Image, Select,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
-  Divider, Tooltip, Flex, HStack, Badge, Code, IconButton as ChakraIconButton
+  FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
+  Divider, Tooltip, Grid, GridItem, Flex, HStack, Badge, Code
 } from "@chakra-ui/react";
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
@@ -23,7 +23,7 @@ const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—"
 const monthName = (yyyymm) => {
   if (!yyyymm || typeof yyyymm !== "string" || yyyymm.length !== 7) return "N/A";
   const [y, m] = yyyymm.split("-");
-  const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+  const date = new Date(parseInt(y), parseInt(m) - 1, 1);
   return date.toLocaleString("default", { month: "short", year: "numeric" });
 };
 const shortId = (id = "", chunk = 4) => {
@@ -35,7 +35,7 @@ const shortId = (id = "", chunk = 4) => {
 
 export default function AdminPage() {
   const toast = useToast();
-  const { token, user: me } = useAuth() || {};
+  const { token } = useAuth();
   useEffect(() => { setAuthHeader(token); }, [token]);
 
   const [tabIndex, setTabIndex] = useState(0);
@@ -88,22 +88,6 @@ export default function AdminPage() {
   });
   const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
   const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
-
-  // ---------- helpers ----------
-  const copyToClipboard = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast({ title: "Session ID copied", status: "success", duration: 1200 });
-    } catch {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      toast({ title: "Copied", status: "success", duration: 1200 });
-    }
-  };
 
   // ---------- Fetchers ----------
   const fetchUsers = useCallback(async () => {
@@ -292,14 +276,13 @@ export default function AdminPage() {
       toast({ title: "Failed to revoke session", status: "error" });
     }
   };
-
   const revokeAllForUser = async (userId) => {
     try {
       await client.delete(`/admin/sessions/user/${userId}`);
       toast({ title: "All sessions revoked for user", status: "success" });
 
-      // only kick out if we revoked *my* sessions
-      if (me?._id && me._id === userId) return forceKickToLogin();
+      const mine = localStorage.getItem(SESSION_KEY);
+      if (mine) return forceKickToLogin();
 
       await fetchSessions();
     } catch {
@@ -564,7 +547,10 @@ export default function AdminPage() {
                           icon={<FaCopy />}
                           size="xs"
                           variant="ghost"
-                          onClick={() => copyToClipboard(i.jti)}
+                          onClick={() => {
+                            navigator.clipboard.writeText(i.jti);
+                            toast({ title: "Session ID copied", status: "success", duration: 1200 });
+                          }}
                         />
                       </Tooltip>
                     </HStack>

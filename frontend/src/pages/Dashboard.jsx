@@ -1,14 +1,16 @@
+// frontend/src/pages/Dashboard.jsx
 import { useState, useEffect } from 'react';
 import { client } from '../api/client';
 import { 
-    Box, Heading, Text, VStack, Divider, Button, useToast, 
-    SimpleGrid, Image, Spinner, Alert, AlertIcon, 
-    Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
-    Icon, Flex
+  Box, Heading, Text, VStack, Divider, Button, useToast, 
+  SimpleGrid, Image, Spinner, Alert, AlertIcon, 
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure,
+  Icon, Flex
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthProvider';
-import { FaMagic, FaPlusSquare } from 'react-icons/fa'; 
+import { FaMagic, FaPlusSquare } from 'react-icons/fa';
+import { cld } from '../utils/cloudinary';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -51,28 +53,20 @@ export default function Dashboard() {
     onOpen();
   };
 
+  const cardSrc = (d) =>
+    cld.thumb(d.thumbUrl || d.publicUrl) || d.imageDataUrl || "";
+
+  const modalSrc = (d) =>
+    cld.preview(d.publicUrl || d.thumbUrl) || d.imageDataUrl || "";
+
   return (
     <Box maxW="6xl" pb={10}> 
-      <Heading 
-        as="h1" 
-        size="pageTitle"
-        color="brand.textLight" 
-        textAlign="left" 
-        w="100%"
-        mb={{ base: 4, md: 6 }}
-      > 
+      <Heading as="h1" size="pageTitle" color="brand.textLight" textAlign="left" w="100%" mb={{ base: 4, md: 6 }}>
         Dashboard
       </Heading>
 
       {user && 
-        <Heading 
-          as="h2" 
-          size={{ base: "md", md: "lg" }} 
-          my={{ base: 4, md: 6 }} 
-          textAlign="left" 
-          color="brand.textMuted" 
-          fontWeight="normal"
-        > 
+        <Heading as="h2" size={{ base: "md", md: "lg" }} my={{ base: 4, md: 6 }} textAlign="left" color="brand.textMuted" fontWeight="normal">
           Welcome back, {user.firstName || user.username || 'friend'}!
         </Heading>
       }
@@ -82,14 +76,7 @@ export default function Dashboard() {
       <VStack align="stretch" spacing={{ base: 6, md: 10 }}> 
         <Box>
           <Flex justifyContent="space-between" alignItems="center" mb={{ base: 4, md: 6 }}>
-            <Heading 
-              as="h2" 
-              size={{ base: "md", md: "lg" }} 
-              color="brand.textLight" 
-              pb={2}
-              borderBottomWidth="2px" 
-              borderColor="brand.accentYellow"
-            >
+            <Heading as="h2" size={{ base: "md", md: "lg" }} color="brand.textLight" pb={2} borderBottomWidth="2px" borderColor="brand.accentYellow">
               Recent Designs
             </Heading>
             <Button variant="link" color="brand.accentYellow" onClick={() => navigate('/my-designs')}>
@@ -114,10 +101,7 @@ export default function Dashboard() {
           )}
 
           {!loadingDesigns && !designsError && recentDesigns.length === 0 && (
-            <VStack 
-                spacing={5} p={{ base: 4, md: 8}} bg="brand.secondary" borderRadius="xl" 
-                shadow="md" borderWidth="1px" borderColor="brand.primary" mt={4}
-            >
+            <VStack spacing={5} p={{ base: 4, md: 8}} bg="brand.secondary" borderRadius="xl" shadow="md" borderWidth="1px" borderColor="brand.primary" mt={4}>
               <Icon as={FaPlusSquare} boxSize={{ base: "40px", md: "50px" }} color="brand.textMuted" /> 
               <Text fontSize={{ base: "lg", md: "xl" }} fontWeight="medium" color="brand.textLight" textAlign="center">
                 You haven’t created any designs yet!
@@ -145,15 +129,9 @@ export default function Dashboard() {
                   _hover={{ boxShadow: "2xl", transform: "translateY(-4px)" }}
                   display="flex" flexDirection="column"
                 >
-                  <Image src={design.imageDataUrl} alt={design.prompt} fit="cover" w="100%" h={{ base: "180px", md: "220px" }} bg="brand.secondary" /> 
+                  <Image src={cardSrc(design)} alt={design.prompt} fit="cover" w="100%" h={{ base: "180px", md: "220px" }} bg="brand.secondary" /> 
                   <Box p={{ base: 3, md: 4 }} flexGrow={1}> 
-                    <Text 
-                      fontSize={{ base: "sm", md: "sm" }} 
-                      color="brand.textLight" 
-                      title={design.prompt}
-                      fontWeight="medium"
-                      noOfLines={2} 
-                    >
+                    <Text fontSize={{ base: "sm", md: "sm" }} color="brand.textLight" title={design.prompt} fontWeight="medium" noOfLines={2}>
                       {design.prompt || "Untitled Design"}
                     </Text>
                   </Box>
@@ -168,23 +146,13 @@ export default function Dashboard() {
         <Modal isOpen={isOpen} onClose={onClose} size={{ base: "full", sm: "xl" }} isCentered> 
           <ModalOverlay bg="blackAlpha.800" />
           <ModalContent> 
-            <ModalHeader 
-              fontWeight="bold" 
-              fontSize={{ base: "lg", md: "xl" }} 
-            >
-              Design Preview
-            </ModalHeader>
+            <ModalHeader fontWeight="bold" fontSize={{ base: "lg", md: "xl" }}>Design Preview</ModalHeader>
             <ModalCloseButton top={{ base: 2, sm: 3}} right={{ base: 2, sm: 3}} /> 
             <ModalBody display="flex" justifyContent="center" alignItems="center" py={6} px={{ base: 2, sm: 6}}>
-              <Image src={selectedDesign.imageDataUrl} alt={selectedDesign.prompt} maxH={{ base: "60vh", sm: "70vh" }} maxW="95%" objectFit="contain" borderRadius="md"/>
+              <Image src={modalSrc(selectedDesign)} alt={selectedDesign.prompt} maxH={{ base: "60vh", sm: "70vh" }} maxW="95%" objectFit="contain" borderRadius="md"/>
             </ModalBody>
             <ModalFooter>
-              <Button 
-                variant="ghost"
-                onClick={onClose}
-              >
-                Close
-              </Button>
+              <Button variant="ghost" onClick={onClose}>Close</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>

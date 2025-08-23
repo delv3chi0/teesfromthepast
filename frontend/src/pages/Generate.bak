@@ -2,7 +2,7 @@
 import {
   Box, Heading, Textarea, Button, VStack, Image, Text, useToast, Spinner, Icon,
   Alert, AlertIcon, HStack, Slider, SliderTrack, SliderFilledTrack, SliderThumb,
-  useBoolean, Tooltip, Badge
+  useBoolean, Tooltip, Badge, Select, Tag, TagLabel, TagCloseButton
 } from "@chakra-ui/react";
 import { useState, useCallback, useMemo, useRef } from "react";
 import { client } from '../api/client';
@@ -12,22 +12,55 @@ import { FaMagic, FaSave, FaPowerOff, FaPlay, FaFastForward, FaBackward, FaEject
 
 const ART_STYLES = ["Classic Art", "Stencil Art", "Embroidery Style"];
 const DECADES = ["1960s", "1970s", "1980s", "1990s"];
+const ARS = ["1:1","3:2","2:3","16:9","9:16"]; // T2I only
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
+
+/**
+ * Stability i2i "strength" = how much the model IGNORES the photo.
+ * We expose a Resemblance slider 0..100 (left=looks like photo, right=follows prompt).
+ * We map 0 → 0.15 (keep photo), 100 → 0.85 (follow prompt).
+ */
+const strengthFromResemblance = (resVal) => {
+  const v = Math.max(0, Math.min(100, Number(resVal) || 0));
+  return 0.15 + (v / 100) * 0.70; // 0.15..0.85
+};
+const resemblanceFromStrength = (s) => {
+  const v = ((Math.max(0.15, Math.min(0.85, s)) - 0.15) / 0.70) * 100;
+  return Math.round(v);
+};
+
+const PRESETS = {
+  fun:       { label: 'Fun Mode',     strength: 0.65, cfg: 12, steps: 40, extra: 'whimsical, fantasy, vibrant colors' },
+  photoreal: { label: 'Photoreal',    strength: 0.25, cfg: 7,  steps: 30, extra: 'realistic, natural lighting, high detail' },
+  bold:      { label: 'Bold Style',   strength: 0.50, cfg: 10, steps: 35, extra: 'bold colors, stylized, dynamic composition' },
+};
 
 export default function Generate() {
   const [powerOn, setPowerOn] = useBoolean(true);
   const [styleIx, setStyleIx] = useState(0);
   const [decadeIx, setDecadeIx] = useState(2);
+
+  // Advanced controls (visible values)
+  const [aspectRatio, setAspectRatio] = useState("1:1"); // T2I only
+  const [cfgScale, setCfgScale] = useState(7);           // 1..20
+  const [steps, setSteps] = useState(30);                // 10..50
+  const [negativePrompt, setNegativePrompt] = useState("");
+
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
 
+  // Preset state
+  const [activePreset, setActivePreset] = useState(null); // 'fun' | 'photoreal' | 'bold' | null
+  const [presetExtra, setPresetExtra] = useState("");
+
   // VCR / image-to-image
   const [initFile, setInitFile] = useState(null);
   const [initPreview, setInitPreview] = useState("");
-  const [imageInfluence, setImageInfluence] = useState(0.35); // 0..1
+  // UI: Resemblance 0..100 (0=looks like photo, 100=follows prompt)
+  const [resemblance, setResemblance] = useState(35); // default ~0.395 strength
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -45,9 +78,12 @@ export default function Generate() {
     } else if (artStyle === "Embroidery Style") {
       p = `embroidery pattern, satin stitch, limited color palette, crisp borders, vector-friendly, ${p}`;
     }
+    // Optional preset style seasoning
+    if (presetExtra) p = `${p}, ${presetExtra}`;
+
     p = `${p}, photographed in the ${decade}, vintage film grain, era-accurate styling, era-specific color palette, authentic wardrobe and objects`;
     return p.trim();
-  }, [userPrompt, artStyle, decade]);
+  }, [userPrompt, artStyle, decade, presetExtra]);
 
   const handleApiError = (err, defaultMessage, actionType = "operation") => {
     const message = err.response?.data?.message || defaultMessage;
@@ -77,24 +113,75 @@ export default function Generate() {
     if (file) handleFile(file);
   };
 
+  const applyPreset = (key) => {
+    const p = PRESETS[key];
+    if (!p) return;
+    setActivePreset(key);
+    setPresetExtra(p.extra);
+    setCfgScale(p.cfg);
+    setSteps(p.steps);
+    setResemblance(resemblanceFromStrength(p.strength));
+    toast({
+      title: `${p.label} preset applied`,
+      description: `Resemblance, CFG and Steps tuned for ${p.label.toLowerCase()}.`,
+      status: 'info',
+      isClosable: true
+    });
+  };
+
+  const clearPreset = () => {
+    setActivePreset(null);
+    setPresetExtra("");
+  };
+
   const handleGenerate = async () => {
     if (!powerOn) { toast({ title: "TV is off", description: "Turn power on to generate.", status: "info" }); return; }
     if (!constructedPrompt) { toast({ title: "Describe your image first", status: "info" }); return; }
 
     setLoading(true); setError(""); setImageUrl("");
     try {
-      const payload = { prompt: constructedPrompt };
+      const payload = {
+        prompt: constructedPrompt,
+        negativePrompt: negativePrompt || undefined,
+        cfgScale,
+        steps
+      };
+
       // Only pass aspect ratio for text-to-image
-      if (!initPreview) payload.aspectRatio = '1:1';
+      if (!initPreview) payload.aspectRatio = aspectRatio || '1:1';
+
+      // I2I: map resemblance → Stability strength
       if (initPreview) {
+        const strength = strengthFromResemblance(resemblance);
         payload.initImageBase64 = initPreview;
-        payload.imageStrength = clamp01(imageInfluence); // 0..1 required for i2i
+        payload.imageStrength = clamp01(strength);
       }
 
       const resp = await client.post('/designs/create', payload);
-      const { imageDataUrl } = resp.data || {};
-      setImageUrl(imageDataUrl || "");
-      (window).__lastGen = { imageDataUrl: imageDataUrl || "", prompt: userPrompt || '' };
+      const { imageDataUrl, previewUrl, masterUrl, thumbUrl, publicId, meta } = resp.data || {};
+
+      // Prefer Cloudinary preview if available
+      setImageUrl(previewUrl || imageDataUrl || "");
+
+      // Stash the last generation for "Save"
+      (window).__lastGen = {
+        prompt: userPrompt || '',
+        negativePrompt: negativePrompt || '',
+        imageDataUrl: imageDataUrl || '',
+        masterUrl: masterUrl || '',
+        previewUrl: previewUrl || '',
+        thumbUrl: thumbUrl || '',
+        publicId: publicId || '',
+        settings: {
+          mode: initPreview ? 'i2i' : 't2i',
+          cfgScale,
+          steps,
+          aspectRatio: initPreview ? undefined : aspectRatio,
+          imageStrength: initPreview ? clamp01(strengthFromResemblance(resemblance)) : undefined,
+          preset: activePreset || undefined,
+          ...meta
+        }
+      };
     } catch (err) {
       handleApiError(err, 'Failed to generate image.', 'Generation');
     } finally { setLoading(false); }
@@ -102,10 +189,28 @@ export default function Generate() {
 
   const handleSaveDesign = async () => {
     const gen = (window).__lastGen;
-    if (!gen?.imageDataUrl) { toast({ title: 'Nothing to save yet', status: 'info' }); return; }
+    if (!gen || (!gen.imageDataUrl && !gen.masterUrl)) {
+      toast({ title: 'Nothing to save yet', status: 'info' });
+      return;
+    }
     setIsSaving(true);
     try {
-      await client.post('/mydesigns', { prompt: gen.prompt || userPrompt || '(untitled)', imageDataUrl: gen.imageDataUrl });
+      await client.post('/mydesigns', {
+        prompt: gen.prompt || userPrompt || '(untitled)',
+        negativePrompt: gen.negativePrompt || negativePrompt || '',
+        imageDataUrl: gen.imageDataUrl || undefined,
+        masterUrl: gen.masterUrl || undefined,
+        previewUrl: gen.previewUrl || undefined,
+        thumbUrl: gen.thumbUrl || undefined,
+        publicId: gen.publicId || undefined,
+        settings: gen.settings || {
+          mode: initPreview ? 'i2i' : 't2i',
+          cfgScale,
+          steps,
+          aspectRatio: initPreview ? undefined : aspectRatio,
+          imageStrength: initPreview ? clamp01(strengthFromResemblance(resemblance)) : undefined
+        }
+      });
       toast({ title: 'Design Saved!', description: "Check “My Designs”.", status: 'success', isClosable: true });
     } catch (err) {
       handleApiError(err, 'Failed to save design.', 'Save');
@@ -236,15 +341,18 @@ export default function Generate() {
                 </Text>
               </Box>
 
-              {/* Influence */}
-              <HStack mt={1} spacing={3}>
-                <Text fontSize="xs" color="gray.300">Image Influence</Text>
-                <Slider value={imageInfluence} min={0} max={1} step={0.01} onChange={setImageInfluence}>
+              {/* Resemblance (i2i only) */}
+              <HStack mt={1} spacing={3} opacity={initPreview ? 1 : 0.5}>
+                <Text fontSize="xs" color="gray.300">Resemblance</Text>
+                <Slider value={resemblance} min={0} max={100} step={1} onChange={setResemblance} isDisabled={!initPreview}>
                   <SliderTrack><SliderFilledTrack/></SliderTrack>
                   <SliderThumb />
                 </Slider>
-                <Text fontSize="xs" color="gray.300">{Math.round(imageInfluence * 100)}%</Text>
+                <Text fontSize="xs" color="gray.300">{resemblance}%</Text>
               </HStack>
+              <Text fontSize="xs" color="whiteAlpha.700" mt={1}>
+                <b>0%</b> = keep photo • <b>100%</b> = follow prompt
+              </Text>
             </Box>
 
             <Box ml="auto" color="gray.400">⋮</Box>
@@ -280,16 +388,40 @@ export default function Generate() {
               </Text>
             </Box>
 
-            <HStack w="100%" justify="space-between" py={3}>
+            <HStack w="100%" justify="space-between" py={3} align="center" flexWrap="wrap" rowGap={3}>
               <Button size="sm" leftIcon={<FaPowerOff/>} colorScheme={powerOn ? 'pink' : 'gray'} onClick={setPowerOn.toggle}>
                 Power
               </Button>
+
+              {/* Presets */}
+              <HStack spacing={2} flexWrap="wrap">
+                <Button size="sm" variant="outline" onClick={() => applyPreset('fun')}>Fun Mode</Button>
+                <Button size="sm" variant="outline" onClick={() => applyPreset('photoreal')}>Photoreal</Button>
+                <Button size="sm" variant="outline" onClick={() => applyPreset('bold')}>Bold Stylization</Button>
+                {activePreset && (
+                  <Tag size="sm" colorScheme="yellow" ml={2}>
+                    <TagLabel>{PRESETS[activePreset].label}</TagLabel>
+                    <TagCloseButton onClick={clearPreset} />
+                  </Tag>
+                )}
+              </HStack>
+
               <HStack spacing={10}>
                 <VStack spacing={1}><Text fontSize="xs" color="yellow.300">Art Style</Text>
                   <Dial valueIx={styleIx} setValueIx={setStyleIx} labels={ART_STYLES}/></VStack>
                 <VStack spacing={1}><Text fontSize="xs" color="yellow.300">Decade</Text>
                   <Dial valueIx={decadeIx} setValueIx={setDecadeIx} labels={DECADES}/></VStack>
               </HStack>
+
+              {/* Aspect ratio (T2I only) */}
+              {!initPreview && (
+                <HStack spacing={2}>
+                  <Text fontSize="xs" color="yellow.300">Aspect</Text>
+                  <Select size="sm" value={aspectRatio} onChange={(e)=>setAspectRatio(e.target.value)} bg="brand.primaryDark" borderColor="whiteAlpha.300">
+                    {ARS.map(ar => <option key={ar} value={ar}>{ar}</option>)}
+                  </Select>
+                </HStack>
+              )}
             </HStack>
           </VStack>
 
@@ -299,16 +431,46 @@ export default function Generate() {
           </Box>
         </HStack>
 
-        {/* Prompt area */}
+        {/* Prompt + Advanced */}
         <Box mx="16px" mb="16px" bg="rgba(0,0,0,.35)" border="1px solid rgba(0,0,0,.6)" borderRadius="8px" p={3}>
           <Text fontSize="sm" color="yellow.200" mb={2}>Describe your image idea</Text>
           <Textarea
-            placeholder="e.g. Make this cat a lion"
+            placeholder="e.g. Have this guy ride a dragon into the sunset"
             value={userPrompt}
             onChange={(e) => setUserPrompt(e.target.value)}
             bg="rgba(0,0,0,.5)" color="white"
             _placeholder={{ color: 'whiteAlpha.700' }}
           />
+
+          {/* Negative prompt */}
+          <Text fontSize="sm" color="yellow.200" mt={4} mb={2}>Things to avoid</Text>
+          <Textarea
+            placeholder="e.g. text, watermarks, extra limbs, artifacts"
+            value={negativePrompt}
+            onChange={(e) => setNegativePrompt(e.target.value)}
+            bg="rgba(0,0,0,.5)" color="white"
+            _placeholder={{ color: 'whiteAlpha.700' }}
+          />
+
+          {/* CFG & Steps */}
+          <HStack mt={4} spacing={6} align="center" flexWrap="wrap">
+            <HStack minW="280px" flex="1">
+              <Text fontSize="sm" color="whiteAlpha.800" w="90px">CFG (Prompt strictness)</Text>
+              <Slider value={cfgScale} min={1} max={20} step={1} onChange={setCfgScale}>
+                <SliderTrack><SliderFilledTrack/></SliderTrack>
+                <SliderThumb />
+              </Slider>
+              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{cfgScale}</Text>
+            </HStack>
+            <HStack minW="280px" flex="1">
+              <Text fontSize="sm" color="whiteAlpha.800" w="90px">Steps (Detail)</Text>
+              <Slider value={steps} min={10} max={50} step={1} onChange={setSteps}>
+                <SliderTrack><SliderFilledTrack/></SliderTrack>
+                <SliderThumb />
+              </Slider>
+              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{steps}</Text>
+            </HStack>
+          </HStack>
         </Box>
       </Box>
 

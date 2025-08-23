@@ -1,27 +1,14 @@
+// frontend/src/pages/MyOrdersPage.jsx
 import { useState, useEffect } from 'react';
 import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  Spinner,
-  Alert,
-  AlertIcon,
-  Divider,
-  SimpleGrid,
-  Tag,
-  Button,
-  Flex,
-  Icon,
-  Image,
-  HStack,
-  Tooltip,
-  Link as ChakraLink,
+  Box, Heading, Text, VStack, Spinner, Alert, AlertIcon, Divider, SimpleGrid,
+  Tag, Button, Flex, Icon, Image, HStack, Tooltip, Link as ChakraLink,
 } from '@chakra-ui/react';
 import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { FaBoxOpen, FaUser, FaShippingFast, FaMapMarkerAlt } from 'react-icons/fa';
+import { cld } from '../utils/cloudinary';
 
 const MyOrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -35,23 +22,15 @@ const MyOrdersPage = () => {
       setLoading(true);
       setError('');
       client.get('/orders/myorders')
-        .then(response => {
-          setOrders(response.data);
-        })
+        .then(response => { setOrders(response.data); })
         .catch(err => {
           console.error("Error fetching orders:", err);
           setError('Could not load your orders. Please try again later.');
-          if (err.response?.status === 401) {
-            logout();
-            navigate('/login');
-          }
+          if (err.response?.status === 401) { logout(); navigate('/login'); }
         })
-        .finally(() => {
-            setLoading(false);
-        });
+        .finally(() => { setLoading(false); });
     }
   }, [user, logout, navigate]);
-
 
   if (loading) {
     return (
@@ -66,17 +45,22 @@ const MyOrdersPage = () => {
     return <Alert status="error"><AlertIcon />{error}</Alert>;
   }
 
+  const itemImage = (item) => {
+    const d = item.designId || {};
+    return cld.thumb(d.thumbUrl || d.publicUrl) || d.imageDataUrl || 'https://via.placeholder.com/150';
+  };
+
   return (
     <Box w="100%">
       <Heading as="h1" size="2xl" mb={8} color="brand.textLight">My Orders</Heading>
 
       {orders.length === 0 ? (
         <Box layerStyle="cardBlue" p={10} textAlign="center">
-            <VStack spacing={5}>
-                <Icon as={FaBoxOpen} boxSize="50px" />
-                <Text fontSize="xl" fontWeight="medium">You haven't placed any orders yet.</Text>
-                <Button colorScheme="brandAccentOrange" onClick={() => navigate('/shop')}>Start Shopping</Button>
-            </VStack>
+          <VStack spacing={5}>
+            <Icon as={FaBoxOpen} boxSize="50px" />
+            <Text fontSize="xl" fontWeight="medium">You haven't placed any orders yet.</Text>
+            <Button colorScheme="brandAccentOrange" onClick={() => navigate('/shop')}>Start Shopping</Button>
+          </VStack>
         </Box>
       ) : (
         <VStack spacing={6} align="stretch">
@@ -107,16 +91,14 @@ const MyOrdersPage = () => {
 
               <Divider my={4} borderColor="rgba(0,0,0,0.1)" />
 
-              {/* Customer and Shipping Info - Two Column Layout */}
+              {/* Customer and Shipping Info */}
               <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6} mb={4}>
-                {/* Customer Info Box */}
                 <Box layerStyle="lightCardInnerSection" p={4}>
                   <HStack mb={2}><Icon as={FaUser} mr={2} boxSize={4}/><Heading size="sm">Customer Info</Heading></HStack>
                   <Text>{order.user?.username || 'N/A'}</Text>
                   <Text>{order.user?.email || 'N/A'}</Text>
                 </Box>
 
-                {/* Shipping Address Box */}
                 <Box layerStyle="lightCardInnerSection" p={4}>
                   <HStack mb={2}><Icon as={FaShippingFast} mr={2} boxSize={4}/><Heading size="sm">Shipping Address</Heading></HStack>
                   <Text>{order.shippingAddress?.recipientName}</Text>
@@ -129,63 +111,47 @@ const MyOrdersPage = () => {
 
               <Divider my={4} borderColor="rgba(0,0,0,0.1)" />
 
-              {/* Order Items List */}
+              {/* Order Items */}
               <Box>
                 <Heading size="sm" mb={4}>Items</Heading>
                 <VStack align="stretch" spacing={4}>
                   {order.orderItems && order.orderItems.map(item => (
-                    <Flex
-                      key={item._id}
-                      className="my-orders-item-flex"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      bg="brand.secondary"
-                      p={3}
-                      borderRadius="md"
-                      gap={4}
-                      minH="100px"
-                      flexWrap={{ base: "wrap", sm: "nowrap" }}
-                      overflowX="auto"
-                    >
-                      {/* Image */}
+                    <Flex key={item._id} className="my-orders-item-flex" justifyContent="space-between" alignItems="center"
+                          bg="brand.secondary" p={3} borderRadius="md" gap={4} minH="100px" flexWrap={{ base: "wrap", sm: "nowrap" }} overflowX="auto">
                       <Image
-                        src={item.designId?.imageDataUrl || 'https://via.placeholder.com/150'}
+                        src={itemImage(item)}
                         alt={item.productName || 'Order Item'}
-                        boxSize="100px"
-                        minW="100px"
-                        objectFit="cover"
-                        borderRadius="md"
+                        boxSize="100px" minW="100px" objectFit="cover" borderRadius="md"
                         fallback={<Icon as={FaBoxOpen} boxSize="50px" color="brand.textLight" />}
                       />
 
-                      {/* Product Name & Quantity (Flexible Middle) */}
                       <VStack align="flex-start" spacing={0} flexGrow={1} flexShrink={1} flexBasis={{ base: "100%", sm: "auto" }} minW={{ base: "150px", sm: "200px" }}>
-                          <Text fontWeight="bold" fontSize="md" color="white" flexShrink={0}>
-                              {item.productName || item.name}
-                              {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
-                                  <Text as="span" fontSize="sm" color="white" ml={2}> (Qty: {item.quantity})</Text> // Corrected comment syntax
-                              )}
-                          </Text>
-                          {item.customImageURL && (
-                              <Tooltip label="View Custom Image">
-                                  <ChakraLink href={item.customImageURL} isExternal color="brand.accentYellow" fontSize="sm">
-                                      <Icon as={FaMapMarkerAlt} mr={1} />Custom Design
-                                  </ChakraLink>
-                              </Tooltip>
+                        <Text fontWeight="bold" fontSize="md" color="white" flexShrink={0}>
+                          {item.productName || item.name}
+                          {typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0 && (
+                            <Text as="span" fontSize="sm" color="white" ml={2}> (Qty: {item.quantity})</Text>
                           )}
-                           {item.designId?.prompt && (
-                              <Tooltip label={item.designId.prompt}>
-                                  <Text fontSize="xs" color="whiteAlpha.700" isTruncated maxW="200px">
-                                      Prompt: {item.designId.prompt}
-                                  </Text>
-                              </Tooltip>
-                          )}
+                        </Text>
+                        {item.designId?.publicUrl && (
+                          <Tooltip label="View Full Image">
+                            <ChakraLink href={cld.auto(item.designId.publicUrl)} isExternal color="brand.accentYellow" fontSize="sm">
+                              <Icon as={FaMapMarkerAlt} mr={1} />Design Link
+                            </ChakraLink>
+                          </Tooltip>
+                        )}
+                        {item.designId?.prompt && (
+                          <Tooltip label={item.designId.prompt}>
+                            <Text fontSize="xs" color="whiteAlpha.700" isTruncated maxW="200px">
+                              Prompt: {item.designId.prompt}
+                            </Text>
+                          </Tooltip>
+                        )}
                       </VStack>
 
-                      {/* Price (Right) */}
-                      {(typeof item.priceAtPurchase === 'number' || typeof item.price === 'number') && typeof item.quantity === 'number' && !isNaN(item.priceAtPurchase) && !isNaN(item.quantity) && (
+                      {(typeof item.priceAtPurchase === 'number' || typeof item.price === 'number') &&
+                        typeof item.quantity === 'number' && !isNaN(item.priceAtPurchase ?? item.price) && !isNaN(item.quantity) && (
                         <Text fontSize="lg" fontWeight="bold" color="white" flexShrink={0} minW="80px" textAlign="right">
-                          ${((item.priceAtPurchase || item.price) * item.quantity / 100).toFixed(2)}
+                          ${(((item.priceAtPurchase ?? item.price) * item.quantity) / 100).toFixed(2)}
                         </Text>
                       )}
                     </Flex>
