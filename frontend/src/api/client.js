@@ -1,64 +1,85 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-const baseURL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "/api"; // works with your proxy or full URL
+// ----- Base URL resolution -----
+// In production on Vercel, we want calls to hit "/api" so vercel.json can proxy to Render.
+// For local dev, you can set VITE_API_BASE_URL=http://localhost:5000/api (or your dev backend).
+const API_BASE =
+  (import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL)
+    ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, "")
+    : "/api";
 
-export const client = axios.create({
-  baseURL,
-  withCredentials: false,
-});
+// Token keys we support across the app
+const TOKEN_KEYS = ["tftp_token", "token"];
+const SESSION_KEY = "tftp_session";
 
-// ---- header helpers ----
+// Helpers
+export function readToken() {
+  for (const k of TOKEN_KEYS) {
+    const v = localStorage.getItem(k);
+    if (v && v !== "undefined") return v;
+  }
+  return null;
+}
 export function setAuthHeader(token) {
-  if (token) client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  if (token) {
+    client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete client.defaults.headers.common["Authorization"];
+  }
 }
 export function clearAuthHeader() {
   delete client.defaults.headers.common["Authorization"];
 }
-
-export function setSessionIdHeader(jti) {
-  if (jti) client.defaults.headers.common["X-Session-Id"] = jti;
-}
-export function clearSessionIdHeader() {
-  delete client.defaults.headers.common["X-Session-Id"];
-}
-
-// Optional: pull existing token/jti from localStorage on first import
-try {
-  const token = localStorage.getItem("tftp_token") || localStorage.getItem("token");
-  const jti = localStorage.getItem("tftp_session");
-  if (token) setAuthHeader(token);
-  if (jti) setSessionIdHeader(jti);
-} catch {}
-
-// ---- 401 / revoked handling ----
-// If the server sends 401 with a recognizable shape, wipe session
-client.interceptors.response.use(
-  (r) => r,
-  (err) => {
-    const status = err?.response?.status;
-    const data = err?.response?.data;
-    const code = data?.code || data?.error || data?.message || "";
-
-    // Tweak this condition to match your middleware's responses
-    const looksRevoked =
-      status === 401 &&
-      /revoked|expired|invalid token|unauthorized/i.test(String(code));
-
-    if (looksRevoked) {
-      try {
-        localStorage.removeItem("tftp_token");
-        localStorage.removeItem("token");
-        localStorage.removeItem("tftp_session");
-      } catch {}
-      // Let the app reroute to /login by reloading (simple + robust)
-      // You can instead publish a custom event if you prefer a softer UX.
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 50);
-    }
-    return Promise.reject(err);
+export function setSessionId(jti) {
+  if (!jti) {
+    localStorage.removeItem(SESSION_KEY);
+    delete client.defaults.headers.common["X-Session-Id"];
+    return;
   }
-);
+  localStorage.setItem(SESSION_KEY, jti);
+  client.defaults.headers.common["X-Session-Id"] = jti;
+}
+export function getSessionId() {
+  return localStorage.getItem(SESSION_KEY) || "";
+}
+
+// Axios instance
+export const client = axios.create({
+  baseURL: API_BASE,
+  withCredentials: false,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Attach token + session automatically on each request
+client.interceptors.request.use((config) => {
+  // Authorization
+  if (!config.headers?.Authorization) {
+    const tok = readToken();
+    if (tok) config.headers = { ...config.headers, Authorization: `Bearer ${tok}` };
+  }
+  // Session
+  const jti = getSessionId();
+  if (jti && !config.headers?.["X-Session-Id"]) {
+    config.headers = { ...config.headers, "X-Session-Id": jti };
+  }
+  // Client hints (nice-to-have)
+  try {
+    const hints = {
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+      lang: navigator.language,
+      platform: navigator.platform,
+      viewport:
+        typeof window !== "undefined"
+          ? `${window.innerWidth}x${window.innerHeight}@${window.devicePixelRatio || 1}`
+          : "",
+    };
+    config.headers["x-client-lang"] = hints.lang;
+    config.headers["x-client-timezone"] = hints.tz;
+    config.headers["x-client-viewport"] = hints.viewport;
+    config.headers["x-client-platform"] = hints.platform;
+  } catch {}
+  return config;
+});
