@@ -1,4 +1,3 @@
-// frontend/src/pages/AdminPage.jsx
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -6,11 +5,11 @@ import {
   Button, useToast, Tag, Image, Select,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider, Tooltip, Grid, GridItem, Flex, HStack, Badge
+  Divider, Tooltip, Grid, GridItem, Flex, HStack, Badge, Code
 } from "@chakra-ui/react";
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
-  FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey
+  FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy
 } from "react-icons/fa";
 
 import { client, setAuthHeader } from "../api/client";
@@ -19,7 +18,6 @@ import InventoryPanel from "../components/admin/InventoryPanel.jsx";
 import AdminDashboard from "./admin/AdminDashboard.jsx";
 import AdminAuditLogs from "./AdminAuditLogs.jsx";
 
-// helpers
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
 const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—");
 const monthName = (yyyymm) => {
@@ -27,6 +25,12 @@ const monthName = (yyyymm) => {
   const [y, m] = yyyymm.split("-");
   const date = new Date(parseInt(y), parseInt(m) - 1, 1);
   return date.toLocaleString("default", { month: "short", year: "numeric" });
+};
+const shortId = (id = "", chunk = 4) => {
+  if (!id) return "-";
+  const s = String(id).replace(/[^a-zA-Z0-9]/g, "");
+  if (s.length <= chunk * 2) return s;
+  return `${s.slice(0, chunk)}…${s.slice(-chunk)}`;
 };
 
 export default function AdminPage() {
@@ -71,6 +75,10 @@ export default function AdminPage() {
   const { isOpen: isDeleteOrderModalOpen, onOpen: onDeleteOrderModalOpen, onClose: onDeleteOrderModalClose } = useDisclosure();
   const { isOpen: isViewDesignModalOpen, onOpen: onOpenViewDesignModal, onClose: onCloseViewDesignModal } = useDisclosure();
   const { isOpen: isDeleteDesignModalOpen, onOpen: onOpenDeleteDesignModal, onClose: onCloseDeleteDesignModal } = useDisclosure();
+
+  // Devices Info Modal
+  const { isOpen: isDeviceInfoOpen, onOpen: onDeviceInfoOpen, onClose: onDeviceInfoClose } = useDisclosure();
+  const [deviceDetail, setDeviceDetail] = useState(null);
 
   const [orderToDelete, setOrderToDelete] = useState(null);
   const [designToDelete, setDesignToDelete] = useState(null);
@@ -118,7 +126,9 @@ export default function AdminPage() {
   const fetchSessions = useCallback(async () => {
     setLoadingSessions(true); setSessionsError("");
     try {
-      const { data } = await client.get("/admin/sessions", { params: { page: sessionsPage, limit: 100, activeOnly: true } });
+      const { data } = await client.get("/admin/sessions", {
+        params: { page: sessionsPage, limit: 100, activeOnly: true }
+      });
       setSessions(data?.items || []);
     } catch {
       setSessionsError("Failed to fetch sessions");
@@ -127,7 +137,7 @@ export default function AdminPage() {
 
   // Tab -> loader
   const dataFetchers = {
-    0: null,          // Dashboard handles itself
+    0: null,
     1: fetchUsers,
     2: fetchOrders,
     3: fetchDesigns,
@@ -240,14 +250,15 @@ export default function AdminPage() {
   };
 
   // ---------- Devices actions ----------
+  const SESSION_KEY = "tftp_session_id"; // keep consistent with client.js
   const forceKickToLogin = () => {
     try {
       localStorage.removeItem("tftp_token");
       localStorage.removeItem("token");
-      localStorage.removeItem("tftp_session");
+      localStorage.removeItem(SESSION_KEY);
     } catch {}
     delete client.defaults.headers.common.Authorization;
-    delete client.defaults.headers.common["X-Session-Id"];
+    delete client.defaults.headers.common["x-session-id"];
     window.location.assign("/login?redirect=/admin");
   };
 
@@ -257,7 +268,7 @@ export default function AdminPage() {
       toast({ title: "Session revoked", status: "success" });
 
       // if this was MY session, log me out now
-      const mySession = localStorage.getItem("tftp_session");
+      const mySession = localStorage.getItem(SESSION_KEY);
       if (mySession && mySession === jti) return forceKickToLogin();
 
       await fetchSessions();
@@ -270,9 +281,7 @@ export default function AdminPage() {
       await client.delete(`/admin/sessions/user/${userId}`);
       toast({ title: "All sessions revoked for user", status: "success" });
 
-      // if I revoked all for myself, logout now
-      // (lightweight check: if any session belongs to me & equals stored sid)
-      const mine = localStorage.getItem("tftp_session");
+      const mine = localStorage.getItem(SESSION_KEY);
       if (mine) return forceKickToLogin();
 
       await fetchSessions();
@@ -293,28 +302,28 @@ export default function AdminPage() {
       ) : usersError ? (
         <Alert status="error"><AlertIcon />{usersError}</Alert>
       ) : (
-        <TableContainer w="100%">
-          <Table variant="simple" size="sm" w="100%">
-            <Thead>
+        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
+          <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
+            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
               <Tr>
-                <Th>ID</Th>
-                <Th>Username</Th>
-                <Th>Email</Th>
-                <Th>Name</Th>
-                <Th>Admin</Th>
-                <Th>Joined</Th>
-                <Th>Actions</Th>
+                <Th w="140px">ID</Th>
+                <Th w="180px">Username</Th>
+                <Th w="240px">Email</Th>
+                <Th w="200px">Name</Th>
+                <Th w="100px">Admin</Th>
+                <Th w="160px">Joined</Th>
+                <Th w="150px">Actions</Th>
               </Tr>
             </Thead>
             <Tbody>
               {users.map((user) => (
                 <Tr key={user._id}>
-                  <Td fontSize="xs" title={user._id}>{String(user._id).substring(0, 8)}...</Td>
-                  <Td>{user.username}</Td>
-                  <Td>{user.email}</Td>
-                  <Td>{`${user.firstName || ""} ${user.lastName || ""}`.trim()}</Td>
+                  <Td fontSize="xs" title={user._id} noOfLines={1}>{String(user._id).substring(0, 8)}…</Td>
+                  <Td noOfLines={1}>{user.username}</Td>
+                  <Td noOfLines={1}>{user.email}</Td>
+                  <Td noOfLines={1}>{`${user.firstName || ""} ${user.lastName || ""}`.trim()}</Td>
                   <Td><Tag size="sm" colorScheme={user.isAdmin ? "green" : "gray"}>{user.isAdmin ? "Yes" : "No"}</Tag></Td>
-                  <Td>{fmtDate(user.createdAt)}</Td>
+                  <Td noOfLines={1}>{fmtDate(user.createdAt)}</Td>
                   <Td>
                     <Tooltip label="View User Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)} /></Tooltip>
                     <Tooltip label="Edit User"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)} /></Tooltip>
@@ -347,37 +356,46 @@ export default function AdminPage() {
         ) : ordersError ? (
           <Alert status="error"><AlertIcon />{ordersError}</Alert>
         ) : (
-          <TableContainer w="100%">
-            <Table variant="simple" size="sm" w="100%">
-              <Thead>
+          <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
+            <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
+              <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
                 <Tr>
-                  <Th>ID</Th>
-                  <Th>User</Th>
-                  <Th>Date</Th>
-                  <Th>Total</Th>
-                  <Th>Pay Status</Th>
-                  <Th>Order Status</Th>
-                  <Th>Items</Th>
-                  <Th>Actions</Th>
+                  <Th w="140px">ID</Th>
+                  <Th w="220px">User</Th>
+                  <Th w="160px">Date</Th>
+                  <Th w="100px">Total</Th>
+                  <Th w="140px">Pay Status</Th>
+                  <Th w="160px">Order Status</Th>
+                  <Th w="90px">Items</Th>
+                  <Th w="150px">Actions</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {orders.map((order) => (
                   <Tr key={order._id}>
-                    <Td fontSize="xs">{String(order._id).substring(0, 8)}...</Td>
-                    <Td>{order.user?.email}</Td>
-                    <Td>{fmtDate(order.createdAt)}</Td>
-                    <Td>{money(order.totalAmount)}</Td>
+                    <Td fontSize="xs" noOfLines={1}>{String(order._id).substring(0, 8)}…</Td>
+                    <Td noOfLines={1}>{order.user?.email}</Td>
+                    <Td noOfLines={1}>{fmtDate(order.createdAt)}</Td>
+                    <Td noOfLines={1}>{money(order.totalAmount)}</Td>
                     <Td><Tag size="sm" colorScheme={order.paymentStatus === "Succeeded" ? "green" : "orange"}>{order.paymentStatus}</Tag></Td>
                     <Td>
-                      <Select size="xs" variant="outline" color="brand.textDark" value={order.orderStatus} onChange={(e) => handleStatusChange(order._id, e.target.value)} bg={getStatusColor(order.orderStatus)} borderRadius="md" maxW="140px">
+                      <Select
+                        size="xs"
+                        variant="outline"
+                        color="brand.textDark"
+                        value={order.orderStatus}
+                        onChange={(e) => handleStatusChange(order._id, e.target.value)}
+                        bg={getStatusColor(order.orderStatus)}
+                        borderRadius="md"
+                        maxW="140px"
+                      >
                         <option value="Processing">Processing</option>
                         <option value="Shipped">Shipped</option>
                         <option value="Delivered">Delivered</option>
                         <option value="Cancelled">Cancelled</option>
                       </Select>
                     </Td>
-                    <Td>{order.orderItems?.length || 0}</Td>
+                    <Td noOfLines={1}>{order.orderItems?.length || 0}</Td>
                     <Td>
                       <Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewOrder(order._id)} /></Tooltip>
                       <Tooltip label="Delete Order"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)} /></Tooltip>
@@ -403,17 +421,17 @@ export default function AdminPage() {
       ) : designsError ? (
         <Alert status="error"><AlertIcon />{designsError}</Alert>
       ) : (
-        <TableContainer w="100%">
-          <Table variant="simple" size="sm" w="100%">
-            <Thead>
+        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
+          <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
+            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
               <Tr>
-                <Th>Preview</Th>
-                <Th>Prompt</Th>
-                <Th>Meta</Th>
-                <Th>Creator</Th>
-                <Th>Created</Th>
-                <Th>Votes (Month)</Th>
-                <Th>Actions</Th>
+                <Th w="90px">Preview</Th>
+                <Th w="380px">Prompt</Th>
+                <Th w="220px">Meta</Th>
+                <Th w="180px">Creator</Th>
+                <Th w="140px">Created</Th>
+                <Th w="150px">Votes (Month)</Th>
+                <Th w="140px">Actions</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -427,8 +445,14 @@ export default function AdminPage() {
                 const previewSrc = design.thumbUrl || design.publicUrl || design.imageDataUrl || "";
                 return (
                   <Tr key={design._id}>
-                    <Td>{previewSrc ? <Image src={previewSrc} boxSize="56px" objectFit="cover" borderRadius="md" /> : <Box boxSize="56px" borderWidth="1px" borderRadius="md" />}</Td>
-                    <Td fontSize="xs" maxW="380px" whiteSpace="normal">{design.prompt}</Td>
+                    <Td>
+                      {previewSrc ? (
+                        <Image src={previewSrc} boxSize="56px" objectFit="cover" borderRadius="md" />
+                      ) : (
+                        <Box boxSize="56px" borderWidth="1px" borderRadius="md" />
+                      )}
+                    </Td>
+                    <Td fontSize="xs" whiteSpace="normal">{design.prompt}</Td>
                     <Td>
                       <VStack align="start" spacing={0}>
                         <HStack spacing={2}>
@@ -442,8 +466,8 @@ export default function AdminPage() {
                         </HStack>
                       </VStack>
                     </Td>
-                    <Td>{design.user?.username || "N/A"}</Td>
-                    <Td>{new Date(design.createdAt).toLocaleDateString()}</Td>
+                    <Td noOfLines={1}>{design.user?.username || "N/A"}</Td>
+                    <Td noOfLines={1}>{new Date(design.createdAt).toLocaleDateString()}</Td>
                     <Td>
                       {design.isSubmittedForContest && design.contestSubmissionMonth ? (
                         <VStack align="center" spacing={0}>
@@ -478,44 +502,95 @@ export default function AdminPage() {
       ) : sessionsError ? (
         <Alert status="error"><AlertIcon />{sessionsError}</Alert>
       ) : (
-        <TableContainer w="100%">
-          <Table size="sm" variant="simple" w="100%">
-            <Thead>
+        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
+          <Table size="sm" variant="simple" w="100%" tableLayout="fixed">
+            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
               <Tr>
-                <Th>User</Th>
-                <Th>IP</Th>
-                <Th>User Agent</Th>
-                <Th>Created</Th>
-                <Th>Last Seen</Th>
-                <Th>Expires</Th>
-                <Th>Status</Th>
-                <Th isNumeric>Actions</Th>
+                <Th w="240px">User</Th>
+                <Th w="180px">Session ID</Th>
+                <Th w="130px">IP</Th>
+                <Th w="360px">User Agent</Th>
+                <Th w="160px">Created</Th>
+                <Th w="160px">Last Seen</Th>
+                <Th w="160px">Expires</Th>
+                <Th w="120px">Status</Th>
+                <Th w="150px" isNumeric>Actions</Th>
               </Tr>
             </Thead>
             <Tbody>
               {sessions.map((i) => (
                 <Tr key={i.jti}>
                   <Td>
-                    <Text fontWeight="bold">{i.user?.username || "(unknown)"}</Text>
-                    <Text fontSize="xs" color="gray.500">{i.user?.email}</Text>
+                    <Text fontWeight="bold" noOfLines={1}>{i.user?.username || "(unknown)"}</Text>
+                    <Text fontSize="xs" color="gray.500" noOfLines={1}>{i.user?.email}</Text>
                     {i.user?._id && (
                       <Tooltip label="Revoke ALL for this user">
-                        <ChakraIconButton ml={2} size="xs" icon={<FaUserSlash />} aria-label="Revoke all" onClick={() => revokeAllForUser(i.user?._id)} />
+                        <ChakraIconButton
+                          ml={2}
+                          size="xs"
+                          icon={<FaUserSlash />}
+                          aria-label="Revoke all"
+                          onClick={() => revokeAllForUser(i.user?._id)}
+                          variant="ghost"
+                        />
                       </Tooltip>
                     )}
                   </Td>
-                  <Td>{i.ip || "—"}</Td>
-                  <Td><Text maxW="360px" noOfLines={1} title={i.userAgent}>{i.userAgent || "—"}</Text></Td>
-                  <Td>{fmtDate(i.createdAt)}</Td>
-                  <Td>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
-                  <Td>{fmtDate(i.expiresAt)}</Td>
-                  <Td>{i.revokedAt ? <Badge colorScheme="red">Revoked</Badge> : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)}</Td>
-                  <Td isNumeric>
-                    {!i.revokedAt && (
-                      <Tooltip label="Revoke this session">
-                        <ChakraIconButton size="sm" icon={<FaTrashAlt />} aria-label="Revoke" onClick={() => revokeSession(i.jti)} />
+                  <Td>
+                    <HStack spacing={2}>
+                      <Tooltip label={i.jti}>
+                        <Code fontSize="xs">{shortId(i.jti)}</Code>
                       </Tooltip>
-                    )}
+                      <Tooltip label="Copy full Session ID">
+                        <ChakraIconButton
+                          aria-label="Copy"
+                          icon={<FaCopy />}
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => {
+                            navigator.clipboard.writeText(i.jti);
+                            toast({ title: "Session ID copied", status: "success", duration: 1200 });
+                          }}
+                        />
+                      </Tooltip>
+                    </HStack>
+                  </Td>
+                  <Td noOfLines={1}>{i.ip || "—"}</Td>
+                  <Td>
+                    <Text noOfLines={1} title={i.userAgent}>{i.userAgent || "—"}</Text>
+                  </Td>
+                  <Td noOfLines={1}>{fmtDate(i.createdAt)}</Td>
+                  <Td noOfLines={1}>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
+                  <Td noOfLines={1}>{fmtDate(i.expiresAt)}</Td>
+                  <Td>
+                    {i.revokedAt
+                      ? <Badge colorScheme="red">Revoked</Badge>
+                      : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)
+                    }
+                  </Td>
+                  <Td isNumeric>
+                    <HStack justify="flex-end" spacing={1}>
+                      <Tooltip label="Info">
+                        <ChakraIconButton
+                          size="sm"
+                          icon={<FaInfoCircle />}
+                          aria-label="Info"
+                          variant="ghost"
+                          onClick={() => { setDeviceDetail(i); onDeviceInfoOpen(); }}
+                        />
+                      </Tooltip>
+                      {!i.revokedAt && (
+                        <Tooltip label="Revoke this session">
+                          <ChakraIconButton
+                            size="sm"
+                            icon={<FaTrashAlt />}
+                            aria-label="Revoke"
+                            onClick={() => revokeSession(i.jti)}
+                            variant="ghost"
+                          />
+                        </Tooltip>
+                      )}
+                    </HStack>
                   </Td>
                 </Tr>
               ))}
@@ -523,6 +598,35 @@ export default function AdminPage() {
           </Table>
         </TableContainer>
       )}
+
+      <Modal isOpen={isDeviceInfoOpen} onClose={onDeviceInfoClose} size="lg" isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Device / Client Details</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {deviceDetail && (
+              <VStack align="stretch" spacing={3} fontSize="sm">
+                <Box><b>User:</b> {deviceDetail.user?.username || "(unknown)"} {deviceDetail.user?.email ? ` <${deviceDetail.user.email}>` : ""}</Box>
+                <Box><b>Session ID:</b> {deviceDetail.jti}</Box>
+                <Box><b>IP:</b> {deviceDetail.ip || "—"}</Box>
+                <Box><b>User Agent:</b> {deviceDetail.userAgent || "—"}</Box>
+                <Box><b>Created:</b> {fmtDate(deviceDetail.createdAt)}</Box>
+                <Box><b>Last Seen:</b> {fmtDate(deviceDetail.lastSeenAt || deviceDetail.createdAt)}</Box>
+                <Box><b>Expires:</b> {fmtDate(deviceDetail.expiresAt)}</Box>
+                <Divider />
+                <Box><b>Client Hints:</b></Box>
+                <Box as="pre" whiteSpace="pre-wrap" fontFamily="mono">
+                  {JSON.stringify(deviceDetail.client || {}, null, 2)}
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onDeviceInfoClose}>Close</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 
@@ -561,8 +665,7 @@ export default function AdminPage() {
         </Box>
       </VStack>
 
-      {/* Modals … (unchanged from your version) */}
-      {/* ... keep your modal code exactly as you pasted earlier ... */}
+      {/* Keep your existing modals below (unchanged) */}
     </Box>
   );
 }

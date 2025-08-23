@@ -22,10 +22,6 @@ try {
   AuditLog = mongoose.model("AuditLog", AuditLogSchema);
 }
 
-/**
- * Generic audit logger.
- * NEW: accepts optional `actor` to override req.user (for login/logout).
- */
 export async function logAudit(
   req,
   { action, targetType = "", targetId = "", meta = {}, actor = null }
@@ -35,6 +31,11 @@ export async function logAudit(
     const userAgent = req.headers["user-agent"] || "";
     const actorId = actor || req.user?._id || null;
 
+    // Auto-capture current session id if present:
+    const sid = req.headers["x-session-id"];
+    const mergedMeta = { ...meta };
+    if (sid && !mergedMeta.sessionId) mergedMeta.sessionId = String(sid);
+
     await AuditLog.create({
       action,
       actor: actorId,
@@ -42,7 +43,7 @@ export async function logAudit(
       targetId: String(targetId || ""),
       ip,
       userAgent,
-      meta,
+      meta: mergedMeta,
     });
   } catch (err) {
     console.warn("[audit] failed:", err?.message);
