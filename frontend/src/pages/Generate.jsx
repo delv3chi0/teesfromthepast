@@ -9,17 +9,20 @@ import { client } from '../api/client';
 import { useAuth } from '../context/AuthProvider';
 import { useNavigate } from 'react-router-dom';
 import { FaMagic, FaSave, FaPowerOff, FaPlay, FaFastForward, FaBackward, FaEject } from 'react-icons/fa';
-import { cld } from '../utils/cloudinary';
 
 const ART_STYLES = ["Classic Art", "Stencil Art", "Embroidery Style"];
 const DECADES = ["1960s", "1970s", "1980s", "1990s"];
 const ARS = ["1:1","3:2","2:3","16:9","9:16"]; // T2I only
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 
-/** map resemblance slider (0..100) → Stability i2i strength (0.15..0.85) */
+/**
+ * Stability i2i "strength" = how much the model IGNORES the photo.
+ * We expose a Resemblance slider 0..100 (left=looks like photo, right=follows prompt).
+ * We map 0 → 0.15 (keep photo), 100 → 0.85 (follow prompt).
+ */
 const strengthFromResemblance = (resVal) => {
   const v = Math.max(0, Math.min(100, Number(resVal) || 0));
-  return 0.15 + (v / 100) * 0.70;
+  return 0.15 + (v / 100) * 0.70; // 0.15..0.85
 };
 const resemblanceFromStrength = (s) => {
   const v = ((Math.max(0.15, Math.min(0.85, s)) - 0.15) / 0.70) * 100;
@@ -37,9 +40,10 @@ export default function Generate() {
   const [styleIx, setStyleIx] = useState(0);
   const [decadeIx, setDecadeIx] = useState(2);
 
+  // Advanced controls (visible values)
   const [aspectRatio, setAspectRatio] = useState("1:1"); // T2I only
-  const [cfgScale, setCfgScale] = useState(7);
-  const [steps, setSteps] = useState(30);
+  const [cfgScale, setCfgScale] = useState(7);           // 1..20
+  const [steps, setSteps] = useState(30);                // 10..50
   const [negativePrompt, setNegativePrompt] = useState("");
 
   const [imageUrl, setImageUrl] = useState("");
@@ -48,12 +52,15 @@ export default function Generate() {
   const [error, setError] = useState("");
   const [userPrompt, setUserPrompt] = useState("");
 
-  const [activePreset, setActivePreset] = useState(null);
+  // Preset state
+  const [activePreset, setActivePreset] = useState(null); // 'fun' | 'photoreal' | 'bold' | null
   const [presetExtra, setPresetExtra] = useState("");
 
+  // VCR / image-to-image
   const [initFile, setInitFile] = useState(null);
   const [initPreview, setInitPreview] = useState("");
-  const [resemblance, setResemblance] = useState(35);
+  // UI: Resemblance 0..100 (0=looks like photo, 100=follows prompt)
+  const [resemblance, setResemblance] = useState(35); // default ~0.395 strength
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -71,7 +78,9 @@ export default function Generate() {
     } else if (artStyle === "Embroidery Style") {
       p = `embroidery pattern, satin stitch, limited color palette, crisp borders, vector-friendly, ${p}`;
     }
+    // Optional preset style seasoning
     if (presetExtra) p = `${p}, ${presetExtra}`;
+
     p = `${p}, photographed in the ${decade}, vintage film grain, era-accurate styling, era-specific color palette, authentic wardrobe and objects`;
     return p.trim();
   }, [userPrompt, artStyle, decade, presetExtra]);
@@ -119,7 +128,11 @@ export default function Generate() {
       isClosable: true
     });
   };
-  const clearPreset = () => { setActivePreset(null); setPresetExtra(""); };
+
+  const clearPreset = () => {
+    setActivePreset(null);
+    setPresetExtra("");
+  };
 
   const handleGenerate = async () => {
     if (!powerOn) { toast({ title: "TV is off", description: "Turn power on to generate.", status: "info" }); return; }
@@ -133,7 +146,11 @@ export default function Generate() {
         cfgScale,
         steps
       };
+
+      // Only pass aspect ratio for text-to-image
       if (!initPreview) payload.aspectRatio = aspectRatio || '1:1';
+
+      // I2I: map resemblance → Stability strength
       if (initPreview) {
         const strength = strengthFromResemblance(resemblance);
         payload.initImageBase64 = initPreview;
@@ -143,14 +160,10 @@ export default function Generate() {
       const resp = await client.post('/designs/create', payload);
       const { imageDataUrl, previewUrl, masterUrl, thumbUrl, publicId, meta } = resp.data || {};
 
-      // Prefer Cloudinary preview with f_auto/q_auto if present
-      const bestForScreen =
-        cld.preview(previewUrl || masterUrl || "") ||
-        cld.preview(thumbUrl || "") ||
-        imageDataUrl ||
-        "";
-      setImageUrl(bestForScreen);
+      // Prefer Cloudinary preview if available
+      setImageUrl(previewUrl || imageDataUrl || "");
 
+      // Stash the last generation for "Save"
       (window).__lastGen = {
         prompt: userPrompt || '',
         negativePrompt: negativePrompt || '',
@@ -245,8 +258,7 @@ export default function Generate() {
     <VStack spacing={8} w="100%">
       <Heading as="h1" size="2xl" color="brand.textLight">AI IMAGE GENERATOR</Heading>
 
-      {/* ... UI omitted for brevity; unchanged layout ... */}
-
+      {/* TV console */}
       <Box
         w="min(1040px, 92vw)"
         borderRadius="14px"
@@ -256,16 +268,104 @@ export default function Generate() {
         border="10px solid #3f2a16"
         _before={{ content: '""', position: 'absolute', inset: 0, boxShadow: 'inset 0 0 0 8px #8b5a2b, inset 0 0 60px rgba(0,0,0,.6)' }}
       >
-        {/* ... antenna & VCR controls unchanged ... */}
+        {/* Antenna */}
+        <Box position="absolute" left="50%" top="-40px" transform="translateX(-50%)" zIndex={2}>
+          <Box w="2px" h="38px" bg="gray.500" mx="auto" />
+          <HStack spacing={8} justify="center" mt="-6px">
+            <Box w="90px" h="2px" bg="gray.500" transform="rotate(-18deg)" />
+            <Box w="90px" h="2px" bg="gray.500" transform="rotate(18deg)" />
+          </HStack>
+        </Box>
 
+        <Badge colorScheme="yellow" position="absolute" top="6px" left="16px" fontFamily="monospace">TeesFromThePast</Badge>
+
+        {/* VCR deck */}
+        <Box mx="16px" mt="10px" mb={2} p={3}
+          bgGradient="linear(to-b, #141922, #0f141c)"
+          border="2px solid #2b3442" borderRadius="8px"
+          boxShadow="inset 0 0 30px rgba(0,0,0,.6)"
+        >
+          <HStack spacing={4} align="center">
+            {/* Thumbnail window */}
+            <Box w="64px" h="48px" bg="black" border="2px solid #333" borderRadius="4px" overflow="hidden">
+              {initPreview ? <Image src={initPreview} alt="VCR tape preview" w="100%" h="100%" objectFit="cover" /> : <Box w="100%" h="100%" bgGradient="linear(to-b, #222, #111)"/>}
+            </Box>
+
+            {/* Deck controls */}
+            <HStack spacing={2}>
+              <Tooltip label="Rewind"><Button size="xs" leftIcon={<FaBackward/>} variant="outline" colorScheme="gray">Rew</Button></Tooltip>
+              <Tooltip label="Play"><Button size="xs" leftIcon={<FaPlay/>} variant="outline" colorScheme="gray">Play</Button></Tooltip>
+              <Tooltip label="Fast Forward"><Button size="xs" leftIcon={<FaFastForward/>} variant="outline" colorScheme="gray">FF</Button></Tooltip>
+              <Tooltip label="Eject (clear image)">
+                <Button size="xs" leftIcon={<FaEject/>} colorScheme="pink" onClick={() => { handleFile(null); }}>
+                  Eject
+                </Button>
+              </Tooltip>
+            </HStack>
+
+            {/* INSERT TAPE SLOT (click or drop) */}
+            <Box flex="1">
+              {/* Hidden input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => handleFile(e.target.files?.[0] || null)}
+              />
+              {/* Slot */}
+              <Box
+                role="button"
+                aria-label="Insert Tape"
+                onClick={openFilePicker}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openFilePicker()}
+                tabIndex={0}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                h="46px"
+                bgGradient={dragOver
+                  ? "linear(to-b, #1b2431, #1a2433)"
+                  : "linear(to-b, #111722, #0c121b)"
+                }
+                border="1px solid #3b4656"
+                borderRadius="6px"
+                boxShadow="inset 0 -6px 12px rgba(0,0,0,.6), inset 0 2px 8px rgba(255,255,255,.04)"
+                display="flex" alignItems="center" justifyContent="center"
+                cursor="pointer"
+                position="relative"
+              >
+                <Box position="absolute" inset="4px" border="1px solid rgba(255,255,255,.08)" borderRadius="4px" />
+                <Text fontSize="sm" color="gray.200" letterSpacing="widest">
+                  {initPreview ? "TAPE LOADED – CLICK TO REPLACE" : "INSERT TAPE"}
+                </Text>
+              </Box>
+
+              {/* Resemblance (i2i only) */}
+              <HStack mt={1} spacing={3} opacity={initPreview ? 1 : 0.5}>
+                <Text fontSize="xs" color="gray.300">Resemblance</Text>
+                <Slider value={resemblance} min={0} max={100} step={1} onChange={setResemblance} isDisabled={!initPreview}>
+                  <SliderTrack><SliderFilledTrack/></SliderTrack>
+                  <SliderThumb />
+                </Slider>
+                <Text fontSize="xs" color="gray.300">{resemblance}%</Text>
+              </HStack>
+              <Text fontSize="xs" color="whiteAlpha.700" mt={1}>
+                <b>0%</b> = keep photo • <b>100%</b> = follow prompt
+              </Text>
+            </Box>
+
+            <Box ml="auto" color="gray.400">⋮</Box>
+          </HStack>
+        </Box>
+
+        {/* Speakers + Screen */}
         <HStack align="stretch" spacing={0} px="16px" pb="16px">
-          {/* speaker left */}
           <Box w={{ base:'0', md:'120px' }} display={{ base:'none', md:'block' }}
             bgGradient="linear(to-b, #5a3a1f, #4a2f19)" borderRight="6px solid #2d1d0f">
             <Box m="12px" h="calc(100% - 24px)" bgGradient="linear(to-b, #3b2716, #301e11)" border="1px solid #1f140b" />
           </Box>
 
-          {/* screen */}
           <VStack flex="1" spacing={0} bg="#0b111a" border="8px solid #a1a5ad" borderRadius="10px" p="10px" mx="16px"
             boxShadow="inset 0 0 80px rgba(0,0,0,.8), 0 6px 20px rgba(0,0,0,.6)">
             <Box position="relative" w="100%" h={{ base:'360px', md:'520px' }}
@@ -288,17 +388,90 @@ export default function Generate() {
               </Text>
             </Box>
 
-            {/* ... rest of panel unchanged ... */}
+            <HStack w="100%" justify="space-between" py={3} align="center" flexWrap="wrap" rowGap={3}>
+              <Button size="sm" leftIcon={<FaPowerOff/>} colorScheme={powerOn ? 'pink' : 'gray'} onClick={setPowerOn.toggle}>
+                Power
+              </Button>
+
+              {/* Presets */}
+              <HStack spacing={2} flexWrap="wrap">
+                <Button size="sm" variant="outline" onClick={() => applyPreset('fun')}>Fun Mode</Button>
+                <Button size="sm" variant="outline" onClick={() => applyPreset('photoreal')}>Photoreal</Button>
+                <Button size="sm" variant="outline" onClick={() => applyPreset('bold')}>Bold Stylization</Button>
+                {activePreset && (
+                  <Tag size="sm" colorScheme="yellow" ml={2}>
+                    <TagLabel>{PRESETS[activePreset].label}</TagLabel>
+                    <TagCloseButton onClick={clearPreset} />
+                  </Tag>
+                )}
+              </HStack>
+
+              <HStack spacing={10}>
+                <VStack spacing={1}><Text fontSize="xs" color="yellow.300">Art Style</Text>
+                  <Dial valueIx={styleIx} setValueIx={setStyleIx} labels={ART_STYLES}/></VStack>
+                <VStack spacing={1}><Text fontSize="xs" color="yellow.300">Decade</Text>
+                  <Dial valueIx={decadeIx} setValueIx={setDecadeIx} labels={DECADES}/></VStack>
+              </HStack>
+
+              {/* Aspect ratio (T2I only) */}
+              {!initPreview && (
+                <HStack spacing={2}>
+                  <Text fontSize="xs" color="yellow.300">Aspect</Text>
+                  <Select size="sm" value={aspectRatio} onChange={(e)=>setAspectRatio(e.target.value)} bg="brand.primaryDark" borderColor="whiteAlpha.300">
+                    {ARS.map(ar => <option key={ar} value={ar}>{ar}</option>)}
+                  </Select>
+                </HStack>
+              )}
+            </HStack>
           </VStack>
 
-          {/* speaker right */}
           <Box w={{ base:'0', md:'120px' }} display={{ base:'none', md:'block' }}
             bgGradient="linear(to-b, #5a3a1f, #4a2f19)" borderLeft="6px solid #2d1d0f">
             <Box m="12px" h="calc(100% - 24px)" bgGradient="linear(to-b, #3b2716, #301e11)" border="1px solid #1f140b" />
           </Box>
         </HStack>
 
-        {/* prompt + advanced controls unchanged */}
+        {/* Prompt + Advanced */}
+        <Box mx="16px" mb="16px" bg="rgba(0,0,0,.35)" border="1px solid rgba(0,0,0,.6)" borderRadius="8px" p={3}>
+          <Text fontSize="sm" color="yellow.200" mb={2}>Describe your image idea</Text>
+          <Textarea
+            placeholder="e.g. Have this guy ride a dragon into the sunset"
+            value={userPrompt}
+            onChange={(e) => setUserPrompt(e.target.value)}
+            bg="rgba(0,0,0,.5)" color="white"
+            _placeholder={{ color: 'whiteAlpha.700' }}
+          />
+
+          {/* Negative prompt */}
+          <Text fontSize="sm" color="yellow.200" mt={4} mb={2}>Things to avoid</Text>
+          <Textarea
+            placeholder="e.g. text, watermarks, extra limbs, artifacts"
+            value={negativePrompt}
+            onChange={(e) => setNegativePrompt(e.target.value)}
+            bg="rgba(0,0,0,.5)" color="white"
+            _placeholder={{ color: 'whiteAlpha.700' }}
+          />
+
+          {/* CFG & Steps */}
+          <HStack mt={4} spacing={6} align="center" flexWrap="wrap">
+            <HStack minW="280px" flex="1">
+              <Text fontSize="sm" color="whiteAlpha.800" w="90px">CFG (Prompt strictness)</Text>
+              <Slider value={cfgScale} min={1} max={20} step={1} onChange={setCfgScale}>
+                <SliderTrack><SliderFilledTrack/></SliderTrack>
+                <SliderThumb />
+              </Slider>
+              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{cfgScale}</Text>
+            </HStack>
+            <HStack minW="280px" flex="1">
+              <Text fontSize="sm" color="whiteAlpha.800" w="90px">Steps (Detail)</Text>
+              <Slider value={steps} min={10} max={50} step={1} onChange={setSteps}>
+                <SliderTrack><SliderFilledTrack/></SliderTrack>
+                <SliderThumb />
+              </Slider>
+              <Text fontSize="sm" color="whiteAlpha.800" w="40px" textAlign="right">{steps}</Text>
+            </HStack>
+          </HStack>
+        </Box>
       </Box>
 
       {error && (
