@@ -1,11 +1,5 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+// frontend/src/context/AuthProvider.jsx
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 import {
   client,
@@ -16,16 +10,13 @@ import {
 } from "../api/client";
 
 const AuthContext = createContext(null);
-
-// ✅ Named export that pages/components import
 export function useAuth() {
   return useContext(AuthContext);
 }
 
-// --- storage keys ---
+// Support legacy/local keys
 const TOKEN_KEYS = ["tftp_token", "token"];
 const PRIMARY_TOKEN_KEY = "tftp_token";
-const SESSION_KEY = "tftp_session";
 
 function readToken() {
   for (const k of TOKEN_KEYS) {
@@ -40,36 +31,23 @@ function writeToken(token) {
     return;
   }
   localStorage.setItem(PRIMARY_TOKEN_KEY, token);
-  localStorage.setItem("token", token); // legacy
-}
-function readSessionId() {
-  const v = localStorage.getItem(SESSION_KEY);
-  return v && v !== "undefined" ? v : null;
-}
-function writeSessionId(jti) {
-  if (!jti) localStorage.removeItem(SESSION_KEY);
-  else localStorage.setItem(SESSION_KEY, jti);
+  localStorage.setItem("token", token);
 }
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(null);
-  const [sessionId, setSessionId] = useState(null); // jti
   const [user, setUser] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
-  // prevent race when clearing mid-flight
   const clearingRef = useRef(false);
 
-  // Single source of truth to set/clear session on the client
-  const setSession = async (newToken, newSessionId) => {
+  const setSession = async (newToken) => {
     if (!newToken) {
       clearingRef.current = true;
       writeToken(null);
-      writeSessionId(null);
       clearAuthHeader();
-      clearSessionIdHeader();
+      clearSessionIdHeader(); // NEW: clear JTI header too
       setToken(null);
-      setSessionId(null);
       setUser(null);
       clearingRef.current = false;
       return;
@@ -80,22 +58,12 @@ export function AuthProvider({ children }) {
       writeToken(newToken);
       setToken(newToken);
       setAuthHeader(newToken);
-
-      if (newSessionId) {
-        writeSessionId(newSessionId);
-        setSessionId(newSessionId);
-        setSessionIdHeader(newSessionId);
-      }
-
       await hydrateUser(newToken);
     } catch {
-      // bad/expired token
       writeToken(null);
-      writeSessionId(null);
       clearAuthHeader();
       clearSessionIdHeader();
       setToken(null);
-      setSessionId(null);
       setUser(null);
     }
   };
@@ -117,18 +85,14 @@ export function AuthProvider({ children }) {
         billingAddress: data.billingAddress,
       });
     } catch {
-      // profile failed (expired/revoked) -> clear
       await setSession(null);
     }
   };
 
-  // Init once from localStorage
   useEffect(() => {
     (async () => {
       try {
         const stored = readToken();
-        const storedJti = readSessionId();
-
         if (!stored) {
           clearAuthHeader();
           clearSessionIdHeader();
@@ -138,24 +102,15 @@ export function AuthProvider({ children }) {
         const nowSec = Math.floor(Date.now() / 1000);
         if (!decoded?.exp || decoded.exp <= nowSec) {
           writeToken(null);
-          writeSessionId(null);
           clearAuthHeader();
           clearSessionIdHeader();
           return;
         }
-
         setToken(stored);
         setAuthHeader(stored);
-
-        if (storedJti) {
-          setSessionId(storedJti);
-          setSessionIdHeader(storedJti);
-        }
-
         await hydrateUser(stored);
       } catch {
         writeToken(null);
-        writeSessionId(null);
         clearAuthHeader();
         clearSessionIdHeader();
       } finally {
@@ -164,18 +119,14 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
-  // Keep axios headers in sync if token/jti change externally
   useEffect(() => {
     if (token) setAuthHeader(token);
-    else clearAuthHeader();
+    else {
+      clearAuthHeader();
+      clearSessionIdHeader();
+    }
   }, [token]);
 
-  useEffect(() => {
-    if (sessionId) setSessionIdHeader(sessionId);
-    else clearSessionIdHeader();
-  }, [sessionId]);
-
-  // Auto-logout at exp (best effort)
   useEffect(() => {
     if (!token) return;
     let timer;
@@ -189,33 +140,27 @@ export function AuthProvider({ children }) {
     return () => clearTimeout(timer);
   }, [token]);
 
-  // Cross-tab sync
   useEffect(() => {
     const onStorage = async (e) => {
-      if (e.key && ![PRIMARY_TOKEN_KEY, "token", SESSION_KEY].includes(e.key)) return;
-      const freshToken = readToken();
-      const freshJti = readSessionId();
-
-      if (!freshToken) {
-        await setSession(null);
-      } else if (freshToken !== token || freshJti !== sessionId) {
-        await setSession(freshToken, freshJti || undefined);
-      }
+      if (e.key && !TOKEN_KEYS.includes(e.key)) return;
+      const fresh = readToken();
+      if (!fresh) await setSession(null);
+      else if (fresh !== token) await setSession(fresh);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [token, sessionId]);
+  }, [token]);
 
   const logout = async () => {
     try {
-      await client.post("/auth/logout"); // ok if this 401s
+      await client.post("/auth/logout");
     } catch {}
     await setSession(null);
   };
 
   const value = useMemo(
-    () => ({ token, sessionId, user, loadingAuth, setSession, logout }),
-    [token, sessionId, user, loadingAuth]
+    () => ({ token, user, loadingAuth, setSession, logout }),
+    [token, user, loadingAuth]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

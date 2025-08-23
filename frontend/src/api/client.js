@@ -1,50 +1,11 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-// ----- Base URL resolution -----
-// In production on Vercel, we want calls to hit "/api" so vercel.json can proxy to Render.
-// For local dev, you can set VITE_API_BASE_URL=http://localhost:5000/api (or your dev backend).
+// --- Base URL: prod uses relative /api (Vercel rewrite); local can use VITE_API_BASE ---
 const API_BASE =
-  (import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL)
-    ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, "")
-    : "/api";
+  import.meta?.env?.VITE_API_BASE?.trim() ||
+  "/api";
 
-// Token keys we support across the app
-const TOKEN_KEYS = ["tftp_token", "token"];
-const SESSION_KEY = "tftp_session";
-
-// Helpers
-export function readToken() {
-  for (const k of TOKEN_KEYS) {
-    const v = localStorage.getItem(k);
-    if (v && v !== "undefined") return v;
-  }
-  return null;
-}
-export function setAuthHeader(token) {
-  if (token) {
-    client.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-  } else {
-    delete client.defaults.headers.common["Authorization"];
-  }
-}
-export function clearAuthHeader() {
-  delete client.defaults.headers.common["Authorization"];
-}
-export function setSessionId(jti) {
-  if (!jti) {
-    localStorage.removeItem(SESSION_KEY);
-    delete client.defaults.headers.common["X-Session-Id"];
-    return;
-  }
-  localStorage.setItem(SESSION_KEY, jti);
-  client.defaults.headers.common["X-Session-Id"] = jti;
-}
-export function getSessionId() {
-  return localStorage.getItem(SESSION_KEY) || "";
-}
-
-// Axios instance
 export const client = axios.create({
   baseURL: API_BASE,
   withCredentials: false,
@@ -53,33 +14,58 @@ export const client = axios.create({
   },
 });
 
-// Attach token + session automatically on each request
-client.interceptors.request.use((config) => {
-  // Authorization
-  if (!config.headers?.Authorization) {
-    const tok = readToken();
-    if (tok) config.headers = { ...config.headers, Authorization: `Bearer ${tok}` };
+// --- Auth header helpers ---
+export function setAuthHeader(token) {
+  if (!token) return clearAuthHeader();
+  client.defaults.headers.common.Authorization = `Bearer ${token}`;
+}
+export function clearAuthHeader() {
+  delete client.defaults.headers.common.Authorization;
+}
+
+// --- Session-ID (JTI) header helpers ---
+const SESSION_HEADER = "x-session-id";
+export function setSessionIdHeader(jti) {
+  if (!jti) return clearSessionIdHeader();
+  client.defaults.headers.common[SESSION_HEADER] = jti;
+}
+export function clearSessionIdHeader() {
+  delete client.defaults.headers.common[SESSION_HEADER];
+}
+
+// Back-compat alias (old code may import setSessionId)
+export const setSessionId = setSessionIdHeader;
+
+// --- Global response interceptor: on 401/419, clear local session & bump to /login ---
+const TOKEN_KEYS = ["tftp_token", "token"];
+function nukeLocalSession() {
+  TOKEN_KEYS.forEach((k) => localStorage.removeItem(k));
+  // also clear our default headers to avoid thrash
+  clearAuthHeader();
+  clearSessionIdHeader();
+}
+
+// Avoid multiple redirects racing
+let redirecting = false;
+client.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error?.response?.status;
+    if ((status === 401 || status === 419) && !redirecting) {
+      redirecting = true;
+      try {
+        nukeLocalSession();
+        // bounce to login, keep where we were as redirect param
+        const here =
+          typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
+        const target = `/login?redirect=${encodeURIComponent(here)}`;
+        if (typeof window !== "undefined") {
+          window.location.replace(target);
+        }
+      } catch {
+        // no-op
+      }
+    }
+    return Promise.reject(error);
   }
-  // Session
-  const jti = getSessionId();
-  if (jti && !config.headers?.["X-Session-Id"]) {
-    config.headers = { ...config.headers, "X-Session-Id": jti };
-  }
-  // Client hints (nice-to-have)
-  try {
-    const hints = {
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-      lang: navigator.language,
-      platform: navigator.platform,
-      viewport:
-        typeof window !== "undefined"
-          ? `${window.innerWidth}x${window.innerHeight}@${window.devicePixelRatio || 1}`
-          : "",
-    };
-    config.headers["x-client-lang"] = hints.lang;
-    config.headers["x-client-timezone"] = hints.tz;
-    config.headers["x-client-viewport"] = hints.viewport;
-    config.headers["x-client-platform"] = hints.platform;
-  } catch {}
-  return config;
-});
+);

@@ -7,7 +7,7 @@ import {
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
 import Footer from "../components/Footer.jsx";
-import { client, setSessionId } from "../api/client";
+import { client, setAuthHeader, setSessionIdHeader } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
 
 function pickToken(payload) {
@@ -47,7 +47,8 @@ export default function LoginPage() {
       if (!token) throw new Error("Login succeeded but no token was returned.");
 
       await setSession(token);
-      if (jti) setSessionId(jti);
+      setAuthHeader(token);
+      if (jti) setSessionIdHeader(jti);
 
       toast({ title: "Login Successful", description: "Welcome back!", status: "success", duration: 2500, isClosable: true });
       navigate(redirectTo, { replace: true });
