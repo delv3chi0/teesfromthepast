@@ -28,46 +28,71 @@ connectDB();
 
 const app = express();
 
+// Trust Render/Reverse proxy so req.ip & x-forwarded-for work
+app.set("trust proxy", true);
+
 // --- Health check for Render ---
 app.get("/health", (req, res) => res.send("OK"));
 
-// --- Tiny dependency-free CORS ---
+/**
+ * Tiny dependency-free CORS that:
+ *  - Allows your Vercel app + localhost
+ *  - Handles preflight properly (reflects Access-Control-Request-Headers)
+ *  - Whitelists the custom telemetry/session headers you use
+ *  - Works whether the browser sends lowercase or PascalCase names
+ */
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
-  "https://teesfromthepast.vercel.app,http://localhost:5173")
+  "https://teesfromthepast.vercel.app,http://localhost:5173,http://localhost:3000")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
+const DEFAULT_ALLOWED_HEADERS = [
+  // standard
+  "content-type",
+  "authorization",
+  "x-requested-with",
+
+  // your session & telemetry headers (lowercase for preflight consistency)
+  "x-session-id",
+  "x-client-info",
+  "x-client-timezone",
+  "x-client-lang",
+  "x-client-viewport",
+  "x-client-platform",
+  "x-client-ua",
+  "x-client-localtime",
+  "x-client-devicememory",
+  "x-client-cpucores",
+];
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    // allow sharing the response across varying origins
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
   }
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+
+  // If the browser sent a preflight header list, reflect it back.
+  // Otherwise, send our default, which includes all custom headers we use.
+  const requested = req.headers["access-control-request-headers"];
   res.setHeader(
     "Access-Control-Allow-Headers",
-    [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      // client-hint / telemetry headers we add from the FE:
-      "X-Client-Timezone",
-      "X-Client-Lang",
-      "X-Client-Viewport",
-      "X-Client-Platform",
-      "X-Client-UA",
-      "X-Client-LocalTime",
-      "X-Client-DeviceMemory",
-      "X-Client-CPUCores",
-      "X-Session-ID",
-    ].join(", ")
+    (requested && String(requested)) || DEFAULT_ALLOWED_HEADERS.join(", ")
   );
-  if (req.method === "OPTIONS") return res.status(204).end();
+
+  // We use Bearer tokens (not cookies), so credentials are not required.
+  // Flip to true if you later use cookies.
+  res.setHeader("Access-Control-Allow-Credentials", "false");
+
+  if (req.method === "OPTIONS") {
+    // End preflight quickly
+    return res.status(204).end();
+  }
   next();
 });
 

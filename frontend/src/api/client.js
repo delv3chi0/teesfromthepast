@@ -1,26 +1,33 @@
 // frontend/src/api/client.js
 import axios from "axios";
 
-/**
- * We do NOT require any env var here.
- * We default to your backend domain so you don't need Vercel rewrites.
- *
- * If you later want to use an env var, you still can:
- *  - VITE_API_BASE or NEXT_PUBLIC_API_BASE
- */
-const FALLBACK_API = "https://teesfromthepast.onrender.com/api"; // <-- your backend (Render) API
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  import.meta.env.NEXT_PUBLIC_API_BASE ||
-  FALLBACK_API;
+const FALLBACK_API = "https://teesfromthepast.onrender.com/api";
+
+// If an env var is present but doesn’t end with /api, we’ll smart-append it.
+function normalizeBase(u) {
+  if (!u) return FALLBACK_API;
+  try {
+    const url = new URL(u);
+    if (!url.pathname.endsWith("/api")) {
+      url.pathname = url.pathname.replace(/\/?$/, "/api");
+    }
+    return url.toString().replace(/\/+$/, ""); // trim trailing slash
+  } catch {
+    // string not a full URL; fall back
+    return FALLBACK_API;
+  }
+}
+
+const API_BASE = normalizeBase(
+  import.meta.env.VITE_API_BASE || import.meta.env.NEXT_PUBLIC_API_BASE || FALLBACK_API
+);
 
 export const client = axios.create({
   baseURL: API_BASE,
-  // Send creds only if you use cookies (you don't now)
   withCredentials: false,
 });
 
-// --- Auth header helpers (used by AuthProvider / pages) ---
+// ---- auth/session header helpers (unchanged) ----
 let authToken = null;
 let sessionId = null;
 
@@ -33,22 +40,13 @@ export function setAuthHeader(token) {
     delete client.defaults.headers.common["Authorization"];
   }
 }
-
 export function clearAuthHeader() {
   authToken = null;
   delete client.defaults.headers.common["Authorization"];
-  try {
-    localStorage.removeItem("tftp_token");
-    localStorage.removeItem("token"); // legacy key
-  } catch {}
+  try { localStorage.removeItem("tftp_token"); localStorage.removeItem("token"); } catch {}
 }
 
-/**
- * Session tracking header so the backend can block revoked sessions immediately.
- * We support both a setter that writes to localStorage and a header-only setter.
- */
 const SESSION_KEY = "tftp_session_id";
-
 export function setSessionId(jti) {
   sessionId = jti || null;
   if (sessionId) {
@@ -59,23 +57,17 @@ export function setSessionId(jti) {
     try { localStorage.removeItem(SESSION_KEY); } catch {}
   }
 }
-
-// keep for callers that want header-only behavior
 export function setSessionIdHeader(jti) {
   sessionId = jti || null;
   if (sessionId) client.defaults.headers.common["x-session-id"] = sessionId;
   else delete client.defaults.headers.common["x-session-id"];
 }
-
 export function clearSessionIdHeader() {
   sessionId = null;
   delete client.defaults.headers.common["x-session-id"];
 }
 
-/**
- * On app boot, hydrate defaults from localStorage if present.
- * This avoids a race where the first API call is missing headers.
- */
+// hydrate on boot
 (function hydrateHeadersFromStorage() {
   try {
     const t = localStorage.getItem("tftp_token") || localStorage.getItem("token");
@@ -87,52 +79,47 @@ export function clearSessionIdHeader() {
   } catch {}
 })();
 
-// --- Interceptors: attach headers + handle 401/SESSION_REVOKED ---
+// ---- interceptors ----
+// (Temporarily skip x-client-info until backend CORS is updated everywhere)
 client.interceptors.request.use((config) => {
-  // Ensure headers are there even if caller didn’t call setters explicitly
   if (authToken && !config.headers?.Authorization) {
     config.headers = { ...(config.headers || {}), Authorization: `Bearer ${authToken}` };
   }
   if (sessionId && !config.headers?.["x-session-id"]) {
     config.headers = { ...(config.headers || {}), "x-session-id": sessionId };
   }
-  // Best-effort client context (optional)
-  try {
-    const info = {
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-      lang: navigator.language,
-      platform: navigator.platform,
-      vendor: navigator.vendor,
-      screen: { w: window.screen?.width, h: window.screen?.height, dpr: window.devicePixelRatio || 1 },
-      href: window.location?.href,
-    };
-    config.headers["x-client-info"] = JSON.stringify(info);
-  } catch {}
+  // If you want to re-enable this later, ensure backend CORS allows x-client-info
+  // try {
+  //   const info = {
+  //     tz: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+  //     lang: navigator.language,
+  //     platform: navigator.platform,
+  //     vendor: navigator.vendor,
+  //     screen: { w: window.screen?.width, h: window.screen?.height, dpr: window.devicePixelRatio || 1 },
+  //     href: window.location?.href,
+  //   };
+  //   config.headers["x-client-info"] = JSON.stringify(info);
+  // } catch {}
   return config;
 });
 
 client.interceptors.response.use(
-  (resp) => resp,
+  (r) => r,
   (err) => {
     const status = err?.response?.status;
-    const code =
+    const code = String(
       err?.response?.data?.code ||
       err?.response?.data?.errorCode ||
-      err?.response?.data?.message;
-
-    // If backend enforces revoked sessions -> return 401 with a clear code
-    if (status === 401 && code && String(code).toUpperCase().includes("SESSION")) {
-      // Clear everything so protected routes kick user to /login
+      err?.response?.data?.message || ""
+    ).toUpperCase();
+    if (status === 401 && code.includes("SESSION")) {
       clearSessionIdHeader();
       clearAuthHeader();
       try {
-        // force other tabs to clear too
         localStorage.setItem("tftp_token", "");
         localStorage.setItem("token", "");
         localStorage.setItem(SESSION_KEY, "");
       } catch {}
-      // Let the app’s AuthProvider react (it calls /auth/profile on boot)
-      // Caller can also catch and redirect.
     }
     return Promise.reject(err);
   }
