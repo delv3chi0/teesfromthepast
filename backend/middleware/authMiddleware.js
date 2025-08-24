@@ -11,6 +11,23 @@ function readBearer(req) {
 }
 
 /**
+ * Sign a short-lived access token for a user.
+ * Keeps payload small and compatible with existing controllers.
+ */
+export function signAccessToken(user, extra = {}) {
+  if (!user?._id) throw new Error("signAccessToken: user missing _id");
+  const payload = {
+    id: user._id.toString(),
+    isAdmin: !!user.isAdmin,
+    ...extra,
+  };
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error("JWT_SECRET not set");
+  const expiresIn = process.env.JWT_EXPIRES_IN || "15m";
+  return jwt.sign(payload, secret, { expiresIn });
+}
+
+/**
  * Factory that enforces:
  *  - Valid JWT always
  *  - Optional or required x-session-id (device binding)
@@ -64,7 +81,7 @@ const baseProtect = (requireSession) =>
 /**
  * Exports:
  *  - protect: JWT required; session OPTIONAL (use for email, profile, most APIs)
- *  - protectWithSession: JWT + x-session-id REQUIRED (use for device-bound actions)
+ *  - protectWithSession: JWT + x-session-id REQUIRED (use for device-bound admin/session endpoints)
  *  - requireAdmin: gate admin routes
  */
 export const protect = baseProtect(false);
