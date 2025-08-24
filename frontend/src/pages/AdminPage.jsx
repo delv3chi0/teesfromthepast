@@ -10,7 +10,8 @@ import {
 } from "@chakra-ui/react";
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
-  FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy, FaChevronDown
+  FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy, FaChevronDown,
+  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge
 } from "react-icons/fa";
 
 import { client, setAuthHeader } from "../api/client";
@@ -27,6 +28,8 @@ const monthName = (yyyymm) => {
   const date = new Date(parseInt(y), parseInt(m) - 1, 1);
   return date.toLocaleString("default", { month: "short", year: "numeric" });
 };
+const shortId = (id) => (id ? String(id).slice(-6).toUpperCase() : "—");
+const hasAddr = (a) => !!(a && (a.street1 || a.city || a.state || a.zipCode || a.country || a.recipientName));
 
 export default function AdminPage() {
   const toast = useToast();
@@ -40,6 +43,7 @@ export default function AdminPage() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
+  const [resendLoading, setResendLoading] = useState(false);
 
   // Orders
   const [orders, setOrders] = useState([]);
@@ -52,6 +56,8 @@ export default function AdminPage() {
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(false);
   const [designsError, setDesignsError] = useState("");
+  // pagination for Designs
+  const [designsVisible, setDesignsVisible] = useState(8);
 
   // Devices / Sessions
   const [sessions, setSessions] = useState([]);
@@ -213,6 +219,17 @@ export default function AdminPage() {
     }
   };
 
+  const adminResendVerification = async (email) => {
+    if (!email) return;
+    setResendLoading(true);
+    try {
+      await client.post("/auth/resend-verification", { email });
+      toast({ title: "Verification email sent", description: email, status: "success" });
+    } catch (e) {
+      toast({ title: "Send failed", description: e?.response?.data?.message || "Unknown error", status: "error" });
+    } finally { setResendLoading(false); }
+  };
+
   // ---------- Orders ----------
   const handleOpenDeleteOrderDialog = (order) => { setOrderToDelete(order); onDeleteOrderModalOpen(); };
   const confirmDeleteOrder = async () => {
@@ -254,14 +271,14 @@ export default function AdminPage() {
   // ---------- Designs ----------
   const [selectedDesign, setSelectedDesign] = useState(null);
   const handleViewDesign = (design) => { setSelectedDesign(design); onOpenViewDesignModal(); };
-  const handleOpenDeleteDesignDialog = (design) => { setDesignToDelete(design); onOpenDeleteDesignModal(); };
+  const handleOpenDeleteDesignDialog = (design) => { setDesignToDelete(design); };
   const confirmDeleteDesign = async () => {
     if (!designToDelete) return;
     try {
       await client.delete(`/admin/designs/${designToDelete._id}`);
       toast({ title: "Design Deleted", status: "success" });
       setDesigns((prev) => prev.filter((d) => d._id !== designToDelete._id));
-      onCloseDeleteDesignModal();
+      setDesignToDelete(null); // fixed: close properly
     } catch (e) {
       toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
     }
@@ -355,9 +372,10 @@ export default function AdminPage() {
           <Table variant="simple" size="sm" w="100%">
             <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
               <Tr>
-                <Th>ID</Th>
+                <Th><Icon as={FaIdBadge} mr={2} />ID</Th>
                 <Th>Username</Th>
                 <Th>Email</Th>
+                <Th>Verified</Th>
                 <Th>Name</Th>
                 <Th>Admin</Th>
                 <Th>Joined</Th>
@@ -367,9 +385,33 @@ export default function AdminPage() {
             <Tbody>
               {users.map((user) => (
                 <Tr key={user._id}>
-                  <Td fontSize="xs" title={user._id}>{String(user._id).substring(0, 8)}…</Td>
+                  <Td>
+                    <HStack spacing={2}>
+                      <Badge variant="subtle">{shortId(user._id)}</Badge>
+                      <Tooltip label="Copy full ID">
+                        <ChakraIconButton
+                          size="xs"
+                          variant="ghost"
+                          icon={<FaCopy />}
+                          onClick={() => { navigator.clipboard.writeText(String(user._id)); toast({ title: "ID copied", status: "success", duration: 1000 }); }}
+                          aria-label="Copy ID"
+                        />
+                      </Tooltip>
+                    </HStack>
+                  </Td>
                   <Td>{user.username}</Td>
                   <Td>{user.email}</Td>
+                  <Td>
+                    {user.emailVerifiedAt ? (
+                      <Tag size="sm" colorScheme="green" borderRadius="full">
+                        <Icon as={FaShieldAlt} mr={1} /> Verified
+                      </Tag>
+                    ) : (
+                      <Tag size="sm" colorScheme="gray" borderRadius="full">
+                        <Icon as={FaTimesCircle} mr={1} /> Unverified
+                      </Tag>
+                    )}
+                  </Td>
                   <Td>{`${user.firstName || ""} ${user.lastName || ""}`.trim() || "—"}</Td>
                   <Td><Tag size="sm" colorScheme={user.isAdmin ? "green" : "gray"}>{user.isAdmin ? "Yes" : "No"}</Tag></Td>
                   <Td>{fmtDate(user.createdAt)}</Td>
@@ -478,96 +520,119 @@ export default function AdminPage() {
     );
   };
 
+  // sort newest first and slice by designsVisible
+  const sortedDesigns = useMemo(() => {
+    const arr = Array.isArray(designs) ? [...designs] : [];
+    arr.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return arr;
+  }, [designs]);
+  const visibleDesigns = sortedDesigns.slice(0, designsVisible);
+
   const DesignsPanel = () => (
     <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
       <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
         <Heading size="md">Design Management</Heading>
-        <Button
-          size="sm"
-          leftIcon={<FaSync />}
-          onClick={() => { setDesigns([]); fetchDesigns(); }}
-          isLoading={loadingDesigns}
-          variant="outline"
-          color="black"
-          borderColor="black"
-        >
-          Refresh
-        </Button>
+        <HStack>
+          <Button
+            size="sm"
+            leftIcon={<FaSync />}
+            onClick={() => { setDesigns([]); setDesignsVisible(8); fetchDesigns(); }}
+            isLoading={loadingDesigns}
+            variant="outline"
+            color="black"
+            borderColor="black"
+          >
+            Refresh
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setDesignsVisible(sortedDesigns.length)}>Expand all</Button>
+          <Button size="sm" variant="outline" onClick={() => setDesignsVisible((v) => Math.min(v + 20, sortedDesigns.length))}>Load 20 more</Button>
+          <Button size="sm" variant="outline" onClick={() => setDesignsVisible(8)}>Collapse to 8</Button>
+        </HStack>
       </HStack>
       {loadingDesigns ? (
         <VStack p={10}><Spinner /></VStack>
       ) : designsError ? (
         <Alert status="error"><AlertIcon />{designsError}</Alert>
       ) : (
-        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-          <Table variant="simple" size="sm" w="100%">
-            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-              <Tr>
-                <Th>Preview</Th>
-                <Th>Prompt</Th>
-                <Th>Meta</Th>
-                <Th>Creator</Th>
-                <Th>Created</Th>
-                <Th>Votes (Month)</Th>
-                <Th>Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {designs.map((design) => {
-                const meta = design.settings || {};
-                const mode = meta.mode || (meta.imageStrength != null ? "i2i" : "t2i");
-                const ar = meta.aspectRatio || "—";
-                const cfg = meta.cfgScale ?? "—";
-                const stp = meta.steps ?? "—";
-                const str = meta.imageStrength != null ? Math.round(meta.imageStrength * 100) + "%" : "—";
-                const previewSrc = design.thumbUrl || design.publicUrl || design.imageDataUrl || "";
-                return (
-                  <Tr key={design._id}>
-                    <Td>
-                      {previewSrc ? (
-                        <Image src={previewSrc} boxSize="56px" objectFit="cover" borderRadius="md" />
-                      ) : (
-                        <Box boxSize="56px" borderWidth="1px" borderRadius="md" />
-                      )}
-                    </Td>
-                    <Td fontSize="xs" whiteSpace="normal">{design.prompt}</Td>
-                    <Td>
-                      <VStack align="start" spacing={0}>
-                        <HStack spacing={2}>
-                          <Badge colorScheme={mode === "i2i" ? "purple" : "blue"}>{mode.toUpperCase()}</Badge>
-                          <Badge>{ar}</Badge>
-                        </HStack>
-                        <HStack spacing={3} fontSize="xs">
-                          <Text>CFG {cfg}</Text>
-                          <Text>Steps {stp}</Text>
-                          <Text>Strength {str}</Text>
-                        </HStack>
-                      </VStack>
-                    </Td>
-                    <Td>{design.user?.username || "N/A"}</Td>
-                    <Td>{design.createdAt ? new Date(design.createdAt).toLocaleDateString() : "N/A"}</Td>
-                    <Td>
-                      {design.isSubmittedForContest && design.contestSubmissionMonth ? (
-                        <VStack align="center" spacing={0}>
-                          <Tag size="sm" colorScheme="blue" borderRadius="full">{design.votes || 0} Votes</Tag>
-                          <Text fontSize="xs" color="brand.textMuted">{monthName(design.contestSubmissionMonth)}</Text>
+        <>
+          <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
+            <Table variant="simple" size="sm" w="100%">
+              <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
+                <Tr>
+                  <Th>Preview</Th>
+                  <Th>Prompt</Th>
+                  <Th>Meta</Th>
+                  <Th>Creator</Th>
+                  <Th>Created</Th>
+                  <Th>Votes (Month)</Th>
+                  <Th>Actions</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {visibleDesigns.map((design) => {
+                  const meta = design.settings || {};
+                  const mode = meta.mode || (meta.imageStrength != null ? "i2i" : "t2i");
+                  const ar = meta.aspectRatio || "—";
+                  const cfg = meta.cfgScale ?? "—";
+                  const stp = meta.steps ?? "—";
+                  const str = meta.imageStrength != null ? Math.round(meta.imageStrength * 100) + "%" : "—";
+                  const previewSrc = design.thumbUrl || design.publicUrl || design.imageDataUrl || "";
+                  return (
+                    <Tr key={design._id}>
+                      <Td>
+                        {previewSrc ? (
+                          <Image src={previewSrc} boxSize="56px" objectFit="cover" borderRadius="md" />
+                        ) : (
+                          <Box boxSize="56px" borderWidth="1px" borderRadius="md" />
+                        )}
+                      </Td>
+                      <Td fontSize="xs" whiteSpace="normal">{design.prompt}</Td>
+                      <Td>
+                        <VStack align="start" spacing={0}>
+                          <HStack spacing={2}>
+                            <Badge colorScheme={mode === "i2i" ? "purple" : "blue"}>{mode.toUpperCase()}</Badge>
+                            <Badge>{ar}</Badge>
+                          </HStack>
+                          <HStack spacing={3} fontSize="xs">
+                            <Text>CFG {cfg}</Text>
+                            <Text>Steps {stp}</Text>
+                            <Text>Strength {str}</Text>
+                          </HStack>
                         </VStack>
-                      ) : (<Text fontSize="xs" color="brand.textMuted">N/A</Text>)}
-                    </Td>
-                    <Td>
-                      <Tooltip label="View Design">
-                        <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} />
-                      </Tooltip>
-                      <Tooltip label="Delete Design">
-                        <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} />
-                      </Tooltip>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </Tbody>
-          </Table>
-        </TableContainer>
+                      </Td>
+                      <Td>{design.user?.username || "N/A"}</Td>
+                      <Td>{design.createdAt ? new Date(design.createdAt).toLocaleDateString() : "N/A"}</Td>
+                      <Td>
+                        {design.isSubmittedForContest && design.contestSubmissionMonth ? (
+                          <VStack align="center" spacing={0}>
+                            <Tag size="sm" colorScheme="blue" borderRadius="full">{design.votes || 0} Votes</Tag>
+                            <Text fontSize="xs" color="brand.textMuted">{monthName(design.contestSubmissionMonth)}</Text>
+                          </VStack>
+                        ) : (<Text fontSize="xs" color="brand.textMuted">N/A</Text>)}
+                      </Td>
+                      <Td>
+                        <Tooltip label="View Design">
+                          <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} />
+                        </Tooltip>
+                        <Tooltip label="Delete Design">
+                          <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} />
+                        </Tooltip>
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </Tbody>
+            </Table>
+          </TableContainer>
+
+          {designsVisible < sortedDesigns.length && (
+            <VStack pt={4}>
+              <Button onClick={() => setDesignsVisible((v) => Math.min(v + 20, sortedDesigns.length))}>
+                Load 20 more (showing {designsVisible} of {sortedDesigns.length})
+              </Button>
+            </VStack>
+          )}
+        </>
       )}
     </Box>
   );
@@ -796,6 +861,31 @@ export default function AdminPage() {
     if (tabIndex === 5 && sessions.length === 0 && !loadingSessions) fetchSessions();
   }, [tabIndex, sessions.length, loadingSessions, fetchSessions]);
 
+  const AddressBlock = ({ title, addr }) => {
+    if (!hasAddr(addr)) return (
+      <Box>
+        <Heading as="h4" size="sm" mb={1}>{title}</Heading>
+        <Text color="whiteAlpha.700">—</Text>
+      </Box>
+    );
+    return (
+      <Box>
+        <Heading as="h4" size="sm" mb={1}>{title}</Heading>
+        <VStack align="start" spacing={0}>
+          {addr.recipientName && <Text>{addr.recipientName}</Text>}
+          <Text>
+            {[addr.street1, addr.street2].filter(Boolean).join(", ")}
+          </Text>
+          <Text>
+            {[addr.city, addr.state, addr.zipCode].filter(Boolean).join(", ")}
+          </Text>
+          <Text>{addr.country}</Text>
+          {addr.phone && <Text>📞 {addr.phone}</Text>}
+        </VStack>
+      </Box>
+    );
+  };
+
   return (
     <Box w="100%" pb={10}>
       <VStack spacing={6} align="stretch">
@@ -826,18 +916,54 @@ export default function AdminPage() {
         </Box>
       </VStack>
 
-      {/* Basic modals to avoid runtime errors (you can keep your richer implementations) */}
-      <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose}>
+      {/* View User: now shows verified + addresses */}
+      <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} size="lg" isCentered>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>User</ModalHeader>
+          <ModalHeader>User Details</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {selectedUser ? (
-              <VStack align="start" spacing={2}>
-                <Text><b>Username:</b> {selectedUser.username}</Text>
-                <Text><b>Email:</b> {selectedUser.email}</Text>
-                <Text><b>Name:</b> {(selectedUser.firstName || "") + " " + (selectedUser.lastName || "")}</Text>
+              <VStack align="stretch" spacing={4}>
+                <HStack justify="space-between" align="center">
+                  <HStack spacing={3}>
+                    <Badge>{shortId(selectedUser._id)}</Badge>
+                    <Text fontWeight="bold">{selectedUser.username}</Text>
+                    {selectedUser.emailVerifiedAt ? (
+                      <Tag size="sm" colorScheme="green" borderRadius="full"><Icon as={FaShieldAlt} mr={1}/>Verified</Tag>
+                    ) : (
+                      <Tag size="sm" colorScheme="gray" borderRadius="full"><Icon as={FaTimesCircle} mr={1}/>Unverified</Tag>
+                    )}
+                  </HStack>
+                  {!selectedUser.emailVerifiedAt && (
+                    <Button
+                      size="sm"
+                      leftIcon={<FaPaperPlane />}
+                      isLoading={resendLoading}
+                      onClick={() => adminResendVerification(selectedUser.email)}
+                    >
+                      Resend verification
+                    </Button>
+                  )}
+                </HStack>
+
+                <Divider />
+
+                <VStack align="stretch" spacing={1}>
+                  <Text><b>Email:</b> {selectedUser.email}</Text>
+                  <Text><b>Name:</b> {(selectedUser.firstName || "") + " " + (selectedUser.lastName || "")}</Text>
+                  <Text><b>Admin:</b> {selectedUser.isAdmin ? "Yes" : "No"}</Text>
+                  <Text><b>Created:</b> {fmtDate(selectedUser.createdAt)}</Text>
+                  <Text><b>Updated:</b> {fmtDate(selectedUser.updatedAt)}</Text>
+                  <Text><b>Verified at:</b> {fmtDate(selectedUser.emailVerifiedAt)}</Text>
+                </VStack>
+
+                <Divider />
+
+                <HStack align="start" spacing={8}>
+                  <AddressBlock title="Shipping Address" addr={selectedUser.shippingAddress} />
+                  <AddressBlock title="Billing Address" addr={selectedUser.billingAddress} />
+                </HStack>
               </VStack>
             ) : <Text>No user selected.</Text>}
           </ModalBody>
