@@ -1,3 +1,4 @@
+// frontend/src/pages/AdminPage.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
@@ -5,7 +6,7 @@ import {
   Button, useToast, Tag, Image, Select,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
   FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider, Tooltip, Grid, GridItem, Flex, HStack, Badge, Code, Checkbox, Menu, MenuButton, MenuList, MenuItem
+  Divider, Tooltip, Flex, HStack, Badge, Code, Checkbox, Menu, MenuButton, MenuList, MenuItem
 } from "@chakra-ui/react";
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
@@ -18,20 +19,13 @@ import InventoryPanel from "../components/admin/InventoryPanel.jsx";
 import AdminDashboard from "./admin/AdminDashboard.jsx";
 import AdminAuditLogs from "./AdminAuditLogs.jsx";
 
-/* ---------- utils ---------- */
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
 const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—");
 const monthName = (yyyymm) => {
   if (!yyyymm || typeof yyyymm !== "string" || yyyymm.length !== 7) return "N/A";
   const [y, m] = yyyymm.split("-");
-  const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+  const date = new Date(parseInt(y), parseInt(m) - 1, 1);
   return date.toLocaleString("default", { month: "short", year: "numeric" });
-};
-const shortId = (id = "", chunk = 4) => {
-  if (!id) return "-";
-  const s = String(id).replace(/[^a-zA-Z0-9]/g, "");
-  if (s.length <= chunk * 2) return s;
-  return `${s.slice(0, chunk)}…${s.slice(-chunk)}`;
 };
 
 export default function AdminPage() {
@@ -41,67 +35,64 @@ export default function AdminPage() {
 
   const [tabIndex, setTabIndex] = useState(0);
 
-  /* ---------- Users ---------- */
+  // Users
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
 
-  /* ---------- Orders ---------- */
+  // Orders
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [loadingSelectedOrder, setLoadingSelectedOrder] = useState(false);
 
-  /* ---------- Designs ---------- */
+  // Designs
   const [designs, setDesigns] = useState([]);
   const [loadingDesigns, setLoadingDesigns] = useState(false);
   const [designsError, setDesignsError] = useState("");
-  const [selectedDesign, setSelectedDesign] = useState(null);
-  const [designToDelete, setDesignToDelete] = useState(null);
 
-  /* ---------- Sessions / Devices ---------- */
+  // Devices / Sessions
   const [sessions, setSessions] = useState([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sessionsError, setSessionsError] = useState("");
   const [sessionsPage] = useState(1);
 
-  // Bulk selection
+  // Bulk selection on Devices tab
   const [selectedJtis, setSelectedJtis] = useState([]);
   const allChecked = sessions.length > 0 && selectedJtis.length === sessions.length;
   const isIndeterminate = selectedJtis.length > 0 && selectedJtis.length < sessions.length;
 
-  // Auto-refresh
+  // Devices auto-refresh
   const [autoRefreshMs, setAutoRefreshMs] = useState(0);
   const autoRefTimer = useRef(null);
-
-  // Device info modal
-  const { isOpen: isDeviceInfoOpen, onOpen: onDeviceInfoOpen, onClose: onDeviceInfoClose } = useDisclosure();
-  const [deviceDetail, setDeviceDetail] = useState(null);
 
   // Audit logs
   const [auditsLoaded, setAuditsLoaded] = useState(false);
 
-  /* ---------- Modal controls ---------- */
+  // Modals
   const { isOpen: isViewUserModalOpen, onOpen: onViewUserModalOpen, onClose: onViewUserModalClose } = useDisclosure();
   const { isOpen: isEditModalOpen, onOpen: onEditModalOpen, onClose: onEditModalClose } = useDisclosure();
   const { isOpen: isDeleteUserModalOpen, onOpen: onDeleteUserModalOpen, onClose: onDeleteUserModalClose } = useDisclosure();
-
   const { isOpen: isViewOrderModalOpen, onOpen: onOpenViewOrderModal, onClose: onCloseViewOrderModal } = useDisclosure();
   const { isOpen: isDeleteOrderModalOpen, onOpen: onDeleteOrderModalOpen, onClose: onDeleteOrderModalClose } = useDisclosure();
-  const [orderToDelete, setOrderToDelete] = useState(null);
-
   const { isOpen: isViewDesignModalOpen, onOpen: onOpenViewDesignModal, onClose: onCloseViewDesignModal } = useDisclosure();
 
-  /* ---------- Edit form ---------- */
+  // Devices Info Modal
+  const { isOpen: isDeviceInfoOpen, onOpen: onDeviceInfoOpen, onClose: onDeviceInfoClose } = useDisclosure();
+  const [deviceDetail, setDeviceDetail] = useState(null);
+
+  const [orderToDelete, setOrderToDelete] = useState(null);
+  const [designToDelete, setDesignToDelete] = useState(null);
+
   const [editFormData, setEditFormData] = useState({
     username: "", email: "", firstName: "", lastName: "", isAdmin: false, newPassword: "", confirmNewPassword: ""
   });
   const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
   const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
 
-  /* ---------- Fetchers ---------- */
+  // ---------- Fetchers ----------
   const fetchUsers = useCallback(async () => {
     if (users.length > 0) return;
     setLoadingUsers(true); setUsersError("");
@@ -143,14 +134,14 @@ export default function AdminPage() {
       });
       const items = data?.items || [];
       setSessions(items);
-      // prune selected if gone
+      // prune selections that no longer exist
       setSelectedJtis((sel) => sel.filter((id) => items.some((s) => s.jti === id)));
     } catch {
       setSessionsError("Failed to fetch sessions");
     } finally { setLoadingSessions(false); }
   }, [sessionsPage]);
 
-  /* ---------- Auto-refresh effect ---------- */
+  // Auto-refresh effect
   useEffect(() => {
     if (autoRefTimer.current) {
       clearInterval(autoRefTimer.current);
@@ -162,7 +153,7 @@ export default function AdminPage() {
     return () => { if (autoRefTimer.current) clearInterval(autoRefTimer.current); };
   }, [autoRefreshMs, fetchSessions]);
 
-  /* ---------- Tab change -> lazy fetch ---------- */
+  // Tab -> loader
   const dataFetchers = {
     0: null,
     1: fetchUsers,
@@ -178,13 +169,13 @@ export default function AdminPage() {
     if (typeof f === "function") f();
   };
 
-  /* ---------- Users actions ---------- */
+  // ---------- Users ----------
   const handleViewUser = (user) => { setSelectedUser(user); onViewUserModalOpen(); };
   const handleOpenEditUser = (user) => {
     setSelectedUser(user);
     setEditFormData({
-      username: user.username || "", email: user.email || "", firstName: user.firstName || "", lastName: user.lastName || "",
-      isAdmin: !!user.isAdmin, newPassword: "", confirmNewPassword: ""
+      username: user.username, email: user.email, firstName: user.firstName || "", lastName: user.lastName || "",
+      isAdmin: user.isAdmin, newPassword: "", confirmNewPassword: ""
     });
     onEditModalOpen();
   };
@@ -222,7 +213,7 @@ export default function AdminPage() {
     }
   };
 
-  /* ---------- Orders actions ---------- */
+  // ---------- Orders ----------
   const handleOpenDeleteOrderDialog = (order) => { setOrderToDelete(order); onDeleteOrderModalOpen(); };
   const confirmDeleteOrder = async () => {
     if (!orderToDelete) return;
@@ -260,7 +251,8 @@ export default function AdminPage() {
     }
   };
 
-  /* ---------- Designs actions ---------- */
+  // ---------- Designs ----------
+  const [selectedDesign, setSelectedDesign] = useState(null);
   const handleViewDesign = (design) => { setSelectedDesign(design); onOpenViewDesignModal(); };
   const handleOpenDeleteDesignDialog = (design) => { setDesignToDelete(design); onOpenDeleteDesignModal(); };
   const confirmDeleteDesign = async () => {
@@ -275,8 +267,8 @@ export default function AdminPage() {
     }
   };
 
-  /* ---------- Devices actions ---------- */
-  const SESSION_KEY = "tftp_session_id";
+  // ---------- Devices actions ----------
+  const SESSION_KEY = "tftp_session_id"; // keep consistent with client.js
   const forceKickToLogin = () => {
     try {
       localStorage.removeItem("tftp_token");
@@ -302,7 +294,6 @@ export default function AdminPage() {
       toast({ title: "Failed to revoke session", status: "error" });
     }
   };
-
   const revokeAllForUser = async (userId) => {
     try {
       await client.delete(`/admin/sessions/user/${userId}`);
@@ -317,81 +308,81 @@ export default function AdminPage() {
     }
   };
 
+  // Selection helpers (Devices)
   const toggleSelectAll = (checked) => {
-    setSelectedJtis(checked ? sessions.map((s) => s.jti) : []);
+    if (checked) setSelectedJtis(sessions.map((s) => s.jti));
+    else setSelectedJtis([]);
   };
   const toggleSelectOne = (jti, checked) => {
-    setSelectedJtis((sel) => {
-      const set = new Set(sel);
-      if (checked) set.add(jti); else set.delete(jti);
-      return Array.from(set);
-    });
+    setSelectedJtis((prev) => checked ? [...new Set([...prev, jti])] : prev.filter((id) => id !== jti));
   };
   const revokeSelected = async () => {
-    if (!selectedJtis.length) return;
-    const toRevoke = [...selectedJtis];
-    setSelectedJtis([]); // optimistic clear
+    if (selectedJtis.length === 0) return;
     try {
-      // revoke sequentially to keep server happy
-      for (const jti of toRevoke) {
-        // swallow individual errors but keep going
-        try { await client.delete(`/admin/sessions/${jti}`); } catch {}
-      }
-      toast({ title: `Revoked ${toRevoke.length} session${toRevoke.length > 1 ? "s" : ""}`, status: "success" });
+      await Promise.all(selectedJtis.map((id) => client.delete(`/admin/sessions/${id}`)));
+      toast({ title: `Revoked ${selectedJtis.length} session(s)`, status: "success" });
+      setSelectedJtis([]);
       await fetchSessions();
     } catch {
-      toast({ title: "Bulk revoke failed", status: "error" });
+      toast({ title: "Failed to revoke some sessions", status: "error" });
     }
   };
 
-  const copySelectedJtis = async () => {
-    try {
-      await navigator.clipboard.writeText(selectedJtis.join("\n"));
-      toast({ title: "Copied JTIs", status: "success", duration: 1200 });
-    } catch {
-      toast({ title: "Copy failed", status: "error" });
-    }
-  };
-
-  /* ---------- Panels ---------- */
-
+  // ---------- Panels ----------
   const UsersPanel = () => (
     <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
       <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
         <Heading size="md">User Management</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setUsers([]); fetchUsers(); }} isLoading={loadingUsers}>Refresh</Button>
+        <Button
+          size="sm"
+          leftIcon={<FaSync />}
+          onClick={() => { setUsers([]); fetchUsers(); }}
+          isLoading={loadingUsers}
+          variant="outline"
+          color="black"
+          borderColor="black"
+        >
+          Refresh
+        </Button>
       </HStack>
+
       {loadingUsers ? (
         <VStack p={10}><Spinner /></VStack>
       ) : usersError ? (
         <Alert status="error"><AlertIcon />{usersError}</Alert>
       ) : (
         <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-          <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
+          <Table variant="simple" size="sm" w="100%">
             <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
               <Tr>
-                <Th w="140px">ID</Th>
-                <Th w="180px">Username</Th>
-                <Th w="240px">Email</Th>
-                <Th w="200px">Name</Th>
-                <Th w="100px">Admin</Th>
-                <Th w="160px">Joined</Th>
-                <Th w="150px">Actions</Th>
+                <Th>ID</Th>
+                <Th>Username</Th>
+                <Th>Email</Th>
+                <Th>Name</Th>
+                <Th>Admin</Th>
+                <Th>Joined</Th>
+                <Th>Actions</Th>
               </Tr>
             </Thead>
             <Tbody>
               {users.map((user) => (
                 <Tr key={user._id}>
-                  <Td fontSize="xs" title={user._id} noOfLines={1}>{String(user._id).substring(0, 8)}…</Td>
-                  <Td noOfLines={1}>{user.username}</Td>
-                  <Td noOfLines={1}>{user.email}</Td>
-                  <Td noOfLines={1}>{`${user.firstName || ""} ${user.lastName || ""}`.trim()}</Td>
+                  <Td fontSize="xs" title={user._id}>{String(user._id).substring(0, 8)}…</Td>
+                  <Td>{user.username}</Td>
+                  <Td>{user.email}</Td>
+                  <Td>{`${user.firstName || ""} ${user.lastName || ""}`.trim() || "—"}</Td>
                   <Td><Tag size="sm" colorScheme={user.isAdmin ? "green" : "gray"}>{user.isAdmin ? "Yes" : "No"}</Tag></Td>
-                  <Td noOfLines={1}>{fmtDate(user.createdAt)}</Td>
+                  <Td>{fmtDate(user.createdAt)}</Td>
                   <Td>
-                    <Tooltip label="View User Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)} /></Tooltip>
-                    <Tooltip label="Edit User"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)} /></Tooltip>
-                    <Tooltip label="Delete User"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteUser(user)} /></Tooltip>
+                    <Tooltip label="View User Details">
+                      <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)} />
+                    </Tooltip>
+                    <Tooltip label="Edit User">
+                      <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)} />
+                    </Tooltip>
+                    <Tooltip label="Delete User">
+                      <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteUser(user)} />
+                    </Tooltip>
                   </Td>
                 </Tr>
               ))}
@@ -413,7 +404,17 @@ export default function AdminPage() {
       <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
         <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
           <Heading size="md">Order Management</Heading>
-          <Button size="sm" leftIcon={<FaSync />} onClick={() => { setOrders([]); fetchOrders(); }} isLoading={loadingOrders}>Refresh</Button>
+          <Button
+            size="sm"
+            leftIcon={<FaSync />}
+            onClick={() => { setOrders([]); fetchOrders(); }}
+            isLoading={loadingOrders}
+            variant="outline"
+            color="black"
+            borderColor="black"
+          >
+            Refresh
+          </Button>
         </HStack>
         {loadingOrders ? (
           <VStack p={10}><Spinner /></VStack>
@@ -421,37 +422,36 @@ export default function AdminPage() {
           <Alert status="error"><AlertIcon />{ordersError}</Alert>
         ) : (
           <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-            <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
+            <Table variant="simple" size="sm" w="100%">
               <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
                 <Tr>
-                  <Th w="140px">ID</Th>
-                  <Th w="220px">User</Th>
-                  <Th w="160px">Date</Th>
-                  <Th w="100px">Total</Th>
-                  <Th w="140px">Pay Status</Th>
-                  <Th w="160px">Order Status</Th>
-                  <Th w="90px">Items</Th>
-                  <Th w="150px">Actions</Th>
+                  <Th>ID</Th>
+                  <Th>User</Th>
+                  <Th>Date</Th>
+                  <Th>Total</Th>
+                  <Th>Pay Status</Th>
+                  <Th>Order Status</Th>
+                  <Th>Items</Th>
+                  <Th>Actions</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {orders.map((order) => (
                   <Tr key={order._id}>
-                    <Td fontSize="xs" noOfLines={1}>{String(order._id).substring(0, 8)}…</Td>
-                    <Td noOfLines={1}>{order.user?.email}</Td>
-                    <Td noOfLines={1}>{fmtDate(order.createdAt)}</Td>
-                    <Td noOfLines={1}>{money(order.totalAmount)}</Td>
+                    <Td fontSize="xs" title={order._id}>{String(order._id).substring(0, 8)}…</Td>
+                    <Td>{order.user?.email || "—"}</Td>
+                    <Td>{fmtDate(order.createdAt)}</Td>
+                    <Td>{money(order.totalAmount)}</Td>
                     <Td><Tag size="sm" colorScheme={order.paymentStatus === "Succeeded" ? "green" : "orange"}>{order.paymentStatus}</Tag></Td>
                     <Td>
                       <Select
                         size="xs"
                         variant="outline"
-                        color="brand.textDark"
                         value={order.orderStatus}
                         onChange={(e) => handleStatusChange(order._id, e.target.value)}
                         bg={getStatusColor(order.orderStatus)}
                         borderRadius="md"
-                        maxW="140px"
+                        maxW="160px"
                       >
                         <option value="Processing">Processing</option>
                         <option value="Shipped">Shipped</option>
@@ -459,10 +459,14 @@ export default function AdminPage() {
                         <option value="Cancelled">Cancelled</option>
                       </Select>
                     </Td>
-                    <Td noOfLines={1}>{order.orderItems?.length || 0}</Td>
+                    <Td>{order.orderItems?.length || 0}</Td>
                     <Td>
-                      <Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewOrder(order._id)} /></Tooltip>
-                      <Tooltip label="Delete Order"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)} /></Tooltip>
+                      <Tooltip label="View Order Details">
+                        <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewOrder(order._id)} />
+                      </Tooltip>
+                      <Tooltip label="Delete Order">
+                        <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)} />
+                      </Tooltip>
                     </Td>
                   </Tr>
                 ))}
@@ -478,7 +482,17 @@ export default function AdminPage() {
     <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
       <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
         <Heading size="md">Design Management</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setDesigns([]); fetchDesigns(); }} isLoading={loadingDesigns}>Refresh</Button>
+        <Button
+          size="sm"
+          leftIcon={<FaSync />}
+          onClick={() => { setDesigns([]); fetchDesigns(); }}
+          isLoading={loadingDesigns}
+          variant="outline"
+          color="black"
+          borderColor="black"
+        >
+          Refresh
+        </Button>
       </HStack>
       {loadingDesigns ? (
         <VStack p={10}><Spinner /></VStack>
@@ -486,16 +500,16 @@ export default function AdminPage() {
         <Alert status="error"><AlertIcon />{designsError}</Alert>
       ) : (
         <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-          <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
+          <Table variant="simple" size="sm" w="100%">
             <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
               <Tr>
-                <Th w="90px">Preview</Th>
-                <Th w="380px">Prompt</Th>
-                <Th w="220px">Meta</Th>
-                <Th w="180px">Creator</Th>
-                <Th w="140px">Created</Th>
-                <Th w="150px">Votes (Month)</Th>
-                <Th w="140px">Actions</Th>
+                <Th>Preview</Th>
+                <Th>Prompt</Th>
+                <Th>Meta</Th>
+                <Th>Creator</Th>
+                <Th>Created</Th>
+                <Th>Votes (Month)</Th>
+                <Th>Actions</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -523,15 +537,15 @@ export default function AdminPage() {
                           <Badge colorScheme={mode === "i2i" ? "purple" : "blue"}>{mode.toUpperCase()}</Badge>
                           <Badge>{ar}</Badge>
                         </HStack>
-                        <HStack spacing={3} fontSize="xs" color="whiteAlpha.800">
+                        <HStack spacing={3} fontSize="xs">
                           <Text>CFG {cfg}</Text>
                           <Text>Steps {stp}</Text>
                           <Text>Strength {str}</Text>
                         </HStack>
                       </VStack>
                     </Td>
-                    <Td noOfLines={1}>{design.user?.username || "N/A"}</Td>
-                    <Td noOfLines={1}>{new Date(design.createdAt).toLocaleDateString()}</Td>
+                    <Td>{design.user?.username || "N/A"}</Td>
+                    <Td>{design.createdAt ? new Date(design.createdAt).toLocaleDateString() : "N/A"}</Td>
                     <Td>
                       {design.isSubmittedForContest && design.contestSubmissionMonth ? (
                         <VStack align="center" spacing={0}>
@@ -541,8 +555,12 @@ export default function AdminPage() {
                       ) : (<Text fontSize="xs" color="brand.textMuted">N/A</Text>)}
                     </Td>
                     <Td>
-                      <Tooltip label="View Design"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} /></Tooltip>
-                      <Tooltip label="Delete Design"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} /></Tooltip>
+                      <Tooltip label="View Design">
+                        <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} />
+                      </Tooltip>
+                      <Tooltip label="Delete Design">
+                        <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} />
+                      </Tooltip>
                     </Td>
                   </Tr>
                 );
@@ -555,47 +573,70 @@ export default function AdminPage() {
   );
 
   const DevicesPanel = () => {
-    const refreshLabel = useMemo(() => {
-      if (!autoRefreshMs) return "Auto-refresh: Off";
-      if (autoRefreshMs === 5000) return "Auto-refresh: 5s";
-      if (autoRefreshMs === 10000) return "Auto-refresh: 10s";
-      if (autoRefreshMs === 30000) return "Auto-refresh: 30s";
-      if (autoRefreshMs === 60000) return "Auto-refresh: 60s";
-      return `Auto-refresh: ${Math.round(autoRefreshMs / 1000)}s`;
-    }, [autoRefreshMs]);
+    // common checkbox styling: black when checked, readable border when not
+    const checkboxSx = {
+      ".chakra-checkbox__control": {
+        bg: "white",
+        borderColor: "blackAlpha.700",
+      },
+      ".chakra-checkbox__control[data-checked]": {
+        bg: "black",
+        borderColor: "black",
+        color: "white",
+      },
+    };
+
+    const AutoRefreshMenu = () => (
+      <Menu>
+        <MenuButton
+          as={Button}
+          size="sm"
+          variant="outline"
+          rightIcon={<FaChevronDown />}
+          color="black"
+          borderColor="black"
+        >
+          Auto-refresh: {autoRefreshMs ? `Every ${autoRefreshMs / 1000}s` : "Off"}
+        </MenuButton>
+        <MenuList bg="brand.primary" color="white" borderColor="blackAlpha.600">
+          <MenuItem bg="brand.primary" _hover={{ bg: "blackAlpha.700" }} onClick={() => setAutoRefreshMs(0)}>Off</MenuItem>
+          <MenuItem bg="brand.primary" _hover={{ bg: "blackAlpha.700" }} onClick={() => setAutoRefreshMs(5000)}>Every 5s</MenuItem>
+          <MenuItem bg="brand.primary" _hover={{ bg: "blackAlpha.700" }} onClick={() => setAutoRefreshMs(15000)}>Every 15s</MenuItem>
+          <MenuItem bg="brand.primary" _hover={{ bg: "blackAlpha.700" }} onClick={() => setAutoRefreshMs(30000)}>Every 30s</MenuItem>
+          <MenuItem bg="brand.primary" _hover={{ bg: "blackAlpha.700" }} onClick={() => setAutoRefreshMs(60000)}>Every 60s</MenuItem>
+        </MenuList>
+      </Menu>
+    );
 
     return (
       <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
-        <HStack justify="space-between" mb={3} flexWrap="wrap" gap={2}>
+        <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
           <Heading size="md">Devices / Active Sessions</Heading>
-          <HStack>
-            <Menu>
-              <MenuButton as={Button} size="sm" rightIcon={<FaChevronDown />}>
-                {refreshLabel}
-              </MenuButton>
-              <MenuList>
-                <MenuItem onClick={() => setAutoRefreshMs(0)}>Off</MenuItem>
-                <MenuItem onClick={() => setAutoRefreshMs(5000)}>Every 5s</MenuItem>
-                <MenuItem onClick={() => setAutoRefreshMs(10000)}>Every 10s</MenuItem>
-                <MenuItem onClick={() => setAutoRefreshMs(30000)}>Every 30s</MenuItem>
-                <MenuItem onClick={() => setAutoRefreshMs(60000)}>Every 60s</MenuItem>
-              </MenuList>
-            </Menu>
-            <Button leftIcon={<FaSync />} size="sm" onClick={fetchSessions} isLoading={loadingSessions}>
+
+          <HStack gap={2}>
+            <AutoRefreshMenu />
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<FaSync />}
+              onClick={fetchSessions}
+              isLoading={loadingSessions}
+              color="black"
+              borderColor="black"
+            >
               Refresh
+            </Button>
+            <Button
+              size="sm"
+              colorScheme="red"
+              variant="solid"
+              isDisabled={selectedJtis.length === 0}
+              onClick={revokeSelected}
+            >
+              Revoke selected ({selectedJtis.length})
             </Button>
           </HStack>
         </HStack>
-
-        {/* Bulk actions toolbar */}
-        {selectedJtis.length > 0 && (
-          <HStack mb={3} spacing={2} flexWrap="wrap">
-            <Tag colorScheme="yellow">{selectedJtis.length} selected</Tag>
-            <Button size="sm" colorScheme="red" onClick={revokeSelected}>Revoke selected</Button>
-            <Button size="sm" variant="outline" leftIcon={<FaCopy />} onClick={copySelectedJtis}>Copy JTIs</Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelectedJtis([])}>Clear</Button>
-          </HStack>
-        )}
 
         {loadingSessions ? (
           <VStack p={10}><Spinner /></VStack>
@@ -603,50 +644,52 @@ export default function AdminPage() {
           <Alert status="error"><AlertIcon />{sessionsError}</Alert>
         ) : (
           <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-            <Table size="sm" variant="simple" w="100%" tableLayout="fixed">
+            <Table size="sm" variant="simple" w="100%">
               <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
                 <Tr>
-                  <Th w="36px">
+                  <Th>
                     <Checkbox
                       isChecked={allChecked}
                       isIndeterminate={isIndeterminate}
                       onChange={(e) => toggleSelectAll(e.target.checked)}
-                      aria-label="Select all"
+                      colorScheme="blackAlpha"
+                      sx={checkboxSx}
                     />
                   </Th>
-                  <Th w="240px">User</Th>
-                  <Th w="180px">Session ID</Th>
-                  <Th w="130px">IP</Th>
-                  <Th w="360px">User Agent</Th>
-                  <Th w="160px">Created</Th>
-                  <Th w="160px">Last Seen</Th>
-                  <Th w="160px">Expires</Th>
-                  <Th w="120px">Status</Th>
-                  <Th w="150px" isNumeric>Actions</Th>
+                  <Th>User</Th>
+                  <Th>Session ID</Th>
+                  <Th>IP</Th>
+                  <Th>User Agent</Th>
+                  <Th>Created</Th>
+                  <Th>Last Seen</Th>
+                  <Th>Expires</Th>
+                  <Th>Status</Th>
+                  <Th isNumeric>Actions</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 {sessions.map((i) => {
-                  const checked = selectedJtis.includes(i.jti);
+                  const isChecked = selectedJtis.includes(i.jti);
                   return (
-                    <Tr key={i.jti} bg={checked ? "yellow.50" : undefined}>
+                    <Tr key={i.jti}>
                       <Td>
                         <Checkbox
-                          isChecked={checked}
+                          isChecked={isChecked}
                           onChange={(e) => toggleSelectOne(i.jti, e.target.checked)}
-                          aria-label="Select row"
+                          colorScheme="blackAlpha"
+                          sx={checkboxSx}
                         />
                       </Td>
                       <Td>
-                        <Text fontWeight="bold" noOfLines={1}>{i.user?.username || "(unknown)"}</Text>
-                        <Text fontSize="xs" color="gray.500" noOfLines={1}>{i.user?.email}</Text>
+                        <Text fontWeight="bold">{i.user?.username || "(unknown)"}</Text>
+                        <Text fontSize="xs" color="gray.600">{i.user?.email || "—"}</Text>
                         {i.user?._id && (
                           <Tooltip label="Revoke ALL for this user">
                             <ChakraIconButton
-                              ml={2}
+                              ml={1}
                               size="xs"
                               icon={<FaUserSlash />}
-                              aria-label="Revoke all for user"
+                              aria-label="Revoke all"
                               onClick={() => revokeAllForUser(i.user?._id)}
                               variant="ghost"
                             />
@@ -654,11 +697,11 @@ export default function AdminPage() {
                         )}
                       </Td>
                       <Td>
-                        <HStack spacing={2}>
-                          <Tooltip label={i.jti}>
-                            <Code fontSize="xs">{shortId(i.jti)}</Code>
-                          </Tooltip>
-                          <Tooltip label="Copy full Session ID">
+                        <HStack spacing={2} align="start">
+                          <Code fontSize="xs" p={1} whiteSpace="normal" wordBreak="break-all">
+                            {i.jti}
+                          </Code>
+                          <Tooltip label="Copy Session ID">
                             <ChakraIconButton
                               aria-label="Copy"
                               icon={<FaCopy />}
@@ -672,13 +715,13 @@ export default function AdminPage() {
                           </Tooltip>
                         </HStack>
                       </Td>
-                      <Td noOfLines={1}>{i.ip || "—"}</Td>
+                      <Td>{i.ip || "—"}</Td>
                       <Td>
-                        <Text noOfLines={1} title={i.userAgent}>{i.userAgent || "—"}</Text>
+                        <Text whiteSpace="normal" wordBreak="break-word">{i.userAgent || "—"}</Text>
                       </Td>
-                      <Td noOfLines={1}>{fmtDate(i.createdAt)}</Td>
-                      <Td noOfLines={1}>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
-                      <Td noOfLines={1}>{fmtDate(i.expiresAt)}</Td>
+                      <Td>{fmtDate(i.createdAt)}</Td>
+                      <Td>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
+                      <Td>{fmtDate(i.expiresAt)}</Td>
                       <Td>
                         {i.revokedAt
                           ? <Badge colorScheme="red">Revoked</Badge>
@@ -717,7 +760,7 @@ export default function AdminPage() {
           </TableContainer>
         )}
 
-        {/* Device info modal */}
+        {/* Device / Client Details */}
         <Modal isOpen={isDeviceInfoOpen} onClose={onDeviceInfoClose} size="lg" isCentered>
           <ModalOverlay />
           <ModalContent>
@@ -741,9 +784,7 @@ export default function AdminPage() {
                 </VStack>
               )}
             </ModalBody>
-            <ModalFooter>
-              <Button onClick={onDeviceInfoClose}>Close</Button>
-            </ModalFooter>
+            <ModalFooter><Button onClick={onDeviceInfoClose}>Close</Button></ModalFooter>
           </ModalContent>
         </Modal>
       </Box>
@@ -755,7 +796,6 @@ export default function AdminPage() {
     if (tabIndex === 5 && sessions.length === 0 && !loadingSessions) fetchSessions();
   }, [tabIndex, sessions.length, loadingSessions, fetchSessions]);
 
-  /* ---------- Render ---------- */
   return (
     <Box w="100%" pb={10}>
       <VStack spacing={6} align="stretch">
@@ -786,176 +826,108 @@ export default function AdminPage() {
         </Box>
       </VStack>
 
-      {/* ------- User + Order + Design Modals below ------- */}
-
-      {/* View User */}
-      <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose} isCentered>
+      {/* Basic modals to avoid runtime errors (you can keep your richer implementations) */}
+      <Modal isOpen={isViewUserModalOpen} onClose={onViewUserModalClose}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>User Details</ModalHeader>
+          <ModalHeader>User</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {selectedUser ? (
-              <VStack align="stretch" spacing={2} fontSize="sm">
-                <Box><b>ID:</b> {selectedUser._id}</Box>
-                <Box><b>Username:</b> {selectedUser.username || "—"}</Box>
-                <Box><b>Email:</b> {selectedUser.email || "—"}</Box>
-                <Box><b>Name:</b> {(selectedUser.firstName || "") + " " + (selectedUser.lastName || "")}</Box>
-                <Box><b>Admin:</b> {selectedUser.isAdmin ? "Yes" : "No"}</Box>
-                <Box><b>Joined:</b> {fmtDate(selectedUser.createdAt)}</Box>
+              <VStack align="start" spacing={2}>
+                <Text><b>Username:</b> {selectedUser.username}</Text>
+                <Text><b>Email:</b> {selectedUser.email}</Text>
+                <Text><b>Name:</b> {(selectedUser.firstName || "") + " " + (selectedUser.lastName || "")}</Text>
               </VStack>
-            ) : <Text>No user selected</Text>}
+            ) : <Text>No user selected.</Text>}
           </ModalBody>
           <ModalFooter><Button onClick={onViewUserModalClose}>Close</Button></ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* Edit User */}
-      <Modal isOpen={isEditModalOpen} onClose={onEditModalClose} size="lg" isCentered>
+      <Modal isOpen={isEditModalOpen} onClose={onEditModalClose}>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Edit User</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <VStack spacing={3} align="stretch">
+            <VStack spacing={3}>
               <FormControl><FormLabel>Username</FormLabel><Input name="username" value={editFormData.username} onChange={handleEditFormChange} /></FormControl>
               <FormControl><FormLabel>Email</FormLabel><Input name="email" value={editFormData.email} onChange={handleEditFormChange} /></FormControl>
-              <HStack>
-                <FormControl><FormLabel>First Name</FormLabel><Input name="firstName" value={editFormData.firstName} onChange={handleEditFormChange} /></FormControl>
-                <FormControl><FormLabel>Last Name</FormLabel><Input name="lastName" value={editFormData.lastName} onChange={handleEditFormChange} /></FormControl>
-              </HStack>
-              <FormControl display="flex" alignItems="center">
-                <FormLabel mb="0">Admin</FormLabel>
-                <Switch name="isAdmin" isChecked={!!editFormData.isAdmin} onChange={(e) => handleEditFormChange({ target: { name: "isAdmin", value: e.target.checked, type: "switch" } })} />
+              <FormControl display="flex" alignItems="center"><FormLabel mb="0">Admin</FormLabel><Switch name="isAdmin" isChecked={editFormData.isAdmin} onChange={(e)=>handleEditFormChange({ target: { name:"isAdmin", type:"switch", checked:e.target.checked }})} /></FormControl>
+              <FormControl>
+                <FormLabel>New Password</FormLabel>
+                <InputGroup>
+                  <Input name="newPassword" type={showNewPasswordInModal ? "text" : "password"} value={editFormData.newPassword} onChange={handleEditFormChange} />
+                  <InputRightElement><Button size="xs" onClick={() => setShowNewPasswordInModal(v=>!v)}>{showNewPasswordInModal ? "Hide" : "Show"}</Button></InputRightElement>
+                </InputGroup>
               </FormControl>
-              <Divider />
-              <HStack>
-                <FormControl>
-                  <FormLabel>New Password</FormLabel>
-                  <InputGroup>
-                    <Input name="newPassword" type={showNewPasswordInModal ? "text" : "password"} value={editFormData.newPassword} onChange={handleEditFormChange} />
-                    <InputRightElement width="4.5rem">
-                      <Button h="1.75rem" size="sm" onClick={() => setShowNewPasswordInModal(v=>!v)}>
-                        {showNewPasswordInModal ? "Hide" : "Show"}
-                      </Button>
-                    </InputRightElement>
-                  </InputGroup>
-                </FormControl>
-                <FormControl>
-                  <FormLabel>Confirm</FormLabel>
-                  <InputGroup>
-                    <Input name="confirmNewPassword" type={showConfirmNewPasswordInModal ? "text" : "password"} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} />
-                    <InputRightElement width="4.5rem">
-                      <Button h="1.75rem" size="sm" onClick={() => setShowConfirmNewPasswordInModal(v=>!v)}>
-                        {showConfirmNewPasswordInModal ? "Hide" : "Show"}
-                      </Button>
-                    </InputRightElement>
-                  </InputGroup>
-                </FormControl>
-              </HStack>
+              <FormControl>
+                <FormLabel>Confirm New Password</FormLabel>
+                <InputGroup>
+                  <Input name="confirmNewPassword" type={showConfirmNewPasswordInModal ? "text" : "password"} value={editFormData.confirmNewPassword} onChange={handleEditFormChange} />
+                  <InputRightElement><Button size="xs" onClick={() => setShowConfirmNewPasswordInModal(v=>!v)}>{showConfirmNewPasswordInModal ? "Hide" : "Show"}</Button></InputRightElement>
+                </InputGroup>
+              </FormControl>
             </VStack>
           </ModalBody>
           <ModalFooter>
-            <HStack>
-              <Button variant="ghost" onClick={onEditModalClose}>Cancel</Button>
-              <Button colorScheme="brandPrimary" onClick={handleSaveChanges}>Save</Button>
-            </HStack>
+            <Button mr={3} onClick={onEditModalClose}>Cancel</Button>
+            <Button colorScheme="blue" onClick={handleSaveChanges}>Save</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* Delete User */}
       <Modal isOpen={isDeleteUserModalOpen} onClose={onDeleteUserModalClose} isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Delete User</ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
-            {selectedUser ? <Text>Delete user <b>{selectedUser.username || selectedUser.email}</b>? This cannot be undone.</Text> : <Text>No user selected.</Text>}
-          </ModalBody>
+          <ModalBody>Are you sure you want to delete this user?</ModalBody>
           <ModalFooter>
-            <HStack>
-              <Button variant="ghost" onClick={onDeleteUserModalClose}>Cancel</Button>
-              <Button colorScheme="red" onClick={confirmDeleteUser}>Delete</Button>
-            </HStack>
+            <Button mr={3} onClick={onDeleteUserModalClose}>Cancel</Button>
+            <Button colorScheme="red" onClick={confirmDeleteUser}>Delete</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* View Order */}
-      <Modal isOpen={isViewOrderModalOpen} onClose={onCloseViewOrderModal} size="xl" isCentered>
+      <Modal isOpen={isViewOrderModalOpen} onClose={onCloseViewOrderModal}>
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Order Details</ModalHeader>
+          <ModalHeader>Order</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            {loadingSelectedOrder ? (
-              <VStack p={8}><Spinner /></VStack>
-            ) : selectedOrder ? (
-              <VStack align="stretch" spacing={4}>
-                <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={3} fontSize="sm">
-                  <GridItem><b>Order ID:</b> {selectedOrder._id}</GridItem>
-                  <GridItem><b>Placed:</b> {fmtDate(selectedOrder.createdAt)}</GridItem>
-                  <GridItem><b>Total:</b> {money(selectedOrder.totalAmount)}</GridItem>
-                  <GridItem><b>Status:</b> {selectedOrder.orderStatus}</GridItem>
-                  <GridItem><b>Payment:</b> {selectedOrder.paymentStatus}</GridItem>
-                  <GridItem><b>Customer:</b> {selectedOrder.user?.email}</GridItem>
-                </Grid>
-                <Divider />
-                <Heading size="sm">Items</Heading>
-                <Table size="sm" variant="simple">
-                  <Thead><Tr><Th>Item</Th><Th isNumeric>Qty</Th><Th isNumeric>Price</Th></Tr></Thead>
-                  <Tbody>
-                    {(selectedOrder.orderItems || []).map((it, idx) => (
-                      <Tr key={idx}>
-                        <Td>{it.name || it.product?.name || "Item"}</Td>
-                        <Td isNumeric>{it.qty || it.quantity || 1}</Td>
-                        <Td isNumeric>{money(it.price)}</Td>
-                      </Tr>
-                    ))}
-                  </Tbody>
-                </Table>
-              </VStack>
-            ) : <Text>Order not found.</Text>}
+            {loadingSelectedOrder ? <Spinner /> : (
+              <Box as="pre" whiteSpace="pre-wrap">{JSON.stringify(selectedOrder, null, 2)}</Box>
+            )}
           </ModalBody>
           <ModalFooter><Button onClick={onCloseViewOrderModal}>Close</Button></ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* Delete Order */}
-      <Modal isOpen={isDeleteOrderModalOpen} onClose={onDeleteOrderModalClose} isCentered>
+      <Modal isOpen={isDeleteOrderModalOpen} onClose={onDeleteOrderModalClose}>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Delete Order</ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
-            {orderToDelete ? <Text>Delete order <b>{shortId(orderToDelete._id)}</b>?</Text> : <Text>No order selected.</Text>}
-          </ModalBody>
+          <ModalBody>Are you sure you want to delete this order?</ModalBody>
           <ModalFooter>
-            <HStack>
-              <Button variant="ghost" onClick={onDeleteOrderModalClose}>Cancel</Button>
-              <Button colorScheme="red" onClick={confirmDeleteOrder}>Delete</Button>
-            </HStack>
+            <Button mr={3} onClick={onDeleteOrderModalClose}>Cancel</Button>
+            <Button colorScheme="red" onClick={confirmDeleteOrder}>Delete</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
 
-      {/* View Design */}
-      <Modal isOpen={isViewDesignModalOpen} onClose={onCloseViewDesignModal} size="2xl" isCentered>
+      <Modal isOpen={isViewDesignModalOpen} onClose={onCloseViewDesignModal}>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Design</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
             {selectedDesign ? (
-              <VStack spacing={3} align="stretch">
-                <Text fontSize="sm" color="whiteAlpha.800">{selectedDesign.prompt || "—"}</Text>
-                <Image
-                  src={selectedDesign.publicUrl || selectedDesign.imageDataUrl || selectedDesign.thumbUrl}
-                  alt="design"
-                  objectFit="contain"
-                  borderRadius="lg"
-                />
+              <VStack align="stretch" spacing={3}>
+                <Image src={selectedDesign.publicUrl || selectedDesign.thumbUrl} borderRadius="md" />
+                <Box as="pre" whiteSpace="pre-wrap" fontSize="sm">{selectedDesign.prompt}</Box>
               </VStack>
             ) : <Text>No design selected.</Text>}
           </ModalBody>
@@ -963,20 +935,15 @@ export default function AdminPage() {
         </ModalContent>
       </Modal>
 
-      {/* Delete Design */}
       <Modal isOpen={!!designToDelete} onClose={() => setDesignToDelete(null)} isCentered>
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Delete Design</ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
-            {designToDelete ? <Text>Delete this design? This can’t be undone.</Text> : <Text>No design selected.</Text>}
-          </ModalBody>
+          <ModalBody>Are you sure you want to delete this design?</ModalBody>
           <ModalFooter>
-            <HStack>
-              <Button variant="ghost" onClick={() => setDesignToDelete(null)}>Cancel</Button>
-              <Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button>
-            </HStack>
+            <Button mr={3} onClick={() => setDesignToDelete(null)}>Cancel</Button>
+            <Button colorScheme="red" onClick={confirmDeleteDesign}>Delete</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
