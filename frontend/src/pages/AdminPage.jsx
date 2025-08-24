@@ -11,7 +11,7 @@ import {
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
   FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy, FaChevronDown,
-  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge
+  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge, FaSearch, FaSort
 } from "react-icons/fa";
 
 import { client, setAuthHeader } from "../api/client";
@@ -73,6 +73,13 @@ export default function AdminPage() {
   // Devices auto-refresh
   const [autoRefreshMs, setAutoRefreshMs] = useState(0);
   const autoRefTimer = useRef(null);
+
+  // Devices filtering/sorting/pagination
+  const [devSearch, setDevSearch] = useState("");
+  const [devStatus, setDevStatus] = useState("active"); // active | revoked | expired | all
+  const [devSort, setDevSort] = useState("lastSeenDesc"); // createdDesc | createdAsc | lastSeenDesc | lastSeenAsc
+  const [devPage, setDevPage] = useState(1);
+  const devPageSize = 25;
 
   // Audit logs
   const [auditsLoaded, setAuditsLoaded] = useState(false);
@@ -136,7 +143,7 @@ export default function AdminPage() {
     setLoadingSessions(true); setSessionsError("");
     try {
       const { data } = await client.get("/admin/sessions", {
-        params: { page: sessionsPage, limit: 100, activeOnly: true }
+        params: { page: sessionsPage, limit: 100, activeOnly: false } // show all so filters work
       });
       const items = data?.items || [];
       setSessions(items);
@@ -278,7 +285,7 @@ export default function AdminPage() {
       await client.delete(`/admin/designs/${designToDelete._id}`);
       toast({ title: "Design Deleted", status: "success" });
       setDesigns((prev) => prev.filter((d) => d._id !== designToDelete._id));
-      setDesignToDelete(null); // fixed: close properly
+      setDesignToDelete(null);
     } catch (e) {
       toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
     }
@@ -615,7 +622,7 @@ export default function AdminPage() {
                           <ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} />
                         </Tooltip>
                         <Tooltip label="Delete Design">
-                          <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} />
+                          <ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => setDesignToDelete(design)} />
                         </Tooltip>
                       </Td>
                     </Tr>
@@ -651,6 +658,54 @@ export default function AdminPage() {
       },
     };
 
+    // derive filtered + sorted list
+    const now = new Date();
+    const filtered = useMemo(() => {
+      const q = devSearch.trim().toLowerCase();
+      return sessions.filter((s) => {
+        const expire = s.expiresAt ? new Date(s.expiresAt) : null;
+        const isExpired = expire ? expire < now : false;
+        const statusMatch =
+          devStatus === "all" ? true :
+          devStatus === "revoked" ? !!s.revokedAt :
+          devStatus === "expired" ? (!s.revokedAt && isExpired) :
+          devStatus === "active" ? (!s.revokedAt && !isExpired) : true;
+
+        if (!statusMatch) return false;
+
+        if (!q) return true;
+        const hay = [
+          s.jti,
+          s.ip,
+          s.userAgent,
+          s.user?.username,
+          s.user?.email,
+        ].filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessions, devSearch, devStatus]);
+
+    const sorted = useMemo(() => {
+      const arr = [...filtered];
+      const byDate = (a, b, field) => {
+        const da = a[field] ? new Date(a[field]).getTime() : 0;
+        const db = b[field] ? new Date(b[field]).getTime() : 0;
+        return db - da;
+      };
+      switch (devSort) {
+        case "createdAsc": arr.sort((a, b) => -byDate(a, b, "createdAt")); break;
+        case "createdDesc": arr.sort((a, b) => byDate(a, b, "createdAt")); break;
+        case "lastSeenAsc": arr.sort((a, b) => -byDate(a, b, "lastSeenAt")); break;
+        case "lastSeenDesc":
+        default: arr.sort((a, b) => byDate(a, b, "lastSeenAt"));
+      }
+      return arr;
+    }, [filtered, devSort]);
+
+    const pageCount = Math.ceil(sorted.length / devPageSize) || 1;
+    const pageItems = sorted.slice(0, devPage * devPageSize);
+
     const AutoRefreshMenu = () => (
       <Menu>
         <MenuButton
@@ -673,18 +728,65 @@ export default function AdminPage() {
       </Menu>
     );
 
+    // status badge
+    const statusBadge = (i) => {
+      if (i.revokedAt) return <Badge colorScheme="red">Revoked</Badge>;
+      if (new Date(i.expiresAt) < new Date()) return <Badge>Expired</Badge>;
+      return <Badge colorScheme="green">Active</Badge>;
+    };
+
+    // helper for short session ID (to match audit logs UX)
+    const shortSession = (id = "", chunk = 6) =>
+      id.length <= chunk * 2 ? id : `${id.slice(0, chunk)}…${id.slice(-chunk)}`;
+
     return (
       <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
         <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
           <Heading size="md">Devices / Active Sessions</Heading>
 
-          <HStack gap={2}>
+          <HStack gap={2} flexWrap="wrap">
+            <HStack>
+              <Input
+                size="sm"
+                placeholder="Search username, email, IP or Session ID"
+                value={devSearch}
+                onChange={(e) => { setDevSearch(e.target.value); setDevPage(1); }}
+                leftIcon={<FaSearch />}
+                w="260px"
+              />
+              <Select
+                size="sm"
+                value={devStatus}
+                onChange={(e) => { setDevStatus(e.target.value); setDevPage(1); }}
+                w="160px"
+                title="Status filter"
+              >
+                <option value="active">Active</option>
+                <option value="expired">Expired</option>
+                <option value="revoked">Revoked</option>
+                <option value="all">All</option>
+              </Select>
+              <Select
+                size="sm"
+                value={devSort}
+                onChange={(e) => setDevSort(e.target.value)}
+                w="190px"
+                title="Sort order"
+                icon={<FaSort />}
+              >
+                <option value="lastSeenDesc">Last Seen ↓</option>
+                <option value="lastSeenAsc">Last Seen ↑</option>
+                <option value="createdDesc">Created ↓</option>
+                <option value="createdAsc">Created ↑</option>
+              </Select>
+            </HStack>
+
             <AutoRefreshMenu />
             <Button
               size="sm"
               variant="outline"
               leftIcon={<FaSync />}
-              onClick={fetchSessions}
+              onClick={() => { fetchSessions(); setDevPage(1); }}
               isLoading={loadingSessions}
               color="black"
               borderColor="black"
@@ -708,121 +810,147 @@ export default function AdminPage() {
         ) : sessionsError ? (
           <Alert status="error"><AlertIcon />{sessionsError}</Alert>
         ) : (
-          <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-            <Table size="sm" variant="simple" w="100%">
-              <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-                <Tr>
-                  <Th>
-                    <Checkbox
-                      isChecked={allChecked}
-                      isIndeterminate={isIndeterminate}
-                      onChange={(e) => toggleSelectAll(e.target.checked)}
-                      colorScheme="blackAlpha"
-                      sx={checkboxSx}
-                    />
-                  </Th>
-                  <Th>User</Th>
-                  <Th>Session ID</Th>
-                  <Th>IP</Th>
-                  <Th>User Agent</Th>
-                  <Th>Created</Th>
-                  <Th>Last Seen</Th>
-                  <Th>Expires</Th>
-                  <Th>Status</Th>
-                  <Th isNumeric>Actions</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {sessions.map((i) => {
-                  const isChecked = selectedJtis.includes(i.jti);
-                  return (
-                    <Tr key={i.jti}>
-                      <Td>
-                        <Checkbox
-                          isChecked={isChecked}
-                          onChange={(e) => toggleSelectOne(i.jti, e.target.checked)}
-                          colorScheme="blackAlpha"
-                          sx={checkboxSx}
-                        />
-                      </Td>
-                      <Td>
-                        <Text fontWeight="bold">{i.user?.username || "(unknown)"}</Text>
-                        <Text fontSize="xs" color="gray.600">{i.user?.email || "—"}</Text>
-                        {i.user?._id && (
-                          <Tooltip label="Revoke ALL for this user">
-                            <ChakraIconButton
-                              ml={1}
-                              size="xs"
-                              icon={<FaUserSlash />}
-                              aria-label="Revoke all"
-                              onClick={() => revokeAllForUser(i.user?._id)}
-                              variant="ghost"
-                            />
-                          </Tooltip>
-                        )}
-                      </Td>
-                      <Td>
-                        <HStack spacing={2} align="start">
-                          <Code fontSize="xs" p={1} whiteSpace="normal" wordBreak="break-all">
-                            {i.jti}
-                          </Code>
-                          <Tooltip label="Copy Session ID">
-                            <ChakraIconButton
-                              aria-label="Copy"
-                              icon={<FaCopy />}
-                              size="xs"
-                              variant="ghost"
-                              onClick={() => {
-                                navigator.clipboard.writeText(i.jti);
-                                toast({ title: "Session ID copied", status: "success", duration: 1200 });
-                              }}
-                            />
-                          </Tooltip>
-                        </HStack>
-                      </Td>
-                      <Td>{i.ip || "—"}</Td>
-                      <Td>
-                        <Text whiteSpace="normal" wordBreak="break-word">{i.userAgent || "—"}</Text>
-                      </Td>
-                      <Td>{fmtDate(i.createdAt)}</Td>
-                      <Td>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
-                      <Td>{fmtDate(i.expiresAt)}</Td>
-                      <Td>
-                        {i.revokedAt
-                          ? <Badge colorScheme="red">Revoked</Badge>
-                          : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)
-                        }
-                      </Td>
-                      <Td isNumeric>
-                        <HStack justify="flex-end" spacing={1}>
-                          <Tooltip label="Info">
-                            <ChakraIconButton
-                              size="sm"
-                              icon={<FaInfoCircle />}
-                              aria-label="Info"
-                              variant="ghost"
-                              onClick={() => { setDeviceDetail(i); onDeviceInfoOpen(); }}
-                            />
-                          </Tooltip>
-                          {!i.revokedAt && (
-                            <Tooltip label="Revoke this session">
+          <>
+            <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
+              <Table size="sm" variant="simple" w="100%">
+                <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
+                  <Tr>
+                    <Th>
+                      <Checkbox
+                        isChecked={allChecked}
+                        isIndeterminate={isIndeterminate}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        colorScheme="blackAlpha"
+                        sx={checkboxSx}
+                      />
+                    </Th>
+                    <Th>User</Th>
+                    <Th>Session ID</Th>
+                    <Th>IP</Th>
+                    <Th>User Agent</Th>
+                    <Th>Created</Th>
+                    <Th>Last Seen</Th>
+                    <Th>Expires</Th>
+                    <Th>Status</Th>
+                    <Th isNumeric>Actions</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {pageItems.map((i) => {
+                    const isChecked = selectedJtis.includes(i.jti);
+                    const mySession = (typeof window !== "undefined") && localStorage.getItem(SESSION_KEY) === i.jti;
+
+                    return (
+                      <Tr key={i.jti} bg={mySession ? "yellow.50" : undefined}>
+                        <Td>
+                          <Checkbox
+                            isChecked={isChecked}
+                            onChange={(e) => toggleSelectOne(i.jti, e.target.checked)}
+                            colorScheme="blackAlpha"
+                            sx={checkboxSx}
+                          />
+                        </Td>
+                        <Td>
+                          <Text fontWeight="bold">{i.user?.username || "(unknown)"}</Text>
+                          <Text fontSize="xs" color="gray.600">{i.user?.email || "—"}</Text>
+                          {i.user?._id && (
+                            <Tooltip label="Revoke ALL sessions for this user">
                               <ChakraIconButton
-                                size="sm"
-                                icon={<FaTrashAlt />}
-                                aria-label="Revoke"
-                                onClick={() => revokeSession(i.jti)}
+                                ml={1}
+                                size="xs"
+                                icon={<FaUserSlash />}
+                                aria-label="Revoke all"
+                                onClick={() => revokeAllForUser(i.user?._id)}
                                 variant="ghost"
                               />
                             </Tooltip>
                           )}
-                        </HStack>
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </Tbody>
-            </Table>
-          </TableContainer>
+                        </Td>
+                        <Td>
+                          <HStack spacing={2} align="start">
+                            {/* Match Audit Logs UX: short code with tooltip + copy */}
+                            <Tooltip label={i.jti}>
+                              <Code fontSize="xs" p={1} whiteSpace="normal" wordBreak="break-all">
+                                {shortSession(i.jti)}
+                              </Code>
+                            </Tooltip>
+                            <Tooltip label="Copy Session ID">
+                              <ChakraIconButton
+                                aria-label="Copy"
+                                icon={<FaCopy />}
+                                size="xs"
+                                variant="ghost"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(i.jti);
+                                  toast({ title: "Session ID copied", status: "success", duration: 1200 });
+                                }}
+                              />
+                            </Tooltip>
+                          </HStack>
+                        </Td>
+                        <Td>{i.ip || "—"}</Td>
+                        <Td>
+                          <Text whiteSpace="normal" wordBreak="break-word" noOfLines={1} title={i.userAgent || ""}>
+                            {i.userAgent || "—"}
+                          </Text>
+                        </Td>
+                        <Td>{fmtDate(i.createdAt)}</Td>
+                        <Td>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
+                        <Td>{fmtDate(i.expiresAt)}</Td>
+                        <Td>{statusBadge(i)}</Td>
+                        <Td isNumeric>
+                          <HStack justify="flex-end" spacing={1}>
+                            <Tooltip label="Device / Client details">
+                              <ChakraIconButton
+                                size="sm"
+                                icon={<FaInfoCircle />}
+                                aria-label="Info"
+                                variant="ghost"
+                                onClick={() => { setDeviceDetail(i); onDeviceInfoOpen(); }}
+                              />
+                            </Tooltip>
+                            {!i.revokedAt && (
+                              <Tooltip label="Revoke this session">
+                                <ChakraIconButton
+                                  size="sm"
+                                  icon={<FaTrashAlt />}
+                                  aria-label="Revoke"
+                                  onClick={() => revokeSession(i.jti)}
+                                  variant="ghost"
+                                />
+                              </Tooltip>
+                            )}
+                          </HStack>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </Tbody>
+              </Table>
+            </TableContainer>
+
+            <Flex mt={3} justify="space-between" align="center" flexWrap="wrap" gap={2}>
+              <Text fontSize="sm" color="gray.600">
+                Showing {pageItems.length} of {sorted.length} (Page {devPage} / {pageCount})
+              </Text>
+              <HStack>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setDevPage(1); fetchSessions(); }}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setDevPage((p) => p + 1)}
+                  isDisabled={devPage * devPageSize >= sorted.length}
+                >
+                  Show more
+                </Button>
+              </HStack>
+            </Flex>
+          </>
         )}
 
         {/* Device / Client Details */}
@@ -834,7 +962,10 @@ export default function AdminPage() {
             <ModalBody>
               {deviceDetail && (
                 <VStack align="stretch" spacing={3} fontSize="sm">
-                  <Box><b>User:</b> {deviceDetail.user?.username || "(unknown)"} {deviceDetail.user?.email ? ` <${deviceDetail.user.email}>` : ""}</Box>
+                  <Box>
+                    <b>User:</b> {deviceDetail.user?.username || "(unknown)"}{" "}
+                    {deviceDetail.user?.email ? ` <${deviceDetail.user.email}>` : ""}
+                  </Box>
                   <Box><b>Session ID:</b> {deviceDetail.jti}</Box>
                   <Box><b>IP:</b> {deviceDetail.ip || "—"}</Box>
                   <Box><b>User Agent:</b> {deviceDetail.userAgent || "—"}</Box>
