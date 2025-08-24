@@ -1,83 +1,76 @@
 // backend/middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
-import mongoose from "mongoose";
 import User from "../models/User.js";
-import RefreshTokenModel from "../models/RefreshToken.js";
 
-const RefreshToken = mongoose.models.RefreshToken || RefreshTokenModel;
-
-/** Create a signed access token (Bearer JWT) */
-export function signAccessToken(userId) {
-  const secret = process.env.JWT_SECRET || "dev-secret-change-me";
-  return jwt.sign({ id: userId }, secret, { expiresIn: "7d" });
-}
-function getTokenFromHeader(req) {
-  const auth = req.headers.authorization || "";
-  if (auth.startsWith("Bearer ")) return auth.slice(7);
-  return null;
+/** Read "Bearer <token>" from Authorization header */
+function readBearer(req) {
+  const raw = req.headers?.authorization || req.headers?.Authorization || "";
+  if (!raw || !raw.startsWith("Bearer ")) return null;
+  return raw.slice(7).trim();
 }
 
 /**
- * NEW: require a valid session id header + unrevoked/active RefreshToken row.
- * Header: X-Session-Id
+ * Factory that enforces:
+ *  - Valid JWT always
+ *  - Optional or required x-session-id (device binding)
  */
-async function assertActiveSession(req, userId) {
-  const jti = req.headers["x-session-id"];
-  if (!jti) {
-    const err = new Error("Session missing");
-    err.statusCode = 401;
-    throw err;
-  }
-  const row = await RefreshToken.findOne({ jti, user: userId }).lean();
-  if (!row) {
-    const err = new Error("Session not found");
-    err.statusCode = 401;
-    throw err;
-  }
-  if (row.revokedAt) {
-    const err = new Error("Session revoked");
-    err.statusCode = 401;
-    throw err;
-  }
-  if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
-    const err = new Error("Session expired");
-    err.statusCode = 401;
-    throw err;
-  }
-  // soft heartbeat (non-blocking)
-  RefreshToken.updateOne({ _id: row._id }, { $set: { lastSeenAt: new Date() } }).catch(() => {});
-}
+const baseProtect = (requireSession) =>
+  asyncHandler(async (req, res, next) => {
+    const token = readBearer(req);
+    if (!token) {
+      return res.status(401).json({ message: "Not authorized: token missing" });
+    }
 
-export const protect = asyncHandler(async (req, res, next) => {
-  const token = getTokenFromHeader(req);
-  if (!token) {
-    res.status(401);
-    throw new Error("Not authorized, token missing");
-  }
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ message: "Not authorized: invalid token" });
+    }
 
-  try {
-    const secret = process.env.JWT_SECRET || "dev-secret-change-me";
-    const decoded = jwt.verify(token, secret);
     const user = await User.findById(decoded.id).select("-password");
     if (!user) {
-      res.status(401);
-      throw new Error("Not authorized, user not found");
+      return res.status(401).json({ message: "Not authorized: user not found" });
     }
-    // Enforce active session
-    await assertActiveSession(req, user._id);
 
     req.user = user;
-    next();
-  } catch (err) {
-    const code = err?.statusCode || 401;
-    res.status(code);
-    throw new Error(err?.message || "Not authorized");
-  }
-});
 
-export const admin = (req, res, next) => {
-  if (req.user && req.user.isAdmin) return next();
-  res.status(403);
-  throw new Error("Admin privileges required");
-};
+    // capture session id if present
+    const sid =
+      req.headers["x-session-id"] ||
+      req.headers["X-Session-Id"] ||
+      req.headers["x-sessionid"] ||
+      "";
+    if (sid) req.sessionId = String(sid);
+
+    // lightweight client/net info (optional)
+    req.client = {
+      ua: req.headers["user-agent"] || "",
+      ip:
+        req.headers["x-forwarded-for"]?.toString().split(",")[0]?.trim() ||
+        req.ip ||
+        req.connection?.remoteAddress ||
+        "",
+    };
+
+    if (requireSession && !req.sessionId) {
+      return res.status(401).json({ message: "Session missing" });
+    }
+
+    return next();
+  });
+
+/**
+ * Exports:
+ *  - protect: JWT required; session OPTIONAL (use for email, profile, most APIs)
+ *  - protectWithSession: JWT + x-session-id REQUIRED (use for device-bound actions)
+ *  - requireAdmin: gate admin routes
+ */
+export const protect = baseProtect(false);
+export const protectWithSession = baseProtect(true);
+
+export function requireAdmin(req, res, next) {
+  if (req?.user?.isAdmin) return next();
+  return res.status(403).json({ message: "Admin access required" });
+}
