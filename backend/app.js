@@ -7,7 +7,7 @@ import connectDB from "./config/db.js";
 import authRoutes from "./routes/auth.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import designsRoutes from "./routes/designs.js";
-import storefrontProductRoutes from "./routes/storefrontProductRoutes.js";
+import storefrontRoutes from "./routes/storefrontProductRoutes.js";
 import checkoutRoutes from "./routes/checkout.js";
 import stripeWebhookRoutes from "./routes/stripeWebhook.js";
 import printfulRoutes from "./routes/printful.js";
@@ -31,14 +31,14 @@ const app = express();
 // Trust Render/Reverse proxy so req.ip & x-forwarded-for work
 app.set("trust proxy", true);
 
-// --- Health check for Render ---
+// --- Health check ---
 app.get("/health", (_req, res) => res.send("OK"));
 
 /**
  * Dependency-free CORS:
- *  - Allows your Vercel app + localhost
- *  - Handles preflight properly (reflects Access-Control-Request-Headers)
- *  - Whitelists the custom telemetry/session headers you use
+ * - Allows your Vercel app + localhost
+ * - Handles preflight
+ * - Whitelists custom headers you use (Authorization + x-session-id)
  */
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
   "https://teesfromthepast.vercel.app,http://localhost:5173,http://localhost:3000")
@@ -54,12 +54,6 @@ const DEFAULT_ALLOWED_HEADERS = [
   "x-client-info",
   "x-client-timezone",
   "x-client-lang",
-  "x-client-viewport",
-  "x-client-platform",
-  "x-client-ua",
-  "x-client-localtime",
-  "x-client-devicememory",
-  "x-client-cpucores",
 ];
 
 app.use((req, res, next) => {
@@ -74,30 +68,30 @@ app.use((req, res, next) => {
     "Access-Control-Allow-Headers",
     (requested && String(requested)) || DEFAULT_ALLOWED_HEADERS.join(", ")
   );
-  // We use Bearer tokens (not cookies) → do not set Access-Control-Allow-Credentials
+  // Using Bearer tokens, not cookies (no credentials needed)
   if (req.method === "OPTIONS") return res.status(204).end();
   next();
 });
 
 /**
  * IMPORTANT: Mount Stripe webhook BEFORE any JSON body parser
- * so `express.raw()` in the route can read the untouched body.
+ * so `express.raw()` inside the webhook route can read the untouched body.
  */
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // JSON body parsing (after Stripe)
 app.use(express.json({ limit: "10mb" }));
 
-// --- Routes ---
+// --- Public & user routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
-app.use("/api/storefront/product", storefrontProductRoutes);
+app.use("/api/storefront", storefrontRoutes);       // <-- your router: /products, /shop-data, /product/:slug
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
 
-// Admin feature routes
+// --- Admin routes (protected) ---
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
@@ -105,7 +99,7 @@ app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/admin/sessions", adminSessionRoutes);
 app.use("/api/admin/audit", adminAuditRoutes);
 
-// Public extras
+// --- Public extras ---
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
 

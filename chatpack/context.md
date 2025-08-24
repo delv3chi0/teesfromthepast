@@ -1,2308 +1,2135 @@
-# Context (generated)
-- Generated: 2025-08-23T13:41:14Z
-- Base: `origin/main` → HEAD
-- Files included: 15
+# CHAT CONTEXT — 2025-08-23 19:18 PDT
 
-## ARCHITECTURE.md
+> Paste this entire file into a new chat to bring the assistant up to speed.
+
+---
+# HANDOFF (Paste this at the TOP of a new chat)
+
+**Project:** TeesFromThePast — React + Chakra, Fabric.js Product Studio, Admin Console, small Express API.
+
+**What the next assistant MUST know:**
+- Admin tabs exist and must remain readable; Devices tab has bulk checkboxes and auto-refresh; show full session IDs (wrapping is OK).
+- Product Studio exports a transparent PNG sized to the placement and uploads to `/upload/printfile`.
+
+**How to get context fast:**
+- I have a folder `chatpack/` in the repo. The file `chatpack/context.md` is the one-file snapshot of the codebase & docs. Ask me for it if I haven’t pasted it yet.
+
+**Rules for changes:**
+- Provide *drop-in* files. Don’t give line-patch instructions.
+- Do not “pretty refactor” working pages unless asked.
+
+---
+
+## Architecture (short)
+# ARCHITECTURE
+
+Plain-English map of what this project is and how pieces fit.
+
+---
+
+## 1) What this app does
+
+- A **Product Studio** where customers place art/text onto products (tees, hats, etc.), then export a **print-ready PNG** sized to the placement and add it to the cart.
+- An **Admin Console** to manage **Users, Orders, Designs, Inventory, and Device Sessions**.
+- A small set of **REST APIs** used by the frontend.
+
+---
+
+## 2) High-level layout
+
+frontend/
+src/
+api/ ← Axios client (auth header helpers)
+components/ ← Re-usable UI bits (InventoryPanel, etc.)
+context/ ← Auth provider (useAuth)
+data/ ← mockupsRegistry helpers (placements, colors, images)
+pages/
+admin/ ← AdminDashboard.jsx
+AdminPage.jsx (tabs)
+AdminAuditLogs.jsx
+ProductStudio.jsx (editor/exporter)
+backend/ ← Express API (not included here but referenced by API calls)
+
+markdown
+Copy
+Edit
+
+---
+
+## 3) Frontend stack
+
+- **React (hooks)** for UI
+- **Chakra UI** for components and theming
+- **fabric.js** on `ProductStudio` canvas
+- **Axios** for HTTP
+- **React Router** for routing
+
+Theme keywords (used by Admin): `brand.primary`, `brand.paper`, `brand.cardBlue`, `brand.textLight`, etc.
+
+---
+
+## 4) Important flows
+
+### 4.1 Auth & sessions
+- Client stores JWT + a custom **`tftp_session_id`** in `localStorage`.
+- Each axios request includes `Authorization: Bearer <token>` and `x-session-id: <id>`.
+- **Admin → Devices tab** calls `/admin/sessions?page=…&limit=…&activeOnly=true`.
+- Revoke current session → clears local storage and redirects to `/login?redirect=/admin`.
+
+### 4.2 Designs
+- Design objects may have:  
+  `thumbUrl`, `publicUrl`, `imageDataUrl`, `settings` (with `mode`, `aspectRatio`, `cfgScale`, `steps`, `imageStrength`), voting info.
+
+### 4.3 Product Studio export
+- **Placement math** comes from `data/mockupsRegistry` via `getPlacement({ slug, view, productType })` returning `{ x,y,w,h }` as fractions of the mockup image.
+- **Export size** (pixels) from `getExportPixelSize(slug, view, productType)`; front/back default 4200×4800, sides 3600×3600 (can be tuned).
+- We create an **offscreen fabric canvas** at export resolution, clone object layers into it, and export a **transparent PNG**.
+- Upload POST to `/upload/printfile` → returns `{ publicUrl, thumbUrl, publicId }`.
+- We store a checkout line item with both **print file** and **preview**.
+
+### 4.4 Orders
+- Admin can set `orderStatus` among: Processing / Shipped / Delivered / Cancelled.
+- `paymentStatus` shown as Tag (Succeeded / …).
+
+---
+
+## 5) Data shapes (simplified)
+
+```ts
+User {
+  _id: string
+  username: string
+  email: string
+  firstName?: string
+  lastName?: string
+  isAdmin: boolean
+  createdAt: string
+}
+
+Order {
+  _id: string
+  user?: { email?: string }
+  orderItems: Array<{ name: string; qty: number; price: number }>
+  totalAmount: number // cents
+  paymentStatus: 'Succeeded' | 'Pending' | 'Failed'
+  orderStatus: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled'
+  createdAt: string
+}
+
+Design {
+  _id: string
+  prompt?: string
+  thumbUrl?: string
+  publicUrl?: string
+  imageDataUrl?: string
+  user?: { username?: string }
+  settings?: {
+    mode?: 't2i' | 'i2i'
+    aspectRatio?: string
+    cfgScale?: number
+    steps?: number
+    imageStrength?: number
+  }
+  isSubmittedForContest?: boolean
+  contestSubmissionMonth?: 'YYYY-MM'
+  votes?: number
+  createdAt?: string
+}
+
+Session {
+  jti: string
+  user?: { _id?: string; username?: string; email?: string }
+  ip?: string
+  userAgent?: string
+  client?: object
+  createdAt: string
+  lastSeenAt?: string
+  expiresAt: string
+  revokedAt?: string
+}
+6) Environment expectations
+Frontend reads API base from the axios client. Backend must allow:
+
+CORS for your Vercel origin
+
+Authorization and x-session-id headers
+
+JSON Content-Type
+
+7) Where to tweak print placements
+/frontend/src/data/mockupsRegistry.js (or similarly named):
+
+images (mockup URLs)
+
+available colors per product
+
+getPlacement fractions per slug + view
+
+8) Known styling constraints
+Admin tables assume a light table body on a darker page background.
+
+Readability fixes: session ID is shown as full, wrapped in a <Code> block; checkboxes use black when checked; “Auto-refresh” uses black text and white text inside the dropdown.
+
+9) Bootstrap assumptions
+If docs are empty, the checkpoint script writes starter content (this file and friends).
+
+context.md is the single file to paste into a new chat when you want the assistant to be “caught up”
+
+---
+
+## Decisions (short)
+# DECISIONS (Lightweight ADRs)
+
+## ADR-001 — Use Fabric.js for canvas editing
+- We need free-form transforms, clipping to a print rectangle, and export to high-res PNG.
+- Fabric.js is widely used and works without a server-side headless step.
+
+## ADR-002 — Placement math via fractions
+- Placements are stored as `{x,y,w,h}` **fractions** of the mockup image bounds.
+- Keeps layout independent of screen or mockup pixel size.
+
+## ADR-003 — Export sizes
+- Defaults: 4200×4800 (front/back), 3600×3600 (sides).
+- Chosen to meet common DTG vendor minimums while keeping file sizes reasonable.
+
+## ADR-004 — Sessions list is the source of truth
+- “Revoke all for user” and single revoke operate on `/admin/sessions`.
+- If you revoke **your** current session, immediately clear storage and redirect to `/login?redirect=/admin`.
+
+## ADR-005 — Docs handoff model
+- Human-curated docs live in `chatpack/docs/…`.
+- On each checkpoint we **compose** a single `chatpack/context.md` that includes a compact summary and pointers + an up-to-date FILEMAP and diff.
+
+---
+
+## Recent changes (tail)
+
+### `chatpack/docs/CHANGELOG.md`
 ```md
-```
-## DECISIONS.md
-```md
-```
-## FILEMAP.md (first 200 lines)
-```md
-| Path | Size | Purpose |
-|------|------|---------|
-| `./backend/app.bak` | 4.6KB | backend/app.js |
-| `./backend/app.js` | 4.0KB | backend/app.js |
-| `./backend/babel.config.cjs` | 0.1KB | backend/babel.config.js |
-| `./backend/backend@1.0.0` | 0.0KB | — |
-| `./backend/config/db.js` | 0.4KB | backend/config/db.js |
-| `./backend/controllers/adminAuditController.js` | 2.0KB | backend/controllers/adminAuditController.js |
-| `./backend/controllers/adminController.js` | 8.7KB | backend/controllers/adminController.js |
-| `./backend/controllers/authController.bak` | 10.2KB | backend/controllers/authController.js |
-| `./backend/controllers/authController.js` | 8.5KB | backend/controllers/authController.js |
-| `./backend/controllers/designController.bak` | 6.3KB | backend/controllers/designController.js |
-| `./backend/controllers/designController.js` | 10.4KB | Long-edge target for print-ready art |
-| `./backend/controllers/formController.js` | 4.2KB | backend/controllers/formController.js |
-| `./backend/controllers/orderController.js` | 3.2KB | backend/controllers/orderController.js |
-| `./backend/controllers/printfulController.js` | 1.7KB | backend/controllers/printfulController.js |
-| `./backend/controllers/storefrontProductController.js` | 2.8KB | backend/controllers/storefrontProductController.js |
-| `./backend/controllers/uploadController.js` | 1.8KB | Configure Cloudinary |
-| `./backend/.env` | 1.1KB | — |
-| `./backend/.gitignore` | 0.0KB | — |
-| `./backend/index.bak` | 1.1KB | backend/index.js |
-| `./backend/index.js` | 2.0KB | backend/index.js |
-| `./backend/middleware/adminMiddleware.js` | 0.7KB | backend/middleware/adminMiddleware.js |
-| `./backend/middleware/authMiddleware.bak` | 1.3KB | backend/middleware/authMiddleware.js |
-| `./backend/middleware/authMiddleware.js` | 2.5KB | backend/middleware/authMiddleware.js |
-| `./backend/middleware/csrfMiddleware.js` | 1.2KB | backend/middleware/csrfMiddleware.js |
-| `./backend/middleware/csrfStrict.js` | 0.3KB | backend/middleware/csrfStrict.js |
-| `./backend/models/AuditLog.js` | 1.5KB | backend/models/AuditLog.js |
-| `./backend/models/Design.bak` | 1.0KB | backend/models/Design.js |
-| `./backend/models/Design.js` | 1.5KB | backend/models/Design.js |
-| `./backend/models/Order.js` | 2.6KB | Add other variant specific fields if needed |
-| `./backend/models/Product.js` | 2.1KB | — |
-| `./backend/models/RefreshToken.js` | 0.9KB | backend/models/RefreshToken.js |
-| `./backend/models/User.js` | 2.9KB | backend/models/User.js |
-| `./backend/models/WebhookEvent.js` | 0.3KB | backend/models/WebhookEvent.js |
-| `./backend/node` | 0.0KB | — |
-| `./backend/node_modules/abort-controller/browser.js` | 0.4KB | globals self, window */ |
-| `./backend/node_modules/abort-controller/browser.mjs` | 0.3KB | globals self, window */ |
-| `./backend/node_modules/abort-controller/dist/abort-controller.d.ts` | 1.0KB | * |
-| `./backend/node_modules/abort-controller/dist/abort-controller.js` | 3.5KB | * |
-| `./backend/node_modules/abort-controller/dist/abort-controller.mjs` | 3.2KB | * |
-| `./backend/node_modules/abort-controller/dist/abort-controller.umd.js` | 9.0KB | * |
-| `./backend/node_modules/abort-controller/LICENSE` | 1.0KB | — |
-| `./backend/node_modules/abort-controller/package.json` | 2.8KB | — |
-| `./backend/node_modules/abort-controller/polyfill.js` | 0.5KB | globals require, self, window */ |
-| `./backend/node_modules/abort-controller/polyfill.mjs` | 0.5KB | globals self, window */ |
-| `./backend/node_modules/abort-controller/README.md` | 3.1KB | abort-controller |
-| `./backend/node_modules/accepts/HISTORY.md` | 5.0KB | — |
-| `./backend/node_modules/accepts/index.js` | 5.1KB | ! |
-| `./backend/node_modules/accepts/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/accepts/package.json` | 1.1KB | — |
-| `./backend/node_modules/accepts/README.md` | 4.0KB | accepts |
-| `./backend/node_modules/agent-base/dist/helpers.d.ts` | 0.6KB | / <reference types="node" /> |
-| `./backend/node_modules/agent-base/dist/helpers.js` | 2.3KB | — |
-| `./backend/node_modules/agent-base/dist/index.d.ts` | 1.5KB | / <reference types="node" /> |
-| `./backend/node_modules/agent-base/dist/index.js` | 7.2KB | — |
-| `./backend/node_modules/agent-base/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/agent-base/package.json` | 1.0KB | — |
-| `./backend/node_modules/agent-base/README.md` | 2.4KB | ## Turn a function into an [`http.Agent`][http.Agent] instance |
-| `./backend/node_modules/agentkeepalive/browser.js` | 0.1KB | Noop function for browser since native api's don't use agents. |
-| `./backend/node_modules/agentkeepalive/index.d.ts` | 2.1KB | — |
-| `./backend/node_modules/agentkeepalive/index.js` | 0.2KB | — |
-| `./backend/node_modules/agentkeepalive/lib/agent.js` | 14.9KB | OriginalAgent come from |
-| `./backend/node_modules/agentkeepalive/lib/constants.js` | 0.5KB | agent |
-| `./backend/node_modules/agentkeepalive/lib/https_agent.js` | 1.2KB | istanbul ignore next */ |
-| `./backend/node_modules/agentkeepalive/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/agentkeepalive/package.json` | 1.3KB | — |
-| `./backend/node_modules/agentkeepalive/README.md` | 11.5KB | agentkeepalive |
-| `./backend/node_modules/@ampproject/remapping/dist/remapping.mjs` | 8.3KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/remapping.umd.js` | 9.5KB | — |
-| `./backend/node_modules/@ampproject/remapping/dist/types/build-source-map-tree.d.ts` | 0.8KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/types/remapping.d.ts` | 1.1KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/types/source-map.d.ts` | 0.6KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/types/source-map-tree.d.ts` | 1.6KB | — |
-| `./backend/node_modules/@ampproject/remapping/dist/types/types.d.ts` | 0.6KB | — |
-| `./backend/node_modules/@ampproject/remapping/LICENSE` | 11.1KB | — |
-| `./backend/node_modules/@ampproject/remapping/package.json` | 2.2KB | — |
-| `./backend/node_modules/@ampproject/remapping/README.md` | 7.1KB | @ampproject/remapping |
-| `./backend/node_modules/ansi-escapes/index.d.ts` | 5.4KB | / <reference types="node"/> |
-| `./backend/node_modules/ansi-escapes/index.js` | 3.7KB | TODO: remove this in the next major version |
-| `./backend/node_modules/ansi-escapes/license` | 1.1KB | — |
-| `./backend/node_modules/ansi-escapes/package.json` | 0.9KB | — |
-| `./backend/node_modules/ansi-escapes/readme.md` | 4.9KB | ansi-escapes |
-| `./backend/node_modules/ansi-regex/index.d.ts` | 0.7KB | * |
-| `./backend/node_modules/ansi-regex/index.js` | 0.3KB | — |
-| `./backend/node_modules/ansi-regex/license` | 1.1KB | — |
-| `./backend/node_modules/ansi-regex/package.json` | 0.8KB | — |
-| `./backend/node_modules/ansi-regex/readme.md` | 2.5KB | ansi-regex |
-| `./backend/node_modules/ansi-styles/index.d.ts` | 6.2KB | — |
-| `./backend/node_modules/ansi-styles/index.js` | 4.0KB | — |
-| `./backend/node_modules/ansi-styles/license` | 1.1KB | — |
-| `./backend/node_modules/ansi-styles/package.json` | 1.0KB | — |
-| `./backend/node_modules/ansi-styles/readme.md` | 4.2KB | ansi-styles [![Build Status](https://travis-ci.org/chalk/ansi-styles.svg?branch=master)](https://travis-ci.org/chalk/ansi-styles) |
-| `./backend/node_modules/anymatch/index.d.ts` | 0.7KB | — |
-| `./backend/node_modules/anymatch/index.js` | 3.1KB | * |
-| `./backend/node_modules/anymatch/LICENSE` | 0.8KB | — |
-| `./backend/node_modules/anymatch/package.json` | 0.9KB | — |
-| `./backend/node_modules/anymatch/README.md` | 3.9KB | ### anymatch(matchers, testString, [returnIndex], [options]) |
-| `./backend/node_modules/argparse/CHANGELOG.md` | 3.3KB | — |
-| `./backend/node_modules/argparse/index.js` | 0.1KB | — |
-| `./backend/node_modules/argparse/lib/action/append/constant.js` | 1.4KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/append.js` | 1.5KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action_container.js` | 14.7KB | * internal |
-| `./backend/node_modules/argparse/lib/action/count.js` | 1.0KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/help.js` | 1.1KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action.js` | 4.5KB | * |
-| `./backend/node_modules/argparse/lib/action/store/constant.js` | 1.3KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/store/false.js` | 0.7KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/store.js` | 1.3KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/store/true.js` | 0.7KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/subparsers.js` | 3.5KB | * internal |
-| `./backend/node_modules/argparse/lib/action/version.js` | 1.2KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/argparse.js` | 0.6KB | — |
-| `./backend/node_modules/argparse/lib/argument/error.js` | 1.2KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/argument/exclusive.js` | 1.6KB | * internal |
-| `./backend/node_modules/argparse/lib/argument/group.js` | 2.3KB | * internal |
-| `./backend/node_modules/argparse/lib/argument_parser.js` | 34.4KB | * |
-| `./backend/node_modules/argparse/lib/const.js` | 0.3KB | — |
-| `./backend/node_modules/argparse/lib/help/added_formatters.js` | 2.6KB | Constants |
-| `./backend/node_modules/argparse/lib/help/formatter.js` | 21.5KB | * |
-| `./backend/node_modules/argparse/lib/namespace.js` | 1.8KB | * |
-| `./backend/node_modules/argparse/lib/utils.js` | 1.3KB | — |
-| `./backend/node_modules/argparse/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/argparse/package.json` | 0.6KB | — |
-| `./backend/node_modules/argparse/README.md` | 8.2KB | — |
-| `./backend/node_modules/array-flatten/array-flatten.js` | 1.2KB | * |
-| `./backend/node_modules/array-flatten/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/array-flatten/package.json` | 0.9KB | — |
-| `./backend/node_modules/array-flatten/README.md` | 1.2KB | Array Flatten |
-| `./backend/node_modules/asap/asap.js` | 1.9KB | * |
-| `./backend/node_modules/asap/browser-asap.js` | 2.1KB | rawAsap provides everything we need except exception management. |
-| `./backend/node_modules/asap/browser-raw.js` | 9.4KB | Use the fastest means possible to execute a task in its own turn, with |
-| `./backend/node_modules/asap/CHANGES.md` | 2.8KB | # 2.0.6 |
-| `./backend/node_modules/asap/LICENSE.md` | 1.1KB | — |
-| `./backend/node_modules/asap/package.json` | 1.9KB | — |
-| `./backend/node_modules/asap/raw.js` | 4.0KB | Use the fastest means possible to execute a task in its own turn, with |
-| `./backend/node_modules/asap/README.md` | 9.9KB | ASAP |
-| `./backend/node_modules/asynckit/bench.js` | 1.2KB | eslint no-console: "off" */ |
-| `./backend/node_modules/asynckit/index.js` | 0.2KB | — |
-| `./backend/node_modules/asynckit/lib/abort.js` | 0.5KB | API |
-| `./backend/node_modules/asynckit/lib/async.js` | 0.6KB | API |
-| `./backend/node_modules/asynckit/lib/defer.js` | 0.4KB | * |
-| `./backend/node_modules/asynckit/lib/iterate.js` | 1.8KB | API |
-| `./backend/node_modules/asynckit/lib/readable_asynckit.js` | 1.6KB | API |
-| `./backend/node_modules/asynckit/lib/readable_parallel.js` | 0.7KB | API |
-| `./backend/node_modules/asynckit/lib/readable_serial.js` | 0.6KB | API |
-| `./backend/node_modules/asynckit/lib/readable_serial_ordered.js` | 0.9KB | API |
-| `./backend/node_modules/asynckit/lib/state.js` | 0.9KB | API |
-| `./backend/node_modules/asynckit/lib/streamify.js` | 2.9KB | API |
-| `./backend/node_modules/asynckit/lib/terminator.js` | 0.5KB | API |
-| `./backend/node_modules/asynckit/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/asynckit/package.json` | 1.6KB | — |
-| `./backend/node_modules/asynckit/parallel.js` | 1.0KB | Public API |
-| `./backend/node_modules/asynckit/README.md` | 7.5KB | asynckit [![NPM Module](https://img.shields.io/npm/v/asynckit.svg?style=flat)](https://www.npmjs.com/package/asynckit) |
-| `./backend/node_modules/asynckit/serial.js` | 0.5KB | Public API |
-| `./backend/node_modules/asynckit/serialOrdered.js` | 1.7KB | Public API |
-| `./backend/node_modules/asynckit/stream.js` | 0.7KB | API |
-| `./backend/node_modules/async-mutex/es6/errors.js` | 0.2KB | — |
-| `./backend/node_modules/async-mutex/es6/index.js` | 0.2KB | — |
-| `./backend/node_modules/async-mutex/es6/MutexInterface.js` | 0.0KB | — |
-| `./backend/node_modules/async-mutex/es6/Mutex.js` | 1.5KB | — |
-| `./backend/node_modules/async-mutex/es6/SemaphoreInterface.js` | 0.0KB | — |
-| `./backend/node_modules/async-mutex/es6/Semaphore.js` | 6.0KB | — |
-| `./backend/node_modules/async-mutex/es6/tryAcquire.js` | 0.4KB | eslint-disable-next-lisne @typescript-eslint/explicit-module-boundary-types |
-| `./backend/node_modules/async-mutex/es6/withTimeout.js` | 5.2KB | eslint-disable @typescript-eslint/no-explicit-any */ |
-| `./backend/node_modules/async-mutex/index.mjs` | 10.9KB | — |
-| `./backend/node_modules/async-mutex/lib/errors.d.ts` | 0.1KB | — |
-| `./backend/node_modules/async-mutex/lib/errors.js` | 0.4KB | — |
-| `./backend/node_modules/async-mutex/lib/index.d.ts` | 0.3KB | — |
-| `./backend/node_modules/async-mutex/lib/index.js` | 0.9KB | — |
-| `./backend/node_modules/async-mutex/lib/Mutex.d.ts` | 0.4KB | — |
-| `./backend/node_modules/async-mutex/lib/MutexInterface.d.ts` | 0.5KB | — |
-| `./backend/node_modules/async-mutex/lib/MutexInterface.js` | 0.1KB | — |
-| `./backend/node_modules/async-mutex/lib/Mutex.js` | 1.6KB | — |
-| `./backend/node_modules/async-mutex/lib/Semaphore.d.ts` | 0.8KB | — |
-| `./backend/node_modules/async-mutex/lib/SemaphoreInterface.d.ts` | 0.6KB | — |
-| `./backend/node_modules/async-mutex/lib/SemaphoreInterface.js` | 0.1KB | — |
-| `./backend/node_modules/async-mutex/lib/Semaphore.js` | 6.0KB | — |
-| `./backend/node_modules/async-mutex/lib/tryAcquire.d.ts` | 0.3KB | — |
-| `./backend/node_modules/async-mutex/lib/tryAcquire.js` | 0.6KB | eslint-disable-next-lisne @typescript-eslint/explicit-module-boundary-types |
-| `./backend/node_modules/async-mutex/lib/withTimeout.d.ts` | 0.3KB | — |
-| `./backend/node_modules/async-mutex/lib/withTimeout.js` | 5.4KB | eslint-disable @typescript-eslint/no-explicit-any */ |
-| `./backend/node_modules/async-mutex/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/async-mutex/package.json` | 2.3KB | — |
-| `./backend/node_modules/async-mutex/README.md` | 15.3KB | What is it? |
-| `./backend/node_modules/axios/CHANGELOG.md` | 78.2KB | Changelog |
-| `./backend/node_modules/axios/dist/axios.js` | 141.5KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/axios.min.js` | 53.0KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/browser/axios.cjs` | 94.8KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/esm/axios.js` | 95.6KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/esm/axios.min.js` | 34.6KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/node/axios.cjs` | 126.4KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/index.d.cts` | 18.0KB | — |
-| `./backend/node_modules/axios/index.d.ts` | 18.1KB | TypeScript Version: 4.7 |
-| `./backend/node_modules/axios/index.js` | 0.7KB | This module is intended to unwrap Axios default export as named. |
-| `./backend/node_modules/axios/lib/adapters/adapters.js` | 1.9KB | eslint-disable-next-line no-empty |
-| `./backend/node_modules/axios/lib/adapters/fetch.js` | 6.5KB | used only inside the fetch adapter |
-| `./backend/node_modules/axios/lib/adapters/http.js` | 22.0KB | — |
-| `./backend/node_modules/axios/lib/adapters/README.md` | 0.9KB | axios // adapters |
-| `./backend/node_modules/axios/lib/adapters/xhr.js` | 6.5KB | — |
-```
-## Changed file slices
-### files/.chatgptignore
-```
-# things never to include in chat packs
-node_modules/
-dist/
-build/
-.env
-*.pem
-*.key
-*.crt
-*.png
-*.jpg
-*.pdf
-```
-### slices/backend__utils__audit.js
-```
-// backend/utils/audit.js
-import mongoose from "mongoose";
-
-let AuditLog;
-try {
-  AuditLog = mongoose.model("AuditLog");
-} catch {
-  const AuditLogSchema = new mongoose.Schema(
-    {
-      action: { type: String, required: true, index: true },
-      actor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-      actorDisplay: { type: String, default: "" },
-      targetType: { type: String, default: "", index: true },
-      targetId: { type: String, default: "", index: true },
-      ip: { type: String, default: "" },
-      userAgent: { type: String, default: "" },
-      meta: { type: mongoose.Schema.Types.Mixed, default: {} },
-    },
-    { timestamps: true }
-  );
-  AuditLogSchema.index({ createdAt: -1, action: 1, targetType: 1 });
-  AuditLog = mongoose.model("AuditLog", AuditLogSchema);
-}
-
-export async function logAudit(
-  req,
-  { action, targetType = "", targetId = "", meta = {}, actor = null }
-) {
-  try {
-    const ip = (req.headers["x-forwarded-for"] || "").toString().split(",")[0].trim() || req.ip || "";
-    const userAgent = req.headers["user-agent"] || "";
-    const actorId = actor || req.user?._id || null;
-
-    // Auto-capture current session id if present:
-    const sid = req.headers["x-session-id"];
-    const mergedMeta = { ...meta };
-    if (sid && !mergedMeta.sessionId) mergedMeta.sessionId = String(sid);
-
-    await AuditLog.create({
-      action,
-      actor: actorId,
-      targetType,
-      targetId: String(targetId || ""),
-      ip,
-      userAgent,
-      meta: mergedMeta,
-    });
-  } catch (err) {
-    console.warn("[audit] failed:", err?.message);
-  }
-}
-
-export async function logAdminAction(req, payload) {
-  return logAudit(req, payload);
-}
-export async function logAuthLogin(req, user, meta = {}) {
-  return logAudit(req, { action: "LOGIN", targetType: "Auth", targetId: user?._id, meta, actor: user?._id });
-}
-export async function logAuthLogout(req, user, meta = {}) {
-  return logAudit(req, { action: "LOGOUT", targetType: "Auth", targetId: user?._id, meta, actor: user?._id });
-}
-```
-### slices/docs__ARCHITECTURE.md
-```
-```
-### slices/docs__CHANGELOG.md
-```
-```
-### slices/docs__CHAT-CONTRACT.md
-```
-```
-### slices/docs__DECISIONS.md
-```
-```
-### slices/docs__FILEMAP.md
-```
-| Path | Size | Purpose |
-|------|------|---------|
-| `./backend/app.bak` | 4.6KB | backend/app.js |
-| `./backend/app.js` | 4.0KB | backend/app.js |
-| `./backend/babel.config.cjs` | 0.1KB | backend/babel.config.js |
-| `./backend/backend@1.0.0` | 0.0KB | — |
-| `./backend/config/db.js` | 0.4KB | backend/config/db.js |
-| `./backend/controllers/adminAuditController.js` | 2.0KB | backend/controllers/adminAuditController.js |
-| `./backend/controllers/adminController.js` | 8.7KB | backend/controllers/adminController.js |
-| `./backend/controllers/authController.bak` | 10.2KB | backend/controllers/authController.js |
-| `./backend/controllers/authController.js` | 8.5KB | backend/controllers/authController.js |
-| `./backend/controllers/designController.bak` | 6.3KB | backend/controllers/designController.js |
-| `./backend/controllers/designController.js` | 10.4KB | Long-edge target for print-ready art |
-| `./backend/controllers/formController.js` | 4.2KB | backend/controllers/formController.js |
-| `./backend/controllers/orderController.js` | 3.2KB | backend/controllers/orderController.js |
-| `./backend/controllers/printfulController.js` | 1.7KB | backend/controllers/printfulController.js |
-| `./backend/controllers/storefrontProductController.js` | 2.8KB | backend/controllers/storefrontProductController.js |
-| `./backend/controllers/uploadController.js` | 1.8KB | Configure Cloudinary |
-| `./backend/.env` | 1.1KB | — |
-| `./backend/.gitignore` | 0.0KB | — |
-| `./backend/index.bak` | 1.1KB | backend/index.js |
-| `./backend/index.js` | 2.0KB | backend/index.js |
-| `./backend/middleware/adminMiddleware.js` | 0.7KB | backend/middleware/adminMiddleware.js |
-| `./backend/middleware/authMiddleware.bak` | 1.3KB | backend/middleware/authMiddleware.js |
-| `./backend/middleware/authMiddleware.js` | 2.5KB | backend/middleware/authMiddleware.js |
-| `./backend/middleware/csrfMiddleware.js` | 1.2KB | backend/middleware/csrfMiddleware.js |
-| `./backend/middleware/csrfStrict.js` | 0.3KB | backend/middleware/csrfStrict.js |
-| `./backend/models/AuditLog.js` | 1.5KB | backend/models/AuditLog.js |
-| `./backend/models/Design.bak` | 1.0KB | backend/models/Design.js |
-| `./backend/models/Design.js` | 1.5KB | backend/models/Design.js |
-| `./backend/models/Order.js` | 2.6KB | Add other variant specific fields if needed |
-| `./backend/models/Product.js` | 2.1KB | — |
-| `./backend/models/RefreshToken.js` | 0.9KB | backend/models/RefreshToken.js |
-| `./backend/models/User.js` | 2.9KB | backend/models/User.js |
-| `./backend/models/WebhookEvent.js` | 0.3KB | backend/models/WebhookEvent.js |
-| `./backend/node` | 0.0KB | — |
-| `./backend/node_modules/abort-controller/browser.js` | 0.4KB | globals self, window */ |
-| `./backend/node_modules/abort-controller/browser.mjs` | 0.3KB | globals self, window */ |
-| `./backend/node_modules/abort-controller/dist/abort-controller.d.ts` | 1.0KB | * |
-| `./backend/node_modules/abort-controller/dist/abort-controller.js` | 3.5KB | * |
-| `./backend/node_modules/abort-controller/dist/abort-controller.mjs` | 3.2KB | * |
-| `./backend/node_modules/abort-controller/dist/abort-controller.umd.js` | 9.0KB | * |
-| `./backend/node_modules/abort-controller/LICENSE` | 1.0KB | — |
-| `./backend/node_modules/abort-controller/package.json` | 2.8KB | — |
-| `./backend/node_modules/abort-controller/polyfill.js` | 0.5KB | globals require, self, window */ |
-| `./backend/node_modules/abort-controller/polyfill.mjs` | 0.5KB | globals self, window */ |
-| `./backend/node_modules/abort-controller/README.md` | 3.1KB | abort-controller |
-| `./backend/node_modules/accepts/HISTORY.md` | 5.0KB | — |
-| `./backend/node_modules/accepts/index.js` | 5.1KB | ! |
-| `./backend/node_modules/accepts/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/accepts/package.json` | 1.1KB | — |
-| `./backend/node_modules/accepts/README.md` | 4.0KB | accepts |
-| `./backend/node_modules/agent-base/dist/helpers.d.ts` | 0.6KB | / <reference types="node" /> |
-| `./backend/node_modules/agent-base/dist/helpers.js` | 2.3KB | — |
-| `./backend/node_modules/agent-base/dist/index.d.ts` | 1.5KB | / <reference types="node" /> |
-| `./backend/node_modules/agent-base/dist/index.js` | 7.2KB | — |
-| `./backend/node_modules/agent-base/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/agent-base/package.json` | 1.0KB | — |
-| `./backend/node_modules/agent-base/README.md` | 2.4KB | ## Turn a function into an [`http.Agent`][http.Agent] instance |
-| `./backend/node_modules/agentkeepalive/browser.js` | 0.1KB | Noop function for browser since native api's don't use agents. |
-| `./backend/node_modules/agentkeepalive/index.d.ts` | 2.1KB | — |
-| `./backend/node_modules/agentkeepalive/index.js` | 0.2KB | — |
-| `./backend/node_modules/agentkeepalive/lib/agent.js` | 14.9KB | OriginalAgent come from |
-| `./backend/node_modules/agentkeepalive/lib/constants.js` | 0.5KB | agent |
-| `./backend/node_modules/agentkeepalive/lib/https_agent.js` | 1.2KB | istanbul ignore next */ |
-| `./backend/node_modules/agentkeepalive/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/agentkeepalive/package.json` | 1.3KB | — |
-| `./backend/node_modules/agentkeepalive/README.md` | 11.5KB | agentkeepalive |
-| `./backend/node_modules/@ampproject/remapping/dist/remapping.mjs` | 8.3KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/remapping.umd.js` | 9.5KB | — |
-| `./backend/node_modules/@ampproject/remapping/dist/types/build-source-map-tree.d.ts` | 0.8KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/types/remapping.d.ts` | 1.1KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/types/source-map.d.ts` | 0.6KB | * |
-| `./backend/node_modules/@ampproject/remapping/dist/types/source-map-tree.d.ts` | 1.6KB | — |
-| `./backend/node_modules/@ampproject/remapping/dist/types/types.d.ts` | 0.6KB | — |
-| `./backend/node_modules/@ampproject/remapping/LICENSE` | 11.1KB | — |
-| `./backend/node_modules/@ampproject/remapping/package.json` | 2.2KB | — |
-| `./backend/node_modules/@ampproject/remapping/README.md` | 7.1KB | @ampproject/remapping |
-| `./backend/node_modules/ansi-escapes/index.d.ts` | 5.4KB | / <reference types="node"/> |
-| `./backend/node_modules/ansi-escapes/index.js` | 3.7KB | TODO: remove this in the next major version |
-| `./backend/node_modules/ansi-escapes/license` | 1.1KB | — |
-| `./backend/node_modules/ansi-escapes/package.json` | 0.9KB | — |
-| `./backend/node_modules/ansi-escapes/readme.md` | 4.9KB | ansi-escapes |
-| `./backend/node_modules/ansi-regex/index.d.ts` | 0.7KB | * |
-| `./backend/node_modules/ansi-regex/index.js` | 0.3KB | — |
-| `./backend/node_modules/ansi-regex/license` | 1.1KB | — |
-| `./backend/node_modules/ansi-regex/package.json` | 0.8KB | — |
-| `./backend/node_modules/ansi-regex/readme.md` | 2.5KB | ansi-regex |
-| `./backend/node_modules/ansi-styles/index.d.ts` | 6.2KB | — |
-| `./backend/node_modules/ansi-styles/index.js` | 4.0KB | — |
-| `./backend/node_modules/ansi-styles/license` | 1.1KB | — |
-| `./backend/node_modules/ansi-styles/package.json` | 1.0KB | — |
-| `./backend/node_modules/ansi-styles/readme.md` | 4.2KB | ansi-styles [![Build Status](https://travis-ci.org/chalk/ansi-styles.svg?branch=master)](https://travis-ci.org/chalk/ansi-styles) |
-| `./backend/node_modules/anymatch/index.d.ts` | 0.7KB | — |
-| `./backend/node_modules/anymatch/index.js` | 3.1KB | * |
-| `./backend/node_modules/anymatch/LICENSE` | 0.8KB | — |
-| `./backend/node_modules/anymatch/package.json` | 0.9KB | — |
-| `./backend/node_modules/anymatch/README.md` | 3.9KB | ### anymatch(matchers, testString, [returnIndex], [options]) |
-| `./backend/node_modules/argparse/CHANGELOG.md` | 3.3KB | — |
-| `./backend/node_modules/argparse/index.js` | 0.1KB | — |
-| `./backend/node_modules/argparse/lib/action/append/constant.js` | 1.4KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/append.js` | 1.5KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action_container.js` | 14.7KB | * internal |
-| `./backend/node_modules/argparse/lib/action/count.js` | 1.0KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/help.js` | 1.1KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action.js` | 4.5KB | * |
-| `./backend/node_modules/argparse/lib/action/store/constant.js` | 1.3KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/store/false.js` | 0.7KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/store.js` | 1.3KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/store/true.js` | 0.7KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/action/subparsers.js` | 3.5KB | * internal |
-| `./backend/node_modules/argparse/lib/action/version.js` | 1.2KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/argparse.js` | 0.6KB | — |
-| `./backend/node_modules/argparse/lib/argument/error.js` | 1.2KB | :nodoc:* |
-| `./backend/node_modules/argparse/lib/argument/exclusive.js` | 1.6KB | * internal |
-| `./backend/node_modules/argparse/lib/argument/group.js` | 2.3KB | * internal |
-| `./backend/node_modules/argparse/lib/argument_parser.js` | 34.4KB | * |
-| `./backend/node_modules/argparse/lib/const.js` | 0.3KB | — |
-| `./backend/node_modules/argparse/lib/help/added_formatters.js` | 2.6KB | Constants |
-| `./backend/node_modules/argparse/lib/help/formatter.js` | 21.5KB | * |
-| `./backend/node_modules/argparse/lib/namespace.js` | 1.8KB | * |
-| `./backend/node_modules/argparse/lib/utils.js` | 1.3KB | — |
-| `./backend/node_modules/argparse/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/argparse/package.json` | 0.6KB | — |
-| `./backend/node_modules/argparse/README.md` | 8.2KB | — |
-| `./backend/node_modules/array-flatten/array-flatten.js` | 1.2KB | * |
-| `./backend/node_modules/array-flatten/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/array-flatten/package.json` | 0.9KB | — |
-| `./backend/node_modules/array-flatten/README.md` | 1.2KB | Array Flatten |
-| `./backend/node_modules/asap/asap.js` | 1.9KB | * |
-| `./backend/node_modules/asap/browser-asap.js` | 2.1KB | rawAsap provides everything we need except exception management. |
-| `./backend/node_modules/asap/browser-raw.js` | 9.4KB | Use the fastest means possible to execute a task in its own turn, with |
-| `./backend/node_modules/asap/CHANGES.md` | 2.8KB | # 2.0.6 |
-| `./backend/node_modules/asap/LICENSE.md` | 1.1KB | — |
-| `./backend/node_modules/asap/package.json` | 1.9KB | — |
-| `./backend/node_modules/asap/raw.js` | 4.0KB | Use the fastest means possible to execute a task in its own turn, with |
-| `./backend/node_modules/asap/README.md` | 9.9KB | ASAP |
-| `./backend/node_modules/asynckit/bench.js` | 1.2KB | eslint no-console: "off" */ |
-| `./backend/node_modules/asynckit/index.js` | 0.2KB | — |
-| `./backend/node_modules/asynckit/lib/abort.js` | 0.5KB | API |
-| `./backend/node_modules/asynckit/lib/async.js` | 0.6KB | API |
-| `./backend/node_modules/asynckit/lib/defer.js` | 0.4KB | * |
-| `./backend/node_modules/asynckit/lib/iterate.js` | 1.8KB | API |
-| `./backend/node_modules/asynckit/lib/readable_asynckit.js` | 1.6KB | API |
-| `./backend/node_modules/asynckit/lib/readable_parallel.js` | 0.7KB | API |
-| `./backend/node_modules/asynckit/lib/readable_serial.js` | 0.6KB | API |
-| `./backend/node_modules/asynckit/lib/readable_serial_ordered.js` | 0.9KB | API |
-| `./backend/node_modules/asynckit/lib/state.js` | 0.9KB | API |
-| `./backend/node_modules/asynckit/lib/streamify.js` | 2.9KB | API |
-| `./backend/node_modules/asynckit/lib/terminator.js` | 0.5KB | API |
-| `./backend/node_modules/asynckit/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/asynckit/package.json` | 1.6KB | — |
-| `./backend/node_modules/asynckit/parallel.js` | 1.0KB | Public API |
-| `./backend/node_modules/asynckit/README.md` | 7.5KB | asynckit [![NPM Module](https://img.shields.io/npm/v/asynckit.svg?style=flat)](https://www.npmjs.com/package/asynckit) |
-| `./backend/node_modules/asynckit/serial.js` | 0.5KB | Public API |
-| `./backend/node_modules/asynckit/serialOrdered.js` | 1.7KB | Public API |
-| `./backend/node_modules/asynckit/stream.js` | 0.7KB | API |
-| `./backend/node_modules/async-mutex/es6/errors.js` | 0.2KB | — |
-| `./backend/node_modules/async-mutex/es6/index.js` | 0.2KB | — |
-| `./backend/node_modules/async-mutex/es6/MutexInterface.js` | 0.0KB | — |
-| `./backend/node_modules/async-mutex/es6/Mutex.js` | 1.5KB | — |
-| `./backend/node_modules/async-mutex/es6/SemaphoreInterface.js` | 0.0KB | — |
-| `./backend/node_modules/async-mutex/es6/Semaphore.js` | 6.0KB | — |
-| `./backend/node_modules/async-mutex/es6/tryAcquire.js` | 0.4KB | eslint-disable-next-lisne @typescript-eslint/explicit-module-boundary-types |
-| `./backend/node_modules/async-mutex/es6/withTimeout.js` | 5.2KB | eslint-disable @typescript-eslint/no-explicit-any */ |
-| `./backend/node_modules/async-mutex/index.mjs` | 10.9KB | — |
-| `./backend/node_modules/async-mutex/lib/errors.d.ts` | 0.1KB | — |
-| `./backend/node_modules/async-mutex/lib/errors.js` | 0.4KB | — |
-| `./backend/node_modules/async-mutex/lib/index.d.ts` | 0.3KB | — |
-| `./backend/node_modules/async-mutex/lib/index.js` | 0.9KB | — |
-| `./backend/node_modules/async-mutex/lib/Mutex.d.ts` | 0.4KB | — |
-| `./backend/node_modules/async-mutex/lib/MutexInterface.d.ts` | 0.5KB | — |
-| `./backend/node_modules/async-mutex/lib/MutexInterface.js` | 0.1KB | — |
-| `./backend/node_modules/async-mutex/lib/Mutex.js` | 1.6KB | — |
-| `./backend/node_modules/async-mutex/lib/Semaphore.d.ts` | 0.8KB | — |
-| `./backend/node_modules/async-mutex/lib/SemaphoreInterface.d.ts` | 0.6KB | — |
-| `./backend/node_modules/async-mutex/lib/SemaphoreInterface.js` | 0.1KB | — |
-| `./backend/node_modules/async-mutex/lib/Semaphore.js` | 6.0KB | — |
-| `./backend/node_modules/async-mutex/lib/tryAcquire.d.ts` | 0.3KB | — |
-| `./backend/node_modules/async-mutex/lib/tryAcquire.js` | 0.6KB | eslint-disable-next-lisne @typescript-eslint/explicit-module-boundary-types |
-| `./backend/node_modules/async-mutex/lib/withTimeout.d.ts` | 0.3KB | — |
-| `./backend/node_modules/async-mutex/lib/withTimeout.js` | 5.4KB | eslint-disable @typescript-eslint/no-explicit-any */ |
-| `./backend/node_modules/async-mutex/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/async-mutex/package.json` | 2.3KB | — |
-| `./backend/node_modules/async-mutex/README.md` | 15.3KB | What is it? |
-| `./backend/node_modules/axios/CHANGELOG.md` | 78.2KB | Changelog |
-| `./backend/node_modules/axios/dist/axios.js` | 141.5KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/axios.min.js` | 53.0KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/browser/axios.cjs` | 94.8KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/esm/axios.js` | 95.6KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/esm/axios.min.js` | 34.6KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/dist/node/axios.cjs` | 126.4KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
-| `./backend/node_modules/axios/index.d.cts` | 18.0KB | — |
-| `./backend/node_modules/axios/index.d.ts` | 18.1KB | TypeScript Version: 4.7 |
-| `./backend/node_modules/axios/index.js` | 0.7KB | This module is intended to unwrap Axios default export as named. |
-| `./backend/node_modules/axios/lib/adapters/adapters.js` | 1.9KB | eslint-disable-next-line no-empty |
-| `./backend/node_modules/axios/lib/adapters/fetch.js` | 6.5KB | used only inside the fetch adapter |
-| `./backend/node_modules/axios/lib/adapters/http.js` | 22.0KB | — |
-| `./backend/node_modules/axios/lib/adapters/README.md` | 0.9KB | axios // adapters |
-| `./backend/node_modules/axios/lib/adapters/xhr.js` | 6.5KB | — |
-| `./backend/node_modules/axios/lib/axios.js` | 2.5KB | — |
-| `./backend/node_modules/axios/lib/cancel/CanceledError.js` | 0.7KB | * |
-| `./backend/node_modules/axios/lib/cancel/CancelToken.js` | 2.7KB | * |
-| `./backend/node_modules/axios/lib/cancel/isCancel.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/core/AxiosError.js` | 2.5KB | * |
-| `./backend/node_modules/axios/lib/core/AxiosHeaders.js` | 7.2KB | — |
-| `./backend/node_modules/axios/lib/core/Axios.js` | 6.7KB | * |
-| `./backend/node_modules/axios/lib/core/buildFullPath.js` | 0.8KB | * |
-| `./backend/node_modules/axios/lib/core/dispatchRequest.js` | 2.1KB | * |
-| `./backend/node_modules/axios/lib/core/InterceptorManager.js` | 1.5KB | * |
-| `./backend/node_modules/axios/lib/core/mergeConfig.js` | 3.3KB | * |
-| `./backend/node_modules/axios/lib/core/README.md` | 0.4KB | axios // core |
-| `./backend/node_modules/axios/lib/core/settle.js` | 0.8KB | * |
-| `./backend/node_modules/axios/lib/core/transformData.js` | 0.8KB | * |
-| `./backend/node_modules/axios/lib/defaults/index.js` | 4.4KB | * |
-| `./backend/node_modules/axios/lib/defaults/transitional.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/env/classes/FormData.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/env/data.js` | 0.0KB | — |
-| `./backend/node_modules/axios/lib/env/README.md` | 0.1KB | axios // env |
-| `./backend/node_modules/axios/lib/helpers/AxiosTransformStream.js` | 3.6KB | — |
-| `./backend/node_modules/axios/lib/helpers/AxiosURLSearchParams.js` | 1.4KB | * |
-| `./backend/node_modules/axios/lib/helpers/bind.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/helpers/buildURL.js` | 1.6KB | * |
-| `./backend/node_modules/axios/lib/helpers/callbackify.js` | 0.4KB | — |
-| `./backend/node_modules/axios/lib/helpers/combineURLs.js` | 0.4KB | * |
-| `./backend/node_modules/axios/lib/helpers/composeSignals.js` | 1.3KB | — |
-| `./backend/node_modules/axios/lib/helpers/cookies.js` | 1.0KB | Standard browser envs support document.cookie |
-| `./backend/node_modules/axios/lib/helpers/deprecatedMethod.js` | 0.7KB | eslint no-console:0*/ |
-| `./backend/node_modules/axios/lib/helpers/formDataToJSON.js` | 2.1KB | * |
-| `./backend/node_modules/axios/lib/helpers/formDataToStream.js` | 2.9KB | — |
-| `./backend/node_modules/axios/lib/helpers/fromDataURI.js` | 1.3KB | * |
-| `./backend/node_modules/axios/lib/helpers/HttpStatusCode.js` | 1.6KB | — |
-| `./backend/node_modules/axios/lib/helpers/isAbsoluteURL.js` | 0.5KB | * |
-| `./backend/node_modules/axios/lib/helpers/isAxiosError.js` | 0.4KB | * |
-| `./backend/node_modules/axios/lib/helpers/isURLSameOrigin.js` | 0.4KB | — |
-| `./backend/node_modules/axios/lib/helpers/null.js` | 0.1KB | eslint-disable-next-line strict |
-| `./backend/node_modules/axios/lib/helpers/parseHeaders.js` | 1.3KB | RawAxiosHeaders whose duplicates are ignored by node |
-| `./backend/node_modules/axios/lib/helpers/parseProtocol.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/helpers/progressEventReducer.js` | 1.2KB | — |
-| `./backend/node_modules/axios/lib/helpers/readBlob.js` | 0.3KB | — |
-| `./backend/node_modules/axios/lib/helpers/README.md` | 0.3KB | axios // helpers |
-| `./backend/node_modules/axios/lib/helpers/resolveConfig.js` | 2.1KB | HTTP basic authentication |
-| `./backend/node_modules/axios/lib/helpers/speedometer.js` | 1.1KB | * |
-| `./backend/node_modules/axios/lib/helpers/spread.js` | 0.6KB | * |
-| `./backend/node_modules/axios/lib/helpers/throttle.js` | 0.8KB | * |
-| `./backend/node_modules/axios/lib/helpers/toFormData.js` | 5.9KB | temporary hotfix to avoid circular references until AxiosURLSearchParams is refactored |
-| `./backend/node_modules/axios/lib/helpers/toURLEncodedForm.js` | 0.5KB | — |
-| `./backend/node_modules/axios/lib/helpers/trackStream.js` | 1.6KB | — |
-| `./backend/node_modules/axios/lib/helpers/validator.js` | 2.7KB | eslint-disable-next-line func-names |
-| `./backend/node_modules/axios/lib/helpers/ZlibHeaderTransformStream.js` | 0.7KB | Add Default Compression headers if no zlib headers are present |
-| `./backend/node_modules/axios/lib/platform/browser/classes/Blob.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/platform/browser/classes/FormData.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/platform/browser/classes/URLSearchParams.js` | 0.2KB | — |
-| `./backend/node_modules/axios/lib/platform/browser/index.js` | 0.3KB | — |
-| `./backend/node_modules/axios/lib/platform/common/utils.js` | 1.6KB | * |
-| `./backend/node_modules/axios/lib/platform/index.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/platform/node/classes/FormData.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/platform/node/classes/URLSearchParams.js` | 0.1KB | — |
-| `./backend/node_modules/axios/lib/platform/node/index.js` | 0.8KB | — |
-| `./backend/node_modules/axios/lib/utils.js` | 17.9KB | utils is a library of generic helper functions non-specific to axios |
-| `./backend/node_modules/axios/LICENSE` | 1.1KB | Copyright (c) 2014-present Matt Zabriskie & Collaborators |
-| `./backend/node_modules/axios/MIGRATION_GUIDE.md` | 0.0KB | Migration Guide |
-| `./backend/node_modules/axios/package.json` | 7.5KB | — |
-| `./backend/node_modules/axios/README.md` | 63.6KB | — |
-| `./backend/node_modules/b4a/browser.js` | 13.5KB | — |
-| `./backend/node_modules/b4a/index.js` | 4.0KB | — |
-| `./backend/node_modules/b4a/lib/ascii.js` | 0.5KB | — |
-| `./backend/node_modules/b4a/lib/base64.js` | 1.5KB | — |
-| `./backend/node_modules/b4a/lib/hex.js` | 1.1KB | — |
-| `./backend/node_modules/b4a/lib/utf16le.js` | 0.7KB | — |
-| `./backend/node_modules/b4a/lib/utf8.js` | 2.9KB | — |
-| `./backend/node_modules/b4a/LICENSE` | 11.1KB | — |
-| `./backend/node_modules/b4a/package.json` | 0.7KB | — |
-| `./backend/node_modules/b4a/README.md` | 4.1KB | Buffer for Array |
-| `./backend/node_modules/@babel/code-frame/lib/index.js` | 6.8KB | — |
-| `./backend/node_modules/@babel/code-frame/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/@babel/code-frame/package.json` | 0.9KB | — |
-| `./backend/node_modules/@babel/code-frame/README.md` | 0.3KB | @babel/code-frame |
-| `./backend/node_modules/@babel/compat-data/corejs2-built-ins.js` | 0.1KB | Todo (Babel 8): remove this file as Babel 8 drop support of core-js 2 |
-| `./backend/node_modules/@babel/compat-data/corejs3-shipped-proposals.js` | 0.2KB | Todo (Babel 8): remove this file now that it is included in babel-plugin-polyfill-corejs3 |
-| `./backend/node_modules/@babel/compat-data/data/corejs2-built-ins.json` | 40.0KB | — |
-| `./backend/node_modules/@babel/compat-data/data/corejs3-shipped-proposals.json` | 0.1KB | — |
-| `./backend/node_modules/@babel/compat-data/data/native-modules.json` | 0.3KB | — |
-| `./backend/node_modules/@babel/compat-data/data/overlapping-plugins.json` | 1.2KB | — |
-| `./backend/node_modules/@babel/compat-data/data/plugin-bugfixes.json` | 4.1KB | — |
-| `./backend/node_modules/@babel/compat-data/data/plugins.json` | 16.4KB | — |
-| `./backend/node_modules/@babel/compat-data/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/@babel/compat-data/native-modules.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
-| `./backend/node_modules/@babel/compat-data/overlapping-plugins.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
-| `./backend/node_modules/@babel/compat-data/package.json` | 1.2KB | — |
-| `./backend/node_modules/@babel/compat-data/plugin-bugfixes.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
-| `./backend/node_modules/@babel/compat-data/plugins.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
-| `./backend/node_modules/@babel/compat-data/README.md` | 0.3KB | @babel/compat-data |
-| `./backend/node_modules/@babel/core/lib/config/cache-contexts.js` | 0.1KB | # sourceMappingURL=cache-contexts.js.map |
-| `./backend/node_modules/@babel/core/lib/config/caching.js` | 7.1KB | — |
-| `./backend/node_modules/@babel/core/lib/config/config-chain.js` | 18.2KB | — |
-| `./backend/node_modules/@babel/core/lib/config/config-descriptors.js` | 6.7KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/configuration.js` | 10.6KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/import.cjs` | 0.1KB | # sourceMappingURL=import.cjs.map |
-| `./backend/node_modules/@babel/core/lib/config/files/index-browser.js` | 1.5KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/index.js` | 1.8KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/module-types.js` | 6.8KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/package.js` | 1.6KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/plugins.js` | 7.5KB | — |
-| `./backend/node_modules/@babel/core/lib/config/files/types.js` | 0.0KB | # sourceMappingURL=types.js.map |
-| `./backend/node_modules/@babel/core/lib/config/files/utils.js` | 0.9KB | — |
-| `./backend/node_modules/@babel/core/lib/config/full.js` | 11.0KB | — |
-| `./backend/node_modules/@babel/core/lib/config/helpers/config-api.js` | 2.7KB | — |
-| `./backend/node_modules/@babel/core/lib/config/helpers/deep-array.js` | 0.5KB | — |
-| `./backend/node_modules/@babel/core/lib/config/helpers/environment.js` | 0.3KB | # sourceMappingURL=environment.js.map |
-| `./backend/node_modules/@babel/core/lib/config/index.js` | 3.3KB | — |
-| `./backend/node_modules/@babel/core/lib/config/item.js` | 1.8KB | — |
-| `./backend/node_modules/@babel/core/lib/config/partial.js` | 5.3KB | — |
-| `./backend/node_modules/@babel/core/lib/config/pattern-to-regex.js` | 1.2KB | — |
-| `./backend/node_modules/@babel/core/lib/config/plugin.js` | 1.0KB | — |
-| `./backend/node_modules/@babel/core/lib/config/printer.js` | 2.8KB | — |
-| `./backend/node_modules/@babel/core/lib/config/resolve-targets-browser.js` | 1.1KB | — |
-| `./backend/node_modules/@babel/core/lib/config/resolve-targets.js` | 1.5KB | — |
-| `./backend/node_modules/@babel/core/lib/config/util.js` | 0.9KB | — |
-| `./backend/node_modules/@babel/core/lib/config/validation/option-assertions.js` | 9.7KB | — |
-| `./backend/node_modules/@babel/core/lib/config/validation/options.js` | 7.8KB | — |
-| `./backend/node_modules/@babel/core/lib/config/validation/plugins.js` | 2.0KB | — |
-| `./backend/node_modules/@babel/core/lib/config/validation/removed.js` | 2.4KB | — |
-| `./backend/node_modules/@babel/core/lib/errors/config-error.js` | 0.5KB | # sourceMappingURL=config-error.js.map |
-| `./backend/node_modules/@babel/core/lib/errors/rewrite-stack-trace.js` | 3.1KB | — |
-| `./backend/node_modules/@babel/core/lib/gensync-utils/async.js` | 2.5KB | — |
-| `./backend/node_modules/@babel/core/lib/gensync-utils/fs.js` | 0.6KB | — |
-| `./backend/node_modules/@babel/core/lib/gensync-utils/functional.js` | 1.3KB | — |
-| `./backend/node_modules/@babel/core/lib/index.js` | 5.7KB | — |
-| `./backend/node_modules/@babel/core/lib/parse.js` | 1.4KB | — |
-| `./backend/node_modules/@babel/core/lib/parser/index.js` | 2.2KB | — |
-| `./backend/node_modules/@babel/core/lib/parser/util/missing-plugin-helper.js` | 12.7KB | — |
-| `./backend/node_modules/@babel/core/lib/tools/build-external-helpers.js` | 4.5KB | — |
-| `./backend/node_modules/@babel/core/lib/transform-ast.js` | 1.6KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/block-hoist-plugin.js` | 1.9KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/file/babel-7-helpers.cjs` | 0.1KB | # sourceMappingURL=babel-7-helpers.cjs.map |
-| `./backend/node_modules/@babel/core/lib/transformation/file/file.js` | 5.9KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/file/generate.js` | 2.2KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/file/merge-map.js` | 0.8KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/index.js` | 3.0KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/normalize-file.js` | 3.6KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/normalize-opts.js` | 1.6KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/plugin-pass.js` | 1.1KB | — |
-| `./backend/node_modules/@babel/core/lib/transformation/util/clone-deep.js` | 1.6KB | — |
-| `./backend/node_modules/@babel/core/lib/transform-file-browser.js` | 0.7KB | — |
-| `./backend/node_modules/@babel/core/lib/transform-file.js` | 1.1KB | — |
-| `./backend/node_modules/@babel/core/lib/transform.js` | 1.5KB | — |
-| `./backend/node_modules/@babel/core/lib/vendor/import-meta-resolve.js` | 40.7KB | — |
-| `./backend/node_modules/@babel/core/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/@babel/core/node_modules/debug/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/@babel/core/node_modules/debug/package.json` | 1.4KB | — |
-| `./backend/node_modules/@babel/core/node_modules/debug/README.md` | 21.6KB | debug |
-| `./backend/node_modules/@babel/core/node_modules/debug/src/browser.js` | 6.0KB | eslint-env browser */ |
-| `./backend/node_modules/@babel/core/node_modules/debug/src/common.js` | 6.8KB | * |
-| `./backend/node_modules/@babel/core/node_modules/debug/src/index.js` | 0.3KB | * |
-| `./backend/node_modules/@babel/core/node_modules/debug/src/node.js` | 4.6KB | * |
-| `./backend/node_modules/@babel/core/node_modules/ms/index.js` | 3.0KB | * |
-| `./backend/node_modules/@babel/core/node_modules/ms/license.md` | 1.1KB | — |
-| `./backend/node_modules/@babel/core/node_modules/ms/package.json` | 0.7KB | — |
-| `./backend/node_modules/@babel/core/node_modules/ms/readme.md` | 1.8KB | ms |
-| `./backend/node_modules/@babel/core/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
-| `./backend/node_modules/@babel/core/node_modules/semver/LICENSE` | 0.7KB | — |
-| `./backend/node_modules/@babel/core/node_modules/semver/package.json` | 1.0KB | — |
-| `./backend/node_modules/@babel/core/node_modules/semver/range.bnf` | 0.6KB | — |
-| `./backend/node_modules/@babel/core/node_modules/semver/README.md` | 16.6KB | # Install |
-| `./backend/node_modules/@babel/core/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
-| `./backend/node_modules/@babel/core/package.json` | 2.4KB | — |
-| `./backend/node_modules/@babel/core/README.md` | 0.4KB | @babel/core |
-| `./backend/node_modules/@babel/core/src/config/files/index-browser.ts` | 2.9KB | c8 ignore start */ |
-| `./backend/node_modules/@babel/core/src/config/files/index.ts` | 0.7KB | Kind of gross, but essentially asserting that the exports of this module are the same as the |
-| `./backend/node_modules/@babel/core/src/config/resolve-targets-browser.ts` | 1.2KB | c8 ignore start */ |
-| `./backend/node_modules/@babel/core/src/config/resolve-targets.ts` | 1.7KB | Kind of gross, but essentially asserting that the exports of this module are the same as the |
-| `./backend/node_modules/@babel/core/src/transform-file-browser.ts` | 0.8KB | c8 ignore start */ |
-| `./backend/node_modules/@babel/core/src/transform-file.ts` | 1.8KB | Kind of gross, but essentially asserting that the exports of this module are the same as the |
-| `./backend/node_modules/@babel/generator/lib/buffer.js` | 8.5KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/base.js` | 2.6KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/classes.js` | 5.5KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/deprecated.js` | 0.7KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/expressions.js` | 7.5KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/flow.js` | 16.3KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/index.js` | 3.8KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/jsx.js` | 3.0KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/methods.js` | 5.7KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/modules.js` | 8.4KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/statements.js` | 6.5KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/template-literals.js` | 1.1KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/typescript.js` | 18.0KB | — |
-| `./backend/node_modules/@babel/generator/lib/generators/types.js` | 6.7KB | — |
-| `./backend/node_modules/@babel/generator/lib/index.js` | 4.1KB | — |
-| `./backend/node_modules/@babel/generator/lib/node/index.js` | 3.6KB | — |
-| `./backend/node_modules/@babel/generator/lib/node/parentheses.js` | 12.1KB | — |
-| `./backend/node_modules/@babel/generator/lib/node/whitespace.js` | 4.7KB | — |
-| `./backend/node_modules/@babel/generator/lib/printer.js` | 27.2KB | — |
-| `./backend/node_modules/@babel/generator/lib/source-map.js` | 3.0KB | — |
-| `./backend/node_modules/@babel/generator/lib/token-map.js` | 5.4KB | — |
-| `./backend/node_modules/@babel/generator/LICENSE` | 1.1KB | — |
-| `./backend/node_modules/@babel/generator/package.json` | 1.1KB | — |
-| `./backend/node_modules/@babel/generator/README.md` | 0.4KB | @babel/generator |
-| `./backend/node_modules/@babel/helper-annotate-as-pure/lib/index.js` | 0.6KB | — |
-| `./backend/node_modules/@babel/helper-annotate-as-pure/LICENSE` | 1.1KB | — |
-
-/* ...snip... (19676 total lines) */
-
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.browser.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.browser.development.cjs.js` | 19.2KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.browser.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.browser.development.esm.js` | 18.5KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.browser.esm.js` | 13.2KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.cjs.d.mts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1jYWNoZS5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1jYWNoZS5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.cjs.js` | 16.2KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.cjs.js` | 21.6KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.edge-light.cjs.js` | 19.5KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.edge-light.esm.js` | 18.6KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.development.esm.js` | 20.6KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.edge-light.cjs.js` | 14.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.edge-light.esm.js` | 13.2KB | — |
-| `./frontend/node_modules/@emotion/cache/dist/emotion-cache.esm.js` | 15.2KB | — |
-| `./frontend/node_modules/@emotion/cache/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/cache/package.json` | 3.5KB | — |
-| `./frontend/node_modules/@emotion/cache/README.md` | 2.2KB | @emotion/cache |
-| `./frontend/node_modules/@emotion/cache/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/cache/src/conditions/is-browser.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/cache/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/cache/src/index.ts` | 8.2KB | — |
-| `./frontend/node_modules/@emotion/cache/src/prefixer.ts` | 8.5KB | eslint-disable no-fallthrough */ |
-| `./frontend/node_modules/@emotion/cache/src/stylis-plugins.ts` | 7.6KB | based on https://github.com/thysultan/stylis.js/blob/e6843c373ebcbbfade25ebcc23f540ed8508da0a/src/Tokenizer.js#L239-L244 |
-| `./frontend/node_modules/@emotion/cache/src/types.ts` | 0.6KB | — |
-| `./frontend/node_modules/@emotion/hash/dist/declarations/src/index.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.dev.js` | 1.7KB | eslint-disable */ |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.d.mts` | 0.2KB | # sourceMappingURL=emotion-hash.cjs.d.mts.map |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.d.ts` | 0.1KB | # sourceMappingURL=emotion-hash.cjs.d.ts.map |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.js` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.cjs.prod.js` | 1.7KB | eslint-disable */ |
-| `./frontend/node_modules/@emotion/hash/dist/emotion-hash.esm.js` | 1.6KB | eslint-disable */ |
-| `./frontend/node_modules/@emotion/hash/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/hash/package.json` | 0.7KB | — |
-| `./frontend/node_modules/@emotion/hash/README.md` | 0.2KB | @emotion/hash |
-| `./frontend/node_modules/@emotion/hash/src/index.ts` | 1.7KB | eslint-disable */ |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/declarations/src/index.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.cjs.d.mts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1pcy1wcm9wLXZhbGlkLmNqcy5kLm10cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1pcy1wcm9wLXZhbGlkLmNqcy5kLnRzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi9kZWNsYXJhdGlvbnMvc3JjL2luZGV4LmQudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEifQ== |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.cjs.js` | 4.7KB | eslint-disable-next-line no-undef |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/is-prop-valid/dist/emotion-is-prop-valid.esm.js` | 4.4KB | eslint-disable-next-line no-undef |
-| `./frontend/node_modules/@emotion/is-prop-valid/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/is-prop-valid/package.json` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/is-prop-valid/README.md` | 0.3KB | @emotion/is-prop-valid |
-| `./frontend/node_modules/@emotion/is-prop-valid/src/index.ts` | 0.5KB | eslint-disable-next-line no-undef |
-| `./frontend/node_modules/@emotion/is-prop-valid/src/props.js` | 10.8KB | * |
-| `./frontend/node_modules/@emotion/memoize/dist/declarations/src/index.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.dev.js` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.d.mts` | 0.2KB | # sourceMappingURL=emotion-memoize.cjs.d.mts.map |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.d.ts` | 0.1KB | # sourceMappingURL=emotion-memoize.cjs.d.ts.map |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.js` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.cjs.prod.js` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/memoize/dist/emotion-memoize.esm.js` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/memoize/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/memoize/package.json` | 0.8KB | — |
-| `./frontend/node_modules/@emotion/memoize/src/index.ts` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/class-names.d.ts` | 0.8KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/context.d.ts` | 0.6KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/css.d.ts` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/global.d.ts` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/index.d.ts` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/_isolated-hnrs.d.ts` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/jsx-dev-runtime.d.ts` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/jsx.d.ts` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/jsx-namespace.d.ts` | 3.1KB | * @ts-ignore */ |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/jsx-runtime.d.ts` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/keyframes.d.ts` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/theming.d.ts` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/dist/declarations/src/types.d.ts` | 0.4KB | * |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-010f37fa.development.edge-light.cjs.js` | 10.9KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-25f9958c.browser.cjs.js` | 6.3KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-4787f564.browser.development.cjs.js` | 9.6KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-489459f2.browser.development.esm.js` | 8.5KB | because this module is primarily intended for the browser and node |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-516430c7.development.edge-light.esm.js` | 9.7KB | because this module is primarily intended for the browser and node |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-782f682d.development.esm.js` | 9.8KB | because this module is primarily intended for the browser and node |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-8113875a.edge-light.esm.js` | 6.5KB | because this module is primarily intended for the browser and node |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-a1829a1e.cjs.js` | 7.7KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-af3dc15b.edge-light.cjs.js` | 7.6KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-d59e098f.esm.js` | 6.5KB | because this module is primarily intended for the browser and node |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-e8f4cc37.development.cjs.js` | 11.0KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-element-f0de968e.browser.esm.js` | 5.2KB | because this module is primarily intended for the browser and node |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.browser.cjs.js` | 8.0KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.browser.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.browser.development.cjs.js` | 23.1KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.browser.development.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.browser.development.esm.js` | 22.1KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.browser.esm.js` | 7.0KB | eslint-disable-next-line prefer-rest-params |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.cjs.js` | 9.4KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.development.cjs.js` | 24.6KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.development.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.development.edge-light.cjs.js` | 22.6KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.development.edge-light.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.development.edge-light.esm.js` | 21.6KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.development.esm.js` | 23.5KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.edge-light.cjs.js` | 7.5KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.edge-light.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.edge-light.esm.js` | 6.4KB | eslint-disable-next-line prefer-rest-params |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.esm.js` | 8.3KB | eslint-disable-next-line prefer-rest-params |
-| `./frontend/node_modules/@emotion/react/dist/emotion-react.umd.min.js` | 21.3KB | # sourceMappingURL=emotion-react.umd.min.js.map |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.cjs.js` | 0.7KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.development.cjs.js` | 0.7KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.development.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.development.esm.js` | 0.4KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.browser.esm.js` | 0.4KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.cjs.d.mts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC1faXNvbGF0ZWQtaG5ycy5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi9kaXN0L2RlY2xhcmF0aW9ucy9zcmMvX2lzb2xhdGVkLWhucnMuZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.cjs.d.ts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC1faXNvbGF0ZWQtaG5ycy5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL2Rpc3QvZGVjbGFyYXRpb25zL3NyYy9faXNvbGF0ZWQtaG5ycy5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.cjs.js` | 0.7KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.cjs.js` | 0.7KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.edge-light.cjs.js` | 0.7KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.edge-light.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.edge-light.esm.js` | 0.4KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.development.esm.js` | 0.4KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.edge-light.cjs.js` | 0.7KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.edge-light.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.edge-light.esm.js` | 0.4KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.esm.js` | 0.4KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/dist/emotion-react-_isolated-hnrs.umd.min.js` | 3.6KB | # sourceMappingURL=emotion-react-_isolated-hnrs.umd.min.js.map |
-| `./frontend/node_modules/@emotion/react/_isolated-hnrs/package.json` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.browser.cjs.js` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.browser.development.cjs.js` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.browser.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.browser.development.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.browser.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC1qc3gtZGV2LXJ1bnRpbWUuY2pzLmQubXRzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vZGlzdC9kZWNsYXJhdGlvbnMvc3JjL2pzeC1kZXYtcnVudGltZS5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC1qc3gtZGV2LXJ1bnRpbWUuY2pzLmQudHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi9kaXN0L2RlY2xhcmF0aW9ucy9zcmMvanN4LWRldi1ydW50aW1lLmQudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEifQ== |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.cjs.js` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.development.cjs.js` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.development.edge-light.cjs.js` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.development.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.development.edge-light.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.development.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.edge-light.cjs.js` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.edge-light.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/dist/emotion-react-jsx-dev-runtime.umd.min.js` | 15.0KB | # sourceMappingURL=emotion-react-jsx-dev-runtime.umd.min.js.map |
-| `./frontend/node_modules/@emotion/react/jsx-dev-runtime/package.json` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.browser.cjs.js` | 1.7KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.browser.development.cjs.js` | 1.8KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.browser.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.browser.development.esm.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.browser.esm.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC1qc3gtcnVudGltZS5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi9kaXN0L2RlY2xhcmF0aW9ucy9zcmMvanN4LXJ1bnRpbWUuZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1yZWFjdC1qc3gtcnVudGltZS5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL2Rpc3QvZGVjbGFyYXRpb25zL3NyYy9qc3gtcnVudGltZS5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.cjs.js` | 1.7KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.development.cjs.js` | 1.7KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.development.edge-light.cjs.js` | 1.8KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.development.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.development.edge-light.esm.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.development.esm.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.edge-light.cjs.js` | 1.7KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.edge-light.esm.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.esm.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/dist/emotion-react-jsx-runtime.umd.min.js` | 15.0KB | # sourceMappingURL=emotion-react-jsx-runtime.umd.min.js.map |
-| `./frontend/node_modules/@emotion/react/jsx-runtime/package.json` | 0.3KB | — |
-| `./frontend/node_modules/@emotion/react/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/react/macro.d.mts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/react/macro.d.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/react/macro.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/react/package.json` | 14.4KB | — |
-| `./frontend/node_modules/@emotion/react/README.md` | 0.7KB | @emotion/react |
-| `./frontend/node_modules/@emotion/react/src/class-names.tsx` | 4.5KB | — |
-| `./frontend/node_modules/@emotion/react/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/react/src/conditions/is-browser.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/react/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/react/src/context.tsx` | 2.5KB | #__PURE__ */ React.createContext<EmotionCache | null>( |
-| `./frontend/node_modules/@emotion/react/src/css.ts` | 0.4KB | — |
-| `./frontend/node_modules/@emotion/react/src/emotion-element.tsx` | 5.0KB | — |
-| `./frontend/node_modules/@emotion/react/src/get-label-from-stack-trace.ts` | 1.6KB | The match may be something like 'Object.createEmotionProps' or |
-| `./frontend/node_modules/@emotion/react/src/global.tsx` | 4.5KB | maintain place over rerenders. |
-| `./frontend/node_modules/@emotion/react/src/index.ts` | 2.1KB | — |
-| `./frontend/node_modules/@emotion/react/src/_isolated-hnrs.ts` | 0.6KB | this file isolates this package that is not tree-shakeable |
-| `./frontend/node_modules/@emotion/react/src/jsx-dev-runtime.ts` | 0.8KB | — |
-| `./frontend/node_modules/@emotion/react/src/jsx-namespace.ts` | 4.2KB | unpack all here to avoid infinite self-referencing when defining our own JSX namespace for the pre-React 19 case |
-| `./frontend/node_modules/@emotion/react/src/jsx-runtime.ts` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/react/src/jsx.ts` | 1.5KB | eslint-disable-next-line prefer-rest-params |
-| `./frontend/node_modules/@emotion/react/src/keyframes.ts` | 0.6KB | — |
-| `./frontend/node_modules/@emotion/react/src/theming.tsx` | 2.9KB | tslint:disable-next-line: no-empty-interface |
-| `./frontend/node_modules/@emotion/react/src/types.ts` | 0.5KB | * |
-| `./frontend/node_modules/@emotion/react/src/utils.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/react/types/css-prop.d.ts` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/declarations/src/index.d.ts` | 1.6KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zZXJpYWxpemUuY2pzLmQubXRzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi9kZWNsYXJhdGlvbnMvc3JjL2luZGV4LmQudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEifQ== |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zZXJpYWxpemUuY2pzLmQudHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.cjs.js` | 6.7KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.development.cjs.js` | 10.5KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.development.esm.js` | 10.1KB | — |
-| `./frontend/node_modules/@emotion/serialize/dist/emotion-serialize.esm.js` | 6.3KB | — |
-| `./frontend/node_modules/@emotion/serialize/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/serialize/package.json` | 1.5KB | — |
-| `./frontend/node_modules/@emotion/serialize/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/serialize/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/serialize/src/index.ts` | 12.9KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/declarations/src/index.d.ts` | 0.6KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zaGVldC5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zaGVldC5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.cjs.js` | 3.7KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.development.cjs.js` | 4.8KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.development.esm.js` | 4.7KB | — |
-| `./frontend/node_modules/@emotion/sheet/dist/emotion-sheet.esm.js` | 3.6KB | — |
-| `./frontend/node_modules/@emotion/sheet/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/sheet/package.json` | 1.2KB | — |
-| `./frontend/node_modules/@emotion/sheet/README.md` | 3.3KB | @emotion/sheet |
-| `./frontend/node_modules/@emotion/sheet/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/sheet/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/sheet/src/index.ts` | 5.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.cjs.js` | 6.4KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.development.cjs.js` | 7.2KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.development.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.development.esm.js` | 6.5KB | for "a" so this is checking that |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.browser.esm.js` | 5.6KB | for "a" so this is checking that |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.cjs.d.mts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zdHlsZWQtYmFzZS5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuLi8uLi9kaXN0L2RlY2xhcmF0aW9ucy9zcmMvYmFzZS5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.cjs.d.ts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zdHlsZWQtYmFzZS5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4uLy4uL2Rpc3QvZGVjbGFyYXRpb25zL3NyYy9iYXNlLmQudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEifQ== |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.cjs.js` | 6.9KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.cjs.js` | 7.8KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.edge-light.cjs.js` | 7.7KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.edge-light.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.edge-light.esm.js` | 6.9KB | for "a" so this is checking that |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.development.esm.js` | 7.0KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.edge-light.cjs.js` | 6.8KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.edge-light.esm.js` | 6.0KB | for "a" so this is checking that |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.esm.js` | 6.1KB | — |
-| `./frontend/node_modules/@emotion/styled/base/dist/emotion-styled-base.umd.min.js` | 10.4KB | # sourceMappingURL=emotion-styled-base.umd.min.js.map |
-| `./frontend/node_modules/@emotion/styled/base/package.json` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/declarations/src/base.d.ts` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/declarations/src/index.d.ts` | 0.7KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/declarations/src/jsx-namespace.d.ts` | 0.3KB | * @ts-ignore */ |
-| `./frontend/node_modules/@emotion/styled/dist/declarations/src/types.d.ts` | 5.1KB | * Same as StyledOptions but shouldForwardProp must be a type guard */ |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.cjs.js` | 1.8KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.development.cjs.js` | 1.8KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.development.esm.js` | 1.7KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.browser.esm.js` | 1.6KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.cjs.d.mts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zdHlsZWQuY2pzLmQubXRzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi9kZWNsYXJhdGlvbnMvc3JjL2luZGV4LmQudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEifQ== |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi1zdHlsZWQuY2pzLmQudHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.cjs.js` | 1.8KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.cjs.js` | 1.8KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.edge-light.cjs.js` | 1.8KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.edge-light.esm.js` | 1.7KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.development.esm.js` | 1.7KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.edge-light.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.edge-light.cjs.js` | 1.8KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.edge-light.esm.js` | 1.7KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.esm.js` | 1.6KB | bind it to avoid mutating the original function |
-| `./frontend/node_modules/@emotion/styled/dist/emotion-styled.umd.min.js` | 11.5KB | # sourceMappingURL=emotion-styled.umd.min.js.map |
-| `./frontend/node_modules/@emotion/styled/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/styled/macro.d.mts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/macro.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/macro.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/styled/package.json` | 7.0KB | — |
-| `./frontend/node_modules/@emotion/styled/README.md` | 0.5KB | @emotion/styled |
-| `./frontend/node_modules/@emotion/styled/src/base.tsx` | 6.8KB | — |
-| `./frontend/node_modules/@emotion/styled/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/styled/src/conditions/is-browser.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/styled/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/styled/src/index.ts` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/styled/src/jsx-namespace.ts` | 0.6KB | this is basically a slimmed down copy of https://github.com/emotion-js/emotion/blob/main/packages/react/types/jsx-namespace.d.ts |
-| `./frontend/node_modules/@emotion/styled/src/tags.ts` | 1.4KB | — |
-| `./frontend/node_modules/@emotion/styled/src/types.ts` | 5.4KB | * Same as StyledOptions but shouldForwardProp must be a type guard */ |
-| `./frontend/node_modules/@emotion/styled/src/utils.ts` | 1.1KB | 96 is one less than the char code |
-| `./frontend/node_modules/@emotion/unitless/dist/declarations/src/index.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.cjs.d.mts` | 0.4KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi11bml0bGVzcy5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi11bml0bGVzcy5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.cjs.js` | 1.0KB | — |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/unitless/dist/emotion-unitless.esm.js` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/unitless/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/unitless/package.json` | 0.8KB | — |
-| `./frontend/node_modules/@emotion/unitless/README.md` | 0.2KB | @emotion/unitless |
-| `./frontend/node_modules/@emotion/unitless/src/index.ts` | 0.9KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/declarations/src/index.d.ts` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.browser.cjs.js` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.browser.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.browser.esm.js` | 0.5KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi11c2UtaW5zZXJ0aW9uLWVmZmVjdC13aXRoLWZhbGxiYWNrcy5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi11c2UtaW5zZXJ0aW9uLWVmZmVjdC13aXRoLWZhbGxiYWNrcy5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.cjs.js` | 1.2KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.edge-light.cjs.js` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.edge-light.cjs.mjs` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.edge-light.esm.js` | 0.4KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/dist/emotion-use-insertion-effect-with-fallbacks.esm.js` | 0.5KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/package.json` | 2.6KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/README.md` | 0.0KB | @emotion/use-insertion-effect-with-fallbacks |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/src/conditions/is-browser.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/use-insertion-effect-with-fallbacks/src/index.ts` | 0.6KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/declarations/src/index.d.ts` | 0.5KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/declarations/src/types.d.ts` | 0.6KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.browser.cjs.js` | 1.9KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.browser.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.browser.esm.js` | 1.7KB | class name could be used further down |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.cjs.d.mts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi11dGlscy5janMuZC5tdHMiLCJzb3VyY2VSb290IjoiIiwic291cmNlcyI6WyIuL2RlY2xhcmF0aW9ucy9zcmMvaW5kZXguZC50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSJ9 |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.cjs.d.ts` | 0.3KB | # sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiZW1vdGlvbi11dGlscy5janMuZC50cyIsInNvdXJjZVJvb3QiOiIiLCJzb3VyY2VzIjpbIi4vZGVjbGFyYXRpb25zL3NyYy9pbmRleC5kLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiJBQUFBIn0= |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.cjs.js` | 2.1KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.edge-light.cjs.js` | 2.0KB | class name could be used further down |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.edge-light.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.edge-light.esm.js` | 1.9KB | class name could be used further down |
-| `./frontend/node_modules/@emotion/utils/dist/emotion-utils.esm.js` | 2.0KB | class name could be used further down |
-| `./frontend/node_modules/@emotion/utils/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/utils/package.json` | 2.0KB | — |
-| `./frontend/node_modules/@emotion/utils/src/conditions/false.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/utils/src/conditions/is-browser.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/utils/src/conditions/true.ts` | 0.0KB | — |
-| `./frontend/node_modules/@emotion/utils/src/index.ts` | 2.2KB | — |
-| `./frontend/node_modules/@emotion/utils/src/types.ts` | 0.5KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/declarations/src/index.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.default.d.ts` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.default.js` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.dev.js` | 0.5KB | Use non-null assertion because we just checked that the cache `has` it |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.d.mts` | 0.2KB | # sourceMappingURL=emotion-weak-memoize.cjs.d.mts.map |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.d.ts` | 0.1KB | # sourceMappingURL=emotion-weak-memoize.cjs.d.ts.map |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.js` | 0.2KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.mjs` | 0.1KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.cjs.prod.js` | 0.5KB | Use non-null assertion because we just checked that the cache `has` it |
-| `./frontend/node_modules/@emotion/weak-memoize/dist/emotion-weak-memoize.esm.js` | 0.4KB | Use non-null assertion because we just checked that the cache `has` it |
-| `./frontend/node_modules/@emotion/weak-memoize/LICENSE` | 1.1KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/package.json` | 0.8KB | — |
-| `./frontend/node_modules/@emotion/weak-memoize/README.md` | 0.7KB | @emotion/weak-memoize |
-| `./frontend/node_modules/@emotion/weak-memoize/src/index.ts` | 0.5KB | Use non-null assertion because we just checked that the cache `has` it |
-| `./frontend/node_modules/entities/decode.js` | 0.1KB | Make exports work in Node < 12 |
-| `./frontend/node_modules/entities/dist/commonjs/decode-codepoint.d.ts` | 0.7KB | * |
-| `./frontend/node_modules/entities/dist/commonjs/decode-codepoint.js` | 2.2KB | Adapted from https://github.com/mathiasbynens/he/blob/36afe179392226cf1b6ccdb16ebbb7a5a844d93a/src/he.js#L106-L134 |
-| `./frontend/node_modules/entities/dist/commonjs/decode.d.ts` | 7.9KB | * Entities in text nodes that can end with any character. */ |
-| `./frontend/node_modules/entities/dist/commonjs/decode.js` | 21.0KB | — |
-| `./frontend/node_modules/entities/dist/commonjs/encode.d.ts` | 0.9KB | * |
-| `./frontend/node_modules/entities/dist/commonjs/encode.js` | 2.8KB | * |
-```
-### slices/frontend__src__pages__AdminAuditLogs.jsx
-```
-import { useEffect, useState, useMemo } from "react";
-import { client } from "../api/client";
-import {
-  Box, Heading, HStack, Input, Button, Table, Thead, Tbody, Tr, Th, Td,
-  Text, Code, useToast, IconButton, Tooltip, Tag, TableContainer,
-  Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
-  VStack, Flex
-} from "@chakra-ui/react";
-import { FaSync, FaInfoCircle, FaCopy } from "react-icons/fa";
-
-function shortId(id = "", chunk = 4) {
-  if (!id) return "-";
-  // 8-char readable (or chunked like xxxx-xxxx)
-  const s = String(id).replace(/[^a-zA-Z0-9]/g, "");
-  if (s.length <= chunk * 2) return s;
-  return `${s.slice(0, chunk)}…${s.slice(-chunk)}`;
-}
-
-export default function AdminAuditLogs() {
-  const [items, setItems] = useState([]);
-  const [filters, setFilters] = useState({ actor: "", action: "" });
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [detail, setDetail] = useState(null);
-  const toast = useToast();
-
-  const limit = 25;
-
-  const load = async (p = 1, append = false) => {
-    setLoading(true);
-    try {
-      const res = await client.get("/admin/audit", {
-        params: { actor: filters.actor, action: filters.action, page: p, limit }
-      });
-      const next = res.data?.items || [];
-      setPage(res.data?.page || p);
-      setHasMore(Boolean(res.data?.hasMore ?? (res.data?.total || 0) > (res.data?.page || 1) * (res.data?.limit || limit)));
-      setItems((prev) => (append ? [...prev, ...next] : next));
-    } catch {
-      toast({ title: "Failed to load audit logs", status: "error" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load(1, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const onApply = () => load(1, false);
-  const onShowMore = () => load(page + 1, true);
-
-  return (
-    <Box layerStyle="cardBlue" w="100%" p={{ base: 2, md: 4 }}>
-      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
-        <Heading size="md">Admin Audit Logs</Heading>
-        <HStack>
-          <Input
-            placeholder="Actor (User ID or username)"
-            value={filters.actor}
-            onChange={e => setFilters(f => ({ ...f, actor: e.target.value }))}
-            size="sm"
-            w="220px"
-          />
-          <Input
-            placeholder="Action (e.g. LOGIN)"
-            value={filters.action}
-            onChange={e => setFilters(f => ({ ...f, action: e.target.value }))}
-            size="sm"
-            w="200px"
-          />
-          <Button leftIcon={<FaSync />} size="sm" onClick={onApply} isLoading={loading}>
-            Apply
-          </Button>
-        </HStack>
-      </HStack>
-
-      <TableContainer
-        w="100%"
-        overflowX="auto"
-        borderRadius="md"
-        borderWidth="1px"
-        borderColor="rgba(0,0,0,0.08)"
-      >
-        <Table size="sm" variant="simple" w="full" tableLayout="fixed">
-          <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-            <Tr>
-              <Th w="160px">When</Th>
-              <Th w="220px">Actor</Th>
-              <Th w="120px">Action</Th>
-              <Th w="180px">Session ID</Th>
-              <Th w="130px">IP</Th>
-              <Th w="360px">User Agent</Th>
-              <Th w="90px" isNumeric>Details</Th>
-            </Tr>
-          </Thead>
-          <Tbody>
-            {items.map((i) => {
-              const sessionId =
-                i.meta?.sessionId ||
-                i.meta?.sid ||
-                i.meta?.session ||
-                i.sessionId || // if backend adds it directly
-                "";
-
-              return (
-                <Tr key={i._id}>
-                  <Td>
-                    <Text fontSize="sm" noOfLines={1}>
-                      {new Date(i.createdAt).toLocaleString()}
-                    </Text>
-                  </Td>
-                  <Td>
-                    <Text fontWeight="bold" noOfLines={1}>
-                      {i.actor?.username || i.actorDisplay || "(unknown)"}
-                    </Text>
-                    <Text fontSize="xs" color="gray.500" noOfLines={1}>
-                      {i.actor?.email || ""}
-                    </Text>
-                  </Td>
-                  <Td>
-                    <Tag
-                      size="sm"
-                      colorScheme={
-                        i.action === "LOGIN"
-                          ? "green"
-                          : i.action === "LOGOUT"
-                          ? "purple"
-                          : "blue"
-                      }
-                    >
-                      {i.action}
-                    </Tag>
-                  </Td>
-                  <Td>
-                    <HStack spacing={2}>
-                      <Tooltip label={sessionId || "-"}>
-                        <Code fontSize="xs">{shortId(sessionId)}</Code>
-                      </Tooltip>
-                      {!!sessionId && (
-                        <Tooltip label="Copy full Session ID">
-                          <IconButton
-                            aria-label="Copy Session ID"
-                            icon={<FaCopy />}
-                            size="xs"
-                            variant="ghost"
-                            onClick={() => {
-                              navigator.clipboard.writeText(sessionId);
-                              toast({ title: "Session ID copied", status: "success", duration: 1200 });
-                            }}
-                          />
-                        </Tooltip>
-                      )}
-                    </HStack>
-                  </Td>
-                  <Td>
-                    <Text noOfLines={1}>{i.ip || "-"}</Text>
-                  </Td>
-                  <Td>
-                    <Text noOfLines={2} title={i.userAgent}>
-                      {i.userAgent || "-"}
-                    </Text>
-                  </Td>
-                  <Td isNumeric>
-                    <Tooltip label="View details">
-                      <IconButton
-                        size="sm"
-                        aria-label="Details"
-                        icon={<FaInfoCircle />}
-                        onClick={() => setDetail(i)}
-                        variant="ghost"
-                      />
-                    </Tooltip>
-                  </Td>
-                </Tr>
-              );
-            })}
-          </Tbody>
-        </Table>
-      </TableContainer>
-
-      <Flex mt={3} justify="space-between" align="center">
-        <Text fontSize="sm" color="gray.600">
-          Showing {items.length} {items.length === 1 ? "entry" : "entries"}
-        </Text>
-        <HStack>
-          <Button size="sm" onClick={() => load(1, false)} variant="outline">
-            Refresh
-          </Button>
-          <Button size="sm" onClick={onShowMore} isDisabled={!hasMore} isLoading={loading}>
-            {hasMore ? "Show more" : "No more"}
-          </Button>
-        </HStack>
-      </Flex>
-
-      <Modal isOpen={!!detail} onClose={() => setDetail(null)} size="lg" isCentered>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>
-            Audit Details{" "}
-            {detail?.action && (
-              <Tag
-                ml={2}
-                size="sm"
-                colorScheme={
-                  detail.action === "LOGIN"
-                    ? "green"
-                    : detail.action === "LOGOUT"
-                    ? "purple"
-                    : "blue"
-                }
-              >
-                {detail.action}
-              </Tag>
-            )}
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            {detail && (
-              <VStack align="stretch" spacing={2} fontSize="sm">
-                <Box><b>id:</b> {detail._id}</Box>
-                <Box><b>when:</b> {new Date(detail.createdAt).toLocaleString()}</Box>
-                <Box>
-                  <b>actor:</b>{" "}
-                  {detail.actor?.username || detail.actorDisplay || "(unknown)"}{" "}
-                  {detail.actor?.email ? ` <${detail.actor.email}>` : ""}
-                </Box>
-                <Box><b>ip:</b> {detail.ip || "-"}</Box>
-                <Box><b>userAgent:</b> {detail.userAgent || "-"}</Box>
-                <Box><b>sessionId:</b> {detail.meta?.sessionId || detail.meta?.sid || "-"}</Box>
-                <Box><b>meta:</b></Box>
-                <Box as="pre" whiteSpace="pre-wrap" fontFamily="mono">
-                  {JSON.stringify(detail.meta || {}, null, 2)}
-                </Box>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={() => setDetail(null)}>Close</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
-  );
-}
-```
-### slices/frontend__src__pages__AdminPage.jsx
-```
-import React, { useCallback, useEffect, useState } from "react";
-import {
-  Box, Heading, Text, VStack, Tabs, TabList, TabPanels, Tab, TabPanel, Icon,
-  Table, Thead, Tbody, Tr, Th, Td, TableContainer, Spinner, Alert, AlertIcon,
-  Button, useToast, Tag, Image, Select,
-  Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure,
-  FormControl, FormLabel, Input, Switch, InputGroup, InputRightElement, IconButton as ChakraIconButton,
-  Divider, Tooltip, Grid, GridItem, Flex, HStack, Badge, Code
-} from "@chakra-ui/react";
-import {
-  FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
-  FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy
-} from "react-icons/fa";
-
-import { client, setAuthHeader } from "../api/client";
-import { useAuth } from "../context/AuthProvider";
-import InventoryPanel from "../components/admin/InventoryPanel.jsx";
-import AdminDashboard from "./admin/AdminDashboard.jsx";
-import AdminAuditLogs from "./AdminAuditLogs.jsx";
-
-const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
-const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—");
-const monthName = (yyyymm) => {
-  if (!yyyymm || typeof yyyymm !== "string" || yyyymm.length !== 7) return "N/A";
-  const [y, m] = yyyymm.split("-");
-  const date = new Date(parseInt(y), parseInt(m) - 1, 1);
-  return date.toLocaleString("default", { month: "short", year: "numeric" });
-};
-const shortId = (id = "", chunk = 4) => {
-  if (!id) return "-";
-  const s = String(id).replace(/[^a-zA-Z0-9]/g, "");
-  if (s.length <= chunk * 2) return s;
-  return `${s.slice(0, chunk)}…${s.slice(-chunk)}`;
-};
-
-export default function AdminPage() {
-  const toast = useToast();
-  const { token } = useAuth();
-  useEffect(() => { setAuthHeader(token); }, [token]);
-
-  const [tabIndex, setTabIndex] = useState(0);
-
-  // Users
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [usersError, setUsersError] = useState("");
-  const [selectedUser, setSelectedUser] = useState(null);
-
-  // Orders
-  const [orders, setOrders] = useState([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [ordersError, setOrdersError] = useState("");
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [loadingSelectedOrder, setLoadingSelectedOrder] = useState(false);
-
-  // Designs
-  const [designs, setDesigns] = useState([]);
-  const [loadingDesigns, setLoadingDesigns] = useState(false);
-  const [designsError, setDesignsError] = useState("");
-
-  // Devices / Sessions
-  const [sessions, setSessions] = useState([]);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-  const [sessionsError, setSessionsError] = useState("");
-  const [sessionsPage] = useState(1);
-
-  // Audit logs
-  const [auditsLoaded, setAuditsLoaded] = useState(false);
-
-  // Modals
-  const { isOpen: isViewUserModalOpen, onOpen: onViewUserModalOpen, onClose: onViewUserModalClose } = useDisclosure();
-  const { isOpen: isEditModalOpen, onOpen: onEditModalOpen, onClose: onEditModalClose } = useDisclosure();
-  const { isOpen: isDeleteUserModalOpen, onOpen: onDeleteUserModalOpen, onClose: onDeleteUserModalClose } = useDisclosure();
-  const { isOpen: isViewOrderModalOpen, onOpen: onOpenViewOrderModal, onClose: onCloseViewOrderModal } = useDisclosure();
-  const { isOpen: isDeleteOrderModalOpen, onOpen: onDeleteOrderModalOpen, onClose: onDeleteOrderModalClose } = useDisclosure();
-  const { isOpen: isViewDesignModalOpen, onOpen: onOpenViewDesignModal, onClose: onCloseViewDesignModal } = useDisclosure();
-  const { isOpen: isDeleteDesignModalOpen, onOpen: onOpenDeleteDesignModal, onClose: onCloseDeleteDesignModal } = useDisclosure();
-
-  // Devices Info Modal
-  const { isOpen: isDeviceInfoOpen, onOpen: onDeviceInfoOpen, onClose: onDeviceInfoClose } = useDisclosure();
-  const [deviceDetail, setDeviceDetail] = useState(null);
-
-  const [orderToDelete, setOrderToDelete] = useState(null);
-  const [designToDelete, setDesignToDelete] = useState(null);
-
-  const [editFormData, setEditFormData] = useState({
-    username: "", email: "", firstName: "", lastName: "", isAdmin: false, newPassword: "", confirmNewPassword: ""
-  });
-  const [showNewPasswordInModal, setShowNewPasswordInModal] = useState(false);
-  const [showConfirmNewPasswordInModal, setShowConfirmNewPasswordInModal] = useState(false);
-
-  // ---------- Fetchers ----------
-  const fetchUsers = useCallback(async () => {
-    if (users.length > 0) return;
-    setLoadingUsers(true); setUsersError("");
-    try {
-      const { data } = await client.get("/admin/users");
-      setUsers(Array.isArray(data) ? data : (data?.items || []));
-    } catch {
-      setUsersError("Failed to fetch users");
-    } finally { setLoadingUsers(false); }
-  }, [users.length]);
-
-  const fetchOrders = useCallback(async () => {
-    if (orders.length > 0) return;
-    setLoadingOrders(true); setOrdersError("");
-    try {
-      const { data } = await client.get("/admin/orders");
-      setOrders(Array.isArray(data) ? data : (data?.items || []));
-    } catch {
-      setOrdersError("Failed to fetch orders");
-    } finally { setLoadingOrders(false); }
-  }, [orders.length]);
-
-  const fetchDesigns = useCallback(async () => {
-    if (designs.length > 0) return;
-    setLoadingDesigns(true); setDesignsError("");
-    try {
-      const { data } = await client.get("/admin/designs");
-      setDesigns(Array.isArray(data) ? data : (data?.items || []));
-    } catch {
-      setDesignsError("Failed to fetch designs");
-    } finally { setLoadingDesigns(false); }
-  }, [designs.length]);
-
-  const fetchSessions = useCallback(async () => {
-    setLoadingSessions(true); setSessionsError("");
-    try {
-      const { data } = await client.get("/admin/sessions", {
-        params: { page: sessionsPage, limit: 100, activeOnly: true }
-      });
-      setSessions(data?.items || []);
-    } catch {
-      setSessionsError("Failed to fetch sessions");
-    } finally { setLoadingSessions(false); }
-  }, [sessionsPage]);
-
-  // Tab -> loader
-  const dataFetchers = {
-    0: null,
-    1: fetchUsers,
-    2: fetchOrders,
-    3: fetchDesigns,
-    4: null,          // Inventory loads internally
-    5: fetchSessions, // Devices
-    6: () => setAuditsLoaded(true),
-  };
-  const handleTabsChange = (index) => {
-    setTabIndex(index);
-    const f = dataFetchers[index];
-    if (typeof f === "function") f();
-  };
-
-  // ---------- Users ----------
-  const handleViewUser = (user) => { setSelectedUser(user); onViewUserModalOpen(); };
-  const handleOpenEditUser = (user) => {
-    setSelectedUser(user);
-    setEditFormData({
-      username: user.username, email: user.email, firstName: user.firstName || "", lastName: user.lastName || "",
-      isAdmin: user.isAdmin, newPassword: "", confirmNewPassword: ""
-    });
-    onEditModalOpen();
-  };
-  const handleEditFormChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setEditFormData((prev) => ({ ...prev, [name]: type === "checkbox" || type === "switch" ? checked : value }));
-  };
-  const handleSaveChanges = async () => {
-    if (!selectedUser) return;
-    if (editFormData.newPassword && editFormData.newPassword !== editFormData.confirmNewPassword) {
-      toast({ title: "Password Mismatch", status: "error" }); return;
-    }
-    const payload = { ...editFormData };
-    if (!payload.newPassword) delete payload.newPassword;
-    delete payload.confirmNewPassword;
-    try {
-      const { data: updatedUser } = await client.put(`/admin/users/${selectedUser._id}`, payload);
-      toast({ title: "User Updated", status: "success" });
-      setUsers((prev) => prev.map((u) => (u._id === updatedUser._id ? updatedUser : u)));
-      onEditModalClose();
-    } catch (e) {
-      toast({ title: "Update Failed", description: e.response?.data?.message, status: "error" });
-    }
-  };
-  const handleOpenDeleteUser = (user) => { setSelectedUser(user); onDeleteUserModalOpen(); };
-  const confirmDeleteUser = async () => {
-    if (!selectedUser) return;
-    try {
-      await client.delete(`/admin/users/${selectedUser._id}`);
-      toast({ title: "User Deleted", status: "success" });
-      setUsers((prev) => prev.filter((u) => u._id !== selectedUser._id));
-      onDeleteUserModalClose();
-    } catch (e) {
-      toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
-    }
-  };
-
-  // ---------- Orders ----------
-  const handleOpenDeleteOrderDialog = (order) => { setOrderToDelete(order); onDeleteOrderModalOpen(); };
-  const confirmDeleteOrder = async () => {
-    if (!orderToDelete) return;
-    try {
-      await client.delete(`/admin/orders/${orderToDelete._id}`);
-      toast({ title: "Order Deleted", status: "success" });
-      setOrders((prev) => prev.filter((o) => o._id !== orderToDelete._id));
-      onDeleteOrderModalClose();
-    } catch (e) {
-      toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
-      onDeleteOrderModalOpen();
-    }
-  };
-  const handleViewOrder = async (orderId) => {
-    setLoadingSelectedOrder(true); onOpenViewOrderModal();
-    try {
-      const { data } = await client.get(`/admin/orders/${orderId}`);
-      setSelectedOrder(data);
-    } catch (e) {
-      toast({ title: "Error Fetching Order", description: e.response?.data?.message, status: "error" });
-      onCloseViewOrderModal();
-    } finally {
-      setLoadingSelectedOrder(false);
-    }
-  };
-  const handleStatusChange = async (orderId, newStatus) => {
-    const original = [...orders];
-    setOrders((prev) => prev.map((o) => (o._id === orderId ? { ...o, orderStatus: newStatus } : o)));
-    try {
-      await client.put(`/admin/orders/${orderId}/status`, { status: newStatus });
-      toast({ title: "Status Updated", status: "success", duration: 2000 });
-    } catch (e) {
-      setOrders(original);
-      toast({ title: "Update Failed", description: e.response?.data?.message, status: "error" });
-    }
-  };
-
-  // ---------- Designs ----------
-  const [selectedDesign, setSelectedDesign] = useState(null);
-  const handleViewDesign = (design) => { setSelectedDesign(design); onOpenViewDesignModal(); };
-  const handleOpenDeleteDesignDialog = (design) => { setDesignToDelete(design); onOpenDeleteDesignModal(); };
-  const confirmDeleteDesign = async () => {
-    if (!designToDelete) return;
-    try {
-      await client.delete(`/admin/designs/${designToDelete._id}`);
-      toast({ title: "Design Deleted", status: "success" });
-      setDesigns((prev) => prev.filter((d) => d._id !== designToDelete._id));
-      onCloseDeleteDesignModal();
-    } catch (e) {
-      toast({ title: "Delete Failed", description: e.response?.data?.message, status: "error" });
-    }
-  };
-
-  // ---------- Devices actions ----------
-  const SESSION_KEY = "tftp_session_id"; // keep consistent with client.js
-  const forceKickToLogin = () => {
-    try {
-      localStorage.removeItem("tftp_token");
-      localStorage.removeItem("token");
-      localStorage.removeItem(SESSION_KEY);
-    } catch {}
-    delete client.defaults.headers.common.Authorization;
-    delete client.defaults.headers.common["x-session-id"];
-    window.location.assign("/login?redirect=/admin");
-  };
-
-  const revokeSession = async (jti) => {
-    try {
-      await client.delete(`/admin/sessions/${jti}`);
-      toast({ title: "Session revoked", status: "success" });
-
-      // if this was MY session, log me out now
-      const mySession = localStorage.getItem(SESSION_KEY);
-      if (mySession && mySession === jti) return forceKickToLogin();
-
-      await fetchSessions();
-    } catch {
-      toast({ title: "Failed to revoke session", status: "error" });
-    }
-  };
-  const revokeAllForUser = async (userId) => {
-    try {
-      await client.delete(`/admin/sessions/user/${userId}`);
-      toast({ title: "All sessions revoked for user", status: "success" });
-
-      const mine = localStorage.getItem(SESSION_KEY);
-      if (mine) return forceKickToLogin();
-
-      await fetchSessions();
-    } catch {
-      toast({ title: "Failed to revoke user sessions", status: "error" });
-    }
-  };
-
-  // ---------- Panels (styled to match) ----------
-  const UsersPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
-      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
-        <Heading size="md">User Management</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setUsers([]); fetchUsers(); }} isLoading={loadingUsers}>Refresh</Button>
-      </HStack>
-      {loadingUsers ? (
-        <VStack p={10}><Spinner /></VStack>
-      ) : usersError ? (
-        <Alert status="error"><AlertIcon />{usersError}</Alert>
-      ) : (
-        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-          <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
-            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-              <Tr>
-                <Th w="140px">ID</Th>
-                <Th w="180px">Username</Th>
-                <Th w="240px">Email</Th>
-                <Th w="200px">Name</Th>
-                <Th w="100px">Admin</Th>
-                <Th w="160px">Joined</Th>
-                <Th w="150px">Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {users.map((user) => (
-                <Tr key={user._id}>
-                  <Td fontSize="xs" title={user._id} noOfLines={1}>{String(user._id).substring(0, 8)}…</Td>
-                  <Td noOfLines={1}>{user.username}</Td>
-                  <Td noOfLines={1}>{user.email}</Td>
-                  <Td noOfLines={1}>{`${user.firstName || ""} ${user.lastName || ""}`.trim()}</Td>
-                  <Td><Tag size="sm" colorScheme={user.isAdmin ? "green" : "gray"}>{user.isAdmin ? "Yes" : "No"}</Tag></Td>
-                  <Td noOfLines={1}>{fmtDate(user.createdAt)}</Td>
-                  <Td>
-                    <Tooltip label="View User Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewUser(user)} /></Tooltip>
-                    <Tooltip label="Edit User"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEdit} />} onClick={() => handleOpenEditUser(user)} /></Tooltip>
-                    <Tooltip label="Delete User"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteUser(user)} /></Tooltip>
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      )}
-    </Box>
-  );
-
-  const OrdersPanel = () => {
-    const getStatusColor = (status) => {
-      if (status === "Delivered") return "green.200";
-      if (status === "Shipped") return "blue.200";
-      if (status === "Cancelled") return "red.200";
-      return "gray.200";
-    };
-    return (
-      <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
-        <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
-          <Heading size="md">Order Management</Heading>
-          <Button size="sm" leftIcon={<FaSync />} onClick={() => { setOrders([]); fetchOrders(); }} isLoading={loadingOrders}>Refresh</Button>
-        </HStack>
-        {loadingOrders ? (
-          <VStack p={10}><Spinner /></VStack>
-        ) : ordersError ? (
-          <Alert status="error"><AlertIcon />{ordersError}</Alert>
-        ) : (
-          <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-            <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
-              <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-                <Tr>
-                  <Th w="140px">ID</Th>
-                  <Th w="220px">User</Th>
-                  <Th w="160px">Date</Th>
-                  <Th w="100px">Total</Th>
-                  <Th w="140px">Pay Status</Th>
-                  <Th w="160px">Order Status</Th>
-                  <Th w="90px">Items</Th>
-                  <Th w="150px">Actions</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {orders.map((order) => (
-                  <Tr key={order._id}>
-                    <Td fontSize="xs" noOfLines={1}>{String(order._id).substring(0, 8)}…</Td>
-                    <Td noOfLines={1}>{order.user?.email}</Td>
-                    <Td noOfLines={1}>{fmtDate(order.createdAt)}</Td>
-                    <Td noOfLines={1}>{money(order.totalAmount)}</Td>
-                    <Td><Tag size="sm" colorScheme={order.paymentStatus === "Succeeded" ? "green" : "orange"}>{order.paymentStatus}</Tag></Td>
-                    <Td>
-                      <Select
-                        size="xs"
-                        variant="outline"
-                        color="brand.textDark"
-                        value={order.orderStatus}
-                        onChange={(e) => handleStatusChange(order._id, e.target.value)}
-                        bg={getStatusColor(order.orderStatus)}
-                        borderRadius="md"
-                        maxW="140px"
-                      >
-                        <option value="Processing">Processing</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </Select>
-                    </Td>
-                    <Td noOfLines={1}>{order.orderItems?.length || 0}</Td>
-                    <Td>
-                      <Tooltip label="View Order Details"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewOrder(order._id)} /></Tooltip>
-                      <Tooltip label="Delete Order"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteOrderDialog(order)} /></Tooltip>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </TableContainer>
-        )}
-      </Box>
-    );
-  };
-
-  const DesignsPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
-      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
-        <Heading size="md">Design Management</Heading>
-        <Button size="sm" leftIcon={<FaSync />} onClick={() => { setDesigns([]); fetchDesigns(); }} isLoading={loadingDesigns}>Refresh</Button>
-      </HStack>
-      {loadingDesigns ? (
-        <VStack p={10}><Spinner /></VStack>
-      ) : designsError ? (
-        <Alert status="error"><AlertIcon />{designsError}</Alert>
-      ) : (
-        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-          <Table variant="simple" size="sm" w="100%" tableLayout="fixed">
-            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-              <Tr>
-                <Th w="90px">Preview</Th>
-                <Th w="380px">Prompt</Th>
-                <Th w="220px">Meta</Th>
-                <Th w="180px">Creator</Th>
-                <Th w="140px">Created</Th>
-                <Th w="150px">Votes (Month)</Th>
-                <Th w="140px">Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {designs.map((design) => {
-                const meta = design.settings || {};
-                const mode = meta.mode || (meta.imageStrength != null ? "i2i" : "t2i");
-                const ar = meta.aspectRatio || "—";
-                const cfg = meta.cfgScale ?? "—";
-                const stp = meta.steps ?? "—";
-                const str = meta.imageStrength != null ? Math.round(meta.imageStrength * 100) + "%" : "—";
-                const previewSrc = design.thumbUrl || design.publicUrl || design.imageDataUrl || "";
-                return (
-                  <Tr key={design._id}>
-                    <Td>
-                      {previewSrc ? (
-                        <Image src={previewSrc} boxSize="56px" objectFit="cover" borderRadius="md" />
-                      ) : (
-                        <Box boxSize="56px" borderWidth="1px" borderRadius="md" />
-                      )}
-                    </Td>
-                    <Td fontSize="xs" whiteSpace="normal">{design.prompt}</Td>
-                    <Td>
-                      <VStack align="start" spacing={0}>
-                        <HStack spacing={2}>
-                          <Badge colorScheme={mode === "i2i" ? "purple" : "blue"}>{mode.toUpperCase()}</Badge>
-                          <Badge>{ar}</Badge>
-                        </HStack>
-                        <HStack spacing={3} fontSize="xs" color="whiteAlpha.800">
-                          <Text>CFG {cfg}</Text>
-                          <Text>Steps {stp}</Text>
-                          <Text>Strength {str}</Text>
-                        </HStack>
-                      </VStack>
-                    </Td>
-                    <Td noOfLines={1}>{design.user?.username || "N/A"}</Td>
-                    <Td noOfLines={1}>{new Date(design.createdAt).toLocaleDateString()}</Td>
-                    <Td>
-                      {design.isSubmittedForContest && design.contestSubmissionMonth ? (
-                        <VStack align="center" spacing={0}>
-                          <Tag size="sm" colorScheme="blue" borderRadius="full">{design.votes || 0} Votes</Tag>
-                          <Text fontSize="xs" color="brand.textMuted">{monthName(design.contestSubmissionMonth)}</Text>
-                        </VStack>
-                      ) : (<Text fontSize="xs" color="brand.textMuted">N/A</Text>)}
-                    </Td>
-                    <Td>
-                      <Tooltip label="View Design"><ChakraIconButton size="xs" variant="ghost" icon={<Icon as={FaEye} />} onClick={() => handleViewDesign(design)} /></Tooltip>
-                      <Tooltip label="Delete Design"><ChakraIconButton size="xs" variant="ghost" colorScheme="red" icon={<Icon as={FaTrashAlt} />} onClick={() => handleOpenDeleteDesignDialog(design)} /></Tooltip>
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      )}
-    </Box>
-  );
-
-  const DevicesPanel = () => (
-    <Box p={{ base: 2, md: 4 }} layerStyle="cardBlue" w="100%">
-      <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
-        <Heading size="md">Devices / Active Sessions</Heading>
-        <Button leftIcon={<FaSync />} size="sm" onClick={fetchSessions} isLoading={loadingSessions}>Refresh</Button>
-      </HStack>
-
-      {loadingSessions ? (
-        <VStack p={10}><Spinner /></VStack>
-      ) : sessionsError ? (
-        <Alert status="error"><AlertIcon />{sessionsError}</Alert>
-      ) : (
-        <TableContainer w="100%" overflowX="auto" borderRadius="md" borderWidth="1px" borderColor="rgba(0,0,0,0.08)">
-          <Table size="sm" variant="simple" w="100%" tableLayout="fixed">
-            <Thead position="sticky" top={0} zIndex={1} bg="brand.cardBlue">
-              <Tr>
-                <Th w="240px">User</Th>
-                <Th w="180px">Session ID</Th>
-                <Th w="130px">IP</Th>
-                <Th w="360px">User Agent</Th>
-                <Th w="160px">Created</Th>
-                <Th w="160px">Last Seen</Th>
-                <Th w="160px">Expires</Th>
-                <Th w="120px">Status</Th>
-                <Th w="150px" isNumeric>Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {sessions.map((i) => (
-                <Tr key={i.jti}>
-                  <Td>
-                    <Text fontWeight="bold" noOfLines={1}>{i.user?.username || "(unknown)"}</Text>
-                    <Text fontSize="xs" color="gray.500" noOfLines={1}>{i.user?.email}</Text>
-                    {i.user?._id && (
-                      <Tooltip label="Revoke ALL for this user">
-                        <ChakraIconButton
-                          ml={2}
-                          size="xs"
-                          icon={<FaUserSlash />}
-                          aria-label="Revoke all"
-                          onClick={() => revokeAllForUser(i.user?._id)}
-                          variant="ghost"
-                        />
-                      </Tooltip>
-                    )}
-                  </Td>
-                  <Td>
-                    <HStack spacing={2}>
-                      <Tooltip label={i.jti}>
-                        <Code fontSize="xs">{shortId(i.jti)}</Code>
-                      </Tooltip>
-                      <Tooltip label="Copy full Session ID">
-                        <ChakraIconButton
-                          aria-label="Copy"
-                          icon={<FaCopy />}
-                          size="xs"
-                          variant="ghost"
-                          onClick={() => {
-                            navigator.clipboard.writeText(i.jti);
-                            toast({ title: "Session ID copied", status: "success", duration: 1200 });
-                          }}
-                        />
-                      </Tooltip>
-                    </HStack>
-                  </Td>
-                  <Td noOfLines={1}>{i.ip || "—"}</Td>
-                  <Td>
-                    <Text noOfLines={1} title={i.userAgent}>{i.userAgent || "—"}</Text>
-                  </Td>
-                  <Td noOfLines={1}>{fmtDate(i.createdAt)}</Td>
-                  <Td noOfLines={1}>{fmtDate(i.lastSeenAt || i.createdAt)}</Td>
-                  <Td noOfLines={1}>{fmtDate(i.expiresAt)}</Td>
-                  <Td>
-                    {i.revokedAt
-                      ? <Badge colorScheme="red">Revoked</Badge>
-                      : (new Date(i.expiresAt) < new Date() ? <Badge>Expired</Badge> : <Badge colorScheme="green">Active</Badge>)
-                    }
-                  </Td>
-                  <Td isNumeric>
-                    <HStack justify="flex-end" spacing={1}>
-                      <Tooltip label="Info">
-                        <ChakraIconButton
-                          size="sm"
-                          icon={<FaInfoCircle />}
-                          aria-label="Info"
-                          variant="ghost"
-                          onClick={() => { setDeviceDetail(i); onDeviceInfoOpen(); }}
-                        />
-                      </Tooltip>
-                      {!i.revokedAt && (
-                        <Tooltip label="Revoke this session">
-                          <ChakraIconButton
-                            size="sm"
-                            icon={<FaTrashAlt />}
-                            aria-label="Revoke"
-                            onClick={() => revokeSession(i.jti)}
-                            variant="ghost"
-                          />
-                        </Tooltip>
-                      )}
-                    </HStack>
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      )}
-
-      <Modal isOpen={isDeviceInfoOpen} onClose={onDeviceInfoClose} size="lg" isCentered>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Device / Client Details</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            {deviceDetail && (
-              <VStack align="stretch" spacing={3} fontSize="sm">
-                <Box><b>User:</b> {deviceDetail.user?.username || "(unknown)"} {deviceDetail.user?.email ? ` <${deviceDetail.user.email}>` : ""}</Box>
-                <Box><b>Session ID:</b> {deviceDetail.jti}</Box>
-                <Box><b>IP:</b> {deviceDetail.ip || "—"}</Box>
-                <Box><b>User Agent:</b> {deviceDetail.userAgent || "—"}</Box>
-                <Box><b>Created:</b> {fmtDate(deviceDetail.createdAt)}</Box>
-                <Box><b>Last Seen:</b> {fmtDate(deviceDetail.lastSeenAt || deviceDetail.createdAt)}</Box>
-                <Box><b>Expires:</b> {fmtDate(deviceDetail.expiresAt)}</Box>
-                <Divider />
-                <Box><b>Client Hints:</b></Box>
-                <Box as="pre" whiteSpace="pre-wrap" fontFamily="mono">
-                  {JSON.stringify(deviceDetail.client || {}, null, 2)}
-                </Box>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button onClick={onDeviceInfoClose}>Close</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    </Box>
-  );
-
-  // Auto-populate devices when visiting the tab the first time
-  useEffect(() => {
-    if (tabIndex === 5 && sessions.length === 0 && !loadingSessions) fetchSessions();
-  }, [tabIndex, sessions.length, loadingSessions, fetchSessions]);
-
-  return (
-    <Box w="100%" pb={10}>
-      <VStack spacing={6} align="stretch">
-        <Heading as="h1" size="pageTitle" color="brand.textLight" w="100%">Admin Console</Heading>
-
-        <Box bg="brand.paper" borderRadius="xl" shadow="xl" p={{ base: 2, md: 4 }} w="100%">
-          <Tabs variant="soft-rounded" colorScheme="brandPrimary" isLazy onChange={handleTabsChange} index={tabIndex}>
-            <TabList mb="1em" flexWrap="wrap">
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaTachometerAlt} mr={2} /> Dashboard</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaUsersCog} mr={2} /> Users</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaBoxOpen} mr={2} /> Orders</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaPalette} mr={2} /> Designs</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaKey} mr={2} /> Devices</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Audit Logs</Tab>
-            </TabList>
-
-            <TabPanels>
-              <TabPanel px={0} py={2}><AdminDashboard token={token} onViewOrder={handleViewOrder} /></TabPanel>
-              <TabPanel px={0} py={2}><UsersPanel /></TabPanel>
-              <TabPanel px={0} py={2}><OrdersPanel /></TabPanel>
-              <TabPanel px={0} py={2}><DesignsPanel /></TabPanel>
-              <TabPanel px={0} py={2}><InventoryPanel /></TabPanel>
-              <TabPanel px={0} py={2}><DevicesPanel /></TabPanel>
-              <TabPanel px={0} py={2}><AdminAuditLogs token={token} /></TabPanel>
-            </TabPanels>
-          </Tabs>
-        </Box>
-      </VStack>
-
-      {/* Keep your existing modals below (unchanged) */}
-    </Box>
-  );
-}
-```
-### slices/scripts__gen_filemap.sh
-```
-#!/usr/bin/env bash
-set -euo pipefail
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$repo_root"
-
-# Build a table: path | size | brief purpose (from top comment or guess)
-echo '| Path | Size | Purpose |' > docs/FILEMAP.md
-echo '|------|------|---------|' >> docs/FILEMAP.md
-
-# find source-ish files
-find . -type f \
-  -not -path "./.git/*" \
-  -not -path "./node_modules/*" \
-  -not -path "./dist/*" \
-  -not -path "./build/*" \
-  -not -name "*.lock" \
-  -not -name "*.map" \
-  -not -name "*.png" -not -name "*.jpg" -not -name "*.pdf" \
-  -not -name "*.woff*" \
-  | sort | while read -r f; do
-    sz=$(wc -c < "$f" | awk '{printf "%.1fKB",$1/1024}')
-    # Grab first comment-ish line as purpose
-    purpose=$(sed -n '1,20p' "$f" \
-      | sed -n 's@^[[:space:]]*//\s*@@p; s@^[[:space:]]*#\s*@@p; s@^[[:space:]]*/\*\s*@@p' \
-      | head -n 1)
-    [ -z "$purpose" ] && purpose="—"
-    echo "| \`$f\` | $sz | $purpose |" >> docs/FILEMAP.md
-  done
-echo "Wrote docs/FILEMAP.md"
-```
-### slices/tools__prepare_chat_context.sh
-```
-#!/usr/bin/env bash
-set -euo pipefail
-
-BASE_REF_DEFAULT="origin/main"
-SINCE="${1:-$BASE_REF_DEFAULT}"
-OUT="chatpack"
-MAX_PER_FILE=800
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$REPO_ROOT"
-
-# Ensure we know the base; fallback to merge-base or first commit
-git fetch --quiet origin || true
-if ! git rev-parse --verify --quiet "$SINCE" >/dev/null; then
-  if git rev-parse --verify --quiet "$BASE_REF_DEFAULT" >/dev/null; then
-    SINCE="$BASE_REF_DEFAULT"
-  else
-    FIRST="$(git rev-list --max-parents=0 HEAD | tail -n1)"
-    SINCE="${FIRST:-HEAD~0}"
-  fi
-fi
-
-rm -rf "$OUT"
-mkdir -p "$OUT/files" "$OUT/slices" "docs" || true
-
-# Always include core docs if present
-BASE_DOCS=(docs/ARCHITECTURE.md docs/DECISIONS.md docs/CHANGELOG.md docs/FILEMAP.md docs/CHAT-CONTRACT.md)
-for f in "${BASE_DOCS[@]}"; do
-  [ -f "$f" ] && install -D "$f" "$OUT/$f"
-done
-
-# Collect changed files (allow zero changes)
-mapfile -t changed < <(git diff --name-only "$SINCE"...HEAD -- . ":(exclude)node_modules" ":(exclude)dist" ":(exclude)build" || true)
-
-# Always include manifests
-for f in package.json backend/package.json frontend/package.json; do
-  [ -f "$f" ] && changed+=("$f")
-done
-
-# Optional ignore: skip paths in .chatgptignore (best-effort)
-ignore_pat="^$"  # matches nothing
-if [ -f .chatgptignore ]; then
-  # build a regex that matches any ignored prefix
-  ignore_pat="$(sed 's/[].[^$\\*/]/\\&/g; s#/\+$#/#; s#^\./##' .chatgptignore \
-    | grep -v '^\s*$' \
-    | sed 's#/$##' \
-    | awk '{printf("%s%s", NR==1?"":"|", "^" $0)}')"
-  [ -z "$ignore_pat" ] && ignore_pat="^$"
-fi
-
-ctx_list=()
-for f in "${changed[@]}"; do
-  [ -n "${f:-}" ] || continue
-  [[ "$f" =~ $ignore_pat ]] && continue
-  [ -f "$f" ] || continue
-
-  size=$(wc -c < "$f")
-  ext="${f##*.}"
-  if [[ "$ext" =~ ^(js|jsx|ts|tsx|json|css|scss|md|yaml|yml|env|sh|py|go|java|rb|php)$ ]]; then
-    total=$(wc -l < "$f" || echo 0)
-    out="$OUT/slices/${f//\//__}"
-    if [ "$total" -le "$MAX_PER_FILE" ]; then
-      install -D "$f" "$out"
-    else
-      head -n $((MAX_PER_FILE/2)) "$f" > "$out"
-      printf "\n/* ...snip... (%s total lines) */\n\n" "$total" >> "$out"
-      tail -n $((MAX_PER_FILE/2)) "$f" >> "$out"
-    fi
-    ctx_list+=("slices/${f//\//__}")
-  else
-    if [ "$size" -le 200000 ]; then
-      install -D "$f" "$OUT/files/$f"
-      ctx_list+=("files/$f")
-    fi
-  fi
-done
-
-# Write a compact diff; don't fail if empty
-git diff --minimal --binary "$SINCE"...HEAD > "$OUT/diff.patch" || true
-
-# Always produce context.md even if there are zero changes
-{
-  echo "# Context (generated)"
-  echo "- Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  echo "- Base: \`$SINCE\` → HEAD"
-  echo "- Files included: ${#ctx_list[@]}"
-  echo
-  [ -f docs/ARCHITECTURE.md ] && { echo "## ARCHITECTURE.md"; echo '```md'; sed -n '1,400p' docs/ARCHITECTURE.md; echo '```'; }
-  [ -f docs/DECISIONS.md ] && { echo "## DECISIONS.md"; echo '```md'; sed -n '1,400p' docs/DECISIONS.md; echo '```'; }
-  [ -f docs/FILEMAP.md ] && { echo "## FILEMAP.md (first 200 lines)"; echo '```md'; sed -n '1,200p' docs/FILEMAP.md; echo '```'; }
-  echo "## Changed file slices"
-  if [ "${#ctx_list[@]}" -eq 0 ]; then
-    echo "_No changed files detected versus \`$SINCE\`. Docs included above._"
-  else
-    for f in "${ctx_list[@]}"; do
-      echo "### $f"
-      echo '```'
-      sed -n '1,800p' "$OUT/$f"
-      echo '```'
-    done
-  fi
-  echo "## Diff (summary)"
-  echo '```diff'
-  git diff --name-status "$SINCE"...HEAD || true
-  echo '```'
-} > "$OUT/context.md"
-
-echo "✅ Chat context ready → $OUT/context.md"
-```
-### slices/tools__scan_for_secrets.sh
-```
-#!/usr/bin/env bash
-set -euo pipefail
-rg -n --hidden --iglob '!node_modules' \
-  -e 'AKIA[0-9A-Z]{16}' \
-  -e '(api|secret|token|key)[^a-zA-Z0-9]?[=:][^[:space:]]{12,}' \
-  -e '-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----' \
-  || true
-```
-### slices/package.json
-```
-{
-  "devDependencies": {
-    "cloudinary": "^2.7.0"
-  }
-}
-```
-### slices/backend__package.json
-```
-{
-  "name": "teesfromthepast-backend",
-  "type": "module",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "jest --runInBand --detectOpenHandles"
-  },
-  "jest": {
-    "setupFilesAfterEnv": [
-      "./setup.js"
-    ]
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@sendgrid/mail": "^8.1.5",
-    "axios": "^1.9.0",
-    "bcrypt": "^6.0.0",
-    "bcryptjs": "^3.0.2",
-    "bull": "^4.16.5",
-    "cloudinary": "^2.7.0",
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
-    "csurf": "^1.11.0",
-    "dotenv": "^16.5.0",
-    "express": "^4.18.2",
-    "express-async-handler": "^1.2.0",
-    "express-mongo-sanitize": "^2.2.0",
-    "express-rate-limit": "^7.5.0",
-    "express-validator": "^7.2.1",
-    "helmet": "^8.1.0",
-    "hpp": "^0.2.3",
-    "ioredis": "^5.6.1",
-    "jsonwebtoken": "^8.5.1",
-    "mongoose": "^8.14.3",
-    "node-fetch": "^2.7.0",
-    "nodemailer": "^7.0.3",
-    "openai": "^4.98.0",
-    "react-router-dom": "^7.6.0",
-    "sharp": "^0.34.3",
-    "slugify": "^1.6.6",
-    "stripe": "^18.2.0",
-    "xss-clean": "^0.1.4"
-  },
-  "devDependencies": {
-    "@babel/preset-env": "^7.27.2",
-    "babel-jest": "^30.0.0-beta.3",
-    "jest": "^29.7.0",
-    "mongodb-memory-server": "^10.1.4",
-    "supertest": "^7.1.1"
-  }
-}
-```
-### slices/frontend__package.json
-```
-{
-  "name": "teesfromthepast",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@chakra-ui/icons": "^2.2.4",
-    "@chakra-ui/react": "^2.10.8",
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0",
-    "@stripe/react-stripe-js": "^3.7.0",
-    "@stripe/stripe-js": "^7.3.1",
-    "axios": "^1.9.0",
-    "fabric": "^5.3.0", 
-    "framer-motion": "^12.11.4",
-    "jwt-decode": "^4.0.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-icons": "^5.5.0",
-    "react-router-dom": "^6.30.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.25.0",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2",
-    "@vitejs/plugin-react": "^4.4.1",
-    "eslint": "^9.25.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.19",
-    "globals": "^16.0.0",
-    "vite": "^6.3.5"
-  }
-}
-```
-## Diff (summary)
-```diff
-A	.chatgptignore
-M	backend/utils/audit.js
-A	docs/ARCHITECTURE.md
-A	docs/CHANGELOG.md
-A	docs/CHAT-CONTRACT.md
-A	docs/DECISIONS.md
-A	docs/FILEMAP.md
-M	frontend/src/pages/AdminAuditLogs.jsx
-M	frontend/src/pages/AdminPage.jsx
-A	scripts/gen_filemap.sh
-A	tools/prepare_chat_context.sh
-A	tools/scan_for_secrets.sh
-```
+# CHANGELOG
+
+Format:
+- `YYYY-MM-DD HH:MM TZ` — short summary
+  - detail lines…
+
+---
+
+## 2025-08-23 18:59 PT — Admin polish & docs bootstrap
+- Devices: added **bulk checkboxes** with black checked state; full readable Session ID; “Auto-refresh” control shows **black label** and **white menu items**.
+- Orders/Designs/Users: column widths relaxed, readability improved, refresh buttons switched to black outline for contrast.
+- Added `checkpoint` script to always build `FILEMAP.md`, `diff.patch`, and **compose `context.md`**.
+- Added starter docs: **ARCHITECTURE, DECISIONS, CHAT-CONTRACT, HANDOFF**.
+
+## 2025-08-23 15:30 PT — CORS fix
+- Backend: ensured CORS includes Vercel origin and custom headers (`Authorization`, `x-session-id`).
+
+## 2025-08-15 — Product Studio export
+- Offscreen Fabric canvas export sized to placement; upload to `/upload/printfile`; cart line item persists preview + print file.
+
+---
+
+## FILEMAP (top)
+# FILEMAP
+
+Snapshot of repo files:
+
+- backend/app.bak
+- backend/app.js
+- backend/babel.config.cjs
+- backend/backend@1.0.0
+- backend/config/db.js
+- backend/controllers/adminAuditController.js
+- backend/controllers/adminController.js
+- backend/controllers/authController.bak
+- backend/controllers/authController.js
+- backend/controllers/designController.bak
+- backend/controllers/designController.js
+- backend/controllers/formController.js
+- backend/controllers/orderController.js
+- backend/controllers/printfulController.js
+- backend/controllers/storefrontProductController.js
+- backend/controllers/uploadController.js
+- backend/.gitignore
+- backend/index.bak
+- backend/index.js
+- backend/middleware/adminMiddleware.js
+- backend/middleware/authMiddleware.bak
+- backend/middleware/authMiddleware.js
+- backend/middleware/csrfMiddleware.js
+- backend/middleware/csrfStrict.js
+- backend/models/AuditLog.js
+- backend/models/Design.bak
+- backend/models/Design.js
+- backend/models/Order.js
+- backend/models/Product.js
+- backend/models/RefreshToken.js
+- backend/models/User.js
+- backend/models/WebhookEvent.js
+- backend/node
+- backend/package.json
+- backend/package-lock.json
+- backend/raw-test.js
+- backend/routes/adminAuditRoutes.js
+- backend/routes/adminDesignRoutes.js
+- backend/routes/admin.js
+- backend/routes/adminOrderRoutes.js
+- backend/routes/adminProductRoutes.js
+- backend/routes/adminSessionRoutes.js
+- backend/routes/adminUserRoutes.js
+- backend/routes/auth.js
+- backend/routes/checkout.js
+- backend/routes/contest.js
+- backend/routes/designs.bak
+- backend/routes/designs.js
+- backend/routes/formRoutes.js
+- backend/routes/generateImage.bak
+- backend/routes/orderRoutes.js
+- backend/routes/orders.js
+- backend/routes/printful.js
+- backend/routes/storefrontProductRoutes.js
+- backend/routes/stripeWebhook.js
+- backend/routes/uploadRoutes.js
+- backend/routes/userDesignRoutes.js
+- backend/services/printful.js
+- backend/setup.js
+- backend/temp.js
+- backend/test-express.js
+- backend/test-http.js
+- backend/__tests__/auth.test.js
+- backend/__tests__/health.test.js
+- backend/transform/transformPrintfulProduct.js
+- backend/trigger.txt
+- backend/utils/audit.js
+- backend/utils/auditLogger.js
+- backend/utils/cors.js
+- backend/utils/pickPrintfulImage.js
+- backend/utils/slugify.js
+- .chatgptignore
+- chatpack/context.md
+- chatpack/diff.patch
+- chatpack/docs/ARCHITECTURE.md
+- chatpack/docs/CHANGELOG.md
+- chatpack/docs/CHAT-CONTRACT.md
+- chatpack/docs/DECISIONS.md
+- chatpack/docs/FILEMAP.md
+- chatpack/files/.chatgptignore
+- chatpack/slices/backend__package.json
+- chatpack/slices/backend__utils__audit.js
+- chatpack/slices/docs__ARCHITECTURE.md
+- chatpack/slices/docs__CHANGELOG.md
+- chatpack/slices/docs__CHAT-CONTRACT.md
+- chatpack/slices/docs__DECISIONS.md
+- chatpack/slices/docs__FILEMAP.md
+- chatpack/slices/frontend__package.json
+- chatpack/slices/frontend__src__pages__AdminAuditLogs.jsx
+- chatpack/slices/frontend__src__pages__AdminPage.jsx
+- chatpack/slices/package.json
+- chatpack/slices/scripts__gen_filemap.sh
+- chatpack/slices/tools__prepare_chat_context.sh
+- chatpack/slices/tools__scan_for_secrets.sh
+- docs/ARCHITECTURE.md
+- docs/CHANGELOG.md
+- docs/CHAT-CONTRACT.md
+- docs/DECISIONS.md
+- docs/FILEMAP.md
+- frontend/.env
+- frontend/eslint.config.js
+- frontend/frontend@0.0.0
+- frontend/fuser
+- frontend/.gitignore
+- frontend/index.html
+- frontend/package.json
+- frontend/package-lock.json
+- frontend/public/js/fabric.min.js
+- frontend/public/logo.png
+- frontend/public/logo-text.png
+- frontend/public/mockups/classic-tee/tee-black/back.png
+- frontend/public/mockups/classic-tee/tee-black/front.png
+- frontend/public/mockups/classic-tee/tee-black/left.png
+- frontend/public/mockups/classic-tee/tee-black/right.png
+- frontend/public/mockups/classic-tee/tee-brown-savana/back.png
+- frontend/public/mockups/classic-tee/tee-brown-savana/front.png
+- frontend/public/mockups/classic-tee/tee-brown-savana/left.png
+- frontend/public/mockups/classic-tee/tee-brown-savana/right.png
+- frontend/public/mockups/classic-tee/tee-charcoal/back.png
+- frontend/public/mockups/classic-tee/tee-charcoal/front.png
+- frontend/public/mockups/classic-tee/tee-charcoal/left.png
+- frontend/public/mockups/classic-tee/tee-charcoal/right.png
+- frontend/public/mockups/classic-tee/tee-lime/back.png
+- frontend/public/mockups/classic-tee/tee-lime/front.png
+- frontend/public/mockups/classic-tee/tee-lime/left.png
+- frontend/public/mockups/classic-tee/tee-lime/right.png
+- frontend/public/mockups/classic-tee/tee-maroon/back.png
+- frontend/public/mockups/classic-tee/tee-maroon/front.png
+- frontend/public/mockups/classic-tee/tee-maroon/left.png
+- frontend/public/mockups/classic-tee/tee-maroon/right.png
+- frontend/public/mockups/classic-tee/tee-military-green/back.png
+- frontend/public/mockups/classic-tee/tee-military-green/front.png
+- frontend/public/mockups/classic-tee/tee-military-green/left.png
+- frontend/public/mockups/classic-tee/tee-military-green/right.png
+- frontend/public/mockups/classic-tee/tee-orange/back.png
+- frontend/public/mockups/classic-tee/tee-orange/front.png
+- frontend/public/mockups/classic-tee/tee-orange/left.png
+- frontend/public/mockups/classic-tee/tee-orange/right.png
+- frontend/public/mockups/classic-tee/tee-purple/back.png
+- frontend/public/mockups/classic-tee/tee-purple/front.png
+- frontend/public/mockups/classic-tee/tee-purple/left.png
+- frontend/public/mockups/classic-tee/tee-purple/right.png
+- frontend/public/mockups/classic-tee/tee-red/back.png
+- frontend/public/mockups/classic-tee/tee-red/front.png
+- frontend/public/mockups/classic-tee/tee-red/left.png
+- frontend/public/mockups/classic-tee/tee-red/right.png
+- frontend/public/mockups/classic-tee/tee-royal/back.png
+- frontend/public/mockups/classic-tee/tee-royal/front.png
+- frontend/public/mockups/classic-tee/tee-royal/left.png
+- frontend/public/mockups/classic-tee/tee-royal/right.png
+- frontend/public/mockups/classic-tee/tee-tropical-blue/back.png
+- frontend/public/mockups/classic-tee/tee-tropical-blue/front.png
+- frontend/public/mockups/classic-tee/tee-tropical-blue/left.png
+- frontend/public/mockups/classic-tee/tee-tropical-blue/right.png
+- frontend/public/mockups/classic-tee/tee-white/back.png
+- frontend/public/mockups/classic-tee/tee-white/front.png
+- frontend/public/mockups/classic-tee/tee-white/left.png
+- frontend/public/mockups/classic-tee/tee-white/right.png
+- frontend/public/vite.svg
+- frontend/README.md
+- frontend/src/api/client.js
+- frontend/src/App.css
+- frontend/src/App.jsx
+- frontend/src/assets/react.svg
+- frontend/src/components/admin/AdminDashboardPanel.jsx
+- frontend/src/components/admin/InventoryPanel.jsx
+- frontend/src/components/admin/ProductTypeManager.jsx
+- frontend/src/components/AdminRoute.jsx
+- frontend/src/components/CheckoutForm.jsx
+- frontend/src/components/ColorDots.jsx
+- frontend/src/components/Footer.jsx
+- frontend/src/components/LogoutButton.jsx
+- frontend/src/components/MainLayout.jsx
+- frontend/src/components/PrivateRoute.jsx
+- frontend/src/components/ProductStudioCanvas.jsx
+- frontend/src/components/shop/ProductCard.jsx
+- frontend/src/components/shop/QuickViewModal.jsx
+- frontend/src/context/AuthProvider.jsx
+- frontend/src/data/colorPalette.js
+- frontend/src/data/colors.js
+- frontend/src/data/mockups.js
+- frontend/src/data/mockupsMeta.js
+- frontend/src/data/mockupsRegistry.js
+- frontend/src/data/printAreas.js
+- frontend/src/Home.jsx
+- frontend/src/hooks/useRefreshToken.js
+- frontend/src/index.css
+- frontend/src/Login.bak
+- frontend/src/Login.jsx
+- frontend/src/main.jsx
+- frontend/src/pages/admin/AdminAuditLogs.jsx
+- frontend/src/pages/admin/AdminDashboard.jsx
+- frontend/src/pages/AdminAuditLogs.jsx
+- frontend/src/pages/AdminDevices.jsx
+- frontend/src/pages/AdminPage.jsx
+- frontend/src/pages/CheckoutPage.jsx
+- frontend/src/pages/ContactPage.jsx
+- frontend/src/pages/Dashboard.jsx
+- frontend/src/pages/ForgotPasswordPage.jsx
+- frontend/src/pages/Generate.jsx
+- frontend/src/pages/Home.jsx
+- frontend/src/pages/HomePage.jsx
+- frontend/src/pages/LoginPage.jsx
+- frontend/src/pages/MyDesigns.jsx
+- frontend/src/pages/MyOrdersPage.jsx
+- frontend/src/pages/PaymentSuccessPage.jsx
+- frontend/src/pages/PrivacyPolicyPage.jsx
+- frontend/src/pages/ProductDetailPage.jsx
+- frontend/src/pages/ProductStudio.bak
+- frontend/src/pages/ProductStudio.jsx
+- frontend/src/pages/ProductStudio.module.css
+- frontend/src/pages/Profile.jsx
+- frontend/src/pages/RegistrationPage.jsx
+- frontend/src/pages/ResetPasswordPage.jsx
+- frontend/src/pages/ShopPage.bak
+- frontend/src/pages/ShopPage.jsx
+- frontend/src/pages/TermsOfServicePage.jsx
+- frontend/src/pages/Vote.jsx
+- frontend/src/pages/VotingPage.jsx
+- frontend/src/pages/Welcome.jsx
+- frontend/src/styles/productstudio.css
+- frontend/src/theme.js
+- frontend/src/utils/cloudinary.js
+- frontend/src/utils/download.js
+- frontend/vercel.json
+- frontend/vite.config.js
+- .gitignore
+- logo.xcf
+- package.json
+- package-lock.json
+- scripts/gen_filemap.sh
+- scripts/prepare-mockups.js
+- stable-diffusion-webui
+- tools/audit_tftp.sh
+- tools/prepare_chat_context.sh
+- tools/scan_for_secrets.sh
+- .venv/bin/activate
+- .venv/bin/activate.csh
+- .venv/bin/activate.fish
+- .venv/bin/Activate.ps1
+- .venv/bin/git-filter-repo
+- .venv/bin/pip
+- .venv/bin/pip3
+- .venv/bin/pip3.12
+- .venv/bin/python
+- .venv/bin/python3
+- .venv/bin/python3.12
+- .venv/lib64
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/COPYING
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/COPYING.gpl
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/COPYING.mit
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/entry_points.txt
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/INSTALLER
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/METADATA
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/RECORD
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/REQUESTED
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/top_level.txt
+- .venv/lib/python3.12/site-packages/git_filter_repo-2.47.0.dist-info/WHEEL
+- .venv/lib/python3.12/site-packages/git_filter_repo.py
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/AUTHORS.txt
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/entry_points.txt
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/INSTALLER
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/LICENSE.txt
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/METADATA
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/RECORD
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/REQUESTED
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/top_level.txt
+- .venv/lib/python3.12/site-packages/pip-24.0.dist-info/WHEEL
+- .venv/lib/python3.12/site-packages/pip/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/build_env.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cache.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/autocompletion.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/base_command.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/cmdoptions.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/command_context.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/main_parser.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/main.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/parser.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/progress_bars.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/autocompletion.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/base_command.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/cmdoptions.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/command_context.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/main.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/main_parser.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/parser.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/progress_bars.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/req_command.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/spinners.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/__pycache__/status_codes.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/req_command.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/spinners.py
+- .venv/lib/python3.12/site-packages/pip/_internal/cli/status_codes.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/cache.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/check.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/completion.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/configuration.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/debug.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/download.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/freeze.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/hash.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/help.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/index.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/inspect.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/install.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/list.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/cache.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/check.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/completion.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/configuration.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/debug.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/download.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/freeze.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/hash.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/help.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/index.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/inspect.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/install.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/list.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/search.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/show.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/uninstall.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/__pycache__/wheel.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/search.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/show.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/uninstall.py
+- .venv/lib/python3.12/site-packages/pip/_internal/commands/wheel.py
+- .venv/lib/python3.12/site-packages/pip/_internal/configuration.py
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/base.py
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/installed.py
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/__pycache__/base.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/__pycache__/installed.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/__pycache__/sdist.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/__pycache__/wheel.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/sdist.py
+- .venv/lib/python3.12/site-packages/pip/_internal/distributions/wheel.py
+- .venv/lib/python3.12/site-packages/pip/_internal/exceptions.py
+- .venv/lib/python3.12/site-packages/pip/_internal/index/collector.py
+- .venv/lib/python3.12/site-packages/pip/_internal/index/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/index/package_finder.py
+- .venv/lib/python3.12/site-packages/pip/_internal/index/__pycache__/collector.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/index/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/index/__pycache__/package_finder.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/index/__pycache__/sources.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/index/sources.py
+- .venv/lib/python3.12/site-packages/pip/_internal/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/base.py
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/_distutils.py
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/__pycache__/base.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/__pycache__/_distutils.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/__pycache__/_sysconfig.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/locations/_sysconfig.py
+- .venv/lib/python3.12/site-packages/pip/_internal/main.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/base.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/_compat.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/_dists.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/_envs.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/__pycache__/_compat.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/__pycache__/_dists.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/__pycache__/_envs.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/_json.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/pkg_resources.py
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/__pycache__/base.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/__pycache__/_json.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/metadata/__pycache__/pkg_resources.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/candidate.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/direct_url.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/format_control.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/index.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__init__.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/installation_report.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/link.py
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/candidate.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/direct_url.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/format_control.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/index.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/__init__.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/installation_report.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/link.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/scheme.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/search_scope.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/selection_prefs.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/target_python.cpython-312.pyc
+- .venv/lib/python3.12/site-packages/pip/_internal/models/__pycache__/wheel.cpython-312.pyc
+
+---
+
+## Current diff (if any)
+diff --git a/chatpack/diff.patch b/chatpack/diff.patch
+index 19833ff..e69de29 100644
+--- a/chatpack/diff.patch
++++ b/chatpack/diff.patch
+@@ -1,20660 +0,0 @@
+-diff --git a/.chatgptignore b/.chatgptignore
+-new file mode 100644
+-index 0000000..a30153e
+---- /dev/null
+-+++ b/.chatgptignore
+-@@ -0,0 +1,11 @@
+-+# things never to include in chat packs
+-+node_modules/
+-+dist/
+-+build/
+-+.env
+-+*.pem
+-+*.key
+-+*.crt
+-+*.png
+-+*.jpg
+-+*.pdf
+-diff --git a/backend/utils/audit.js b/backend/utils/audit.js
+-index b84614a..824f397 100644
+---- a/backend/utils/audit.js
+-+++ b/backend/utils/audit.js
+-@@ -22,10 +22,6 @@ try {
+-   AuditLog = mongoose.model("AuditLog", AuditLogSchema);
+- }
+- 
+--/**
+-- * Generic audit logger.
+-- * NEW: accepts optional `actor` to override req.user (for login/logout).
+-- */
+- export async function logAudit(
+-   req,
+-   { action, targetType = "", targetId = "", meta = {}, actor = null }
+-@@ -35,6 +31,11 @@ export async function logAudit(
+-     const userAgent = req.headers["user-agent"] || "";
+-     const actorId = actor || req.user?._id || null;
+- 
+-+    // Auto-capture current session id if present:
+-+    const sid = req.headers["x-session-id"];
+-+    const mergedMeta = { ...meta };
+-+    if (sid && !mergedMeta.sessionId) mergedMeta.sessionId = String(sid);
+-+
+-     await AuditLog.create({
+-       action,
+-       actor: actorId,
+-@@ -42,7 +43,7 @@ export async function logAudit(
+-       targetId: String(targetId || ""),
+-       ip,
+-       userAgent,
+--      meta,
+-+      meta: mergedMeta,
+-     });
+-   } catch (err) {
+-     console.warn("[audit] failed:", err?.message);
+-diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+-new file mode 100644
+-index 0000000..e69de29
+-diff --git a/docs/CHANGELOG.md b/docs/CHANGELOG.md
+-new file mode 100644
+-index 0000000..e69de29
+-diff --git a/docs/CHAT-CONTRACT.md b/docs/CHAT-CONTRACT.md
+-new file mode 100644
+-index 0000000..e69de29
+-diff --git a/docs/DECISIONS.md b/docs/DECISIONS.md
+-new file mode 100644
+-index 0000000..e69de29
+-diff --git a/docs/FILEMAP.md b/docs/FILEMAP.md
+-new file mode 100644
+-index 0000000..cb7d9a3
+---- /dev/null
+-+++ b/docs/FILEMAP.md
+-@@ -0,0 +1,19676 @@
+-+| Path | Size | Purpose |
+-+|------|------|---------|
+-+| `./backend/app.bak` | 4.6KB | backend/app.js |
+-+| `./backend/app.js` | 4.0KB | backend/app.js |
+-+| `./backend/babel.config.cjs` | 0.1KB | backend/babel.config.js |
+-+| `./backend/backend@1.0.0` | 0.0KB | — |
+-+| `./backend/config/db.js` | 0.4KB | backend/config/db.js |
+-+| `./backend/controllers/adminAuditController.js` | 2.0KB | backend/controllers/adminAuditController.js |
+-+| `./backend/controllers/adminController.js` | 8.7KB | backend/controllers/adminController.js |
+-+| `./backend/controllers/authController.bak` | 10.2KB | backend/controllers/authController.js |
+-+| `./backend/controllers/authController.js` | 8.5KB | backend/controllers/authController.js |
+-+| `./backend/controllers/designController.bak` | 6.3KB | backend/controllers/designController.js |
+-+| `./backend/controllers/designController.js` | 10.4KB | Long-edge target for print-ready art |
+-+| `./backend/controllers/formController.js` | 4.2KB | backend/controllers/formController.js |
+-+| `./backend/controllers/orderController.js` | 3.2KB | backend/controllers/orderController.js |
+-+| `./backend/controllers/printfulController.js` | 1.7KB | backend/controllers/printfulController.js |
+-+| `./backend/controllers/storefrontProductController.js` | 2.8KB | backend/controllers/storefrontProductController.js |
+-+| `./backend/controllers/uploadController.js` | 1.8KB | Configure Cloudinary |
+-+| `./backend/.env` | 1.1KB | — |
+-+| `./backend/.gitignore` | 0.0KB | — |
+-+| `./backend/index.bak` | 1.1KB | backend/index.js |
+-+| `./backend/index.js` | 2.0KB | backend/index.js |
+-+| `./backend/middleware/adminMiddleware.js` | 0.7KB | backend/middleware/adminMiddleware.js |
+-+| `./backend/middleware/authMiddleware.bak` | 1.3KB | backend/middleware/authMiddleware.js |
+-+| `./backend/middleware/authMiddleware.js` | 2.5KB | backend/middleware/authMiddleware.js |
+-+| `./backend/middleware/csrfMiddleware.js` | 1.2KB | backend/middleware/csrfMiddleware.js |
+-+| `./backend/middleware/csrfStrict.js` | 0.3KB | backend/middleware/csrfStrict.js |
+-+| `./backend/models/AuditLog.js` | 1.5KB | backend/models/AuditLog.js |
+-+| `./backend/models/Design.bak` | 1.0KB | backend/models/Design.js |
+-+| `./backend/models/Design.js` | 1.5KB | backend/models/Design.js |
+-+| `./backend/models/Order.js` | 2.6KB | Add other variant specific fields if needed |
+-+| `./backend/models/Product.js` | 2.1KB | — |
+-+| `./backend/models/RefreshToken.js` | 0.9KB | backend/models/RefreshToken.js |
+-+| `./backend/models/User.js` | 2.9KB | backend/models/User.js |
+-+| `./backend/models/WebhookEvent.js` | 0.3KB | backend/models/WebhookEvent.js |
+-+| `./backend/node` | 0.0KB | — |
+-+| `./backend/node_modules/abort-controller/browser.js` | 0.4KB | globals self, window */ |
+-+| `./backend/node_modules/abort-controller/browser.mjs` | 0.3KB | globals self, window */ |
+-+| `./backend/node_modules/abort-controller/dist/abort-controller.d.ts` | 1.0KB | * |
+-+| `./backend/node_modules/abort-controller/dist/abort-controller.js` | 3.5KB | * |
+-+| `./backend/node_modules/abort-controller/dist/abort-controller.mjs` | 3.2KB | * |
+-+| `./backend/node_modules/abort-controller/dist/abort-controller.umd.js` | 9.0KB | * |
+-+| `./backend/node_modules/abort-controller/LICENSE` | 1.0KB | — |
+-+| `./backend/node_modules/abort-controller/package.json` | 2.8KB | — |
+-+| `./backend/node_modules/abort-controller/polyfill.js` | 0.5KB | globals require, self, window */ |
+-+| `./backend/node_modules/abort-controller/polyfill.mjs` | 0.5KB | globals self, window */ |
+-+| `./backend/node_modules/abort-controller/README.md` | 3.1KB | abort-controller |
+-+| `./backend/node_modules/accepts/HISTORY.md` | 5.0KB | — |
+-+| `./backend/node_modules/accepts/index.js` | 5.1KB | ! |
+-+| `./backend/node_modules/accepts/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/accepts/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/accepts/README.md` | 4.0KB | accepts |
+-+| `./backend/node_modules/agent-base/dist/helpers.d.ts` | 0.6KB | / <reference types="node" /> |
+-+| `./backend/node_modules/agent-base/dist/helpers.js` | 2.3KB | — |
+-+| `./backend/node_modules/agent-base/dist/index.d.ts` | 1.5KB | / <reference types="node" /> |
+-+| `./backend/node_modules/agent-base/dist/index.js` | 7.2KB | — |
+-+| `./backend/node_modules/agent-base/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/agent-base/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/agent-base/README.md` | 2.4KB | ## Turn a function into an [`http.Agent`][http.Agent] instance |
+-+| `./backend/node_modules/agentkeepalive/browser.js` | 0.1KB | Noop function for browser since native api's don't use agents. |
+-+| `./backend/node_modules/agentkeepalive/index.d.ts` | 2.1KB | — |
+-+| `./backend/node_modules/agentkeepalive/index.js` | 0.2KB | — |
+-+| `./backend/node_modules/agentkeepalive/lib/agent.js` | 14.9KB | OriginalAgent come from |
+-+| `./backend/node_modules/agentkeepalive/lib/constants.js` | 0.5KB | agent |
+-+| `./backend/node_modules/agentkeepalive/lib/https_agent.js` | 1.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/agentkeepalive/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/agentkeepalive/package.json` | 1.3KB | — |
+-+| `./backend/node_modules/agentkeepalive/README.md` | 11.5KB | agentkeepalive |
+-+| `./backend/node_modules/@ampproject/remapping/dist/remapping.mjs` | 8.3KB | * |
+-+| `./backend/node_modules/@ampproject/remapping/dist/remapping.umd.js` | 9.5KB | — |
+-+| `./backend/node_modules/@ampproject/remapping/dist/types/build-source-map-tree.d.ts` | 0.8KB | * |
+-+| `./backend/node_modules/@ampproject/remapping/dist/types/remapping.d.ts` | 1.1KB | * |
+-+| `./backend/node_modules/@ampproject/remapping/dist/types/source-map.d.ts` | 0.6KB | * |
+-+| `./backend/node_modules/@ampproject/remapping/dist/types/source-map-tree.d.ts` | 1.6KB | — |
+-+| `./backend/node_modules/@ampproject/remapping/dist/types/types.d.ts` | 0.6KB | — |
+-+| `./backend/node_modules/@ampproject/remapping/LICENSE` | 11.1KB | — |
+-+| `./backend/node_modules/@ampproject/remapping/package.json` | 2.2KB | — |
+-+| `./backend/node_modules/@ampproject/remapping/README.md` | 7.1KB | @ampproject/remapping |
+-+| `./backend/node_modules/ansi-escapes/index.d.ts` | 5.4KB | / <reference types="node"/> |
+-+| `./backend/node_modules/ansi-escapes/index.js` | 3.7KB | TODO: remove this in the next major version |
+-+| `./backend/node_modules/ansi-escapes/license` | 1.1KB | — |
+-+| `./backend/node_modules/ansi-escapes/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/ansi-escapes/readme.md` | 4.9KB | ansi-escapes |
+-+| `./backend/node_modules/ansi-regex/index.d.ts` | 0.7KB | * |
+-+| `./backend/node_modules/ansi-regex/index.js` | 0.3KB | — |
+-+| `./backend/node_modules/ansi-regex/license` | 1.1KB | — |
+-+| `./backend/node_modules/ansi-regex/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/ansi-regex/readme.md` | 2.5KB | ansi-regex |
+-+| `./backend/node_modules/ansi-styles/index.d.ts` | 6.2KB | — |
+-+| `./backend/node_modules/ansi-styles/index.js` | 4.0KB | — |
+-+| `./backend/node_modules/ansi-styles/license` | 1.1KB | — |
+-+| `./backend/node_modules/ansi-styles/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/ansi-styles/readme.md` | 4.2KB | ansi-styles [![Build Status](https://travis-ci.org/chalk/ansi-styles.svg?branch=master)](https://travis-ci.org/chalk/ansi-styles) |
+-+| `./backend/node_modules/anymatch/index.d.ts` | 0.7KB | — |
+-+| `./backend/node_modules/anymatch/index.js` | 3.1KB | * |
+-+| `./backend/node_modules/anymatch/LICENSE` | 0.8KB | — |
+-+| `./backend/node_modules/anymatch/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/anymatch/README.md` | 3.9KB | ### anymatch(matchers, testString, [returnIndex], [options]) |
+-+| `./backend/node_modules/argparse/CHANGELOG.md` | 3.3KB | — |
+-+| `./backend/node_modules/argparse/index.js` | 0.1KB | — |
+-+| `./backend/node_modules/argparse/lib/action/append/constant.js` | 1.4KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action/append.js` | 1.5KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action_container.js` | 14.7KB | * internal |
+-+| `./backend/node_modules/argparse/lib/action/count.js` | 1.0KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action/help.js` | 1.1KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action.js` | 4.5KB | * |
+-+| `./backend/node_modules/argparse/lib/action/store/constant.js` | 1.3KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action/store/false.js` | 0.7KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action/store.js` | 1.3KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action/store/true.js` | 0.7KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/action/subparsers.js` | 3.5KB | * internal |
+-+| `./backend/node_modules/argparse/lib/action/version.js` | 1.2KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/argparse.js` | 0.6KB | — |
+-+| `./backend/node_modules/argparse/lib/argument/error.js` | 1.2KB | :nodoc:* |
+-+| `./backend/node_modules/argparse/lib/argument/exclusive.js` | 1.6KB | * internal |
+-+| `./backend/node_modules/argparse/lib/argument/group.js` | 2.3KB | * internal |
+-+| `./backend/node_modules/argparse/lib/argument_parser.js` | 34.4KB | * |
+-+| `./backend/node_modules/argparse/lib/const.js` | 0.3KB | — |
+-+| `./backend/node_modules/argparse/lib/help/added_formatters.js` | 2.6KB | Constants |
+-+| `./backend/node_modules/argparse/lib/help/formatter.js` | 21.5KB | * |
+-+| `./backend/node_modules/argparse/lib/namespace.js` | 1.8KB | * |
+-+| `./backend/node_modules/argparse/lib/utils.js` | 1.3KB | — |
+-+| `./backend/node_modules/argparse/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/argparse/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/argparse/README.md` | 8.2KB | — |
+-+| `./backend/node_modules/array-flatten/array-flatten.js` | 1.2KB | * |
+-+| `./backend/node_modules/array-flatten/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/array-flatten/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/array-flatten/README.md` | 1.2KB | Array Flatten |
+-+| `./backend/node_modules/asap/asap.js` | 1.9KB | * |
+-+| `./backend/node_modules/asap/browser-asap.js` | 2.1KB | rawAsap provides everything we need except exception management. |
+-+| `./backend/node_modules/asap/browser-raw.js` | 9.4KB | Use the fastest means possible to execute a task in its own turn, with |
+-+| `./backend/node_modules/asap/CHANGES.md` | 2.8KB | # 2.0.6 |
+-+| `./backend/node_modules/asap/LICENSE.md` | 1.1KB | — |
+-+| `./backend/node_modules/asap/package.json` | 1.9KB | — |
+-+| `./backend/node_modules/asap/raw.js` | 4.0KB | Use the fastest means possible to execute a task in its own turn, with |
+-+| `./backend/node_modules/asap/README.md` | 9.9KB | ASAP |
+-+| `./backend/node_modules/asynckit/bench.js` | 1.2KB | eslint no-console: "off" */ |
+-+| `./backend/node_modules/asynckit/index.js` | 0.2KB | — |
+-+| `./backend/node_modules/asynckit/lib/abort.js` | 0.5KB | API |
+-+| `./backend/node_modules/asynckit/lib/async.js` | 0.6KB | API |
+-+| `./backend/node_modules/asynckit/lib/defer.js` | 0.4KB | * |
+-+| `./backend/node_modules/asynckit/lib/iterate.js` | 1.8KB | API |
+-+| `./backend/node_modules/asynckit/lib/readable_asynckit.js` | 1.6KB | API |
+-+| `./backend/node_modules/asynckit/lib/readable_parallel.js` | 0.7KB | API |
+-+| `./backend/node_modules/asynckit/lib/readable_serial.js` | 0.6KB | API |
+-+| `./backend/node_modules/asynckit/lib/readable_serial_ordered.js` | 0.9KB | API |
+-+| `./backend/node_modules/asynckit/lib/state.js` | 0.9KB | API |
+-+| `./backend/node_modules/asynckit/lib/streamify.js` | 2.9KB | API |
+-+| `./backend/node_modules/asynckit/lib/terminator.js` | 0.5KB | API |
+-+| `./backend/node_modules/asynckit/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/asynckit/package.json` | 1.6KB | — |
+-+| `./backend/node_modules/asynckit/parallel.js` | 1.0KB | Public API |
+-+| `./backend/node_modules/asynckit/README.md` | 7.5KB | asynckit [![NPM Module](https://img.shields.io/npm/v/asynckit.svg?style=flat)](https://www.npmjs.com/package/asynckit) |
+-+| `./backend/node_modules/asynckit/serial.js` | 0.5KB | Public API |
+-+| `./backend/node_modules/asynckit/serialOrdered.js` | 1.7KB | Public API |
+-+| `./backend/node_modules/asynckit/stream.js` | 0.7KB | API |
+-+| `./backend/node_modules/async-mutex/es6/errors.js` | 0.2KB | — |
+-+| `./backend/node_modules/async-mutex/es6/index.js` | 0.2KB | — |
+-+| `./backend/node_modules/async-mutex/es6/MutexInterface.js` | 0.0KB | — |
+-+| `./backend/node_modules/async-mutex/es6/Mutex.js` | 1.5KB | — |
+-+| `./backend/node_modules/async-mutex/es6/SemaphoreInterface.js` | 0.0KB | — |
+-+| `./backend/node_modules/async-mutex/es6/Semaphore.js` | 6.0KB | — |
+-+| `./backend/node_modules/async-mutex/es6/tryAcquire.js` | 0.4KB | eslint-disable-next-lisne @typescript-eslint/explicit-module-boundary-types |
+-+| `./backend/node_modules/async-mutex/es6/withTimeout.js` | 5.2KB | eslint-disable @typescript-eslint/no-explicit-any */ |
+-+| `./backend/node_modules/async-mutex/index.mjs` | 10.9KB | — |
+-+| `./backend/node_modules/async-mutex/lib/errors.d.ts` | 0.1KB | — |
+-+| `./backend/node_modules/async-mutex/lib/errors.js` | 0.4KB | — |
+-+| `./backend/node_modules/async-mutex/lib/index.d.ts` | 0.3KB | — |
+-+| `./backend/node_modules/async-mutex/lib/index.js` | 0.9KB | — |
+-+| `./backend/node_modules/async-mutex/lib/Mutex.d.ts` | 0.4KB | — |
+-+| `./backend/node_modules/async-mutex/lib/MutexInterface.d.ts` | 0.5KB | — |
+-+| `./backend/node_modules/async-mutex/lib/MutexInterface.js` | 0.1KB | — |
+-+| `./backend/node_modules/async-mutex/lib/Mutex.js` | 1.6KB | — |
+-+| `./backend/node_modules/async-mutex/lib/Semaphore.d.ts` | 0.8KB | — |
+-+| `./backend/node_modules/async-mutex/lib/SemaphoreInterface.d.ts` | 0.6KB | — |
+-+| `./backend/node_modules/async-mutex/lib/SemaphoreInterface.js` | 0.1KB | — |
+-+| `./backend/node_modules/async-mutex/lib/Semaphore.js` | 6.0KB | — |
+-+| `./backend/node_modules/async-mutex/lib/tryAcquire.d.ts` | 0.3KB | — |
+-+| `./backend/node_modules/async-mutex/lib/tryAcquire.js` | 0.6KB | eslint-disable-next-lisne @typescript-eslint/explicit-module-boundary-types |
+-+| `./backend/node_modules/async-mutex/lib/withTimeout.d.ts` | 0.3KB | — |
+-+| `./backend/node_modules/async-mutex/lib/withTimeout.js` | 5.4KB | eslint-disable @typescript-eslint/no-explicit-any */ |
+-+| `./backend/node_modules/async-mutex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/async-mutex/package.json` | 2.3KB | — |
+-+| `./backend/node_modules/async-mutex/README.md` | 15.3KB | What is it? |
+-+| `./backend/node_modules/axios/CHANGELOG.md` | 78.2KB | Changelog |
+-+| `./backend/node_modules/axios/dist/axios.js` | 141.5KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
+-+| `./backend/node_modules/axios/dist/axios.min.js` | 53.0KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
+-+| `./backend/node_modules/axios/dist/browser/axios.cjs` | 94.8KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
+-+| `./backend/node_modules/axios/dist/esm/axios.js` | 95.6KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
+-+| `./backend/node_modules/axios/dist/esm/axios.min.js` | 34.6KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
+-+| `./backend/node_modules/axios/dist/node/axios.cjs` | 126.4KB | ! Axios v1.9.0 Copyright (c) 2025 Matt Zabriskie and contributors */ |
+-+| `./backend/node_modules/axios/index.d.cts` | 18.0KB | — |
+-+| `./backend/node_modules/axios/index.d.ts` | 18.1KB | TypeScript Version: 4.7 |
+-+| `./backend/node_modules/axios/index.js` | 0.7KB | This module is intended to unwrap Axios default export as named. |
+-+| `./backend/node_modules/axios/lib/adapters/adapters.js` | 1.9KB | eslint-disable-next-line no-empty |
+-+| `./backend/node_modules/axios/lib/adapters/fetch.js` | 6.5KB | used only inside the fetch adapter |
+-+| `./backend/node_modules/axios/lib/adapters/http.js` | 22.0KB | — |
+-+| `./backend/node_modules/axios/lib/adapters/README.md` | 0.9KB | axios // adapters |
+-+| `./backend/node_modules/axios/lib/adapters/xhr.js` | 6.5KB | — |
+-+| `./backend/node_modules/axios/lib/axios.js` | 2.5KB | — |
+-+| `./backend/node_modules/axios/lib/cancel/CanceledError.js` | 0.7KB | * |
+-+| `./backend/node_modules/axios/lib/cancel/CancelToken.js` | 2.7KB | * |
+-+| `./backend/node_modules/axios/lib/cancel/isCancel.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/core/AxiosError.js` | 2.5KB | * |
+-+| `./backend/node_modules/axios/lib/core/AxiosHeaders.js` | 7.2KB | — |
+-+| `./backend/node_modules/axios/lib/core/Axios.js` | 6.7KB | * |
+-+| `./backend/node_modules/axios/lib/core/buildFullPath.js` | 0.8KB | * |
+-+| `./backend/node_modules/axios/lib/core/dispatchRequest.js` | 2.1KB | * |
+-+| `./backend/node_modules/axios/lib/core/InterceptorManager.js` | 1.5KB | * |
+-+| `./backend/node_modules/axios/lib/core/mergeConfig.js` | 3.3KB | * |
+-+| `./backend/node_modules/axios/lib/core/README.md` | 0.4KB | axios // core |
+-+| `./backend/node_modules/axios/lib/core/settle.js` | 0.8KB | * |
+-+| `./backend/node_modules/axios/lib/core/transformData.js` | 0.8KB | * |
+-+| `./backend/node_modules/axios/lib/defaults/index.js` | 4.4KB | * |
+-+| `./backend/node_modules/axios/lib/defaults/transitional.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/env/classes/FormData.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/env/data.js` | 0.0KB | — |
+-+| `./backend/node_modules/axios/lib/env/README.md` | 0.1KB | axios // env |
+-+| `./backend/node_modules/axios/lib/helpers/AxiosTransformStream.js` | 3.6KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/AxiosURLSearchParams.js` | 1.4KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/bind.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/buildURL.js` | 1.6KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/callbackify.js` | 0.4KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/combineURLs.js` | 0.4KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/composeSignals.js` | 1.3KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/cookies.js` | 1.0KB | Standard browser envs support document.cookie |
+-+| `./backend/node_modules/axios/lib/helpers/deprecatedMethod.js` | 0.7KB | eslint no-console:0*/ |
+-+| `./backend/node_modules/axios/lib/helpers/formDataToJSON.js` | 2.1KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/formDataToStream.js` | 2.9KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/fromDataURI.js` | 1.3KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/HttpStatusCode.js` | 1.6KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/isAbsoluteURL.js` | 0.5KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/isAxiosError.js` | 0.4KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/isURLSameOrigin.js` | 0.4KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/null.js` | 0.1KB | eslint-disable-next-line strict |
+-+| `./backend/node_modules/axios/lib/helpers/parseHeaders.js` | 1.3KB | RawAxiosHeaders whose duplicates are ignored by node |
+-+| `./backend/node_modules/axios/lib/helpers/parseProtocol.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/progressEventReducer.js` | 1.2KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/readBlob.js` | 0.3KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/README.md` | 0.3KB | axios // helpers |
+-+| `./backend/node_modules/axios/lib/helpers/resolveConfig.js` | 2.1KB | HTTP basic authentication |
+-+| `./backend/node_modules/axios/lib/helpers/speedometer.js` | 1.1KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/spread.js` | 0.6KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/throttle.js` | 0.8KB | * |
+-+| `./backend/node_modules/axios/lib/helpers/toFormData.js` | 5.9KB | temporary hotfix to avoid circular references until AxiosURLSearchParams is refactored |
+-+| `./backend/node_modules/axios/lib/helpers/toURLEncodedForm.js` | 0.5KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/trackStream.js` | 1.6KB | — |
+-+| `./backend/node_modules/axios/lib/helpers/validator.js` | 2.7KB | eslint-disable-next-line func-names |
+-+| `./backend/node_modules/axios/lib/helpers/ZlibHeaderTransformStream.js` | 0.7KB | Add Default Compression headers if no zlib headers are present |
+-+| `./backend/node_modules/axios/lib/platform/browser/classes/Blob.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/platform/browser/classes/FormData.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/platform/browser/classes/URLSearchParams.js` | 0.2KB | — |
+-+| `./backend/node_modules/axios/lib/platform/browser/index.js` | 0.3KB | — |
+-+| `./backend/node_modules/axios/lib/platform/common/utils.js` | 1.6KB | * |
+-+| `./backend/node_modules/axios/lib/platform/index.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/platform/node/classes/FormData.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/platform/node/classes/URLSearchParams.js` | 0.1KB | — |
+-+| `./backend/node_modules/axios/lib/platform/node/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/axios/lib/utils.js` | 17.9KB | utils is a library of generic helper functions non-specific to axios |
+-+| `./backend/node_modules/axios/LICENSE` | 1.1KB | Copyright (c) 2014-present Matt Zabriskie & Collaborators |
+-+| `./backend/node_modules/axios/MIGRATION_GUIDE.md` | 0.0KB | Migration Guide |
+-+| `./backend/node_modules/axios/package.json` | 7.5KB | — |
+-+| `./backend/node_modules/axios/README.md` | 63.6KB | — |
+-+| `./backend/node_modules/b4a/browser.js` | 13.5KB | — |
+-+| `./backend/node_modules/b4a/index.js` | 4.0KB | — |
+-+| `./backend/node_modules/b4a/lib/ascii.js` | 0.5KB | — |
+-+| `./backend/node_modules/b4a/lib/base64.js` | 1.5KB | — |
+-+| `./backend/node_modules/b4a/lib/hex.js` | 1.1KB | — |
+-+| `./backend/node_modules/b4a/lib/utf16le.js` | 0.7KB | — |
+-+| `./backend/node_modules/b4a/lib/utf8.js` | 2.9KB | — |
+-+| `./backend/node_modules/b4a/LICENSE` | 11.1KB | — |
+-+| `./backend/node_modules/b4a/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/b4a/README.md` | 4.1KB | Buffer for Array |
+-+| `./backend/node_modules/@babel/code-frame/lib/index.js` | 6.8KB | — |
+-+| `./backend/node_modules/@babel/code-frame/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/code-frame/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/code-frame/README.md` | 0.3KB | @babel/code-frame |
+-+| `./backend/node_modules/@babel/compat-data/corejs2-built-ins.js` | 0.1KB | Todo (Babel 8): remove this file as Babel 8 drop support of core-js 2 |
+-+| `./backend/node_modules/@babel/compat-data/corejs3-shipped-proposals.js` | 0.2KB | Todo (Babel 8): remove this file now that it is included in babel-plugin-polyfill-corejs3 |
+-+| `./backend/node_modules/@babel/compat-data/data/corejs2-built-ins.json` | 40.0KB | — |
+-+| `./backend/node_modules/@babel/compat-data/data/corejs3-shipped-proposals.json` | 0.1KB | — |
+-+| `./backend/node_modules/@babel/compat-data/data/native-modules.json` | 0.3KB | — |
+-+| `./backend/node_modules/@babel/compat-data/data/overlapping-plugins.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/compat-data/data/plugin-bugfixes.json` | 4.1KB | — |
+-+| `./backend/node_modules/@babel/compat-data/data/plugins.json` | 16.4KB | — |
+-+| `./backend/node_modules/@babel/compat-data/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/compat-data/native-modules.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
+-+| `./backend/node_modules/@babel/compat-data/overlapping-plugins.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
+-+| `./backend/node_modules/@babel/compat-data/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/compat-data/plugin-bugfixes.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
+-+| `./backend/node_modules/@babel/compat-data/plugins.js` | 0.1KB | Todo (Babel 8): remove this file, in Babel 8 users import the .json directly |
+-+| `./backend/node_modules/@babel/compat-data/README.md` | 0.3KB | @babel/compat-data |
+-+| `./backend/node_modules/@babel/core/lib/config/cache-contexts.js` | 0.1KB | # sourceMappingURL=cache-contexts.js.map |
+-+| `./backend/node_modules/@babel/core/lib/config/caching.js` | 7.1KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/config-chain.js` | 18.2KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/config-descriptors.js` | 6.7KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/configuration.js` | 10.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/import.cjs` | 0.1KB | # sourceMappingURL=import.cjs.map |
+-+| `./backend/node_modules/@babel/core/lib/config/files/index-browser.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/index.js` | 1.8KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/module-types.js` | 6.8KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/package.js` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/plugins.js` | 7.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/files/types.js` | 0.0KB | # sourceMappingURL=types.js.map |
+-+| `./backend/node_modules/@babel/core/lib/config/files/utils.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/full.js` | 11.0KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/helpers/config-api.js` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/helpers/deep-array.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/helpers/environment.js` | 0.3KB | # sourceMappingURL=environment.js.map |
+-+| `./backend/node_modules/@babel/core/lib/config/index.js` | 3.3KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/item.js` | 1.8KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/partial.js` | 5.3KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/pattern-to-regex.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/plugin.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/printer.js` | 2.8KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/resolve-targets-browser.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/resolve-targets.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/util.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/validation/option-assertions.js` | 9.7KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/validation/options.js` | 7.8KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/validation/plugins.js` | 2.0KB | — |
+-+| `./backend/node_modules/@babel/core/lib/config/validation/removed.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/core/lib/errors/config-error.js` | 0.5KB | # sourceMappingURL=config-error.js.map |
+-+| `./backend/node_modules/@babel/core/lib/errors/rewrite-stack-trace.js` | 3.1KB | — |
+-+| `./backend/node_modules/@babel/core/lib/gensync-utils/async.js` | 2.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/gensync-utils/fs.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/gensync-utils/functional.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/core/lib/index.js` | 5.7KB | — |
+-+| `./backend/node_modules/@babel/core/lib/parse.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/core/lib/parser/index.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/core/lib/parser/util/missing-plugin-helper.js` | 12.7KB | — |
+-+| `./backend/node_modules/@babel/core/lib/tools/build-external-helpers.js` | 4.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transform-ast.js` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/block-hoist-plugin.js` | 1.9KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/file/babel-7-helpers.cjs` | 0.1KB | # sourceMappingURL=babel-7-helpers.cjs.map |
+-+| `./backend/node_modules/@babel/core/lib/transformation/file/file.js` | 5.9KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/file/generate.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/file/merge-map.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/index.js` | 3.0KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/normalize-file.js` | 3.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/normalize-opts.js` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/plugin-pass.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transformation/util/clone-deep.js` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transform-file-browser.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transform-file.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/core/lib/transform.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/core/lib/vendor/import-meta-resolve.js` | 40.7KB | — |
+-+| `./backend/node_modules/@babel/core/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/package.json` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/README.md` | 21.6KB | debug |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/src/browser.js` | 6.0KB | eslint-env browser */ |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/src/common.js` | 6.8KB | * |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/src/index.js` | 0.3KB | * |
+-+| `./backend/node_modules/@babel/core/node_modules/debug/src/node.js` | 4.6KB | * |
+-+| `./backend/node_modules/@babel/core/node_modules/ms/index.js` | 3.0KB | * |
+-+| `./backend/node_modules/@babel/core/node_modules/ms/license.md` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/ms/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/ms/readme.md` | 1.8KB | ms |
+-+| `./backend/node_modules/@babel/core/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
+-+| `./backend/node_modules/@babel/core/node_modules/semver/LICENSE` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/semver/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/semver/range.bnf` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/core/node_modules/semver/README.md` | 16.6KB | # Install |
+-+| `./backend/node_modules/@babel/core/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/@babel/core/package.json` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/core/README.md` | 0.4KB | @babel/core |
+-+| `./backend/node_modules/@babel/core/src/config/files/index-browser.ts` | 2.9KB | c8 ignore start */ |
+-+| `./backend/node_modules/@babel/core/src/config/files/index.ts` | 0.7KB | Kind of gross, but essentially asserting that the exports of this module are the same as the |
+-+| `./backend/node_modules/@babel/core/src/config/resolve-targets-browser.ts` | 1.2KB | c8 ignore start */ |
+-+| `./backend/node_modules/@babel/core/src/config/resolve-targets.ts` | 1.7KB | Kind of gross, but essentially asserting that the exports of this module are the same as the |
+-+| `./backend/node_modules/@babel/core/src/transform-file-browser.ts` | 0.8KB | c8 ignore start */ |
+-+| `./backend/node_modules/@babel/core/src/transform-file.ts` | 1.8KB | Kind of gross, but essentially asserting that the exports of this module are the same as the |
+-+| `./backend/node_modules/@babel/generator/lib/buffer.js` | 8.5KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/base.js` | 2.6KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/classes.js` | 5.5KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/deprecated.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/expressions.js` | 7.5KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/flow.js` | 16.3KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/index.js` | 3.8KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/jsx.js` | 3.0KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/methods.js` | 5.7KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/modules.js` | 8.4KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/statements.js` | 6.5KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/template-literals.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/typescript.js` | 18.0KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/generators/types.js` | 6.7KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/index.js` | 4.1KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/node/index.js` | 3.6KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/node/parentheses.js` | 12.1KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/node/whitespace.js` | 4.7KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/printer.js` | 27.2KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/source-map.js` | 3.0KB | — |
+-+| `./backend/node_modules/@babel/generator/lib/token-map.js` | 5.4KB | — |
+-+| `./backend/node_modules/@babel/generator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/generator/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/generator/README.md` | 0.4KB | @babel/generator |
+-+| `./backend/node_modules/@babel/helper-annotate-as-pure/lib/index.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-annotate-as-pure/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-annotate-as-pure/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-annotate-as-pure/README.md` | 0.4KB | @babel/helper-annotate-as-pure |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/debug.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/filter-items.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/index.js` | 7.8KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/options.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/pretty.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/targets.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/lib/utils.js` | 1.9KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/node_modules/semver/LICENSE` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/node_modules/semver/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/node_modules/semver/range.bnf` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/node_modules/semver/README.md` | 16.6KB | # Install |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-compilation-targets/README.md` | 0.4KB | @babel/helper-compilation-targets |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/decorators-2018-09.js` | 4.7KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/decorators.js` | 55.0KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/features.js` | 6.9KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/fields.js` | 39.8KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/index.js` | 10.2KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/misc.js` | 4.3KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/lib/typescript.js` | 0.7KB | # sourceMappingURL=typescript.js.map |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/node_modules/semver/LICENSE` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/node_modules/semver/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/node_modules/semver/range.bnf` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/node_modules/semver/README.md` | 16.6KB | # Install |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helper-create-class-features-plugin/README.md` | 0.4KB | @babel/helper-create-class-features-plugin |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/lib/features.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/lib/index.js` | 4.1KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/lib/util.js` | 2.1KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/node_modules/semver/LICENSE` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/node_modules/semver/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/node_modules/semver/range.bnf` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/node_modules/semver/README.md` | 16.6KB | # Install |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helper-create-regexp-features-plugin/README.md` | 0.4KB | @babel/helper-create-regexp-features-plugin |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/esm/index.browser.mjs` | 26.9KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/esm/index.node.mjs` | 28.2KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/browser/dependencies.js` | 0.7KB | eslint-disable-next-line @typescript-eslint/no-unused-vars |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/debug-utils.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/define-provider.js` | 0.2KB | This will allow us to do some things |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/imports-injector.js` | 4.6KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/index.js` | 12.9KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/meta-resolver.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/node/dependencies.js` | 2.2KB | eslint-disable-line |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/normalize-options.js` | 2.3KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/types.js` | 0.0KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/utils.js` | 6.3KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/visitors/entry.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/visitors/index.js` | 0.3KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/lib/visitors/usage.js` | 3.9KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/package.json` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/README.md` | 21.6KB | debug |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/src/browser.js` | 6.0KB | eslint-env browser */ |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/src/common.js` | 6.8KB | * |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/src/index.js` | 0.3KB | * |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/debug/src/node.js` | 4.6KB | * |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/ms/index.js` | 3.0KB | * |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/ms/license.md` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/ms/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/node_modules/ms/readme.md` | 1.8KB | ms |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/package.json` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/helper-define-polyfill-provider/README.md` | 0.2KB | @babel/helper-define-polyfill-provider |
+-+| `./backend/node_modules/@babel/helper-member-expression-to-functions/lib/index.js` | 12.5KB | — |
+-+| `./backend/node_modules/@babel/helper-member-expression-to-functions/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-member-expression-to-functions/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-member-expression-to-functions/README.md` | 0.4KB | @babel/helper-member-expression-to-functions |
+-+| `./backend/node_modules/@babel/helper-module-imports/lib/import-builder.js` | 4.1KB | — |
+-+| `./backend/node_modules/@babel/helper-module-imports/lib/import-injector.js` | 10.7KB | — |
+-+| `./backend/node_modules/@babel/helper-module-imports/lib/index.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-module-imports/lib/is-module.js` | 0.2KB | # sourceMappingURL=is-module.js.map |
+-+| `./backend/node_modules/@babel/helper-module-imports/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-module-imports/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-module-imports/README.md` | 0.3KB | @babel/helper-module-imports |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/dynamic-import.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/get-module-name.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/index.js` | 13.2KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/lazy-modules.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/normalize-and-load-metadata.js` | 13.0KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/rewrite-live-references.js` | 13.3KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/lib/rewrite-this.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helper-module-transforms/README.md` | 0.4KB | @babel/helper-module-transforms |
+-+| `./backend/node_modules/@babel/helper-optimise-call-expression/lib/index.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-optimise-call-expression/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-optimise-call-expression/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-optimise-call-expression/README.md` | 0.4KB | @babel/helper-optimise-call-expression |
+-+| `./backend/node_modules/@babel/helper-plugin-utils/lib/index.js` | 2.5KB | — |
+-+| `./backend/node_modules/@babel/helper-plugin-utils/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-plugin-utils/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-plugin-utils/README.md` | 0.3KB | @babel/helper-plugin-utils |
+-+| `./backend/node_modules/@babel/helper-remap-async-to-generator/lib/index.js` | 2.0KB | — |
+-+| `./backend/node_modules/@babel/helper-remap-async-to-generator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-remap-async-to-generator/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helper-remap-async-to-generator/README.md` | 0.4KB | @babel/helper-remap-async-to-generator |
+-+| `./backend/node_modules/@babel/helper-replace-supers/lib/index.js` | 10.5KB | — |
+-+| `./backend/node_modules/@babel/helper-replace-supers/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-replace-supers/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helper-replace-supers/README.md` | 0.3KB | @babel/helper-replace-supers |
+-+| `./backend/node_modules/@babel/helper-skip-transparent-expression-wrappers/lib/index.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helper-skip-transparent-expression-wrappers/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-skip-transparent-expression-wrappers/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helper-skip-transparent-expression-wrappers/README.md` | 0.4KB | @babel/helper-skip-transparent-expression-wrappers |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecoratedDescriptor.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecs2203.js` | 10.3KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecs2203R.js` | 10.7KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecs2301.js` | 12.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecs2305.js` | 8.4KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecs2311.js` | 8.4KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/applyDecs.js` | 13.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/arrayLikeToArray.js` | 0.3KB | # sourceMappingURL=arrayLikeToArray.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/arrayWithHoles.js` | 0.2KB | # sourceMappingURL=arrayWithHoles.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/arrayWithoutHoles.js` | 0.3KB | # sourceMappingURL=arrayWithoutHoles.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/assertClassBrand.js` | 0.4KB | # sourceMappingURL=assertClassBrand.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/assertThisInitialized.js` | 0.3KB | # sourceMappingURL=assertThisInitialized.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/asyncGeneratorDelegate.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/asyncIterator.js` | 1.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/asyncToGenerator.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/awaitAsyncGenerator.js` | 0.3KB | # sourceMappingURL=awaitAsyncGenerator.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/AwaitValue.js` | 0.2KB | # sourceMappingURL=AwaitValue.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/callSuper.js` | 0.7KB | # sourceMappingURL=callSuper.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/checkInRHS.js` | 0.3KB | # sourceMappingURL=checkInRHS.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/checkPrivateRedeclaration.js` | 0.4KB | # sourceMappingURL=checkPrivateRedeclaration.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classApplyDescriptorDestructureSet.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classApplyDescriptorGet.js` | 0.3KB | # sourceMappingURL=classApplyDescriptorGet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classApplyDescriptorSet.js` | 0.5KB | # sourceMappingURL=classApplyDescriptorSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classCallCheck.js` | 0.3KB | # sourceMappingURL=classCallCheck.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classCheckPrivateStaticAccess.js` | 0.4KB | # sourceMappingURL=classCheckPrivateStaticAccess.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classCheckPrivateStaticFieldDescriptor.js` | 0.4KB | # sourceMappingURL=classCheckPrivateStaticFieldDescriptor.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classExtractFieldDescriptor.js` | 0.4KB | # sourceMappingURL=classExtractFieldDescriptor.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classNameTDZError.js` | 0.3KB | # sourceMappingURL=classNameTDZError.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldDestructureSet.js` | 0.5KB | # sourceMappingURL=classPrivateFieldDestructureSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldGet2.js` | 0.4KB | # sourceMappingURL=classPrivateFieldGet2.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldGet.js` | 0.5KB | # sourceMappingURL=classPrivateFieldGet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldInitSpec.js` | 0.4KB | # sourceMappingURL=classPrivateFieldInitSpec.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldLooseBase.js` | 0.4KB | # sourceMappingURL=classPrivateFieldLooseBase.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldLooseKey.js` | 0.3KB | # sourceMappingURL=classPrivateFieldLooseKey.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldSet2.js` | 0.4KB | # sourceMappingURL=classPrivateFieldSet2.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateFieldSet.js` | 0.5KB | # sourceMappingURL=classPrivateFieldSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateGetter.js` | 0.4KB | # sourceMappingURL=classPrivateGetter.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateMethodGet.js` | 0.3KB | # sourceMappingURL=classPrivateMethodGet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateMethodInitSpec.js` | 0.4KB | # sourceMappingURL=classPrivateMethodInitSpec.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateMethodSet.js` | 0.3KB | # sourceMappingURL=classPrivateMethodSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classPrivateSetter.js` | 0.4KB | # sourceMappingURL=classPrivateSetter.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classStaticPrivateFieldDestructureSet.js` | 0.7KB | # sourceMappingURL=classStaticPrivateFieldDestructureSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classStaticPrivateFieldSpecGet.js` | 0.6KB | # sourceMappingURL=classStaticPrivateFieldSpecGet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classStaticPrivateFieldSpecSet.js` | 0.7KB | # sourceMappingURL=classStaticPrivateFieldSpecSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classStaticPrivateMethodGet.js` | 0.4KB | # sourceMappingURL=classStaticPrivateMethodGet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/classStaticPrivateMethodSet.js` | 0.3KB | # sourceMappingURL=classStaticPrivateMethodSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/construct.js` | 0.6KB | # sourceMappingURL=construct.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/createClass.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/createForOfIteratorHelper.js` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/createForOfIteratorHelperLoose.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/createSuper.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/decorate.js` | 12.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/defaults.js` | 0.5KB | # sourceMappingURL=defaults.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/defineAccessor.js` | 0.3KB | # sourceMappingURL=defineAccessor.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/defineEnumerableProperties.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/defineProperty.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/dispose.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/extends.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers-generated.js` | 111.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/get.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/getPrototypeOf.js` | 0.4KB | # sourceMappingURL=getPrototypeOf.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/identity.js` | 0.2KB | # sourceMappingURL=identity.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/importDeferProxy.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/inherits.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/inheritsLoose.js` | 0.4KB | # sourceMappingURL=inheritsLoose.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/initializerDefineProperty.js` | 0.5KB | # sourceMappingURL=initializerDefineProperty.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/initializerWarningHelper.js` | 0.4KB | # sourceMappingURL=initializerWarningHelper.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/instanceof.js` | 0.4KB | # sourceMappingURL=instanceof.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/interopRequireDefault.js` | 0.3KB | # sourceMappingURL=interopRequireDefault.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/interopRequireWildcard.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/isNativeFunction.js` | 0.3KB | # sourceMappingURL=isNativeFunction.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/isNativeReflectConstruct.js` | 0.4KB | # sourceMappingURL=isNativeReflectConstruct.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/iterableToArray.js` | 0.3KB | # sourceMappingURL=iterableToArray.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/iterableToArrayLimit.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/jsx.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/maybeArrayLike.js` | 0.5KB | # sourceMappingURL=maybeArrayLike.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/newArrowCheck.js` | 0.3KB | # sourceMappingURL=newArrowCheck.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/nonIterableRest.js` | 0.3KB | # sourceMappingURL=nonIterableRest.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/nonIterableSpread.js` | 0.3KB | # sourceMappingURL=nonIterableSpread.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/nullishReceiverError.js` | 0.3KB | # sourceMappingURL=nullishReceiverError.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/objectDestructuringEmpty.js` | 0.3KB | # sourceMappingURL=objectDestructuringEmpty.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/objectSpread2.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/objectSpread.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/objectWithoutProperties.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/objectWithoutPropertiesLoose.js` | 0.5KB | # sourceMappingURL=objectWithoutPropertiesLoose.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/OverloadYield.js` | 0.2KB | # sourceMappingURL=OverloadYield.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/possibleConstructorReturn.js` | 0.6KB | # sourceMappingURL=possibleConstructorReturn.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/readOnlyError.js` | 0.2KB | # sourceMappingURL=readOnlyError.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorAsyncGen.js` | 0.5KB | # sourceMappingURL=regeneratorAsyncGen.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorAsyncIterator.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorAsync.js` | 0.5KB | # sourceMappingURL=regeneratorAsync.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorDefine.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regenerator.js` | 6.0KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorKeys.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorRuntime.js` | 3.4KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/regeneratorValues.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/setFunctionName.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/set.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/setPrototypeOf.js` | 0.4KB | # sourceMappingURL=setPrototypeOf.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/skipFirstGeneratorNext.js` | 0.3KB | # sourceMappingURL=skipFirstGeneratorNext.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/slicedToArray.js` | 0.6KB | # sourceMappingURL=slicedToArray.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/superPropBase.js` | 0.4KB | # sourceMappingURL=superPropBase.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/superPropGet.js` | 0.5KB | # sourceMappingURL=superPropGet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/superPropSet.js` | 0.5KB | # sourceMappingURL=superPropSet.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/taggedTemplateLiteral.js` | 0.4KB | # sourceMappingURL=taggedTemplateLiteral.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/taggedTemplateLiteralLoose.js` | 0.3KB | # sourceMappingURL=taggedTemplateLiteralLoose.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/tdz.js` | 0.2KB | # sourceMappingURL=tdz.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/temporalRef.js` | 0.4KB | # sourceMappingURL=temporalRef.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/temporalUndefined.js` | 0.2KB | # sourceMappingURL=temporalUndefined.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/toArray.js` | 0.6KB | # sourceMappingURL=toArray.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/toConsumableArray.js` | 0.6KB | # sourceMappingURL=toConsumableArray.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/toPrimitive.js` | 0.5KB | # sourceMappingURL=toPrimitive.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/toPropertyKey.js` | 0.3KB | # sourceMappingURL=toPropertyKey.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/toSetter.js` | 0.4KB | # sourceMappingURL=toSetter.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/tsRewriteRelativeImportExtensions.js` | 0.6KB | # sourceMappingURL=tsRewriteRelativeImportExtensions.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/typeof.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/unsupportedIterableToArray.js` | 0.7KB | # sourceMappingURL=unsupportedIterableToArray.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/usingCtx.js` | 2.6KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/using.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/wrapAsyncGenerator.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/wrapNativeSuper.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/wrapRegExp.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/helpers/lib/helpers/writeOnlyError.js` | 0.2KB | # sourceMappingURL=writeOnlyError.js.map |
+-+| `./backend/node_modules/@babel/helpers/lib/index.js` | 3.6KB | — |
+-+| `./backend/node_modules/@babel/helpers/LICENSE` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/helpers/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/helpers/README.md` | 0.3KB | @babel/helpers |
+-+| `./backend/node_modules/@babel/helper-string-parser/lib/index.js` | 7.7KB | — |
+-+| `./backend/node_modules/@babel/helper-string-parser/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-string-parser/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-string-parser/README.md` | 0.3KB | @babel/helper-string-parser |
+-+| `./backend/node_modules/@babel/helper-validator-identifier/lib/identifier.js` | 12.2KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-identifier/lib/index.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-identifier/lib/keyword.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-identifier/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-identifier/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-identifier/README.md` | 0.4KB | @babel/helper-validator-identifier |
+-+| `./backend/node_modules/@babel/helper-validator-option/lib/find-suggestion.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-option/lib/index.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-option/lib/validator.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-option/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-option/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/helper-validator-option/README.md` | 0.3KB | @babel/helper-validator-option |
+-+| `./backend/node_modules/@babel/helper-wrap-function/lib/index.js` | 4.3KB | — |
+-+| `./backend/node_modules/@babel/helper-wrap-function/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/helper-wrap-function/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/helper-wrap-function/README.md` | 0.3KB | @babel/helper-wrap-function |
+-+| `./backend/node_modules/babel-jest/build/index.d.ts` | 0.7KB | * |
+-+| `./backend/node_modules/babel-jest/build/index.js` | 10.2KB | ! |
+-+| `./backend/node_modules/babel-jest/build/index.mjs` | 0.1KB | — |
+-+| `./backend/node_modules/babel-jest/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-jest/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/babel-jest/README.md` | 1.4KB | babel-jest |
+-+| `./backend/node_modules/@babel/parser/bin/babel-parser.js` | 0.4KB | !/usr/bin/env node |
+-+| `./backend/node_modules/@babel/parser/CHANGELOG.md` | 37.3KB | Changelog |
+-+| `./backend/node_modules/@babel/parser/lib/index.js` | 492.8KB | — |
+-+| `./backend/node_modules/@babel/parser/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/parser/package.json` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/parser/README.md` | 0.4KB | @babel/parser |
+-+| `./backend/node_modules/@babel/parser/typings/babel-parser.d.ts` | 8.1KB | This file is auto-generated! Do not modify it directly. |
+-+| `./backend/node_modules/@babel/plugin-bugfix-firefox-class-in-computed-class-key/lib/index.js` | 2.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-firefox-class-in-computed-class-key/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-firefox-class-in-computed-class-key/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-firefox-class-in-computed-class-key/README.md` | 0.6KB | @babel/plugin-bugfix-firefox-class-in-computed-class-key |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-class-field-initializer-scope/lib/index.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-class-field-initializer-scope/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-class-field-initializer-scope/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-class-field-initializer-scope/README.md` | 0.5KB | @babel/plugin-bugfix-safari-class-field-initializer-scope |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression/lib/index.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression/README.md` | 0.6KB | @babel/plugin-bugfix-safari-id-destructuring-collision-in-function-expression |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining/lib/index.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining/package.json` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining/README.md` | 0.6KB | @babel/plugin-bugfix-v8-spread-parameters-in-optional-chaining |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly/lib/index.js` | 5.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-bugfix-v8-static-class-fields-redefine-readonly/README.md` | 0.6KB | @babel/plugin-bugfix-v8-static-class-fields-redefine-readonly |
+-+| `./backend/node_modules/babel-plugin-istanbul/CHANGELOG.md` | 13.0KB | Changelog |
+-+| `./backend/node_modules/babel-plugin-istanbul/lib/index.js` | 4.3KB | istanbul ignore next */ |
+-+| `./backend/node_modules/babel-plugin-istanbul/lib/load-nyc-config-sync.js` | 0.4KB | !/usr/bin/env node |
+-+| `./backend/node_modules/babel-plugin-istanbul/LICENSE` | 1.5KB | — |
+-+| `./backend/node_modules/babel-plugin-istanbul/package.json` | 1.8KB | — |
+-+| `./backend/node_modules/babel-plugin-istanbul/README.md` | 4.8KB | babel-plugin-istanbul |
+-+| `./backend/node_modules/babel-plugin-jest-hoist/build/index.d.ts` | 0.4KB | * |
+-+| `./backend/node_modules/babel-plugin-jest-hoist/build/index.js` | 10.2KB | ! |
+-+| `./backend/node_modules/babel-plugin-jest-hoist/build/index.mjs` | 0.1KB | — |
+-+| `./backend/node_modules/babel-plugin-jest-hoist/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-plugin-jest-hoist/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/babel-plugin-jest-hoist/README.md` | 0.6KB | babel-plugin-jest-hoist |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/esm/index.mjs` | 17.5KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/lib/add-platform-specific-polyfills.js` | 0.9KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/lib/built-in-definitions.js` | 11.7KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/lib/helpers.js` | 1.5KB | If the range is unavailable, we're running the script during Babel's |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/lib/index.js` | 6.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/node_modules/semver/LICENSE` | 0.7KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/node_modules/semver/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/node_modules/semver/range.bnf` | 0.6KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/node_modules/semver/README.md` | 16.6KB | # Install |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs2/README.md` | 0.5KB | babel-plugin-polyfill-corejs2 |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/core-js-compat/data.js` | 0.0KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/core-js-compat/entries.js` | 0.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/core-js-compat/get-modules-list-for-target-version.js` | 0.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/core-js-compat/README.md` | 0.2KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/esm/index.mjs` | 49.0KB | This file is automatically generated by scripts/build-corejs3-shipped-proposals.mjs |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/lib/babel-runtime-corejs3-paths.js` | 3.6KB | This file contains the list of paths supported by @babel/runtime-corejs3. |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/lib/built-in-definitions.js` | 32.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/lib/index.js` | 13.7KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/lib/shipped-proposals.js` | 0.8KB | This file is automatically generated by scripts/build-corejs3-shipped-proposals.mjs |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/lib/usage-filters.js` | 1.7KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/lib/utils.js` | 3.7KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/package.json` | 1.4KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-corejs3/README.md` | 1.9KB | babel-plugin-polyfill-corejs3 |
+-+| `./backend/node_modules/babel-plugin-polyfill-regenerator/esm/index.mjs` | 1.6KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-regenerator/lib/index.js` | 1.8KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-regenerator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-regenerator/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/babel-plugin-polyfill-regenerator/README.md` | 0.5KB | babel-plugin-polyfill-regenerator |
+-+| `./backend/node_modules/@babel/plugin-proposal-private-property-in-object/lib/index.js` | 1.6KB | Try this as a fallback, in case it's available in node_modules |
+-+| `./backend/node_modules/@babel/plugin-proposal-private-property-in-object/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-proposal-private-property-in-object/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-proposal-private-property-in-object/README.md` | 0.8KB | @babel/plugin-proposal-private-property-in-object |
+-+| `./backend/node_modules/@babel/plugin-syntax-async-generators/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-async-generators/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-async-generators/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-async-generators/README.md` | 0.4KB | @babel/plugin-syntax-async-generators |
+-+| `./backend/node_modules/@babel/plugin-syntax-bigint/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-bigint/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-bigint/package.json` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-bigint/README.md` | 0.3KB | @babel/plugin-syntax-bigint |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-properties/lib/index.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-properties/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-properties/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-properties/README.md` | 0.4KB | @babel/plugin-syntax-class-properties |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-static-block/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-static-block/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-static-block/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-class-static-block/README.md` | 0.4KB | @babel/plugin-syntax-class-static-block |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-assertions/lib/index.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-assertions/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-assertions/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-assertions/README.md` | 0.4KB | @babel/plugin-syntax-import-assertions |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-attributes/lib/index.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-attributes/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-attributes/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-attributes/README.md` | 0.4KB | @babel/plugin-syntax-import-attributes |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-meta/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-meta/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-meta/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-import-meta/README.md` | 0.4KB | @babel/plugin-syntax-import-meta |
+-+| `./backend/node_modules/@babel/plugin-syntax-json-strings/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-json-strings/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-json-strings/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-json-strings/README.md` | 0.4KB | @babel/plugin-syntax-json-strings |
+-+| `./backend/node_modules/@babel/plugin-syntax-jsx/lib/index.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-jsx/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-jsx/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-jsx/README.md` | 0.3KB | @babel/plugin-syntax-jsx |
+-+| `./backend/node_modules/@babel/plugin-syntax-logical-assignment-operators/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-logical-assignment-operators/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-logical-assignment-operators/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-logical-assignment-operators/README.md` | 0.5KB | @babel/plugin-syntax-logical-assignment-operators |
+-+| `./backend/node_modules/@babel/plugin-syntax-nullish-coalescing-operator/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-nullish-coalescing-operator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-nullish-coalescing-operator/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-nullish-coalescing-operator/README.md` | 0.5KB | @babel/plugin-syntax-nullish-coalescing-operator |
+-+| `./backend/node_modules/@babel/plugin-syntax-numeric-separator/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-numeric-separator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-numeric-separator/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-numeric-separator/README.md` | 0.5KB | @babel/plugin-syntax-numeric-separator |
+-+| `./backend/node_modules/@babel/plugin-syntax-object-rest-spread/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-object-rest-spread/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-object-rest-spread/package.json` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-object-rest-spread/README.md` | 0.4KB | @babel/plugin-syntax-object-rest-spread |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-catch-binding/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-catch-binding/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-catch-binding/package.json` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-catch-binding/README.md` | 0.4KB | @babel/plugin-syntax-optional-catch-binding |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-chaining/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-chaining/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-chaining/package.json` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-optional-chaining/README.md` | 0.4KB | @babel/plugin-syntax-optional-chaining |
+-+| `./backend/node_modules/@babel/plugin-syntax-private-property-in-object/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-private-property-in-object/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-private-property-in-object/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-private-property-in-object/README.md` | 0.4KB | @babel/plugin-syntax-private-property-in-object |
+-+| `./backend/node_modules/@babel/plugin-syntax-top-level-await/lib/index.js` | 0.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-top-level-await/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-top-level-await/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-top-level-await/README.md` | 0.4KB | @babel/plugin-syntax-top-level-await |
+-+| `./backend/node_modules/@babel/plugin-syntax-typescript/lib/index.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-typescript/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-typescript/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-typescript/README.md` | 0.4KB | @babel/plugin-syntax-typescript |
+-+| `./backend/node_modules/@babel/plugin-syntax-unicode-sets-regex/lib/index.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-unicode-sets-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-unicode-sets-regex/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-syntax-unicode-sets-regex/README.md` | 0.4KB | @babel/plugin-syntax-unicode-sets-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-arrow-functions/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-arrow-functions/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-arrow-functions/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-arrow-functions/README.md` | 0.4KB | @babel/plugin-transform-arrow-functions |
+-+| `./backend/node_modules/@babel/plugin-transform-async-generator-functions/lib/for-await.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-generator-functions/lib/index.js` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-generator-functions/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-generator-functions/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-generator-functions/README.md` | 0.5KB | @babel/plugin-transform-async-generator-functions |
+-+| `./backend/node_modules/@babel/plugin-transform-async-to-generator/lib/index.js` | 1.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-to-generator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-to-generator/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-async-to-generator/README.md` | 0.4KB | @babel/plugin-transform-async-to-generator |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoped-functions/lib/index.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoped-functions/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoped-functions/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoped-functions/README.md` | 0.5KB | @babel/plugin-transform-block-scoped-functions |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/lib/annex-B_3_3.js` | 2.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/lib/index.js` | 6.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/lib/loop.js` | 9.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/lib/validation.js` | 4.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-block-scoping/README.md` | 0.4KB | @babel/plugin-transform-block-scoping |
+-+| `./backend/node_modules/@babel/plugin-transform-classes/lib/index.js` | 3.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-classes/lib/inline-callSuper-helpers.js` | 2.3KB | core-js@3 |
+-+| `./backend/node_modules/@babel/plugin-transform-classes/lib/transformClass.js` | 20.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-classes/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-classes/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-classes/README.md` | 0.4KB | @babel/plugin-transform-classes |
+-+| `./backend/node_modules/@babel/plugin-transform-class-properties/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-class-properties/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-class-properties/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-class-properties/README.md` | 0.5KB | @babel/plugin-transform-class-properties |
+-+| `./backend/node_modules/@babel/plugin-transform-class-static-block/lib/index.js` | 2.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-class-static-block/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-class-static-block/package.json` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-class-static-block/README.md` | 0.4KB | @babel/plugin-transform-class-static-block |
+-+| `./backend/node_modules/@babel/plugin-transform-computed-properties/lib/index.js` | 5.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-computed-properties/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-computed-properties/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-computed-properties/README.md` | 0.4KB | @babel/plugin-transform-computed-properties |
+-+| `./backend/node_modules/@babel/plugin-transform-destructuring/lib/index.js` | 21.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-destructuring/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-destructuring/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-destructuring/README.md` | 0.4KB | @babel/plugin-transform-destructuring |
+-+| `./backend/node_modules/@babel/plugin-transform-dotall-regex/lib/index.js` | 0.6KB | # sourceMappingURL=index.js.map |
+-+| `./backend/node_modules/@babel/plugin-transform-dotall-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-dotall-regex/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-dotall-regex/README.md` | 0.4KB | @babel/plugin-transform-dotall-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-keys/lib/index.js` | 1.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-keys/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-keys/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-keys/README.md` | 0.4KB | @babel/plugin-transform-duplicate-keys |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-named-capturing-groups-regex/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-named-capturing-groups-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-named-capturing-groups-regex/package.json` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-duplicate-named-capturing-groups-regex/README.md` | 0.6KB | @babel/plugin-transform-duplicate-named-capturing-groups-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-dynamic-import/lib/index.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-dynamic-import/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-dynamic-import/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-dynamic-import/README.md` | 0.4KB | @babel/plugin-transform-dynamic-import |
+-+| `./backend/node_modules/@babel/plugin-transform-exponentiation-operator/lib/index.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-exponentiation-operator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-exponentiation-operator/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-exponentiation-operator/README.md` | 0.4KB | @babel/plugin-transform-exponentiation-operator |
+-+| `./backend/node_modules/@babel/plugin-transform-export-namespace-from/lib/index.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-export-namespace-from/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-export-namespace-from/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-export-namespace-from/README.md` | 0.4KB | @babel/plugin-transform-export-namespace-from |
+-+| `./backend/node_modules/@babel/plugin-transform-for-of/lib/index.js` | 7.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-for-of/lib/no-helper-implementation.js` | 4.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-for-of/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-for-of/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-for-of/README.md` | 0.3KB | @babel/plugin-transform-for-of |
+-+| `./backend/node_modules/@babel/plugin-transform-function-name/lib/index.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-function-name/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-function-name/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-function-name/README.md` | 0.4KB | @babel/plugin-transform-function-name |
+-+| `./backend/node_modules/@babel/plugin-transform-json-strings/lib/index.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-json-strings/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-json-strings/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-json-strings/README.md` | 0.4KB | @babel/plugin-transform-json-strings |
+-+| `./backend/node_modules/@babel/plugin-transform-literals/lib/index.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-literals/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-literals/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-literals/README.md` | 0.4KB | @babel/plugin-transform-literals |
+-+| `./backend/node_modules/@babel/plugin-transform-logical-assignment-operators/lib/index.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-logical-assignment-operators/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-logical-assignment-operators/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-logical-assignment-operators/README.md` | 0.5KB | @babel/plugin-transform-logical-assignment-operators |
+-+| `./backend/node_modules/@babel/plugin-transform-member-expression-literals/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-member-expression-literals/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-member-expression-literals/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-member-expression-literals/README.md` | 0.5KB | @babel/plugin-transform-member-expression-literals |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-amd/lib/index.js` | 5.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-amd/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-amd/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-amd/README.md` | 0.4KB | @babel/plugin-transform-modules-amd |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/lib/dynamic-import.js` | 0.8KB | # sourceMappingURL=dynamic-import.js.map |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/lib/hooks.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/lib/index.js` | 8.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/lib/lazy.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-commonjs/README.md` | 0.4KB | @babel/plugin-transform-modules-commonjs |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-systemjs/lib/index.js` | 18.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-systemjs/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-systemjs/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-systemjs/README.md` | 0.4KB | @babel/plugin-transform-modules-systemjs |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-umd/lib/index.js` | 6.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-umd/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-umd/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-modules-umd/README.md` | 0.4KB | @babel/plugin-transform-modules-umd |
+-+| `./backend/node_modules/@babel/plugin-transform-named-capturing-groups-regex/lib/index.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-named-capturing-groups-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-named-capturing-groups-regex/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-named-capturing-groups-regex/README.md` | 0.5KB | @babel/plugin-transform-named-capturing-groups-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-new-target/lib/index.js` | 2.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-new-target/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-new-target/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-new-target/README.md` | 0.4KB | @babel/plugin-transform-new-target |
+-+| `./backend/node_modules/@babel/plugin-transform-nullish-coalescing-operator/lib/index.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-nullish-coalescing-operator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-nullish-coalescing-operator/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-nullish-coalescing-operator/README.md` | 0.5KB | @babel/plugin-transform-nullish-coalescing-operator |
+-+| `./backend/node_modules/@babel/plugin-transform-numeric-separator/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-numeric-separator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-numeric-separator/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-numeric-separator/README.md` | 0.4KB | @babel/plugin-transform-numeric-separator |
+-+| `./backend/node_modules/@babel/plugin-transform-object-rest-spread/lib/index.js` | 19.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-object-rest-spread/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-object-rest-spread/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-object-rest-spread/README.md` | 0.4KB | @babel/plugin-transform-object-rest-spread |
+-+| `./backend/node_modules/@babel/plugin-transform-object-super/lib/index.js` | 2.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-object-super/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-object-super/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-object-super/README.md` | 0.4KB | @babel/plugin-transform-object-super |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-catch-binding/lib/index.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-catch-binding/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-catch-binding/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-catch-binding/README.md` | 0.4KB | @babel/plugin-transform-optional-catch-binding |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-chaining/lib/index.js` | 8.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-chaining/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-chaining/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-optional-chaining/README.md` | 0.4KB | @babel/plugin-transform-optional-chaining |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/lib/index.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/lib/params.js` | 4.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/lib/rest.js` | 8.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/lib/shadow-utils.js` | 2.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-parameters/README.md` | 0.4KB | @babel/plugin-transform-parameters |
+-+| `./backend/node_modules/@babel/plugin-transform-private-methods/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-private-methods/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-private-methods/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-private-methods/README.md` | 0.4KB | @babel/plugin-transform-private-methods |
+-+| `./backend/node_modules/@babel/plugin-transform-private-property-in-object/lib/index.js` | 4.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-private-property-in-object/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-private-property-in-object/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-private-property-in-object/README.md` | 0.5KB | @babel/plugin-transform-private-property-in-object |
+-+| `./backend/node_modules/@babel/plugin-transform-property-literals/lib/index.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-property-literals/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-property-literals/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-property-literals/README.md` | 0.4KB | @babel/plugin-transform-property-literals |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/index.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/emit.js` | 25.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/hoist.js` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/leap.js` | 3.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/meta.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/replaceShorthandObjectMethod.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/util.js` | 1.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/lib/regenerator/visit.js` | 8.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/package.json` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regenerator/README.md` | 0.4KB | @babel/plugin-transform-regenerator |
+-+| `./backend/node_modules/@babel/plugin-transform-regexp-modifiers/lib/index.js` | 0.6KB | # sourceMappingURL=index.js.map |
+-+| `./backend/node_modules/@babel/plugin-transform-regexp-modifiers/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regexp-modifiers/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-regexp-modifiers/README.md` | 0.4KB | @babel/plugin-transform-regexp-modifiers |
+-+| `./backend/node_modules/@babel/plugin-transform-reserved-words/lib/index.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-reserved-words/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-reserved-words/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-reserved-words/README.md` | 0.4KB | @babel/plugin-transform-reserved-words |
+-+| `./backend/node_modules/@babel/plugin-transform-shorthand-properties/lib/index.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-shorthand-properties/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-shorthand-properties/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-shorthand-properties/README.md` | 0.4KB | @babel/plugin-transform-shorthand-properties |
+-+| `./backend/node_modules/@babel/plugin-transform-spread/lib/index.js` | 5.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-spread/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-spread/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-spread/README.md` | 0.3KB | @babel/plugin-transform-spread |
+-+| `./backend/node_modules/@babel/plugin-transform-sticky-regex/lib/index.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-sticky-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-sticky-regex/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-sticky-regex/README.md` | 0.4KB | @babel/plugin-transform-sticky-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-template-literals/lib/index.js` | 3.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-template-literals/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-template-literals/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-template-literals/README.md` | 0.4KB | @babel/plugin-transform-template-literals |
+-+| `./backend/node_modules/@babel/plugin-transform-typeof-symbol/lib/index.js` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-typeof-symbol/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-typeof-symbol/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-typeof-symbol/README.md` | 0.5KB | @babel/plugin-transform-typeof-symbol |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-escapes/lib/index.js` | 3.5KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-escapes/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-escapes/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-escapes/README.md` | 0.4KB | @babel/plugin-transform-unicode-escapes |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-property-regex/lib/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-property-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-property-regex/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-property-regex/README.md` | 0.5KB | @babel/plugin-transform-unicode-property-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-regex/lib/index.js` | 0.5KB | # sourceMappingURL=index.js.map |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-regex/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-regex/README.md` | 0.4KB | @babel/plugin-transform-unicode-regex |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-sets-regex/lib/index.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-sets-regex/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-sets-regex/package.json` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/plugin-transform-unicode-sets-regex/README.md` | 0.4KB | @babel/plugin-transform-unicode-sets-regex |
+-+| `./backend/node_modules/babel-preset-current-node-syntax/.github/FUNDING.yml` | 0.1KB | These are supported funding model platforms |
+-+| `./backend/node_modules/babel-preset-current-node-syntax/.github/workflows/nodejs.yml` | 1.1KB | This workflow will do a clean install of node dependencies, build the source code and run tests across different versions of node |
+-+| `./backend/node_modules/babel-preset-current-node-syntax/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-preset-current-node-syntax/package.json` | 1.7KB | — |
+-+| `./backend/node_modules/babel-preset-current-node-syntax/README.md` | 0.8KB | `babel-preset-current-node-syntax` |
+-+| `./backend/node_modules/babel-preset-current-node-syntax/src/index.js` | 2.3KB | ECMAScript 2018 |
+-+| `./backend/node_modules/@babel/preset-env/CONTRIBUTING.md` | 3.6KB | Contributing |
+-+| `./backend/node_modules/@babel/preset-env/data/built-in-modules.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/built-in-modules.json.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/built-ins.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/built-ins.json.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/corejs2-built-ins.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/corejs2-built-ins.json.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/core-js-compat.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/package.json` | 0.0KB | — |
+-+| `./backend/node_modules/@babel/preset-env/data/plugins.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/plugins.json.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/shipped-proposals.js` | 0.2KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/data/unreleased-labels.js` | 0.1KB | TODO: Remove in Babel 8 |
+-+| `./backend/node_modules/@babel/preset-env/lib/available-plugins.js` | 13.1KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/debug.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/filter-items.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/index.js` | 11.7KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/module-transformations.js` | 0.4KB | # sourceMappingURL=module-transformations.js.map |
+-+| `./backend/node_modules/@babel/preset-env/lib/normalize-options.js` | 7.6KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/options.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/plugins-compat-data.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/polyfills/babel-7-plugins.cjs` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/polyfills/babel-polyfill.cjs` | 2.2KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/polyfills/regenerator.cjs` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/polyfills/utils.cjs` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/shipped-proposals.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/preset-env/lib/targets-parser.js` | 0.5KB | # sourceMappingURL=targets-parser.js.map |
+-+| `./backend/node_modules/@babel/preset-env/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/preset-env/node_modules/semver/bin/semver.js` | 4.6KB | !/usr/bin/env node |
+-+| `./backend/node_modules/@babel/preset-env/node_modules/semver/LICENSE` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/preset-env/node_modules/semver/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/preset-env/node_modules/semver/range.bnf` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/preset-env/node_modules/semver/README.md` | 16.6KB | # Install |
+-+| `./backend/node_modules/@babel/preset-env/node_modules/semver/semver.js` | 43.2KB | istanbul ignore next */ |
+-+| `./backend/node_modules/@babel/preset-env/package.json` | 4.9KB | — |
+-+| `./backend/node_modules/@babel/preset-env/README.md` | 0.4KB | @babel/preset-env |
+-+| `./backend/node_modules/babel-preset-jest/index.js` | 0.5KB | * |
+-+| `./backend/node_modules/babel-preset-jest/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/babel-preset-jest/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/babel-preset-jest/README.md` | 0.5KB | babel-preset-jest |
+-+| `./backend/node_modules/@babel/preset-modules/lib/index.js` | 1.4KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-async-arrows-in-class/index.js` | 1.1KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-edge-default-parameters/index.js` | 1.1KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-edge-function-name/index.js` | 1.4KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-jsx-spread/index.js` | 3.4KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-safari-block-shadowing/index.js` | 1.3KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-safari-for-shadowing/index.js` | 1.1KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/lib/plugins/transform-tagged-template-caching/index.js` | 3.1KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/LICENSE` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/preset-modules/package.json` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/preset-modules/README.md` | 7.0KB | `@babel/preset-modules` |
+-+| `./backend/node_modules/@babel/preset-modules/src/index.js` | 1.0KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-async-arrows-in-class/index.js` | 1.0KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-edge-default-parameters/index.js` | 1.0KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-edge-function-name/index.js` | 1.3KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-jsx-spread/index.js` | 3.3KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-safari-block-shadowing/index.js` | 1.2KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-safari-for-shadowing/index.js` | 1.0KB | * |
+-+| `./backend/node_modules/@babel/preset-modules/src/plugins/transform-tagged-template-caching/index.js` | 3.2KB | * |
+-+| `./backend/node_modules/@babel/template/lib/builder.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/template/lib/formatters.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/template/lib/index.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/template/lib/literal.js` | 1.9KB | — |
+-+| `./backend/node_modules/@babel/template/lib/options.js` | 2.9KB | — |
+-+| `./backend/node_modules/@babel/template/lib/parse.js` | 4.5KB | — |
+-+| `./backend/node_modules/@babel/template/lib/populate.js` | 4.3KB | — |
+-+| `./backend/node_modules/@babel/template/lib/string.js` | 0.6KB | # sourceMappingURL=string.js.map |
+-+| `./backend/node_modules/@babel/template/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/template/package.json` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/template/README.md` | 0.4KB | @babel/template |
+-+| `./backend/node_modules/@babel/traverse/lib/cache.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/context.js` | 3.0KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/hub.js` | 0.4KB | # sourceMappingURL=hub.js.map |
+-+| `./backend/node_modules/@babel/traverse/lib/index.js` | 2.6KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/ancestry.js` | 3.5KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/comments.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/context.js` | 6.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/conversion.js` | 21.1KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/evaluation.js` | 10.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/family.js` | 10.4KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/index.js` | 11.0KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/inference/index.js` | 4.2KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/inference/inferer-reference.js` | 4.5KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/inference/inferers.js` | 6.5KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/inference/util.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/introspection.js` | 12.6KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/lib/hoister.js` | 5.3KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/lib/removal-hooks.js` | 1.3KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/lib/virtual-types.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/lib/virtual-types-validator.js` | 4.2KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/modification.js` | 7.9KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/removal.js` | 2.0KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/path/replacement.js` | 9.0KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/scope/binding.js` | 1.9KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/scope/index.js` | 30.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/scope/lib/renamer.js` | 3.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/traverse-node.js` | 3.9KB | — |
+-+| `./backend/node_modules/@babel/traverse/lib/types.js` | 0.0KB | # sourceMappingURL=types.js.map |
+-+| `./backend/node_modules/@babel/traverse/lib/visitors.js` | 7.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/package.json` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/README.md` | 21.6KB | debug |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/src/browser.js` | 6.0KB | eslint-env browser */ |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/src/common.js` | 6.8KB | * |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/src/index.js` | 0.3KB | * |
+-+| `./backend/node_modules/@babel/traverse/node_modules/debug/src/node.js` | 4.6KB | * |
+-+| `./backend/node_modules/@babel/traverse/node_modules/ms/index.js` | 3.0KB | * |
+-+| `./backend/node_modules/@babel/traverse/node_modules/ms/license.md` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/traverse/node_modules/ms/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/traverse/node_modules/ms/readme.md` | 1.8KB | ms |
+-+| `./backend/node_modules/@babel/traverse/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/traverse/README.md` | 0.5KB | @babel/traverse |
+-+| `./backend/node_modules/@babel/types/lib/asserts/assertNode.js` | 0.5KB | # sourceMappingURL=assertNode.js.map |
+-+| `./backend/node_modules/@babel/types/lib/asserts/generated/index.js` | 44.3KB | — |
+-+| `./backend/node_modules/@babel/types/lib/ast-types/generated/index.js` | 0.0KB | # sourceMappingURL=index.js.map |
+-+| `./backend/node_modules/@babel/types/lib/builders/flow/createFlowUnionType.js` | 0.5KB | # sourceMappingURL=createFlowUnionType.js.map |
+-+| `./backend/node_modules/@babel/types/lib/builders/flow/createTypeAnnotationBasedOnTypeof.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/types/lib/builders/generated/index.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/types/lib/builders/generated/lowercase.js` | 83.2KB | — |
+-+| `./backend/node_modules/@babel/types/lib/builders/generated/uppercase.js` | 26.4KB | — |
+-+| `./backend/node_modules/@babel/types/lib/builders/productions.js` | 0.3KB | # sourceMappingURL=productions.js.map |
+-+| `./backend/node_modules/@babel/types/lib/builders/react/buildChildren.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/types/lib/builders/typescript/createTSUnionType.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/builders/validateNode.js` | 0.6KB | — |
+-+| `./backend/node_modules/@babel/types/lib/clone/cloneDeep.js` | 0.3KB | # sourceMappingURL=cloneDeep.js.map |
+-+| `./backend/node_modules/@babel/types/lib/clone/cloneDeepWithoutLoc.js` | 0.3KB | # sourceMappingURL=cloneDeepWithoutLoc.js.map |
+-+| `./backend/node_modules/@babel/types/lib/clone/clone.js` | 0.2KB | # sourceMappingURL=clone.js.map |
+-+| `./backend/node_modules/@babel/types/lib/clone/cloneNode.js` | 3.2KB | — |
+-+| `./backend/node_modules/@babel/types/lib/clone/cloneWithoutLoc.js` | 0.3KB | # sourceMappingURL=cloneWithoutLoc.js.map |
+-+| `./backend/node_modules/@babel/types/lib/comments/addComment.js` | 0.4KB | # sourceMappingURL=addComment.js.map |
+-+| `./backend/node_modules/@babel/types/lib/comments/addComments.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/types/lib/comments/inheritInnerComments.js` | 0.3KB | # sourceMappingURL=inheritInnerComments.js.map |
+-+| `./backend/node_modules/@babel/types/lib/comments/inheritLeadingComments.js` | 0.3KB | # sourceMappingURL=inheritLeadingComments.js.map |
+-+| `./backend/node_modules/@babel/types/lib/comments/inheritsComments.js` | 0.6KB | # sourceMappingURL=inheritsComments.js.map |
+-+| `./backend/node_modules/@babel/types/lib/comments/inheritTrailingComments.js` | 0.3KB | # sourceMappingURL=inheritTrailingComments.js.map |
+-+| `./backend/node_modules/@babel/types/lib/comments/removeComments.js` | 0.3KB | # sourceMappingURL=removeComments.js.map |
+-+| `./backend/node_modules/@babel/types/lib/constants/generated/index.js` | 6.1KB | — |
+-+| `./backend/node_modules/@babel/types/lib/constants/index.js` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/ensureBlock.js` | 0.3KB | # sourceMappingURL=ensureBlock.js.map |
+-+| `./backend/node_modules/@babel/types/lib/converters/gatherSequenceExpressions.js` | 2.4KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/toBindingIdentifierName.js` | 0.4KB | # sourceMappingURL=toBindingIdentifierName.js.map |
+-+| `./backend/node_modules/@babel/types/lib/converters/toBlock.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/toComputedKey.js` | 0.4KB | # sourceMappingURL=toComputedKey.js.map |
+-+| `./backend/node_modules/@babel/types/lib/converters/toExpression.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/toIdentifier.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/toKeyAlias.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/toSequenceExpression.js` | 0.5KB | # sourceMappingURL=toSequenceExpression.js.map |
+-+| `./backend/node_modules/@babel/types/lib/converters/toStatement.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/types/lib/converters/valueToNode.js` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/core.js` | 52.2KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/deprecated-aliases.js` | 0.3KB | # sourceMappingURL=deprecated-aliases.js.map |
+-+| `./backend/node_modules/@babel/types/lib/definitions/experimental.js` | 2.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/flow.js` | 16.1KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/index.js` | 2.5KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/jsx.js` | 4.1KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/misc.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/placeholders.js` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/typescript.js` | 16.3KB | — |
+-+| `./backend/node_modules/@babel/types/lib/definitions/utils.js` | 9.3KB | — |
+-+| `./backend/node_modules/@babel/types/lib/index.d.ts` | 606.2KB | — |
+-+| `./backend/node_modules/@babel/types/lib/index.js` | 16.9KB | — |
+-+| `./backend/node_modules/@babel/types/lib/index.js.flow` | 175.3KB | NOTE: This file is autogenerated. Do not modify. |
+-+| `./backend/node_modules/@babel/types/lib/index-legacy.d.ts` | 166.8KB | NOTE: This file is autogenerated. Do not modify. |
+-+| `./backend/node_modules/@babel/types/lib/modifications/appendToMemberExpression.js` | 0.5KB | # sourceMappingURL=appendToMemberExpression.js.map |
+-+| `./backend/node_modules/@babel/types/lib/modifications/flow/removeTypeDuplicates.js` | 1.8KB | — |
+-+| `./backend/node_modules/@babel/types/lib/modifications/inherits.js` | 0.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/modifications/prependToMemberExpression.js` | 0.5KB | # sourceMappingURL=prependToMemberExpression.js.map |
+-+| `./backend/node_modules/@babel/types/lib/modifications/removePropertiesDeep.js` | 0.4KB | # sourceMappingURL=removePropertiesDeep.js.map |
+-+| `./backend/node_modules/@babel/types/lib/modifications/removeProperties.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/types/lib/modifications/typescript/removeTypeDuplicates.js` | 2.0KB | — |
+-+| `./backend/node_modules/@babel/types/lib/retrievers/getAssignmentIdentifiers.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/types/lib/retrievers/getBindingIdentifiers.js` | 2.9KB | — |
+-+| `./backend/node_modules/@babel/types/lib/retrievers/getFunctionName.js` | 1.7KB | — |
+-+| `./backend/node_modules/@babel/types/lib/retrievers/getOuterBindingIdentifiers.js` | 0.4KB | # sourceMappingURL=getOuterBindingIdentifiers.js.map |
+-+| `./backend/node_modules/@babel/types/lib/traverse/traverseFast.js` | 0.9KB | — |
+-+| `./backend/node_modules/@babel/types/lib/traverse/traverse.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/types/lib/utils/deprecationWarning.js` | 1.2KB | — |
+-+| `./backend/node_modules/@babel/types/lib/utils/inherit.js` | 0.3KB | # sourceMappingURL=inherit.js.map |
+-+| `./backend/node_modules/@babel/types/lib/utils/react/cleanJSXElementLiteralChild.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/types/lib/utils/shallowEqual.js` | 0.3KB | # sourceMappingURL=shallowEqual.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/buildMatchMemberExpression.js` | 0.4KB | # sourceMappingURL=buildMatchMemberExpression.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/generated/index.js` | 93.3KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/isBinding.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/isBlockScoped.js` | 0.4KB | # sourceMappingURL=isBlockScoped.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isImmutable.js` | 0.5KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/is.js` | 0.8KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/isLet.js` | 0.4KB | # sourceMappingURL=isLet.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isNode.js` | 0.3KB | # sourceMappingURL=isNode.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isNodesEquivalent.js` | 1.4KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/isPlaceholderType.js` | 0.5KB | # sourceMappingURL=isPlaceholderType.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isReferenced.js` | 2.5KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/isScope.js` | 0.5KB | # sourceMappingURL=isScope.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isSpecifierDefault.js` | 0.4KB | # sourceMappingURL=isSpecifierDefault.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isType.js` | 0.5KB | # sourceMappingURL=isType.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isValidES3Identifier.js` | 0.6KB | # sourceMappingURL=isValidES3Identifier.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isValidIdentifier.js` | 0.6KB | # sourceMappingURL=isValidIdentifier.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/isVar.js` | 0.4KB | # sourceMappingURL=isVar.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/matchesPattern.js` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/types/lib/validators/react/isCompatTag.js` | 0.2KB | # sourceMappingURL=isCompatTag.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/react/isReactComponent.js` | 0.4KB | # sourceMappingURL=isReactComponent.js.map |
+-+| `./backend/node_modules/@babel/types/lib/validators/validate.js` | 1.5KB | — |
+-+| `./backend/node_modules/@babel/types/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/@babel/types/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@babel/types/README.md` | 0.4KB | @babel/types |
+-+| `./backend/node_modules/balanced-match/.github/FUNDING.yml` | 0.1KB | — |
+-+| `./backend/node_modules/balanced-match/index.js` | 1.2KB | — |
+-+| `./backend/node_modules/balanced-match/LICENSE.md` | 1.1KB | — |
+-+| `./backend/node_modules/balanced-match/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/balanced-match/README.md` | 3.4KB | balanced-match |
+-+| `./backend/node_modules/bare-events/index.d.ts` | 2.3KB | — |
+-+| `./backend/node_modules/bare-events/index.js` | 6.8KB | — |
+-+| `./backend/node_modules/bare-events/lib/errors.js` | 0.7KB | — |
+-+| `./backend/node_modules/bare-events/LICENSE` | 11.1KB | — |
+-+| `./backend/node_modules/bare-events/package.json` | 0.9KB | — |
+-+| `./backend/node_modules/bare-events/README.md` | 0.3KB | bare-events |
+-+| `./backend/node_modules/@bcoe/v8-coverage/CHANGELOG.md` | 9.6KB | # Next |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/ascii.d.ts` | 0.5KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/ascii.js` | 16.3KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/ascii.mjs` | 16.0KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/CHANGELOG.md` | 9.6KB | # Next |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/clone.d.ts` | 0.9KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/clone.js` | 5.6KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/clone.mjs` | 5.3KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/compare.d.ts` | 0.8KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/compare.js` | 3.7KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/compare.mjs` | 3.4KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/index.d.ts` | 0.5KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/index.js` | 2.4KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/index.mjs` | 1.6KB | # sourceMappingURL=data:application/json;charset=utf8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIl9zcmMvaW5kZXgudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IkFBQUEsT0FBTyxFQUFFLFVBQVUsRUFBRSxlQUFlLEVBQUUsbUJBQW1CLEVBQUUsWUFBWSxFQUFFLE1BQU0sU0FBUyxDQUFDO0FBQ3pGLE9BQU8sRUFBRSxnQkFBZ0IsRUFBRSxlQUFlLEVBQUUsY0FBYyxFQUFFLGFBQWEsRUFBRSxNQUFNLFNBQVMsQ0FBQztBQUMzRixPQUFPLEVBQUUsaUJBQWlCLEVBQUUsbUJBQW1CLEVBQUUsZ0JBQWdCLEVBQUUsTUFBTSxXQUFXLENBQUM7QUFDckYsT0FBTyxFQUFFLGlCQUFpQixFQUFFLGdCQUFnQixFQUFFLGVBQWUsRUFBRSxNQUFNLFNBQVMsQ0FBQztBQUMvRSxPQUFPLEVBQUUsU0FBUyxFQUFFLE1BQU0sY0FBYyxDQUFDIiwiZmlsZSI6ImluZGV4LmpzIiwic291cmNlc0NvbnRlbnQiOlsiZXhwb3J0IHsgZW1pdEZvcmVzdCwgZW1pdEZvcmVzdExpbmVzLCBwYXJzZUZ1bmN0aW9uUmFuZ2VzLCBwYXJzZU9mZnNldHMgfSBmcm9tIFwiLi9hc2NpaVwiO1xuZXhwb3J0IHsgY2xvbmVGdW5jdGlvbkNvdiwgY2xvbmVQcm9jZXNzQ292LCBjbG9uZVNjcmlwdENvdiwgY2xvbmVSYW5nZUNvdiB9IGZyb20gXCIuL2Nsb25lXCI7XG5leHBvcnQgeyBjb21wYXJlU2NyaXB0Q292cywgY29tcGFyZUZ1bmN0aW9uQ292cywgY29tcGFyZVJhbmdlQ292cyB9IGZyb20gXCIuL2NvbXBhcmVcIjtcbmV4cG9ydCB7IG1lcmdlRnVuY3Rpb25Db3ZzLCBtZXJnZVByb2Nlc3NDb3ZzLCBtZXJnZVNjcmlwdENvdnMgfSBmcm9tIFwiLi9tZXJnZVwiO1xuZXhwb3J0IHsgUmFuZ2VUcmVlIH0gZnJvbSBcIi4vcmFuZ2UtdHJlZVwiO1xuZXhwb3J0IHsgUHJvY2Vzc0NvdiwgU2NyaXB0Q292LCBGdW5jdGlvbkNvdiwgUmFuZ2VDb3YgfSBmcm9tIFwiLi90eXBlc1wiO1xuIl0sInNvdXJjZVJvb3QiOiIifQ== |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/LICENSE.md` | 1.1KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/merge.d.ts` | 1.5KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/merge.js` | 35.5KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/merge.mjs` | 35.4KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/normalize.d.ts` | 1.6KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/normalize.js` | 7.5KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/normalize.mjs` | 7.2KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/range-tree.d.ts` | 0.7KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/range-tree.js` | 15.6KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/range-tree.mjs` | 15.5KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/README.md` | 0.7KB | V8 Coverage |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/ascii.ts` | 4.4KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/clone.ts` | 1.7KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/compare.ts` | 1.1KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/index.ts` | 0.5KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/merge.ts` | 10.6KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/normalize.ts` | 2.3KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/range-tree.ts` | 4.2KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/_src/types.ts` | 0.4KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/tsconfig.json` | 1.6KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/types.d.ts` | 0.4KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/types.js` | 0.9KB | # sourceMappingURL=data:application/json;charset=utf8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIl9zcmMvdHlwZXMudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IiIsImZpbGUiOiJ0eXBlcy5qcyIsInNvdXJjZXNDb250ZW50IjpbImV4cG9ydCBpbnRlcmZhY2UgUHJvY2Vzc0NvdiB7XG4gIHJlc3VsdDogU2NyaXB0Q292W107XG59XG5cbmV4cG9ydCBpbnRlcmZhY2UgU2NyaXB0Q292IHtcbiAgc2NyaXB0SWQ6IHN0cmluZztcbiAgdXJsOiBzdHJpbmc7XG4gIGZ1bmN0aW9uczogRnVuY3Rpb25Db3ZbXTtcbn1cblxuZXhwb3J0IGludGVyZmFjZSBGdW5jdGlvbkNvdiB7XG4gIGZ1bmN0aW9uTmFtZTogc3RyaW5nO1xuICByYW5nZXM6IFJhbmdlQ292W107XG4gIGlzQmxvY2tDb3ZlcmFnZTogYm9vbGVhbjtcbn1cblxuZXhwb3J0IGludGVyZmFjZSBSYW5nZSB7XG4gIHJlYWRvbmx5IHN0YXJ0OiBudW1iZXI7XG4gIHJlYWRvbmx5IGVuZDogbnVtYmVyO1xufVxuXG5leHBvcnQgaW50ZXJmYWNlIFJhbmdlQ292IHtcbiAgc3RhcnRPZmZzZXQ6IG51bWJlcjtcbiAgZW5kT2Zmc2V0OiBudW1iZXI7XG4gIGNvdW50OiBudW1iZXI7XG59XG4iXSwic291cmNlUm9vdCI6IiJ9 |
+-+| `./backend/node_modules/@bcoe/v8-coverage/dist/lib/types.mjs` | 0.8KB | # sourceMappingURL=data:application/json;charset=utf8;base64,eyJ2ZXJzaW9uIjozLCJzb3VyY2VzIjpbIl9zcmMvdHlwZXMudHMiXSwibmFtZXMiOltdLCJtYXBwaW5ncyI6IiIsImZpbGUiOiJ0eXBlcy5qcyIsInNvdXJjZXNDb250ZW50IjpbImV4cG9ydCBpbnRlcmZhY2UgUHJvY2Vzc0NvdiB7XG4gIHJlc3VsdDogU2NyaXB0Q292W107XG59XG5cbmV4cG9ydCBpbnRlcmZhY2UgU2NyaXB0Q292IHtcbiAgc2NyaXB0SWQ6IHN0cmluZztcbiAgdXJsOiBzdHJpbmc7XG4gIGZ1bmN0aW9uczogRnVuY3Rpb25Db3ZbXTtcbn1cblxuZXhwb3J0IGludGVyZmFjZSBGdW5jdGlvbkNvdiB7XG4gIGZ1bmN0aW9uTmFtZTogc3RyaW5nO1xuICByYW5nZXM6IFJhbmdlQ292W107XG4gIGlzQmxvY2tDb3ZlcmFnZTogYm9vbGVhbjtcbn1cblxuZXhwb3J0IGludGVyZmFjZSBSYW5nZSB7XG4gIHJlYWRvbmx5IHN0YXJ0OiBudW1iZXI7XG4gIHJlYWRvbmx5IGVuZDogbnVtYmVyO1xufVxuXG5leHBvcnQgaW50ZXJmYWNlIFJhbmdlQ292IHtcbiAgc3RhcnRPZmZzZXQ6IG51bWJlcjtcbiAgZW5kT2Zmc2V0OiBudW1iZXI7XG4gIGNvdW50OiBudW1iZXI7XG59XG4iXSwic291cmNlUm9vdCI6IiJ9 |
+-+| `./backend/node_modules/@bcoe/v8-coverage/.editorconfig` | 0.1KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/.gitattributes` | 0.1KB | Enforce `lf` for text files (even on Windows) |
+-+| `./backend/node_modules/@bcoe/v8-coverage/gulpfile.ts` | 2.3KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/LICENSE.md` | 1.1KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/LICENSE.txt` | 0.7KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/README.md` | 0.7KB | V8 Coverage |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/ascii.ts` | 4.4KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/clone.ts` | 1.7KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/compare.ts` | 1.1KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/index.ts` | 0.5KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/merge.ts` | 10.6KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/normalize.ts` | 2.3KB | * |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/range-tree.ts` | 4.2KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/lib/types.ts` | 0.4KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/src/test/merge.spec.ts` | 9.3KB | — |
+-+| `./backend/node_modules/@bcoe/v8-coverage/tsconfig.json` | 1.5KB | — |
+-+| `./backend/node_modules/bcrypt/bcrypt.js` | 7.0KB | / generate a salt (sync) |
+-+| `./backend/node_modules/bcrypt/binding.gyp` | 1.2KB | — |
+-+| `./backend/node_modules/bcrypt/build-all.sh` | 1.0KB | !/bin/bash -ue |
+-+| `./backend/node_modules/bcrypt/CHANGELOG.md` | 4.0KB | 6.0.0 (2025-02-28) |
+-+| `./backend/node_modules/bcrypt/Dockerfile` | 1.5KB | Usage: |
+-+| `./backend/node_modules/bcrypt/Dockerfile-alpine` | 0.9KB | Usage: |
+-+| `./backend/node_modules/bcrypt/.dockerignore` | 0.1KB | — |
+-+| `./backend/node_modules/bcrypt/.editorconfig` | 0.3KB | — |
+-+| `./backend/node_modules/bcrypt/examples/async_compare.js` | 0.9KB | genSalt |
+-+| `./backend/node_modules/bcrypt/examples/forever_gen_salt.js` | 0.2KB | — |
+-+| `./backend/node_modules/bcrypt/.github/workflows/build-pack-publish.yml` | 4.0KB | This is unsafe, but we really don't use any other native dependencies |
+-+| `./backend/node_modules/bcrypt/.github/workflows/ci.yaml` | 0.8KB | — |
+-+| `./backend/node_modules/bcrypt/ISSUE_TEMPLATE.md` | 1.0KB | — |
+-+| `./backend/node_modules/bcryptjs/bin/bcrypt` | 0.5KB | !/usr/bin/env node |
+-+| `./backend/node_modules/bcryptjs/index.d.ts` | 0.1KB | — |
+-+| `./backend/node_modules/bcryptjs/index.js` | 40.5KB | — |
+-+| `./backend/node_modules/bcryptjs/LICENSE` | 1.5KB | — |
+-+| `./backend/node_modules/bcryptjs/package.json` | 2.0KB | — |
+-+| `./backend/node_modules/bcryptjs/README.md` | 7.4KB | bcrypt.js |
+-+| `./backend/node_modules/bcryptjs/types.d.ts` | 5.5KB | Originally imported from https://github.com/DefinitelyTyped/DefinitelyTyped/blob/8b36dbdf95b624b8a7cd7f8416f06c15d274f9e6/types/bcryptjs/index.d.ts |
+-+| `./backend/node_modules/bcryptjs/umd/index.d.ts` | 0.1KB | — |
+-+| `./backend/node_modules/bcryptjs/umd/index.js` | 46.4KB | GENERATED FILE. DO NOT EDIT. |
+-+| `./backend/node_modules/bcryptjs/umd/package.json` | 0.0KB | — |
+-+| `./backend/node_modules/bcryptjs/umd/types.d.ts` | 5.5KB | Originally imported from https://github.com/DefinitelyTyped/DefinitelyTyped/blob/8b36dbdf95b624b8a7cd7f8416f06c15d274f9e6/types/bcryptjs/index.d.ts |
+-+| `./backend/node_modules/bcrypt/LICENSE` | 1.0KB | — |
+-+| `./backend/node_modules/bcrypt/Makefile` | 0.2KB | — |
+-+| `./backend/node_modules/bcrypt/package.json` | 2.1KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/darwin-arm64/bcrypt.node` | 86.5KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/darwin-x64/bcrypt.node` | 54.2KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/linux-arm64/bcrypt.glibc.node` | 74.8KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/linux-arm64/bcrypt.musl.node` | 74.8KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/linux-arm/bcrypt.glibc.node` | 65.9KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/linux-arm/bcrypt.musl.node` | 65.8KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/linux-x64/bcrypt.glibc.node` | 82.9KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/linux-x64/bcrypt.musl.node` | 94.2KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/win32-arm64/bcrypt.node` | 178.5KB | — |
+-+| `./backend/node_modules/bcrypt/prebuilds/win32-x64/bcrypt.node` | 191.0KB | — |
+-+| `./backend/node_modules/bcrypt/promises.js` | 1.1KB | / encapsulate a method with a node-style callback in a Promise |
+-+| `./backend/node_modules/bcrypt/README.md` | 16.9KB | node.bcrypt.js |
+-+| `./backend/node_modules/bcrypt/SECURITY.md` | 0.5KB | Security Policy |
+-+| `./backend/node_modules/bcrypt/src/bcrypt.cc` | 7.8KB | $OpenBSD: bcrypt.c,v 1.31 2014/03/22 23:02:03 tedu Exp $	*/ |
+-+| `./backend/node_modules/bcrypt/src/bcrypt_node.cc` | 10.0KB | define NAPI_VERSION 3 |
+-+| `./backend/node_modules/bcrypt/src/blowfish.cc` | 22.7KB | $OpenBSD: blowfish.c,v 1.18 2004/11/02 17:23:26 hshoexer Exp $ */ |
+-+| `./backend/node_modules/bcrypt/src/node_blf.h` | 4.7KB | $OpenBSD: blf.h,v 1.7 2007/03/14 17:59:41 grunk Exp $ */ |
+-+| `./backend/node_modules/bcrypt/test/async.test.js` | 5.8KB | — |
+-+| `./backend/node_modules/bcrypt/test/implementation.test.js` | 5.2KB | some tests were adapted from https://github.com/riverrun/bcrypt_elixir/blob/master/test/base_test.exs |
+-+| `./backend/node_modules/bcrypt/test/promise.test.js` | 5.1KB | make sure test passes with non-native implementations such as bluebird |
+-+| `./backend/node_modules/bcrypt/test/repetitions.test.js` | 1.9KB | it is necessary to increase the test timeout when emulating cross-architecture |
+-+| `./backend/node_modules/bcrypt/test/sync.test.js` | 4.2KB | — |
+-+| `./backend/node_modules/body-parser/HISTORY.md` | 16.3KB | — |
+-+| `./backend/node_modules/body-parser/index.js` | 2.6KB | ! |
+-+| `./backend/node_modules/body-parser/lib/read.js` | 4.2KB | ! |
+-+| `./backend/node_modules/body-parser/lib/types/json.js` | 5.2KB | ! |
+-+| `./backend/node_modules/body-parser/lib/types/raw.js` | 1.8KB | ! |
+-+| `./backend/node_modules/body-parser/lib/types/text.js` | 2.2KB | ! |
+-+| `./backend/node_modules/body-parser/lib/types/urlencoded.js` | 6.3KB | ! |
+-+| `./backend/node_modules/body-parser/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/body-parser/package.json` | 1.4KB | — |
+-+| `./backend/node_modules/body-parser/README.md` | 18.7KB | body-parser |
+-+| `./backend/node_modules/body-parser/SECURITY.md` | 1.2KB | Security Policies and Procedures |
+-+| `./backend/node_modules/brace-expansion/index.js` | 4.7KB | — |
+-+| `./backend/node_modules/brace-expansion/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/brace-expansion/package.json` | 1.1KB | — |
+-+| `./backend/node_modules/brace-expansion/README.md` | 4.0KB | brace-expansion |
+-+| `./backend/node_modules/braces/index.js` | 4.3KB | * |
+-+| `./backend/node_modules/braces/lib/compile.js` | 1.5KB | — |
+-+| `./backend/node_modules/braces/lib/constants.js` | 1.6KB | Digits |
+-+| `./backend/node_modules/braces/lib/expand.js` | 2.7KB | — |
+-+| `./backend/node_modules/braces/lib/parse.js` | 6.7KB | * |
+-+| `./backend/node_modules/braces/lib/stringify.js` | 0.7KB | — |
+-+| `./backend/node_modules/braces/lib/utils.js` | 2.5KB | * |
+-+| `./backend/node_modules/braces/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/braces/package.json` | 1.6KB | — |
+-+| `./backend/node_modules/braces/README.md` | 21.0KB | braces [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=W8YFZ425KND68) [![NPM version](https://img.shields.io/npm/v/braces.svg?style=flat)](https://www.npmjs.com/package/braces) [![NPM monthly downloads](https://img.shields.io/npm/dm/braces.svg?style=flat)](https://npmjs.org/package/braces) [![NPM total downloads](https://img.shields.io/npm/dt/braces.svg?style=flat)](https://npmjs.org/package/braces) [![Linux Build Status](https://img.shields.io/travis/micromatch/braces.svg?style=flat&label=Travis)](https://travis-ci.org/micromatch/braces) |
+-+| `./backend/node_modules/browserslist/browser.js` | 1.1KB | — |
+-+| `./backend/node_modules/browserslist/cli.js` | 4.2KB | !/usr/bin/env node |
+-+| `./backend/node_modules/browserslist/error.d.ts` | 0.2KB | — |
+-+| `./backend/node_modules/browserslist/error.js` | 0.3KB | — |
+-+| `./backend/node_modules/browserslist/index.d.ts` | 4.8KB | * |
+-+| `./backend/node_modules/browserslist/index.js` | 34.2KB | Helpers |
+-+| `./backend/node_modules/browserslist/LICENSE` | 1.1KB | — |
+-+| `./backend/node_modules/browserslist/node.js` | 12.4KB | — |
+-+| `./backend/node_modules/browserslist/package.json` | 1.0KB | — |
+-+| `./backend/node_modules/browserslist/parse.js` | 1.7KB | — |
+-+| `./backend/node_modules/browserslist/README.md` | 2.8KB | Browserslist [![Cult Of Martians][cult-img]][cult] |
+-+| `./backend/node_modules/bser/index.js` | 15.2KB | Copyright 2015-present Facebook, Inc. |
+-+| `./backend/node_modules/bser/package.json` | 0.7KB | — |
+-+| `./backend/node_modules/bser/README.md` | 1.6KB | BSER Binary Serialization |
+-+| `./backend/node_modules/bson/bson.d.ts` | 61.4KB | * |
+-+| `./backend/node_modules/bson/etc/prepare.js` | 0.6KB | ! /usr/bin/env node |
+-+| `./backend/node_modules/bson/lib/bson.bundle.js` | 171.5KB | — |
+-+| `./backend/node_modules/bson/lib/bson.cjs` | 171.6KB | — |
+-+| `./backend/node_modules/bson/lib/bson.mjs` | 171.0KB | — |
+-+| `./backend/node_modules/bson/lib/bson.rn.cjs` | 172.1KB | — |
+-+| `./backend/node_modules/bson/LICENSE.md` | 11.1KB | — |
+-+| `./backend/node_modules/bson/package.json` | 3.8KB | — |
+-+| `./backend/node_modules/bson/README.md` | 13.1KB | BSON parser |
+-+| `./backend/node_modules/bson/src/binary.ts` | 22.7KB | * @public */ |
+-+| `./backend/node_modules/bson/src/bson.ts` | 8.0KB | Parts of the parser |
+-+| `./backend/node_modules/bson/src/bson_value.ts` | 0.9KB | * @public */ |
+-+| `./backend/node_modules/bson/src/code.ts` | 1.8KB | * @public */ |
+-+| `./backend/node_modules/bson/src/constants.ts` | 3.4KB | * @internal */ |
+-+| `./backend/node_modules/bson/src/db_ref.ts` | 3.1KB | * @public */ |
+-+| `./backend/node_modules/bson/src/decimal128.ts` | 27.1KB | Nan value bits as 32 bit values (due to lack of longs) |
+-+| `./backend/node_modules/bson/src/double.ts` | 3.4KB | * @public */ |
+-+| `./backend/node_modules/bson/src/error.ts` | 2.5KB | * |
