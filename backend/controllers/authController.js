@@ -8,6 +8,9 @@ import RefreshTokenModel from "../models/RefreshToken.js";
 import { signAccessToken } from "../middleware/authMiddleware.js";
 import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 
+// NEW: send verification email after register
+import { queueSendVerificationEmail } from "./emailVerificationController.js";
+
 const RefreshToken = mongoose.models.RefreshToken || RefreshTokenModel;
 
 function clientNet(req) {
@@ -40,31 +43,21 @@ function sessionExpiry(days = 30) {
 /** POST /api/auth/register */
 export const registerUser = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400);
-    throw new Error(errors.array()[0].msg);
-  }
+  if (!errors.isEmpty()) { res.status(400); throw new Error(errors.array()[0].msg); }
 
   const { username, email, password, firstName = "", lastName = "" } = req.body;
   const exists = await User.findOne({ $or: [{ email }, { username }] });
-  if (exists) {
-    res.status(400);
-    throw new Error("User with that email or username already exists");
-  }
+  if (exists) { res.status(400); throw new Error("User with that email or username already exists"); }
 
   const user = await User.create({ username, email, password, firstName, lastName });
-  const token = signAccessToken(user._id);
 
+  // (A) Create session like before
+  const token = signAccessToken(user._id);
   const jti = crypto.randomUUID();
   const { ip, userAgent, hints } = clientNet(req);
   await RefreshToken.create({
-    jti,
-    user: user._id,
-    ip,
-    userAgent,
-    client: hints,
-    expiresAt: sessionExpiry(30),
-    lastSeenAt: new Date(),
+    jti, user: user._id, ip, userAgent, client: hints,
+    expiresAt: sessionExpiry(30), lastSeenAt: new Date(),
   });
 
   await logAudit(req, {
@@ -76,6 +69,10 @@ export const registerUser = asyncHandler(async (req, res) => {
   });
   await logAuthLogin(req, user, { via: "register", sessionId: jti });
 
+  // (B) Fire off verification email (do not block response if it fails)
+  try { await queueSendVerificationEmail(user.email); }
+  catch (e) { console.warn("[register] send verification email failed:", e?.message || e); }
+
   res.status(201).json({
     token,
     sessionJti: jti,
@@ -86,6 +83,7 @@ export const registerUser = asyncHandler(async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       isAdmin: !!user.isAdmin,
+      emailVerifiedAt: user.emailVerifiedAt || null,
     },
   });
 });
@@ -93,30 +91,18 @@ export const registerUser = asyncHandler(async (req, res) => {
 /** POST /api/auth/login */
 export const loginUser = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400);
-    throw new Error(errors.array()[0].msg);
-  }
+  if (!errors.isEmpty()) { res.status(400); throw new Error(errors.array()[0].msg); }
 
   const { email, password } = req.body;
   const user = await User.findOne({ email }).select("+password");
-  if (!user || !(await user.matchPassword(password))) {
-    res.status(401);
-    throw new Error("Invalid email or password");
-  }
+  if (!user || !(await user.matchPassword(password))) { res.status(401); throw new Error("Invalid email or password"); }
 
   const token = signAccessToken(user._id);
-
   const jti = crypto.randomUUID();
   const { ip, userAgent, hints } = clientNet(req);
   await RefreshToken.create({
-    jti,
-    user: user._id,
-    ip,
-    userAgent,
-    client: hints,
-    expiresAt: sessionExpiry(30),
-    lastSeenAt: new Date(),
+    jti, user: user._id, ip, userAgent, client: hints,
+    expiresAt: sessionExpiry(30), lastSeenAt: new Date(),
   });
 
   await logAuthLogin(req, user, { email, sessionId: jti });
@@ -131,6 +117,7 @@ export const loginUser = asyncHandler(async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       isAdmin: !!user.isAdmin,
+      emailVerifiedAt: user.emailVerifiedAt || null,
     },
   });
 });
@@ -143,10 +130,7 @@ export const logoutUser = asyncHandler(async (req, res) => {
 
   if (user?._id && sessionId) {
     const rt = await RefreshToken.findOne({ jti: sessionId, user: user._id, revokedAt: null }).exec();
-    if (rt) {
-      rt.revokedAt = new Date();
-      await rt.save();
-    }
+    if (rt) { rt.revokedAt = new Date(); await rt.save(); }
   }
   res.json({ message: "Logged out" });
 });
@@ -154,28 +138,22 @@ export const logoutUser = asyncHandler(async (req, res) => {
 /** GET /api/auth/profile */
 export const getUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select("-password");
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
-  }
+  if (!user) { res.status(404); throw new Error("User not found"); }
   res.json(user);
 });
 
 /** PUT /api/auth/profile */
 export const updateUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select("+password");
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
-  }
+  if (!user) { res.status(404); throw new Error("User not found"); }
 
   const { username, email, firstName, lastName, shippingAddress, billingAddress } = req.body;
   if (username !== undefined) user.username = username;
-  if (email !== undefined) user.email = email;
+  if (email !== undefined)    user.email = email;
   if (firstName !== undefined) user.firstName = firstName;
-  if (lastName !== undefined) user.lastName = lastName;
+  if (lastName !== undefined)  user.lastName = lastName;
   if (shippingAddress !== undefined) user.shippingAddress = shippingAddress;
-  if (billingAddress !== undefined) user.billingAddress = billingAddress;
+  if (billingAddress  !== undefined) user.billingAddress  = billingAddress;
 
   const updated = await user.save();
 
@@ -195,16 +173,11 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
 /** POST /api/auth/request-password-reset */
 export const requestPasswordReset = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400);
-    throw new Error(errors.array()[0].msg);
-  }
+  if (!errors.isEmpty()) { res.status(400); throw new Error(errors.array()[0].msg); }
 
   const { email } = req.body;
   const user = await User.findOne({ email }).select("+passwordResetToken +passwordResetExpires");
-  if (!user) {
-    return res.json({ message: "If the email exists, a reset link has been sent." });
-  }
+  if (!user) return res.json({ message: "If the email exists, a reset link has been sent." });
 
   const raw = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(raw).digest("hex");
@@ -226,10 +199,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
 /** POST /api/auth/reset-password */
 export const resetPassword = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400);
-    throw new Error(errors.array()[0].msg);
-  }
+  if (!errors.isEmpty()) { res.status(400); throw new Error(errors.array()[0].msg); }
 
   const { token, password } = req.body;
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
@@ -238,10 +208,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     passwordResetToken: tokenHash,
     passwordResetExpires: { $gt: new Date() },
   }).select("+password");
-  if (!user) {
-    res.status(400);
-    throw new Error("Invalid or expired reset token");
-  }
+  if (!user) { res.status(400); throw new Error("Invalid or expired reset token"); }
 
   user.password = password;
   user.passwordResetToken = undefined;
@@ -262,22 +229,13 @@ export const resetPassword = asyncHandler(async (req, res) => {
 /** PUT /api/auth/change-password */
 export const changePassword = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400);
-    throw new Error(errors.array()[0].msg);
-  }
+  if (!errors.isEmpty()) { res.status(400); throw new Error(errors.array()[0].msg); }
 
   const { currentPassword, newPassword } = req.body;
   const user = await User.findById(req.user._id).select("+password");
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
-  }
+  if (!user) { res.status(404); throw new Error("User not found"); }
   const ok = await user.matchPassword(currentPassword);
-  if (!ok) {
-    res.status(400);
-    throw new Error("Current password is incorrect");
-  }
+  if (!ok) { res.status(400); throw new Error("Current password is incorrect"); }
 
   user.password = newPassword;
   await user.save();
@@ -300,11 +258,7 @@ export const refreshSession = asyncHandler(async (req, res) => {
   const sessionId = req.headers["x-session-id"];
   if (sessionId) {
     const rt = await RefreshToken.findOne({ jti: sessionId, user: req.user._id, revokedAt: null }).exec();
-    if (rt) {
-      rt.expiresAt = sessionExpiry(30);
-      rt.lastSeenAt = new Date();
-      await rt.save();
-    }
+    if (rt) { rt.expiresAt = sessionExpiry(30); rt.lastSeenAt = new Date(); await rt.save(); }
   }
 
   res.json({ token });

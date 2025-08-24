@@ -18,53 +18,42 @@ const addressSchema = new mongoose.Schema(addressSchemaDefinition, { _id: false 
 
 // Define the schema for a user's monthly vote record
 const monthlyVoteRecordSchema = new mongoose.Schema({
-    month: { type: String, required: true }, // 'YYYY-MM' format
-    designsVotedFor: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Design'
-    }]
+  month: { type: String, required: true }, // 'YYYY-MM' format
+  designsVotedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Design' }],
 }, { _id: false }); // Don't need an _id for subdocuments in this array
 
 const UserSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true, trim: true },
-  email: { type: String, required: true, unique: true, trim: true, lowercase: true },
-  password: { type: String, required: true },
+  username:  { type: String, required: true, unique: true, trim: true },
+  email:     { type: String, required: true, unique: true, trim: true, lowercase: true },
+  password:  { type: String, required: true },
   firstName: { type: String, default: '', trim: true },
-  lastName: { type: String, default: '', trim: true },
-  isAdmin: {
-    type: Boolean,
-    required: true,
-    default: false,
-  },
-  // --- NEW CONTEST FIELDS ---
-  lastContestSubmissionMonth: { // Stores 'YYYY-MM' of last design submitted by user
-    type: String
-  },
-  monthlyVoteRecord: [monthlyVoteRecordSchema], // Array to track votes per month
-  // --- END CONTEST FIELDS ---
+  lastName:  { type: String, default: '', trim: true },
+  isAdmin:   { type: Boolean, required: true, default: false },
+
+  // --- CONTEST FIELDS ---
+  lastContestSubmissionMonth: { type: String }, // 'YYYY-MM'
+  monthlyVoteRecord: [monthlyVoteRecordSchema],
 
   shippingAddress: addressSchema,
-  billingAddress: addressSchema,
+  billingAddress:  addressSchema,
 
-  // ---- NEW FIELDS FOR PASSWORD RESET ----
-  passwordResetToken: {
-    type: String,
-    select: false,
-  },
-  passwordResetExpires: {
-    type: Date,
-    select: false,
-  },
-  // ---- END OF NEW FIELDS ----
+  // ---- PASSWORD RESET ----
+  passwordResetToken:   { type: String, select: false },
+  passwordResetExpires: { type: Date,   select: false },
 
+  // ---- EMAIL VERIFICATION ----
+  emailVerifiedAt: { type: Date, default: null },
+  emailVerification: {
+    tokenHash: { type: String },    // sha256(token)
+    expiresAt: { type: Date },
+    attempts:  { type: Number, default: 0 },
+    lastSentAt:{ type: Date },
+  },
 }, { timestamps: true });
 
-// Middleware to hash password before saving (if it's modified)
+// Hash password before save (if modified)
 UserSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
-
+  if (!this.isModified('password')) return next();
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
@@ -74,14 +63,13 @@ UserSchema.pre('save', async function (next) {
   }
 });
 
-// Method to compare entered password with the hashed password in the database
+// Compare entered vs stored password
 UserSchema.methods.matchPassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  return bcrypt.compare(enteredPassword, this.password);
 };
 
-// Ensure virtuals are included when converting to JSON (e.g. for 'id')
-UserSchema.set('toJSON', { virtuals: true });
-UserSchema.set('toObject', { virtuals: true });
+UserSchema.set('toJSON',  { virtuals: true });
+UserSchema.set('toObject',{ virtuals: true });
 
 const User = mongoose.model('User', UserSchema);
 export default User;

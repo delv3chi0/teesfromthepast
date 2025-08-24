@@ -34,12 +34,16 @@ const RegistrationPage = () => {
         email: formData.email,
         password: formData.password
       });
-      // If register returns a token and you want auto-login:
+
+      // Optional: don’t auto-login until verified. If you do want auto-login, uncomment:
       // const token = res.data?.token;
       // if (token) await setSession(token);
 
-      toast({ title: 'Registration Successful', description: 'You can now log in.', status: 'success', duration: 3000, isClosable: true });
-      navigate('/login');
+      // Kick verification email (idempotent; backend also queued one)
+      try { await client.post('/auth/send-verification', { email: formData.email }); } catch {}
+
+      toast({ title: 'Registration Successful', description: 'Check your email to verify your account.', status: 'success', duration: 3000, isClosable: true });
+      navigate('/check-email');
     } catch (error) {
       toast({ title: 'Registration Failed', description: error.response?.data?.message || 'An unexpected error occurred.', status: 'error', duration: 5000, isClosable: true });
     } finally { setLoading(false); }
@@ -50,8 +54,8 @@ const RegistrationPage = () => {
       <Container maxW="container.sm" centerContent flex="1" display="flex" flexDirection="column" justifyContent="center" py={{ base: 8, md: 12 }}>
         <VStack spacing={6} w="100%">
           <RouterLink to="/"><Image src="/logo.png" alt="Tees From The Past Logo" maxH="100px" mb={4} objectFit="contain" /></RouterLink>
-          <VStack as="form" onSubmit={handleSubmit} spacing={6} p={{ base: 6, md: 10 }} layerStyle="cardBlue" w="100%">
-            <Heading as="h1" size="lg" textAlign="center" fontFamily="heading" color="brand.textLight">Create Your Account</Heading>
+          <VStack as="form" onSubmit={handleSubmit} spacing={6} layerStyle="cardBlue" w="100%" p={{ base: 6, md: 10 }}>
+            <Heading as="h1" size="lg" textAlign="center" color="brand.textLight">Create Your Account</Heading>
 
             <FormControl isRequired><FormLabel>Username</FormLabel><Input name="username" onChange={handleChange} placeholder="Choose a unique username" size="lg"/></FormControl>
             <FormControl isRequired><FormLabel>Email Address</FormLabel><Input type="email" name="email" onChange={handleChange} placeholder="you@example.com" size="lg"/></FormControl>
@@ -76,7 +80,9 @@ const RegistrationPage = () => {
               </InputGroup>
             </FormControl>
 
-            <Button type="submit" isLoading={loading} loadingText="Creating Account..." colorScheme="brandAccentOrange" width="full" size="lg" fontSize="md">Sign Up</Button>
+            <Button type="submit" isLoading={loading} loadingText="Creating Account..." bg="brand.accentOrange" color="white" _hover={{ bg: 'brand.accentOrangeHover' }} width="full" size="lg">
+              Sign Up
+            </Button>
 
             <Text pt={2} textAlign="center" color="brand.textMuted">
               Already have an account?{' '}

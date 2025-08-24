@@ -44,6 +44,10 @@ import AdminPage from './pages/AdminPage';
 import AdminDevices from './pages/AdminDevices';
 import AdminAuditLogs from './pages/AdminAuditLogs';
 
+// ✅ NEW: email verification pages
+import CheckEmail from './pages/CheckEmail';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+
 import { FaPaintBrush, FaTrophy, FaUserCheck } from 'react-icons/fa';
 
 // --- HomePage ---
@@ -171,6 +175,10 @@ const AppContent = () => {
         <Route path="/privacy-policy" element={<MainLayout><PrivacyPolicyPage /></MainLayout>} />
         <Route path="/terms-of-service" element={<MainLayout><TermsOfServicePage /></MainLayout>} />
 
+        {/* ✅ NEW: email verification flow (public) */}
+        <Route path="/check-email" element={<MainLayout><CheckEmail /></MainLayout>} />
+        <Route path="/verify-email" element={<MainLayout><VerifyEmailPage /></MainLayout>} />
+
         {/* PROTECTED */}
         <Route path="/generate" element={<PrivateRoute><MainLayout><Generate /></MainLayout></PrivateRoute>} />
         <Route path="/my-designs" element={<PrivateRoute><MainLayout><MyDesigns /></MainLayout></PrivateRoute>} />
@@ -185,8 +193,8 @@ const AppContent = () => {
         <Route path="/payment-success" element={<PrivateRoute><MainLayout><PaymentSuccessPage /></MainLayout></PrivateRoute>} />
         <Route path="/my-orders" element={<PrivateRoute><MainLayout><MyOrdersPage /></MainLayout></PrivateRoute>} />
         <Route path="/admin" element={<AdminRoute><MainLayout><AdminPage /></MainLayout></AdminRoute>} />
-	<Route path="/admin/devices" element={<AdminDevices/>} />
-	<Route path="/admin/audit-logs" element={<AdminAuditLogs/>} />
+        <Route path="/admin/devices" element={<AdminDevices/>} />
+        <Route path="/admin/audit-logs" element={<AdminAuditLogs/>} />
 
         {/* Aliases */}
         <Route path="/studio" element={<Navigate to="/product-studio" replace />} />

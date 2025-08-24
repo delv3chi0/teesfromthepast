@@ -1,0 +1,137 @@
+// backend/controllers/emailVerificationController.js
+import crypto from 'crypto';
+import { Resend } from 'resend';
+import User from '../models/User.js';
+import { verificationEmailTemplate } from '../utils/emailTemplates.js';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM = process.env.RESEND_FROM;
+const APP_ORIGIN = process.env.APP_ORIGIN || 'http://localhost:5173';
+const TTL_MIN = parseInt(process.env.EMAIL_VERIFY_TOKEN_TTL_MIN || '30', 10);
+
+function nowPlusMinutes(min) {
+  return new Date(Date.now() + min * 60 * 1000);
+}
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+function safeEmailCompare(a, b) {
+  return a && b && a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * POST /api/auth/send-verification
+ * Body: { email }  (optional if using session)
+ */
+export async function sendVerification(req, res) {
+  try {
+    const email = (req.body?.email || '').trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ message: 'Valid email required.' });
+    }
+
+    // Don't leak existence: do a soft lookup
+    const user = await User.findOne({ email }).select('_id email emailVerifiedAt emailVerification').lean();
+
+    // If user exists and already verified, return 200 OK to keep UX tidy
+    if (user?.emailVerifiedAt) {
+      return res.json({ ok: true, message: 'If an account exists, a verification email has been sent.' });
+    }
+
+    // Create token regardless (but only save if user exists)
+    const raw = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashToken(raw);
+    const expiresAt = nowPlusMinutes(TTL_MIN);
+
+    if (user) {
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            emailVerification: {
+              tokenHash,
+              expiresAt,
+              attempts: 0,
+              lastSentAt: new Date(),
+            },
+          },
+        }
+      );
+    }
+
+    const verifyUrl = `${APP_ORIGIN}/verify-email?token=${encodeURIComponent(raw)}&email=${encodeURIComponent(email)}`;
+    const { html, text } = verificationEmailTemplate({ verifyUrl });
+
+    // Send via Resend
+    const { error } = await resend.emails.send({
+      from: `Tees From The Past <${FROM}>`,
+      to: email, // send to the user directly
+      subject: 'Verify your email',
+      html,
+      text,
+    });
+    if (error) {
+      console.error('[verify] Resend error:', error);
+      return res.status(500).json({ message: 'Unable to send verification email.' });
+    }
+
+    return res.json({ ok: true, message: 'If an account exists, a verification email has been sent.' });
+  } catch (e) {
+    console.error('[verify] sendVerification failed:', e);
+    return res.status(500).json({ message: 'Unable to send verification email.' });
+  }
+}
+
+/**
+ * POST /api/auth/verify-email
+ * Body: { email, token }
+ */
+export async function verifyEmail(req, res) {
+  try {
+    const email = (req.body?.email || '').trim();
+    const token = (req.body?.token || '').trim();
+
+    if (!/^\S+@\S+\.\S+$/.test(email) || !token) {
+      return res.status(400).json({ message: 'Invalid request.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user || !user.emailVerification) {
+      // Don’t reveal existence
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+
+    const { tokenHash, expiresAt, attempts = 0 } = user.emailVerification;
+    if (!tokenHash || !expiresAt || new Date(expiresAt) < new Date() || attempts >= 5) {
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+
+    // Constant-time-ish check
+    const providedHash = hashToken(token);
+    if (providedHash !== tokenHash) {
+      // Increment attempts to slow brute force
+      await User.updateOne({ _id: user._id }, { $inc: { 'emailVerification.attempts': 1 } });
+      return res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+
+    // Success → mark verified & clear token
+    user.emailVerifiedAt = new Date();
+    user.emailVerification = undefined;
+    await user.save();
+
+    return res.json({ ok: true, message: 'Email verified.' });
+  } catch (e) {
+    console.error('[verify] verifyEmail failed:', e);
+    return res.status(500).json({ message: 'Verification failed.' });
+  }
+}
+
+/**
+ * POST /api/auth/resend-verification
+ * Body: { email }
+ * Same as sendVerification but can enforce a minimum gap between sends.
+ */
+export async function resendVerification(req, res) {
+  // You can call sendVerification here or duplicate with extra anti-abuse logic.
+  return sendVerification(req, res);
+}

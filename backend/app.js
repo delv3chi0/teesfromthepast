@@ -18,6 +18,7 @@ import adminDesignRoutes from "./routes/adminDesignRoutes.js";
 import adminProductRoutes from "./routes/adminProductRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
+import emailVerificationRoutes from "./routes/emailVerificationRoutes.js";
 
 // Admin utilities
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
@@ -104,6 +105,7 @@ app.use("/api/forms/contact", contactLimiter);
 
 // --- Public & user routes ---
 app.use("/api/auth", authRoutes);
+app.use("/api/auth", emailVerificationRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
 app.use("/api/storefront", storefrontRoutes); // /products, /shop-data, /product/:slug

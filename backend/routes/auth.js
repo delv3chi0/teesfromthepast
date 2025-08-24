@@ -3,14 +3,15 @@ import express from "express";
 import rateLimit from "express-rate-limit";
 import { body } from "express-validator";
 import { protect } from "../middleware/authMiddleware.js";
-
-// Namespace import avoids hard-failing if a single named export is missing
 import * as auth from "../controllers/authController.js";
+
+// NEW: verification handlers
+import { sendVerification, verifyEmail, resendVerification } from "../controllers/emailVerificationController.js";
 
 const router = express.Router();
 
 /** ----------------------------------------------------------------------
- * Validators (keep your existing simple, local validators)
+ * Validators
  * ---------------------------------------------------------------------*/
 const vRegister = [
   body("username").trim().notEmpty().withMessage("Username is required"),
@@ -35,6 +36,13 @@ const vChange = [
   body("newPassword").isLength({ min: 6 }).withMessage("New password min 6 chars"),
 ];
 
+// simple validator for verification endpoints
+const vEmailOnly = [body("email").isEmail().withMessage("Valid email required")];
+const vVerify = [
+  body("email").isEmail().withMessage("Valid email required"),
+  body("token").notEmpty().withMessage("Token required")
+];
+
 /** ----------------------------------------------------------------------
  * Safe wrapper so missing handlers don't crash the app
  * ---------------------------------------------------------------------*/
@@ -42,43 +50,29 @@ const safe = (fnName) => {
   const fn = auth[fnName];
   if (typeof fn === "function") return fn;
   return (_req, res) =>
-    res
-      .status(501)
-      .json({ message: `Handler '${fnName}' is not available on authController` });
+    res.status(501).json({ message: `Handler '${fnName}' is not available on authController` });
 };
 
 /** ----------------------------------------------------------------------
- * Per-route rate limiters (adds what the audit flagged)
+ * Per-route rate limiters
  * ---------------------------------------------------------------------*/
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 10,                  // 10 login attempts / 15 min / IP
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,                    // 5 registrations / hour / IP
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Optional but recommended: keep bots from hammering reset endpoints
-const resetLimiter = rateLimit({
-  windowMs: 30 * 60 * 1000, // 30 min
-  max: 10,                   // 10 reset requests / 30 min / IP
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
+const resetLimiter = rateLimit({ windowMs: 30 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const verifyLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
 
 /** ----------------------------------------------------------------------
- * Routes (preserve your full surface, add limiters where it makes sense)
+ * Routes
  * ---------------------------------------------------------------------*/
 // Register / Login / Logout
 router.post("/register", registerLimiter, vRegister, safe("registerUser"));
 router.post("/login", loginLimiter, vLogin, safe("loginUser"));
 router.post("/logout", protect, safe("logoutUser"));
+
+// Email verification (public)
+router.post("/send-verification", verifyLimiter, vEmailOnly, sendVerification);
+router.post("/resend-verification", verifyLimiter, vEmailOnly, resendVerification);
+router.post("/verify-email", verifyLimiter, vVerify, verifyEmail);
 
 // Profile
 router.get("/profile", protect, safe("getUserProfile"));

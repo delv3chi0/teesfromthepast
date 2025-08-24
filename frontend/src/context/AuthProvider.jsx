@@ -5,8 +5,8 @@ import {
   client,
   setAuthHeader,
   clearAuthHeader,
-  setSessionId,        // <— add: persists + sets header
-  setSessionIdHeader,  // (still used on boot via client.js IIFE)
+  setSessionId,
+  setSessionIdHeader,
   clearSessionIdHeader,
 } from "../api/client";
 
@@ -42,16 +42,12 @@ export function AuthProvider({ children }) {
 
   const clearingRef = useRef(false);
 
-  /**
-   * IMPORTANT: Accept sessionId so we can set BOTH headers
-   * before the first authenticated request (hydrateUser).
-   */
   const setSession = async (newToken, newSessionId) => {
     if (!newToken) {
       clearingRef.current = true;
       writeToken(null);
       clearAuthHeader();
-      clearSessionIdHeader(); // clear JTI header too
+      clearSessionIdHeader();
       setToken(null);
       setUser(null);
       clearingRef.current = false;
@@ -61,15 +57,11 @@ export function AuthProvider({ children }) {
       const decoded = jwtDecode(newToken);
       if (!decoded?.exp) throw new Error("Token missing exp");
 
-      // Persist & set headers BEFORE hydrating
       writeToken(newToken);
       setToken(newToken);
       setAuthHeader(newToken);
 
-      if (newSessionId) {
-        // Persist to localStorage AND set default header
-        setSessionId(newSessionId);
-      }
+      if (newSessionId) setSessionId(newSessionId);
 
       await hydrateUser(newToken);
     } catch {
@@ -84,7 +76,6 @@ export function AuthProvider({ children }) {
   const hydrateUser = async (activeToken) => {
     try {
       if (activeToken) setAuthHeader(activeToken);
-      // session id header is already set by setSessionId() above
       const { data } = await client.get("/auth/profile");
       if (clearingRef.current) return;
       setUser({
@@ -97,6 +88,8 @@ export function AuthProvider({ children }) {
         isAdmin: !!data.isAdmin,
         shippingAddress: data.shippingAddress,
         billingAddress: data.billingAddress,
+        // ✅ include verification flag
+        emailVerifiedAt: data.emailVerifiedAt || null,
       });
     } catch {
       await setSession(null);
@@ -123,7 +116,6 @@ export function AuthProvider({ children }) {
         }
         setToken(stored);
         setAuthHeader(stored);
-        // client.js IIFE already restored x-session-id from storage if present
         await hydrateUser(stored);
       } catch {
         writeToken(null);
@@ -175,9 +167,13 @@ export function AuthProvider({ children }) {
     await setSession(null);
   };
 
+  // ✅ convenience flags
+  const isAuthenticated = !!token;
+  const isVerified = !!user?.emailVerifiedAt;
+
   const value = useMemo(
-    () => ({ token, user, loadingAuth, setSession, logout }),
-    [token, user, loadingAuth]
+    () => ({ token, user, loadingAuth, isAuthenticated, isVerified, setSession, logout }),
+    [token, user, loadingAuth, isAuthenticated, isVerified]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
