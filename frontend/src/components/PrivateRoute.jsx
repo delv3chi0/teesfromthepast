@@ -8,7 +8,7 @@ export default function PrivateRoute({ children }) {
   const { token, user, loadingAuth } = useAuth();
   const location = useLocation();
 
-  // Still booting auth → show spinner
+  // App still booting auth
   if (loadingAuth) {
     return (
       <VStack minH="60vh" justify="center">
@@ -18,14 +18,23 @@ export default function PrivateRoute({ children }) {
     );
   }
 
-  // Not logged in → go to login (preserve where they came from)
+  // Not logged in → go login
   if (!token) {
     const redirect = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }
 
-  // Logged in but not verified → send to check-email
-  // We pass the email as a query param purely for UX (prefill/resend buttons if you add them).
+  // ⚠️ Logged in, but profile not hydrated yet → wait (don't mis-route)
+  if (token && !user) {
+    return (
+      <VStack minH="60vh" justify="center">
+        <Spinner size="lg" thickness="4px" />
+        <Text mt={3} color="whiteAlpha.800">Loading your profile…</Text>
+      </VStack>
+    );
+  }
+
+  // Logged in, user loaded: require verified email
   const isVerified = !!user?.emailVerifiedAt;
   if (!isVerified) {
     const qp = new URLSearchParams();
@@ -34,6 +43,5 @@ export default function PrivateRoute({ children }) {
     return <Navigate to={`/check-email?${qp.toString()}`} replace />;
   }
 
-  // All good
   return children;
 }

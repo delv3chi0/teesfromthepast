@@ -9,11 +9,10 @@ const AdminRoute = ({ children }) => {
   const { user, token, loadingAuth } = useAuth();
   const location = useLocation();
 
-  console.log(`[AdminRoute Render] Path: ${location.pathname}, loadingAuth: ${loadingAuth}, Token: ${token ? 'Exists' : 'No Token'}, User: ${user ? user.username : 'No User'}, IsAdmin: ${user?.isAdmin}, Verified: ${!!user?.emailVerifiedAt}`);
+  console.log(`[AdminRoute Render] Path: ${location.pathname}, loadingAuth: ${loadingAuth}, token: ${!!token}, user: ${user?.username || 'n/a'}, admin: ${!!user?.isAdmin}, verified: ${!!user?.emailVerifiedAt}`);
 
-  // Still booting auth
+  // App still booting
   if (loadingAuth) {
-    console.log('[AdminRoute Decision] Auth is loading. Rendering Spinner.');
     return (
       <VStack justifyContent="center" alignItems="center" minH="80vh">
         <Spinner size="xl" thickness="4px" color="brand.primary" />
@@ -22,32 +21,31 @@ const AdminRoute = ({ children }) => {
     );
   }
 
-  // Not logged in → go to login (preserve origin)
+  // Not logged in → login
   if (!token) {
-    console.log('[AdminRoute Decision] No token. Redirecting to /login.');
-    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
-    // (You previously used state; either works. Using query keeps it consistent with PrivateRoute.)
-    // return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Logged in but somehow no user loaded → force login
-  if (!user) {
-    console.log('[AdminRoute Decision] Token exists, but no user object. Redirecting to /login for safety.');
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
 
-  // Logged in but NOT verified → send to check-email (prefill email)
+  // ⚠️ Logged in but user not hydrated yet → wait
+  if (token && !user) {
+    return (
+      <VStack justifyContent="center" alignItems="center" minH="80vh">
+        <Spinner size="lg" thickness="4px" color="brand.primary" />
+        <Text mt={3} color="brand.textLight">Loading your profile…</Text>
+      </VStack>
+    );
+  }
+
+  // Require verified first
   if (!user.emailVerifiedAt) {
-    console.log('[AdminRoute Decision] User not verified. Redirecting to /check-email.');
     const qp = new URLSearchParams();
     if (user.email) qp.set('email', user.email);
     qp.set('unverified', '1');
     return <Navigate to={`/check-email?${qp.toString()}`} replace />;
   }
 
-  // Logged in, verified, but not an admin → show Access Denied UI
+  // Require admin
   if (!user.isAdmin) {
-    console.log('[AdminRoute Decision] User is not an admin. Rendering Access Denied message.');
     return (
       <Box textAlign="center" py={10} px={6} minH="70vh" display="flex" flexDirection="column" justifyContent="center" alignItems="center">
         <Alert
@@ -86,7 +84,6 @@ const AdminRoute = ({ children }) => {
     );
   }
 
-  console.log('[AdminRoute Decision] User is an admin and verified. Rendering children.');
   return children;
 };
 
