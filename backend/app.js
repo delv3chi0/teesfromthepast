@@ -23,13 +23,19 @@ import formRoutes from "./routes/formRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 
+// 👇 NEW: add express-rate-limit to gently throttle the contact form
+import rateLimit from "express-rate-limit";
+
 dotenv.config();
 connectDB();
 
 const app = express();
 
-// Trust Render/Reverse proxy so req.ip & x-forwarded-for work
-app.set("trust proxy", true);
+/**
+ * Trust the first proxy (Render puts you behind exactly one).
+ * This makes req.ip the REAL client IP and keeps express-rate-limit happy.
+ */
+app.set("trust proxy", 1); // <-- CHANGED from true to 1
 
 // --- Health check ---
 app.get("/health", (_req, res) => res.send("OK"));
@@ -82,11 +88,25 @@ app.use("/api/stripe", stripeWebhookRoutes);
 // JSON body parsing (after Stripe)
 app.use(express.json({ limit: "10mb" }));
 
+/**
+ * 👇 NEW: Gentle rate-limit ONLY the contact form POST
+ * - 30 requests per IP per minute (tune as you like)
+ * - Standard headers on; legacy headers off
+ * - With trust proxy = 1 above, the limiter sees the real client IP
+ */
+const contactLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 30,           // allow 30 POSTs per minute per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api/forms/contact", contactLimiter);
+
 // --- Public & user routes ---
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
-app.use("/api/storefront", storefrontRoutes);       // <-- your router: /products, /shop-data, /product/:slug
+app.use("/api/storefront", storefrontRoutes); // /products, /shop-data, /product/:slug
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
