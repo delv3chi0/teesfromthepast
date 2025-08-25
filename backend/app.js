@@ -1,5 +1,5 @@
 import express from "express";
-import dotenv from "dotenv";
+import config from "./config/index.js";
 import connectDB from "./config/db.js";
 
 // Core app routes
@@ -28,8 +28,9 @@ import rateLimit from "express-rate-limit";
 
 // NEW: Security headers / CSP for hCaptcha, Cloudinary, etc.
 import helmet from "helmet";
+import mongoose from "mongoose";
+import errorHandler from "./middleware/errorHandler.js";
 
-dotenv.config();
 connectDB();
 
 const app = express();
@@ -43,17 +44,26 @@ app.set("trust proxy", 1); // <-- CHANGED from true to 1
 // --- Health check ---
 app.get("/health", (_req, res) => res.send("OK"));
 
+// --- Readiness check ---
+app.get("/ready", (_req, res) => {
+  const dbState = mongoose.connection.readyState;
+  if (dbState === 1) {
+    res.status(200).json({ status: "ready" });
+  } else {
+    res.status(503).json({ 
+      status: "degraded", 
+      db: dbState === 0 ? "disconnected" : dbState === 2 ? "connecting" : "disconnecting"
+    });
+  }
+});
+
 /**
  * Dependency-free CORS:
  * - Allows your Vercel app + localhost
  * - Handles preflight
  * - Whitelists custom headers you use (Authorization + x-session-id)
  */
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ||
-  "https://teesfromthepast.vercel.app,http://localhost:5173,http://localhost:3000")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+const ALLOWED_ORIGINS = config.corsOrigins;
 
 const DEFAULT_ALLOWED_HEADERS = [
   "content-type",
@@ -148,5 +158,8 @@ app.use("/api/admin/audit", adminAuditRoutes);
 // --- Public extras ---
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
+
+// --- Error handling middleware (must be last) ---
+app.use(errorHandler);
 
 export default app;

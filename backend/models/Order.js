@@ -57,6 +57,9 @@ const orderSchema = new mongoose.Schema(
   }
 );
 
+// Add unique index on paymentIntentId for Stripe webhook idempotency
+orderSchema.index({ paymentIntentId: 1 }, { unique: true });
+
 const Order = mongoose.model('Order', orderSchema);
 
 export default Order;

@@ -1,7 +1,8 @@
 // backend/routes/stripeWebhook.js
 import express from "express";
 import Stripe from "stripe";
-import "dotenv/config";
+import config from "../config/index.js";
+import logger from "../utils/logger.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Design from "../models/Design.js";
@@ -9,12 +10,12 @@ import WebhookEvent from "../models/WebhookEvent.js";
 
 const router = express.Router();
 
-if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
-  console.error("[Webhook] CRITICAL: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET missing");
+if (!config.stripeSecretKey || !config.stripeWebhookSecret) {
+  logger.error("[Webhook] CRITICAL: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET missing");
 }
 
-const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey) : null;
+const webhookSecret = config.stripeWebhookSecret;
 
 // MUST be mounted BEFORE global express.json() in app.js
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
@@ -25,7 +26,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
-    console.error("[Webhook] Signature verification failed:", err.message);
+    logger.error("[Webhook] Signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
@@ -35,7 +36,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     if (existed) return res.status(200).json({ received: true, dedup: true });
     await WebhookEvent.create({ _id: event.id, type: event.type });
   } catch (e) {
-    console.error("[Webhook] Failed to record event id:", e.message);
+    logger.error("[Webhook] Failed to record event id:", e.message);
     // do not bail; still try to process once
   }
 
@@ -109,35 +110,69 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         paymentStatus: "Succeeded",
         orderStatus: "Processing",
       });
-      await newOrder.save();
+      
+      try {
+        await newOrder.save();
+      } catch (saveErr) {
+        // Handle duplicate key error (E11000) gracefully
+        if (saveErr.code === 11000 && saveErr.message.includes('paymentIntentId')) {
+          logger.info("webhook.duplicate_key_order_race", { paymentIntentId: pi.id });
+          return res.status(200).json({ received: true, dedup: true });
+        }
+        throw saveErr; // Re-throw other errors
+      }
 
       // stock decrement (supports both old and new variant shapes)
       for (const item of itemsFromMeta) {
-        const product = await Product.findById(item.productId);
-        if (!product) continue;
-
-        const isNew = product.variants?.length > 0 && product.variants[0]?.sizes !== undefined;
-
-        if (isNew) {
-          const colorVariant = product.variants.find(cv => cv.sizes?.some(sv => sv.sku === item.variantSku));
-          if (colorVariant) {
-            const sizeVariant = colorVariant.sizes.find(sv => sv.sku === item.variantSku);
-            if (sizeVariant) sizeVariant.stock = Math.max(0, (sizeVariant.stock || 0) - item.quantity);
+        try {
+          const product = await Product.findById(item.productId);
+          if (!product) {
+            logger.warn("[Webhook] Product not found for inventory decrement", { productId: item.productId });
+            continue;
           }
-        } else {
-          const oldVariant = product.variants?.find(v => v.sku === item.variantSku);
-          if (oldVariant) oldVariant.stock = Math.max(0, (oldVariant.stock || 0) - item.quantity);
+
+          const isNew = product.variants?.length > 0 && product.variants[0]?.sizes !== undefined;
+
+          if (isNew) {
+            const colorVariant = product.variants.find(cv => cv.sizes?.some(sv => sv.sku === item.variantSku));
+            if (colorVariant) {
+              const sizeVariant = colorVariant.sizes.find(sv => sv.sku === item.variantSku);
+              if (sizeVariant) sizeVariant.stock = Math.max(0, (sizeVariant.stock || 0) - item.quantity);
+            } else {
+              logger.warn("[Webhook] Color variant not found for inventory decrement", { 
+                productId: item.productId, 
+                variantSku: item.variantSku 
+              });
+            }
+          } else {
+            const oldVariant = product.variants?.find(v => v.sku === item.variantSku);
+            if (oldVariant) {
+              oldVariant.stock = Math.max(0, (oldVariant.stock || 0) - item.quantity);
+            } else {
+              logger.warn("[Webhook] Variant not found for inventory decrement", { 
+                productId: item.productId, 
+                variantSku: item.variantSku 
+              });
+            }
+          }
+          await product.save();
+        } catch (inventoryErr) {
+          logger.warn("[Webhook] Failed to update inventory for item", { 
+            productId: item.productId, 
+            variantSku: item.variantSku,
+            error: inventoryErr.message 
+          });
+          // Continue processing other items - don't fail the entire webhook
         }
-        await product.save();
       }
     } catch (err) {
-      console.error("[Webhook] Handler error:", err.message, err.stack || "");
+      logger.error("[Webhook] Handler error:", err.message, err.stack || "");
       return res.status(500).json({ error: "Failed to process webhook" });
     }
   } else if (event.type === "payment_intent.payment_failed") {
-    console.log(`[Webhook] Payment failed: ${event.data.object.id}`);
+    logger.info(`[Webhook] Payment failed: ${event.data.object.id}`);
   } else {
-    console.log(`[Webhook] Unhandled: ${event.type}`);
+    logger.debug(`[Webhook] Unhandled: ${event.type}`);
   }
 
   return res.status(200).json({ received: true });
