@@ -3,6 +3,16 @@
 import pino from 'pino';
 import { isConfigReady, getConfig } from '../config/index.js';
 
+// Import OpenTelemetry API for trace context extraction
+let otelTrace;
+try {
+  const otel = await import('@opentelemetry/api');
+  otelTrace = otel.trace;
+} catch {
+  // OTel not available, will fallback to headers
+  otelTrace = null;
+}
+
 // Internal singleton
 let baseLogger;
 
@@ -94,9 +104,28 @@ export function createRequestLogger(req, res, next) {
   const userId = req.user?._id?.toString() || null;
   const sessionJti = req.headers['x-session-id'] || null;
 
-  // Placeholder until integrated with actual OpenTelemetry context extraction.
-  const traceId = req.headers['x-trace-id'] || null;
-  const spanId = req.headers['x-span-id'] || null;
+  // Extract traceId and spanId from OpenTelemetry context if available
+  let traceId = null;
+  let spanId = null;
+  
+  if (otelTrace) {
+    try {
+      const activeSpan = otelTrace.getActiveSpan();
+      if (activeSpan) {
+        const spanContext = activeSpan.spanContext();
+        traceId = spanContext.traceId;
+        spanId = spanContext.spanId;
+      }
+    } catch (error) {
+      // Silently fail and use fallback
+    }
+  }
+  
+  // Fallback to headers if OTel not available
+  if (!traceId) {
+    traceId = req.headers['x-trace-id'] || null;
+    spanId = req.headers['x-span-id'] || null;
+  }
 
   req.log = createCorrelatedLogger(traceId, spanId, requestId, userId, sessionJti);
 

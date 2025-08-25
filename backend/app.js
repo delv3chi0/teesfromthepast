@@ -41,6 +41,7 @@ import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
+import healthRoutes from "./routes/health.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -52,8 +53,8 @@ logCorsConfig();
 // Apply CORS before any routes
 applyCors(app);
 
-// Health (now receives CORS headers)
-app.get("/health", (_req, res) => res.status(200).send("OK"));
+// Health and readiness routes (now receive CORS headers)
+app.use(healthRoutes);
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.

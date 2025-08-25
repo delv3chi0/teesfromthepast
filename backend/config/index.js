@@ -38,6 +38,13 @@ const configSchema = z.object({
   // OpenTelemetry
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   
+  // Metrics
+  ENABLE_METRICS: z.string().optional().transform(val => val === 'true'),
+  METRICS_AUTH_TOKEN: z.string().optional(),
+  
+  // Security
+  ALLOWED_ORIGINS: z.string().optional(),
+  
   // Error monitoring
   SENTRY_DSN: z.string().url().optional(),
   
