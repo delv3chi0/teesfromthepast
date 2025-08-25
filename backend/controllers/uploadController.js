@@ -1,9 +1,23 @@
+/**
+ * Upload controller with:
+ *  - Support for either body.imageData (raw base64) OR body.dataUrl (data: URI)
+ *  - Preflight decoded size estimation & 413 structured response if exceeded
+ *  - Structured error responses via sendError utility (if present)
+ *  - Cloudinary upload + thumbnail URL
+ *  - TODO comment for future streaming endpoint
+ *
+ * NOTE: This version fixes a deployment crash caused by an overly escaped RegExp.
+ */
 import cloudinary from "cloudinary";
 import { MAX_PRINTFILE_DECODED_MB } from "../config/constants.js";
 import { sendError } from "../utils/sendError.js";
 
 const FOLDER_ROOT = "tees_from_the_past/print_files";
 
+/**
+ * Estimate decoded size (bytes) from a base64 string (no data: prefix).
+ * Uses standard 3/4 rule minus padding.
+ */
 function estimateDecodedSizeBytes(base64) {
   const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, "");
   const padding = (cleaned.match(/=+$/) || [""])[0].length;
@@ -14,13 +28,42 @@ function toMB(bytes) {
   return bytes / (1024 * 1024);
 }
 
+/**
+ * Extract pure base64 (no data: prefix) from body.imageData or body.dataUrl.
+ * Safer than a single large RegExp that is prone to escaping issues.
+ *
+ * Accepts:
+ *   - imageData: raw base64 (preferred)
+ *   - dataUrl: data:image/<subtype>[+suffix];base64,<payload>
+ */
 function extractBase64(body) {
   if (!body) return null;
-  if (body.imageData && typeof body.imageData === "string") return body.imageData;
-  if (body.dataUrl && typeof body.dataUrl === "string") {
-    const match = body.dataUrl.match(/^data:(?:image\\/[a-zA-Z+.-]+);base64,(.+)$/);
-    return match ? match[1] : body.dataUrl;
+
+  if (body.imageData && typeof body.imageData === "string") {
+    // Trim whitespace just in case
+    return body.imageData.trim();
   }
+
+  if (body.dataUrl && typeof body.dataUrl === "string") {
+    const dataUrl = body.dataUrl.trim();
+
+    // Fast path: find the first comma separator in a data URL
+    const commaIndex = dataUrl.indexOf(",");
+    if (commaIndex !== -1) {
+      const header = dataUrl.slice(0, commaIndex);
+      const payload = dataUrl.slice(commaIndex + 1);
+
+      // Validate header shape (case-insensitive), e.g. data:image/png;base64
+      // Subtype allows letters, digits, plus, dot, or dash.
+      if (/^data:image\/[a-z0-9.+-]+;base64$/i.test(header)) {
+        return payload;
+      }
+    }
+
+    // Fallback: if not a well-formed data URL, attempt a generic strip
+    return dataUrl.replace(/^data:.*;base64,/, "");
+  }
+
   return null;
 }
 
@@ -33,7 +76,12 @@ export async function uploadPrintFile(req, res) {
       return sendError(res, "NO_IMAGE_DATA", 400, "No image data provided.");
     }
     if (!productSlug) {
-      return sendError(res, "MISSING_PRODUCT_SLUG", 400, "productSlug is required.");
+      return sendError(
+        res,
+        "MISSING_PRODUCT_SLUG",
+        400,
+        "productSlug is required for organizing uploads."
+      );
     }
 
     const decodedBytes = estimateDecodedSizeBytes(base64);
@@ -44,13 +92,15 @@ export async function uploadPrintFile(req, res) {
         maxMB: MAX_PRINTFILE_DECODED_MB,
         estimatedMB: Number(decodedMB.toFixed(2)),
         recommendation:
-          "Reduce resolution or compress (optimize PNG / high-quality JPEG) and retry."
+          "Reduce resolution or compress the image (optimize dimensions or use a more efficient format) and try again."
       });
     }
 
     const timestamp = Date.now();
     const publicId = `${FOLDER_ROOT}/${productSlug}/${productSlug}_${timestamp}`;
 
+    // Assume PNG; if you support multiple formats, detect MIME from header portion before stripping.
+    // Prepend required data URL header for Cloudinary when uploading base64 directly.
     const uploadResult = await cloudinary.v2.uploader.upload(
       `data:image/png;base64,${base64}`,
       {
@@ -60,6 +110,7 @@ export async function uploadPrintFile(req, res) {
       }
     );
 
+    // Generate thumbnail (idempotent transformation)
     const thumbUrl = cloudinary.v2.url(uploadResult.public_id, {
       width: 400,
       height: 400,
@@ -77,17 +128,22 @@ export async function uploadPrintFile(req, res) {
       bytesDecoded: decodedBytes,
       sizeMB: Number(decodedMB.toFixed(2))
     });
-  } catch (err) {
-    console.error("Cloudinary Upload Error:", err);
-    return sendError(res, "UPLOAD_FAILED", 500, "Failed to upload print file.", {
-      reason: err.message
-    });
+  } catch (error) {
+    console.error("Cloudinary Upload Error:", error);
+    return sendError(
+      res,
+      "UPLOAD_FAILED",
+      500,
+      "Failed to upload print file.",
+      { reason: error.message }
+    );
   }
 }
 
 /**
- * TODO: Potential streaming endpoint: POST /api/upload/printfile-stream (multipart/form-data)
- * for very large files (bypass base64 inflation).
+ * TODO: Future optimization:
+ *  Implement streaming multipart endpoint: POST /api/upload/printfile-stream
+ *  to avoid base64 inflation for large files and reduce memory footprint.
  */
 
 export default uploadPrintFile;
