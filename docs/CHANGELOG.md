@@ -22,6 +22,10 @@ CHANGE LOG:
 
 8/23 - Fixed up a way to run a script to try and backup current site status for new convesrations.
   Added revoke button and refresh buttons to the devices page. limited audit logs page to 25, still needs additional formatting but dont know what. 
+  Free trial for sendgrid expired - its 20 a month, switching to 'Resend', its free for ~1000 emails a month
+8/24 - Got 'Resend' deployed and working on the contact us page. Working on making the user creation flow and email verifcation proper. Updated Admin console to have verified badges for users who verified emails. Added better view info for customer and limited designs to 8 then provided expand buttons.
+Setting up hCAPTCHA on Contact, Login, Register and Password change. 
+
 
 
 
