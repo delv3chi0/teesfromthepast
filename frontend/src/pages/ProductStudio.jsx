@@ -54,6 +54,52 @@ function ProductTypeBadgeIcon({ type }) {
   return <IconCmp color="var(--chakra-colors-yellow-400)" />;
 }
 
+async function directUpload(file, productSlug) {
+  // 1. Get signature
+  const signRes = await fetch("/api/cloudinary/sign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ folder: `tees_from_the_past/print_files/${productSlug}` })
+  });
+  const signJson = await signRes.json();
+  if (!signJson.ok) throw new Error("Failed to get Cloudinary signature");
+  const { cloudName, apiKey, signature, timestamp, folder, preset } = signJson.data;
+
+  // 2. multipart/form-data upload
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", apiKey);
+  form.append("timestamp", timestamp);
+  form.append("signature", signature);
+  form.append("folder", folder);
+  if (preset) form.append("upload_preset", preset);
+
+  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body: form
+  });
+  const uploadJson = await uploadRes.json();
+  if (!uploadRes.ok) {
+    throw new Error(`Cloudinary upload failed: ${uploadJson.error?.message || "Unknown"}`);
+  }
+
+  // 3. Finalize with backend (store metadata / unify API response)
+  const finalizeRes = await fetch("/api/upload/printfile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      productSlug,
+      cloudinaryPublicId: uploadJson.public_id,
+      mime: file.type
+    })
+  });
+  const finalizeJson = await finalizeRes.json();
+  if (!finalizeRes.ok || !finalizeJson.ok) {
+    throw new Error(finalizeJson.error?.message || "Finalize failed");
+  }
+  return { ...finalizeJson, cloudinary: uploadJson };
+}
+
 export default function ProductStudio() {
   const toast = useToast();
   const navigate = useNavigate();
