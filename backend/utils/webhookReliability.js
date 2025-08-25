@@ -2,7 +2,7 @@
 // Enhanced webhook reliability with idempotency, retry logic, and verification
 import { logger } from './logger.js';
 import Bull from 'bull';
-import { getConfig } from '../config/index.js';
+import { isConfigReady, getConfig } from '../config/index.js';
 
 let webhookQueue = null;
 
@@ -10,12 +10,19 @@ let webhookQueue = null;
 function initWebhookQueue() {
   if (webhookQueue) return webhookQueue;
   
-  const config = getConfig();
+  let redisUrl;
+  
+  if (isConfigReady()) {
+    const config = getConfig();
+    redisUrl = config.REDIS_URL;
+  } else {
+    redisUrl = process.env.REDIS_URL;
+  }
   
   try {
     // Use Redis for queue if available, otherwise use in-memory
-    const queueConfig = config.REDIS_URL 
-      ? { redis: config.REDIS_URL }
+    const queueConfig = redisUrl 
+      ? { redis: redisUrl }
       : {}; // In-memory fallback
     
     webhookQueue = new Bull('webhook processing', queueConfig);
@@ -301,10 +308,8 @@ function isTransientError(error) {
   );
 }
 
-// Initialize queue on module load (only if not in test environment)
-if (process.env.NODE_ENV !== 'test') {
-  initWebhookQueue();
-}
+// Note: initWebhookQueue() should be called explicitly when needed,
+// not at module load time to avoid config initialization issues
 
 export default {
   verifyWebhookSignature,

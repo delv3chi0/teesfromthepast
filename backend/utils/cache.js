@@ -1,7 +1,7 @@
 // backend/utils/cache.js
 // Redis-based caching layer with namespaced keys and metrics
 import Redis from 'ioredis';
-import { getConfig } from '../config/index.js';
+import { isConfigReady, getConfig } from '../config/index.js';
 import { logger } from './logger.js';
 
 let redis = null;
@@ -20,15 +20,22 @@ const metrics = {
 function initCacheRedis() {
   if (redis) return redis;
   
-  const config = getConfig();
+  let redisUrl;
   
-  if (!config.REDIS_URL) {
+  if (isConfigReady()) {
+    const config = getConfig();
+    redisUrl = config.REDIS_URL;
+  } else {
+    redisUrl = process.env.REDIS_URL;
+  }
+  
+  if (!redisUrl) {
     logger.warn('Redis URL not provided, caching will be disabled');
     return null;
   }
   
   try {
-    redis = new Redis(config.REDIS_URL, {
+    redis = new Redis(redisUrl, {
       keyPrefix: 'cache:v1:',
       retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,

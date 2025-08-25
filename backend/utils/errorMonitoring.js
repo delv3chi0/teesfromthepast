@@ -1,7 +1,7 @@
 // backend/utils/errorMonitoring.js
 // Error monitoring and alert ingestion using Sentry
 import * as Sentry from '@sentry/node';
-import { getConfig } from '../config/index.js';
+import { isConfigReady, getConfig } from '../config/index.js';
 import { logger } from './logger.js';
 
 let initialized = false;
@@ -114,14 +114,14 @@ export function sentryErrorHandler(err, req, res, next) {
     ok: false,
     error: {
       code: err.code || 'INTERNAL_ERROR',
-      message: getConfig().NODE_ENV === 'development' ? err.message : 'Internal server error'
+      message: (isConfigReady() && getConfig().NODE_ENV === 'development') ? err.message : 'Internal server error'
     },
     requestId: req.id,
     errorRef: eventId
   };
   
   // Include stack trace in development
-  if (getConfig().NODE_ENV === 'development' && statusCode >= 500) {
+  if (isConfigReady() && getConfig().NODE_ENV === 'development' && statusCode >= 500) {
     errorResponse.error.stack = err.stack;
   }
   
