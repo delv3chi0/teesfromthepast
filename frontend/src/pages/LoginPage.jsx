@@ -73,15 +73,21 @@ export default function LoginPage() {
       toast({ title: "Login Successful", description: "Welcome back!", status: "success", duration: 2000, isClosable: true });
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      const needCaptcha = !!error?.response?.data?.needCaptcha || error?.response?.status === 428;
+      const errorData = error?.response?.data;
+      const needCaptcha = !!errorData?.needCaptcha || error?.response?.status === 428;
+      const captchaFailed = !!errorData?.captchaFailed;
+      
       if (needCaptcha) {
         setShowCaptcha(true);
-        setCaptchaToken(null);
-        setCaptchaKey((k) => k + 1);
+        // Only reset captcha token if the backend specifically indicates captcha verification failed
+        if (captchaFailed) {
+          setCaptchaToken(null);
+          setCaptchaKey((k) => k + 1);
+        }
       }
       const msg =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
+        errorData?.message ||
+        errorData?.error ||
         "Invalid email or password.";
       toast({ title: "Login Failed", description: msg, status: "error", duration: 5000, isClosable: true });
     } finally {

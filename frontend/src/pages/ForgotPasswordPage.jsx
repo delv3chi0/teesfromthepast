@@ -60,17 +60,23 @@ const ForgotPasswordPage = () => {
       setMessageStatus("success");
       setEmail("");
     } catch (error) {
-      const needCaptcha = !!error?.response?.data?.needCaptcha || error?.response?.status === 428;
+      const errorData = error?.response?.data;
+      const needCaptcha = !!errorData?.needCaptcha || error?.response?.status === 428;
+      const captchaFailed = !!errorData?.captchaFailed;
+      
       if (needCaptcha) {
         setShowCaptcha(true);
-        setCaptchaToken(null);
-        setCaptchaKey((k) => k + 1);
+        // Only reset captcha token if the backend specifically indicates captcha verification failed
+        if (captchaFailed) {
+          setCaptchaToken(null);
+          setCaptchaKey((k) => k + 1);
+        }
       }
       setMessage(
         "If an account with that email address exists, a password reset link has been sent. If you continue to have trouble, please contact support."
       );
       setMessageStatus("info");
-      console.error("Error requesting password reset:", error.response?.data?.message || error.message);
+      console.error("Error requesting password reset:", errorData?.message || error.message);
     } finally {
       setIsLoading(false);
     }

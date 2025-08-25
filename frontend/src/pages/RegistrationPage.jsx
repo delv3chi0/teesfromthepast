@@ -65,13 +65,19 @@ const RegistrationPage = () => {
       toast({ title: "Registration Successful", description: "Check your email to verify your account.", status: "success", duration: 3000, isClosable: true });
       navigate("/check-email");
     } catch (error) {
-      const needCaptcha = !!error?.response?.data?.needCaptcha || error?.response?.status === 428;
+      const errorData = error?.response?.data;
+      const needCaptcha = !!errorData?.needCaptcha || error?.response?.status === 428;
+      const captchaFailed = !!errorData?.captchaFailed;
+      
       if (needCaptcha) {
         setShowCaptcha(true);
-        setCaptchaToken(null);
-        setCaptchaKey((k) => k + 1);
+        // Only reset captcha token if the backend specifically indicates captcha verification failed
+        if (captchaFailed) {
+          setCaptchaToken(null);
+          setCaptchaKey((k) => k + 1);
+        }
       }
-      toast({ title: "Registration Failed", description: error.response?.data?.message || "An unexpected error occurred.", status: "error", duration: 5000, isClosable: true });
+      toast({ title: "Registration Failed", description: errorData?.message || "An unexpected error occurred.", status: "error", duration: 5000, isClosable: true });
     } finally { setLoading(false); }
   };
 

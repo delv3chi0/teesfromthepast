@@ -56,8 +56,15 @@ export const registerUser = asyncHandler(async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const pol = await getCaptchaPolicy({ ip, email });
   if (pol.needCaptcha) {
-    const { ok } = await captchaRequiredOk(req.body?.hcaptchaToken);
-    if (!ok) return res.status(428).json({ message: "Captcha required", needCaptcha: true });
+    const { ok, reason, raw } = await captchaRequiredOk(req.body?.hcaptchaToken);
+    if (!ok) {
+      return res.status(428).json({ 
+        message: "Captcha required", 
+        needCaptcha: true,
+        captchaFailed: true,
+        reason: reason || "verification_failed"
+      });
+    }
   }
 
   const { username, password, firstName = "", lastName = "" } = req.body;
@@ -92,8 +99,15 @@ export const loginUser = asyncHandler(async (req, res) => {
   const pol = await getCaptchaPolicy({ ip, email });
   if (pol.locked) return res.status(429).json({ message: "Too many attempts. Try later.", needCaptcha: true, lockedUntil: pol.until });
   if (pol.needCaptcha) {
-    const { ok } = await captchaRequiredOk(req.body?.hcaptchaToken);
-    if (!ok) return res.status(428).json({ message: "Captcha required", needCaptcha: true });
+    const { ok, reason, raw } = await captchaRequiredOk(req.body?.hcaptchaToken);
+    if (!ok) {
+      return res.status(428).json({ 
+        message: "Captcha required", 
+        needCaptcha: true,
+        captchaFailed: true,
+        reason: reason || "verification_failed"
+      });
+    }
   }
 
   // Case-insensitive login by normalized email
@@ -168,8 +182,15 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
 
   const pol = await getCaptchaPolicy({ ip, email });
   if (pol.needCaptcha) {
-    const { ok } = await captchaRequiredOk(req.body?.hcaptchaToken);
-    if (!ok) return res.status(428).json({ message: "Captcha required", needCaptcha: true });
+    const { ok, reason, raw } = await captchaRequiredOk(req.body?.hcaptchaToken);
+    if (!ok) {
+      return res.status(428).json({ 
+        message: "Captcha required", 
+        needCaptcha: true,
+        captchaFailed: true,
+        reason: reason || "verification_failed"
+      });
+    }
   }
 
   const user = await User.findOne({ email }).select("+passwordResetToken +passwordResetExpires");
