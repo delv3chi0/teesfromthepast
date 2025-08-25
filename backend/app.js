@@ -42,6 +42,11 @@ import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
 import healthRoutes from "./routes/health.js";
+import prometheusRoutes from "./routes/prometheus.js";
+
+// Import middleware
+import { collectHttpMetrics } from "./routes/prometheus.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -52,6 +57,9 @@ logCorsConfig();
 
 // Apply CORS before any routes
 applyCors(app);
+
+// HTTP metrics collection middleware
+app.use(collectHttpMetrics);
 
 // Health and readiness routes (now receive CORS headers)
 app.use(healthRoutes);
@@ -120,6 +128,9 @@ app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
 app.use("/api/metrics", metricsRoutes);
 
+// Prometheus metrics endpoint
+app.use(prometheusRoutes);
+
 // Development error test route (only in non-production)
 if (process.env.NODE_ENV !== 'production') {
   app.get('/api/dev/boom', (req, res, next) => {
@@ -130,35 +141,11 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({
-    ok: false,
-    error: { code: "NOT_FOUND", message: "Resource not found." },
-    requestId: req.id,
-  });
-});
+// 404 handler - use new unified handler
+app.use(notFoundHandler);
 
-// Global error handler (must be last)
-import { sentryErrorHandler } from "./utils/errorMonitoring.js";
-
-// Custom CORS error handler first
-app.use((err, req, res, next) => {
-  const msg = err?.message || "";
-  if (/^CORS: Origin not allowed:/i.test(msg)) {
-    if (!res.headersSent) {
-      return res.status(403).json({
-        ok: false,
-        error: { code: "CORS_ORIGIN_DENIED", message: msg },
-        requestId: req.id,
-      });
-    }
-  }
-  next(err); // Pass to Sentry error handler
-});
-
-// Sentry error handler (handles all other errors)
-app.use(sentryErrorHandler);
+// Global error handler (must be last) - use new unified handler
+app.use(errorHandler);
 
 export { app };
 export default app;

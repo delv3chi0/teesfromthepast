@@ -4,14 +4,17 @@ import pino from 'pino';
 import { isConfigReady, getConfig } from '../config/index.js';
 
 // Import OpenTelemetry API for trace context extraction
-let otelTrace;
-try {
-  const otel = await import('@opentelemetry/api');
-  otelTrace = otel.trace;
-} catch {
-  // OTel not available, will fallback to headers
-  otelTrace = null;
-}
+let otelTrace = null;
+
+// Dynamically import OpenTelemetry when available
+(async () => {
+  try {
+    const otel = await import('@opentelemetry/api');
+    otelTrace = otel.trace;
+  } catch {
+    // OTel not available, will fallback to headers
+  }
+})();
 
 // Internal singleton
 let baseLogger;
