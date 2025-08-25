@@ -7,17 +7,20 @@
 
 import express from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 
 import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import traceCorrelation from "./middleware/traceCorrelation.js";
-import rateLimitLogin from "./middleware/rateLimitLogin.js";
+import { createContactRateLimiter, createLoginRateLimiter } from "./middleware/createRateLimiter.js";
 import metricsRouter, { metricsMiddleware } from "./routes/metrics.js";
 
 // Initialize Cloudinary side-effects early
 import "./config/cloudinary.js";
+
+// Initialize Redis client
+import { createRedisClient } from "./config/redis.js";
+createRedisClient();
 
 // CORS utilities
 import { applyCors, logCorsConfig } from "./utils/cors.js";
@@ -42,6 +45,7 @@ import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
+import healthzRoutes from "./routes/healthz.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -55,6 +59,7 @@ applyCors(app);
 
 // Health (now receives CORS headers)
 app.get("/health", (_req, res) => res.status(200).send("OK"));
+app.use("/healthz", healthzRoutes);
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -72,15 +77,12 @@ app.use(
   })
 );
 
-// Rate limits
-const contactLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Rate limits - Redis-backed
+const contactLimiter = createContactRateLimiter();
+const loginLimiter = createLoginRateLimiter();
+
 app.use("/api/forms/contact", contactLimiter);
-app.use("/api/auth/login", rateLimitLogin);
+app.use("/api/auth/login", loginLimiter);
 
 // Request metadata / logging / observability
 app.use(requestId);

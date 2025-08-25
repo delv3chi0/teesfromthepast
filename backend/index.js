@@ -6,6 +6,7 @@ dotenv.config();
 
 // Initialize telemetry first
 import { initTelemetry, shutdownTelemetry } from "./config/telemetry.js";
+import { shutdownRedis } from "./config/redis.js";
 initTelemetry();
 
 import connectDB from "./config/db.js";
@@ -36,9 +37,11 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('[Server] Shutting down gracefully...');
-  server.close(() => {
-    shutdownTelemetry().then(() => {
-      process.exit(0);
-    });
+  server.close(async () => {
+    await Promise.all([
+      shutdownTelemetry(),
+      shutdownRedis()
+    ]);
+    process.exit(0);
   });
 });
