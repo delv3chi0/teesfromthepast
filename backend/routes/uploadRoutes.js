@@ -1,10 +1,14 @@
-import express from 'express';
-import { uploadPrintFile } from '../controllers/uploadController.js';
-import { protect } from '../middleware/authMiddleware.js';
+/**
+ * Route wiring for print file upload.
+ * Ensure this is mounted in app.js, e.g.:
+ *   import uploadRoutes from "./routes/uploadRoutes.js";
+ *   app.use("/api/upload", uploadRoutes);
+ */
+import { Router } from "express";
+import { uploadPrintFile } from "../controllers/uploadController.js";
 
-const router = express.Router();
+const router = Router();
 
-// POST /api/upload/printfile — Upload print-ready + thumbnail
-router.post('/upload/printfile', protect, uploadPrintFile);
+router.post("/printfile", uploadPrintFile);
 
 export default router;
