@@ -10,6 +10,8 @@ import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 import { trackFailedAction } from "../utils/adaptiveRateLimit.js";
 import { passwordResetTemplate, passwordChangedTemplate } from "../utils/emailTemplates.js";
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
+import { blacklistRefreshToken, isRefreshTokenBlacklisted, storeRefreshTokenMetadata, removeRefreshTokenMetadata } from "../redis/index.js";
+import { getConfig } from "../config/index.js";
 
 import { verifyHCaptcha } from "../middleware/hcaptcha.js";
 import { markAuthFail, clearAuthFails, getCaptchaPolicy } from "../middleware/rateLimiters.js";
@@ -125,16 +127,33 @@ export const loginUser = asyncHandler(async (req, res) => {
 });
 
 /** POST /api/auth/logout */
+/** POST /api/auth/logout - Enhanced with token blacklisting */
 export const logoutUser = asyncHandler(async (req, res) => {
   const user = req.user || null;
   const sessionId = req.headers["x-session-id"] || "";
   await logAuthLogout(req, user, { sessionId });
 
   if (user?._id && sessionId) {
+    // Find the refresh token to get its expiry for blacklist TTL
     const rt = await RefreshToken.findOne({ jti: sessionId, user: user._id, revokedAt: null }).exec();
-    if (rt) { rt.revokedAt = new Date(); await rt.save(); }
+    if (rt) {
+      // Blacklist the refresh token in Redis
+      const ttlSeconds = Math.floor((rt.expiresAt - new Date()) / 1000);
+      await blacklistRefreshToken(sessionId, Math.max(ttlSeconds, 3600)); // At least 1 hour
+
+      // Revoke in database
+      rt.revokedAt = new Date();
+      await rt.save();
+
+      // Remove metadata from Redis
+      await removeRefreshTokenMetadata(sessionId);
+    }
   }
-  res.json({ message: "Logged out" });
+  
+  res.json({ 
+    message: "Logged out",
+    sessionRevoked: !!sessionId
+  });
 });
 
 /** GET /api/auth/profile */
@@ -256,15 +275,204 @@ export const changePassword = asyncHandler(async (req, res) => {
   res.json({ message: "Password changed" });
 });
 
-/** POST /api/auth/refresh */
+/** POST /api/auth/refresh - Enhanced with rotation and blacklisting */
 export const refreshSession = asyncHandler(async (req, res) => {
-  const token = signAccessToken(req.user._id);
-
-  const sessionId = req.headers["x-session-id"];
-  if (sessionId) {
-    const rt = await RefreshToken.findOne({ jti: sessionId, user: req.user._id, revokedAt: null }).exec();
-    if (rt) { rt.expiresAt = sessionExpiry(30); rt.lastSeenAt = new Date(); await rt.save(); }
+  const config = getConfig();
+  const oldSessionId = req.headers["x-session-id"];
+  
+  if (!oldSessionId) {
+    return res.status(400).json({ 
+      message: "Session ID required for refresh",
+      code: "SESSION_ID_REQUIRED" 
+    });
   }
 
-  res.json({ token });
+  // Check if old refresh token is blacklisted
+  const isBlacklisted = await isRefreshTokenBlacklisted(oldSessionId);
+  if (isBlacklisted) {
+    return res.status(401).json({ 
+      message: "Invalid refresh token",
+      code: "INVALID_REFRESH_TOKEN" 
+    });
+  }
+
+  // Find the refresh token in database
+  const oldRefreshToken = await RefreshToken.findOne({ 
+    jti: oldSessionId, 
+    user: req.user._id, 
+    revokedAt: null 
+  }).exec();
+
+  if (!oldRefreshToken) {
+    return res.status(401).json({ 
+      message: "Invalid refresh token",
+      code: "INVALID_REFRESH_TOKEN" 
+    });
+  }
+
+  // Check if refresh token is expired
+  if (oldRefreshToken.expiresAt < new Date()) {
+    return res.status(401).json({ 
+      message: "Refresh token expired",
+      code: "REFRESH_TOKEN_EXPIRED" 
+    });
+  }
+
+  // Generate new tokens
+  const newJti = crypto.randomUUID();
+  const { userAgent, hints } = clientNet(req);
+  const refreshTtlDays = parseInt(config.JWT_REFRESH_TTL.replace(/[^\d]/g, '')) || 30;
+
+  // Create new access token with JTI
+  const accessToken = signAccessToken(req.user);
+
+  // Create new refresh token
+  const newRefreshToken = await RefreshToken.create({
+    jti: newJti,
+    user: req.user._id,
+    ip: req.client?.ip || "",
+    userAgent,
+    client: hints,
+    expiresAt: sessionExpiry(refreshTtlDays),
+    lastSeenAt: new Date()
+  });
+
+  // Blacklist the old refresh token in Redis (rotation)
+  const ttlSeconds = Math.floor((oldRefreshToken.expiresAt - new Date()) / 1000);
+  await blacklistRefreshToken(oldSessionId, Math.max(ttlSeconds, 86400));
+
+  // Store new refresh token metadata in Redis
+  await storeRefreshTokenMetadata(newJti, req.user._id.toString(), {
+    ip: req.client?.ip,
+    userAgent
+  }, refreshTtlDays * 86400);
+
+  // Revoke old refresh token in database
+  oldRefreshToken.revokedAt = new Date();
+  await oldRefreshToken.save();
+
+  // Remove old metadata from Redis
+  await removeRefreshTokenMetadata(oldSessionId);
+
+  res.json({ 
+    token: accessToken,
+    sessionJti: newJti,
+    refreshedAt: new Date().toISOString()
+  });
 });
+
+// ============================================================================
+// 2FA SCAFFOLD ENDPOINTS (Task 6)
+// ============================================================================
+
+/** POST /api/auth/2fa/setup - 2FA Setup Scaffold (STUB) */
+export const setup2FA = asyncHandler(async (req, res) => {
+  const config = getConfig();
+  
+  if (!config.ENABLE_2FA) {
+    return res.status(501).json({
+      message: "2FA is not enabled on this server",
+      code: "2FA_DISABLED"
+    });
+  }
+
+  // TODO: Task 6 - Implement full TOTP secret generation and QR code
+  // TODO: - Generate TOTP secret using crypto.randomBytes(20)
+  // TODO: - Create QR code URL with app name and user email
+  // TODO: - Store secret temporarily (pending verification) in user model
+  // TODO: - Return QR code data URL and backup codes
+
+  return res.status(501).json({
+    message: "2FA setup not fully implemented yet",
+    code: "NOT_IMPLEMENTED",
+    todo: [
+      "Generate TOTP secret",
+      "Create QR code for authenticator app",
+      "Implement backup codes generation",
+      "Add 2FA fields to User model"
+    ],
+    mockData: {
+      qrCodeUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==",
+      secret: "MOCK_SECRET_FOR_DEVELOPMENT",
+      backupCodes: ["123456", "789012", "345678"]
+    }
+  });
+});
+
+/** POST /api/auth/2fa/verify - 2FA Verification Scaffold (STUB) */
+export const verify2FA = asyncHandler(async (req, res) => {
+  const config = getConfig();
+  
+  if (!config.ENABLE_2FA) {
+    return res.status(501).json({
+      message: "2FA is not enabled on this server", 
+      code: "2FA_DISABLED"
+    });
+  }
+
+  const { code, backupCode } = req.body;
+
+  if (!code && !backupCode) {
+    return res.status(400).json({
+      message: "Either TOTP code or backup code is required",
+      code: "CODE_REQUIRED"
+    });
+  }
+
+  // TODO: Task 6 - Implement full TOTP verification
+  // TODO: - Validate TOTP code using time-based algorithm
+  // TODO: - Handle backup code verification and consumption
+  // TODO: - Update user model to mark 2FA as enabled
+  // TODO: - Invalidate pending setup state
+
+  return res.status(501).json({
+    message: "2FA verification not fully implemented yet",
+    code: "NOT_IMPLEMENTED", 
+    todo: [
+      "Implement TOTP validation algorithm",
+      "Add backup code verification logic",
+      "Update User model with 2FA status",
+      "Add 2FA requirement to sensitive operations"
+    ],
+    mockVerification: {
+      valid: code === "123456" || backupCode === "123456",
+      codeUsed: code || backupCode
+    }
+  });
+});
+
+/** POST /api/auth/2fa/disable - 2FA Disable Scaffold (STUB) */
+export const disable2FA = asyncHandler(async (req, res) => {
+  const config = getConfig();
+  
+  if (!config.ENABLE_2FA) {
+    return res.status(501).json({
+      message: "2FA is not enabled on this server",
+      code: "2FA_DISABLED"
+    });
+  }
+
+  // TODO: Task 6 - Implement 2FA disable functionality
+  // TODO: - Require current password or 2FA code for security
+  // TODO: - Clear 2FA secrets and backup codes from user
+  // TODO: - Log security event for audit
+  // TODO: - Optionally revoke all sessions for security
+
+  return res.status(501).json({
+    message: "2FA disable not fully implemented yet",
+    code: "NOT_IMPLEMENTED",
+    todo: [
+      "Add password/2FA verification requirement",
+      "Clear 2FA data from user model",
+      "Implement audit logging",
+      "Consider session revocation for security"
+    ]
+  });
+});
+
+// TODO: Task 6 - Additional 2FA features to implement later:
+// TODO: - 2FA recovery via email verification
+// TODO: - Multiple authenticator device support  
+// TODO: - 2FA requirement policies (admin-configurable)
+// TODO: - 2FA bypass tokens for emergency access
+// TODO: - Integration with hardware security keys (WebAuthn)

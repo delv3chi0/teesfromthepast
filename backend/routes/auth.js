@@ -66,4 +66,9 @@ router.put("/change-password", protect, vChange, safe("changePassword"));
 // Session refresh
 router.post("/refresh", protect, safe("refreshSession"));
 
+// 2FA scaffold endpoints (Task 6)
+router.post("/2fa/setup", protect, safe("setup2FA"));
+router.post("/2fa/verify", protect, safe("verify2FA"));
+router.post("/2fa/disable", protect, safe("disable2FA"));
+
 export default router;

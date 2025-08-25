@@ -13,6 +13,9 @@ const configSchema = z.object({
   
   // Authentication & Security
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  JWT_ACCESS_TTL: z.string().default('15m'), // Short-lived access tokens
+  JWT_REFRESH_TTL: z.string().default('30d'), // Long-lived refresh tokens
+  ENABLE_2FA: z.string().transform(val => val === 'true' || val === '1').default('false'),
   
   // Stripe
   STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
@@ -51,6 +54,9 @@ const configSchema = z.object({
   
   // Email (optional)
   RESEND_API_KEY: z.string().optional(),
+  
+  // Job Queue (optional)
+  ENABLE_JOB_TESTING: z.string().transform(val => val === 'true' || val === '1').default('false'),
 });
 
 let _config;
