@@ -12,7 +12,14 @@
   "jest": {
     "setupFilesAfterEnv": [
       "./setup.js"
-    ]
+    ],
+    "extensionsToTreatAsEsm": [".js"],
+    "globals": {
+      "__ESM__": true
+    },
+    "transform": {
+      "^.+\\.js$": ["babel-jest", {"useESM": true}]
+    }
   },
   "keywords": [],
   "author": "",
