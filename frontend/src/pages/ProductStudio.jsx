@@ -14,6 +14,7 @@ import {
 } from "react-icons/fa";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { client } from "../api/client";
+import { MAX_PRINTFILE_DECODED_MB, UPLOAD_WARNING_THRESHOLD } from "../constants";
 
 import {
   getMockupCandidates, getPrimaryImage, listColors, resolveColor,
@@ -46,6 +47,24 @@ const COLOR_SWATCHES = {
 
 const norm = (s) => String(s || "").trim().toLowerCase();
 const VIEWS = ["front", "back", "left", "right"];
+
+// Helper function to estimate decoded size from data URL
+function estimateDataUrlSize(dataUrl) {
+  if (!dataUrl) return 0;
+  
+  // Extract base64 part
+  const base64Part = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+  if (!base64Part) return 0;
+  
+  // Calculate padding characters
+  const padding = (base64Part.match(/=/g) || []).length;
+  
+  // Estimated decoded size in bytes
+  const decodedSizeBytes = Math.ceil((base64Part.length * 3) / 4) - padding;
+  
+  // Convert to MB
+  return decodedSizeBytes / (1024 * 1024);
+}
 
 function ProductTypeBadgeIcon({ type }) {
   const IconCmp =
@@ -609,6 +628,18 @@ export default function ProductStudio() {
     const png = exportPrintPNG();
     if (!png) { toast({ title: "Export failed", status: "error" }); return; }
 
+    // Client-side size estimation
+    const estimatedMB = estimateDataUrlSize(png);
+    if (estimatedMB > UPLOAD_WARNING_THRESHOLD) {
+      toast({
+        title: `Large file warning`,
+        description: `File size (~${Math.round(estimatedMB * 10) / 10}MB) approaches the ${MAX_PRINTFILE_DECODED_MB}MB limit. Consider reducing quality if upload fails.`,
+        status: "warning",
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+
     // Also keep a lower-res preview of the whole editor for cart/checkout thumbnails
     const savedOverlay = fc.overlayImage;
     if (savedOverlay) fc.setOverlayImage(null, fc.renderAll.bind(fc));
@@ -618,8 +649,12 @@ export default function ProductStudio() {
     setUploading(true);
     toast({ title: "Uploading print file…", status: "info", duration: 2000 });
     try {
+      // Extract base64 for backward compatibility, but server handles both formats
+      const imageData = png.includes(',') ? png.split(',')[1] : png;
+      
       const upload = await client.post("/upload/printfile", {
-        dataUrl: png,
+        imageData, // Send extracted base64 (new preferred format)
+        dataUrl: png, // Keep dataUrl for backward compatibility
         productSlug: product?.slug || slugParam,
         side: view,
         designName: `${product?.name || "Custom"} ${view}`,
@@ -649,7 +684,26 @@ export default function ProductStudio() {
       navigate("/checkout");
     } catch (e) {
       console.error(e);
-      toast({ title: "Upload failed", status: "error" });
+      
+      // Handle structured 413 error response
+      if (e.response?.status === 413 && e.response?.data?.error) {
+        const { error } = e.response.data;
+        toast({
+          title: "File too large",
+          description: `${error.message}. ${error.details?.recommendation || 'Try reducing image quality or resolution.'}`,
+          status: "error",
+          duration: 8000,
+          isClosable: true,
+        });
+      } else {
+        toast({ 
+          title: "Upload failed", 
+          description: e.response?.data?.message || e.message || "Unknown error occurred",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     } finally {
       setUploading(false);
     }
@@ -666,9 +720,48 @@ export default function ProductStudio() {
 
   // ---------- UI ----------
   return (
-    <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
-      {/* LEFT PANEL */}
-      <Box w={{ base: "100%", xl: "320px" }} p={4} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" bg="brand.paper">
+    <Box position="relative" minH="100vh" bg="brand.primary">
+      {/* Upload Progress Overlay */}
+      {uploading && (
+        <Box
+          position="fixed"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          bg="blackAlpha.600"
+          zIndex={9999}
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+        >
+          <VStack spacing={4} color="white" textAlign="center">
+            <Box
+              w={16}
+              h={16}
+              border="4px solid"
+              borderColor="whiteAlpha.300"
+              borderTopColor="yellow.400"
+              borderRadius="full"
+              animation="spin 1s linear infinite"
+              sx={{
+                "@keyframes spin": {
+                  "0%": { transform: "rotate(0deg)" },
+                  "100%": { transform: "rotate(360deg)" }
+                }
+              }}
+            />
+            <VStack spacing={2}>
+              <Text fontSize="lg" fontWeight="bold">Uploading print file...</Text>
+              <Text fontSize="sm" opacity={0.8}>Please wait while we process your design</Text>
+            </VStack>
+          </VStack>
+        </Box>
+      )}
+      
+      <Flex direction={{ base: "column", xl: "row" }} minH="100vh">
+        {/* LEFT PANEL */}
+        <Box w={{ base: "100%", xl: "320px" }} p={4} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" bg="brand.paper">
         <VStack align="stretch" spacing={4}>
           <HStack>
             <ProductTypeBadgeIcon type={productType} />
@@ -875,6 +968,7 @@ export default function ProductStudio() {
         </VStack>
       </Box>
     </Flex>
+    </Box>
   );
 }
 

@@ -57,14 +57,20 @@ Theme keywords (used by Admin): `brand.primary`, `brand.paper`, `brand.cardBlue`
 - Design objects may have:  
   `thumbUrl`, `publicUrl`, `imageDataUrl`, `settings` (with `mode`, `aspectRatio`, `cfgScale`, `steps`, `imageStrength`), voting info.
 
-### 4.3 Product Studio export
+### 4.3 Product Studio export & upload
 - **Placement math** comes from `data/mockupsRegistry` via `getPlacement({ slug, view, productType })` returning `{ x,y,w,h }` as fractions of the mockup image.
 - **Export size** (pixels) from `getExportPixelSize(slug, view, productType)`; front/back default 4200×4800, sides 3600×3600 (can be tuned).
 - We create an **offscreen fabric canvas** at export resolution, clone object layers into it, and export a **transparent PNG**.
-- Upload POST to `/upload/printfile` → returns `{ publicUrl, thumbUrl, publicId }`.
+- **Size estimation**: Client-side estimation warns at 80% of 22MB limit; server validates with structured 413 errors.
+- Upload POST to `/upload/printfile` with `imageData` (base64) or `dataUrl` (full data URI) → returns `{ publicUrl, thumbUrl, publicId }` or structured error.
 - We store a checkout line item with both **print file** and **preview**.
 
-### 4.4 Orders
+### 4.4 Checkout flows
+- **Primary**: `POST /checkout/create-payment-intent` with items array and shipping address.
+- **Alias**: `POST /checkout` (reuses same logic for simplified API access).
+- Both validate required fields, calculate totals, and return Stripe client secret or 400 errors.
+
+### 4.5 Orders
 - Admin can set `orderStatus` among: Processing / Shipped / Delivered / Cancelled.
 - `paymentStatus` shown as Tag (Succeeded / …).
 

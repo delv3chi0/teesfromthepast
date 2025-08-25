@@ -11,6 +11,10 @@ const MOCKUPS = {
       back:  "https://res.cloudinary.com/dqvsdvjis/image/upload/v1754973575/mockups/classic-tee/tee-black/mockups/classic-tee/tee-black/back.png",
       left:  "https://res.cloudinary.com/dqvsdvjis/image/upload/v1754973577/mockups/classic-tee/tee-black/mockups/classic-tee/tee-black/left.png",
       // right: (upload failed in your log – omitted so code can fall back)
+      
+      // TODO: Replace with actual black mockup URLs when available
+      // Placeholder black mockup - update these URLs with real black t-shirt mockups
+      // Expected paths: mockups/classic-tee/tee-black/front.png, etc.
     },
     "brown-savana": {
       front: "https://res.cloudinary.com/dqvsdvjis/image/upload/v1754973579/mockups/classic-tee/tee-brown-savana/mockups/classic-tee/tee-brown-savana/front.png",
