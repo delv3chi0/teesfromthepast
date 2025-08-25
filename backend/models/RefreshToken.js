@@ -7,6 +7,11 @@ const RefreshTokenSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, required: true },
     ip: { type: String, default: "" },
     userAgent: { type: String, default: "" },
+    // Token rotation and security
+    tokenHash: { type: String, required: true, index: true }, // hashed refresh token
+    rotationId: { type: String, index: true }, // tracks token families for rotation
+    usedAt: { type: Date, default: null }, // when this token was used (for reuse detection)
+    isRevoked: { type: Boolean, default: false, index: true }, // for quick revocation checks
     // client hints / telemetry (filled progressively)
     client: {
       tz: String,

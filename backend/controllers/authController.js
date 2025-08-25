@@ -9,6 +9,7 @@ import { signAccessToken } from "../middleware/authMiddleware.js";
 import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 import { passwordResetTemplate, passwordChangedTemplate } from "../utils/emailTemplates.js";
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
+import logger from "../utils/logger.js";
 
 import { verifyHCaptcha } from "../middleware/hcaptcha.js";
 import { markAuthFail, clearAuthFails, getCaptchaPolicy } from "../middleware/rateLimiters.js";
@@ -106,17 +107,36 @@ export const loginUser = asyncHandler(async (req, res) => {
 
   await clearAuthFails({ ip, email });
 
-  const token = signAccessToken(user._id);
+  const token = signAccessToken(user);
   const jti = crypto.randomUUID();
+  const rotationId = crypto.randomUUID(); // for tracking token families
+  const refreshToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  
   const { userAgent, hints } = clientNet(req);
-  await RefreshToken.create({ jti, user: user._id, ip, userAgent, client: hints, expiresAt: sessionExpiry(30), lastSeenAt: new Date() });
+  await RefreshToken.create({ 
+    jti, 
+    user: user._id, 
+    ip, 
+    userAgent, 
+    client: hints, 
+    tokenHash,
+    rotationId,
+    expiresAt: sessionExpiry(7), // 7 days sliding window
+    lastSeenAt: new Date() 
+  });
 
   await logAuthLogin(req, user, { email, sessionId: jti });
 
-  res.json({ token, sessionJti: jti, user: {
-    _id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName,
-    isAdmin: !!user.isAdmin, emailVerifiedAt: user.emailVerifiedAt || null,
-  }});
+  res.json({ 
+    token, 
+    refreshToken, // return raw token to frontend
+    sessionJti: jti, 
+    user: {
+      _id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName,
+      isAdmin: !!user.isAdmin, emailVerifiedAt: user.emailVerifiedAt || null,
+    }
+  });
 });
 
 /** POST /api/auth/logout */
@@ -190,7 +210,9 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     const { subject, text, html } = passwordResetTemplate({ resetUrl, ttlMin: 60 });
     const { error } = await resend.emails.send({ from: `Tees From The Past <${FROM}>`, to: user.email, subject, text, html });
     if (error) throw error;
-  } catch (e) { console.error("[password-reset] email send failed:", e); }
+  } catch (e) { 
+    logger.error({ error: e.message, email: user.email }, "Password reset email send failed");
+  }
 
   res.json(generic);
 });
@@ -246,20 +268,81 @@ export const changePassword = asyncHandler(async (req, res) => {
     const { subject, text, html } = passwordChangedTemplate();
     const { error } = await resend.emails.send({ from: `Tees From The Past <${FROM}>`, to: user.email, subject, text, html });
     if (error) throw error;
-  } catch (e) { console.error("[change-password] confirmation email failed:", e); }
+  } catch (e) { 
+    logger.error({ error: e.message, userId: user._id }, "Password change confirmation email failed");
+  }
 
   res.json({ message: "Password changed" });
 });
 
 /** POST /api/auth/refresh */
 export const refreshSession = asyncHandler(async (req, res) => {
-  const token = signAccessToken(req.user._id);
-
-  const sessionId = req.headers["x-session-id"];
-  if (sessionId) {
-    const rt = await RefreshToken.findOne({ jti: sessionId, user: req.user._id, revokedAt: null }).exec();
-    if (rt) { rt.expiresAt = sessionExpiry(30); rt.lastSeenAt = new Date(); await rt.save(); }
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Refresh token required" });
   }
+  
+  const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  
+  // Find the refresh token
+  const rt = await RefreshToken.findOne({ tokenHash, isRevoked: false });
+  if (!rt || rt.expiresAt < new Date()) {
+    return res.status(401).json({ message: "Invalid or expired refresh token" });
+  }
+  
+  // Check for token reuse (compromised token detection)
+  if (rt.usedAt) {
+    // Token has been used before - this indicates potential compromise
+    // Revoke all tokens in this rotation family
+    await RefreshToken.updateMany(
+      { rotationId: rt.rotationId },
+      { isRevoked: true, revokedAt: new Date() }
+    );
+    
+    await logAudit(req, { 
+      action: "REFRESH_TOKEN_REUSE_DETECTED", 
+      targetType: "User", 
+      targetId: String(rt.user), 
+      meta: { rotationId: rt.rotationId, ip: req.client?.ip }, 
+      actor: rt.user 
+    });
+    
+    return res.status(401).json({ message: "Token reuse detected. All sessions revoked." });
+  }
+  
+  // Mark this token as used
+  rt.usedAt = new Date();
+  rt.isRevoked = true;
+  await rt.save();
+  
+  // Create new access token
+  const user = await User.findById(rt.user).select("-password");
+  if (!user) {
+    return res.status(401).json({ message: "User not found" });
+  }
+  
+  const token = signAccessToken(user);
+  
+  // Create new refresh token (rotation)
+  const newJti = crypto.randomUUID();
+  const newRefreshToken = crypto.randomBytes(32).toString('hex');
+  const newTokenHash = crypto.createHash('sha256').update(newRefreshToken).digest('hex');
+  
+  await RefreshToken.create({
+    jti: newJti,
+    user: user._id,
+    ip: rt.ip,
+    userAgent: rt.userAgent,
+    client: rt.client,
+    tokenHash: newTokenHash,
+    rotationId: rt.rotationId, // keep same rotation family
+    expiresAt: sessionExpiry(7), // 7 days sliding window
+    lastSeenAt: new Date()
+  });
 
-  res.json({ token });
+  res.json({ 
+    token, 
+    refreshToken: newRefreshToken,
+    sessionJti: newJti 
+  });
 });

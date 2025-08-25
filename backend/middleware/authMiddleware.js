@@ -24,7 +24,16 @@ export function signAccessToken(user, extra = {}) {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET not set");
   const expiresIn = process.env.JWT_EXPIRES_IN || "15m";
-  return jwt.sign(payload, secret, { expiresIn });
+  
+  const options = { expiresIn };
+  
+  // Add issuer and audience if configured
+  const issuer = process.env.JWT_ISSUER;
+  const audience = process.env.JWT_AUDIENCE;
+  if (issuer) options.issuer = issuer;
+  if (audience) options.audience = audience;
+  
+  return jwt.sign(payload, secret, options);
 }
 
 /**
@@ -41,7 +50,16 @@ const baseProtect = (requireSession) =>
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const secret = process.env.JWT_SECRET;
+      const options = {};
+      
+      // Add issuer and audience validation if configured
+      const issuer = process.env.JWT_ISSUER;
+      const audience = process.env.JWT_AUDIENCE;
+      if (issuer) options.issuer = issuer;
+      if (audience) options.audience = audience;
+      
+      decoded = jwt.verify(token, secret, options);
     } catch (err) {
       return res.status(401).json({ message: "Not authorized: invalid token" });
     }

@@ -9,7 +9,7 @@ export function ensureCsrfCookie(req, res, next) {
     const token = crypto.randomBytes(24).toString('hex');
     // Non-httpOnly so the frontend can read & send in header
     res.cookie(CSRF_COOKIE, token, {
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       secure: process.env.NODE_ENV === 'production',
       httpOnly: false,
       path: '/',

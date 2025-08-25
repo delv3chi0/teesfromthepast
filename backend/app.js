@@ -8,6 +8,7 @@
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import compression from "compression";
 
 import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
@@ -63,6 +64,19 @@ app.use("/api/stripe", stripeWebhookRoutes);
 // JSON body parser
 app.use(express.json({ limit: `${JSON_BODY_LIMIT_MB}mb` }));
 
+// Compression middleware with threshold
+app.use(compression({
+  threshold: 1024, // 1kb threshold
+  level: 6, // balance between compression ratio and CPU usage
+  filter: (req, res) => {
+    // Don't compress already compressed responses or specific content types
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
 // Security headers
 app.use(
   helmet({
@@ -77,8 +91,28 @@ const contactLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5, // limit each IP to 5 registration/password reset requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many authentication attempts, please try again later." }
+});
+
+const burstyLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 20, // 20 requests per minute for bursty endpoints
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests, please try again later." }
+});
+
 app.use("/api/forms/contact", contactLimiter);
 app.use("/api/auth/login", rateLimitLogin);
+app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/password-reset-request", authLimiter);
+app.use("/api/auth/reset-password", authLimiter);
 
 // Request metadata / logging
 app.use(requestId);
