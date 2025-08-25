@@ -97,7 +97,25 @@ try {
   } catch (error) {
     console.log('  Webhook signature verification: expected error for invalid signature');
   }
-  console.log('✅ Webhook reliability test completed');
+  console.log('Testing database performance monitoring...');
+  const slowQueryMonitor = await import('./utils/slowQueryMonitor.js');
+  
+  // Test metrics
+  slowQueryMonitor.initializeSlowQueryMonitoring();
+  const metrics = slowQueryMonitor.getQueryMetrics();
+  console.log('  Database query metrics:', {
+    total: metrics.total,
+    slow: metrics.slow,
+    threshold: metrics.slowThreshold + 'ms'
+  });
+  
+  const histogram = slowQueryMonitor.getQueryDurationHistogram();
+  console.log('  Query duration histogram:', {
+    buckets: Object.keys(histogram.buckets).length,
+    count: histogram.count,
+    sum: histogram.sum
+  });
+  console.log('✅ Database performance monitoring test completed');
   
   console.log('✅ All tests completed successfully');
   
