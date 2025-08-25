@@ -37,6 +37,23 @@ export const EFFECTIVE_PRINTFILE_LIMIT_MB = Math.min(
   CLOUDINARY_MAX_IMAGE_MB
 );
 
+// Warning threshold percentage for file size recommendations
+export const PRINTFILE_WARNING_PCT = parsePositiveInt(
+  process.env.PRINTFILE_WARNING_PCT,
+  80
+);
+
+// Accepted MIME types for image uploads
+export const ACCEPTED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/jpg", 
+  "image/png",
+  "image/webp",
+  "image/svg+xml",
+  "image/heic",
+  "image/heif"
+];
+
 export const REQUEST_ID_HEADER = "X-Req-Id";
 
 export const CONSTANTS = Object.freeze({
@@ -44,5 +61,7 @@ export const CONSTANTS = Object.freeze({
   MAX_PRINTFILE_DECODED_MB,
   CLOUDINARY_MAX_IMAGE_MB,
   EFFECTIVE_PRINTFILE_LIMIT_MB,
+  PRINTFILE_WARNING_PCT,
+  ACCEPTED_IMAGE_MIME_TYPES,
   REQUEST_ID_HEADER
 });
