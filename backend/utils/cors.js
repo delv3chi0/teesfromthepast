@@ -1,9 +1,9 @@
-// Enhanced CORS utility
+// backend/utils/cors.js
 import cors from "cors";
 
 /**
- * Default origins always allowed.
- * Add more via CORS_ORIGINS env (comma separated).
+ * Default always-allowed origins.
+ * Extend via CORS_ORIGINS=comma,separated,list
  */
 const DEFAULT_ORIGINS = [
   "http://localhost:5173",
@@ -11,50 +11,42 @@ const DEFAULT_ORIGINS = [
   "https://teesfromthepast.vercel.app",
 ];
 
-// Allow preview *.vercel.app or other patterns if needed
+// Optional regex patterns for preview domains (tighten if desired)
 const REGEX_PATTERNS = [
   /^https:\/\/[a-z0-9-]+\.teesfromthepast\.vercel\.app$/i, // future preview subdomains
-  /^https:\/\/.+\.vercel\.app$/i, // generic vercel preview (optional; tighten if desired)
 ];
 
-function normalize(list) {
+function normalizeOrigins(list) {
   return list
-    .map(s => s.trim())
+    .map(o => o.trim())
     .filter(Boolean)
-    .map(s => {
-      // Remove trailing slash for consistent matching
-      if (s.endsWith("/")) return s.slice(0, -1);
-      return s;
-    });
+    .map(o => (o.endsWith("/") ? o.slice(0, -1) : o));
 }
 
-/**
- * Build CORS middleware. We keep credentials true so cookies (if any) or
- * Authorization headers can be sent cross-site.
- */
+function buildOriginChecker() {
+  const extra = normalizeOrigins((process.env.CORS_ORIGINS || "").split(","));
+  const base = normalizeOrigins(DEFAULT_ORIGINS);
+  const allowAll = /^true$/i.test(process.env.CORS_ALLOW_ALL || "");
+  const origins = [...new Set([...base, ...extra])];
+
+  function isAllowed(origin) {
+    if (!origin) return true; // Non-browser (no Origin header)
+    if (allowAll) return true;
+    const o = origin.endsWith("/") ? origin.slice(0, -1) : origin;
+    if (origins.includes(o)) return true;
+    if (REGEX_PATTERNS.some(rx => rx.test(o))) return true;
+    return false;
+  }
+
+  return { isAllowed, allowAll, origins };
+}
+
 export function buildCors() {
-  const extra = normalize((process.env.CORS_ORIGINS || "").split(","));
-  const origins = [...new Set([...normalize(DEFAULT_ORIGINS), ...extra])];
-
-  const allowAllFlag = /^true$/i.test(process.env.CORS_ALLOW_ALL || "");
-
+  const { isAllowed } = buildOriginChecker();
   return cors({
     origin: (origin, cb) => {
-      // Non-browser requests (no Origin) are allowed
-      if (!origin) return cb(null, true);
-
-      // Normalize incoming origin (strip trailing slash)
-      const o = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-
-      if (allowAllFlag) return cb(null, true);
-
-      if (origins.includes(o)) return cb(null, true);
-
-      // Pattern match
-      if (REGEX_PATTERNS.some(rx => rx.test(o))) return cb(null, true);
-
-      // Deny
-      return cb(new Error(`CORS: Origin not allowed: ${o}`));
+      if (isAllowed(origin)) return cb(null, true);
+      return cb(new Error(`CORS: Origin not allowed: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -71,28 +63,33 @@ export function buildCors() {
       "X-Client-Info",
       "x-client-info",
     ],
-    exposedHeaders: [
-      "Content-Length",
-      // Add custom exposed headers here if needed
-    ],
+    exposedHeaders: ["Content-Length"],
     maxAge: 86400,
-    preflightContinue: false,
     optionsSuccessStatus: 204,
   });
 }
 
 /**
- * Helper to apply CORS early plus a safety fallback to ensure OPTIONS
- * always returns quickly even if no route matches.
+ * Apply CORS early and provide an explicit OPTIONS handler to satisfy
+ * proxies/CDNs that expect a route-level response.
  */
 export function applyCors(app) {
   const middleware = buildCors();
   app.use(middleware);
+  app.options("*", middleware, (_req, res) => res.sendStatus(204));
+}
 
-  // Explicit OPTIONS handler (some proxies behave better with this)
-  app.options("*", middleware, (req, res) => {
-    res.sendStatus(204);
-  });
+/**
+ * Helper to log resolved origins (for diagnostics).
+ * Does NOT reveal secrets.
+ */
+export function logCorsConfig() {
+  const { origins, allowAll } = buildOriginChecker();
+  if (allowAll) {
+    console.log("[CORS] ALL origins temporarily allowed (CORS_ALLOW_ALL=true).");
+  } else {
+    console.log("[CORS] Allowed origins:", origins.join(", ") || "(none)");
+  }
 }
 
 export default buildCors;
