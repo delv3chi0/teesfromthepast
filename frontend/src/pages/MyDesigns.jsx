@@ -1,12 +1,12 @@
 // frontend/src/pages/MyDesigns.jsx
 import { useState, useEffect, useRef } from 'react';
 import {
-  Box, Heading, Text, SimpleGrid, Image, Spinner, Alert, AlertIcon, Button, VStack,
+  Box, Heading, Text, SimpleGrid, Image, Alert, AlertIcon, Button, VStack,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter,
   useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader,
   AlertDialogContent, AlertDialogOverlay, useToast, Icon, HStack, AspectRatio, Divider,
   Drawer, DrawerBody, DrawerHeader, DrawerOverlay, DrawerContent, DrawerCloseButton,
-  Code, Tooltip
+  Code, Tooltip, IconButton
 } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { client } from '../api/client';
@@ -14,6 +14,8 @@ import { useAuth } from '../context/AuthProvider';
 import { FaPlusSquare, FaMagic, FaTrophy, FaTrashAlt, FaDownload, FaExternalLinkAlt, FaInfoCircle, FaClipboard } from 'react-icons/fa';
 import { downloadImage } from '../utils/download';
 import { cld } from '../utils/cloudinary';
+import SEO from '../components/SEO';
+import { SkeletonGrid } from '../components/Skeleton';
 
 const getCurrentMonthYYYYMM = () => {
   const now = new Date();
@@ -158,38 +160,63 @@ export default function MyDesigns() {
 
   if (loading) {
     return (
-      <VStack justifyContent="center" minH="60vh">
-        <Spinner size="xl" />
-        <Text mt={4} fontSize="lg" color="brand.textLight">Loading Your Designs...</Text>
-      </VStack>
+      <>
+        <SEO 
+          title="My Designs"
+          description="View and manage your custom vintage t-shirt designs"
+        />
+        <Box w="100%">
+          <VStack spacing={6} align="stretch" mb={8}>
+            <Heading as="h1" size="2xl" color="brand.textLight">My Saved Designs</Heading>
+          </VStack>
+          <SkeletonGrid 
+            itemCount={12} 
+            columns={{ base: 1, sm: 2, md: 3, lg: 4 }}
+            aspectRatio={4/3}
+            showText={true}
+          />
+        </Box>
+      </>
     );
   }
 
   if (error) {
     return (
-      <Alert status="error" colorScheme="red" borderRadius="md" p={6} borderWidth="1px">
-        <AlertIcon />
-        <Text>{error}</Text>
-      </Alert>
+      <>
+        <SEO 
+          title="My Designs - Error"
+          description="Error loading your custom vintage t-shirt designs"
+        />
+        <Alert status="error" colorScheme="red" borderRadius="md" p={6} borderWidth="1px">
+          <AlertIcon />
+          <Text>{error}</Text>
+        </Alert>
+      </>
     );
   }
 
   return (
-    <Box w="100%">
-      <VStack spacing={6} align="stretch" mb={8}>
-        <Heading as="h1" size="2xl" color="brand.textLight">My Saved Designs</Heading>
-        {designs.length > 0 && (
-          <Button
-            colorScheme="brandAccentOrange"
-            onClick={() => navigate('/generate')}
-            alignSelf="flex-start"
-            size="lg"
-            leftIcon={<Icon as={FaMagic} />}
-          >
-            Create Another Design
-          </Button>
-        )}
-      </VStack>
+    <>
+      <SEO 
+        title="My Designs"
+        description={`View and manage your ${designs.length} custom vintage t-shirt designs`}
+      />
+      <Box w="100%">
+        <VStack spacing={6} align="stretch" mb={8}>
+          <Heading as="h1" size="2xl" color="brand.textLight">My Saved Designs</Heading>
+          {designs.length > 0 && (
+            <Button
+              colorScheme="brandAccentOrange"
+              onClick={() => navigate('/generate')}
+              alignSelf="flex-start"
+              size="lg"
+              leftIcon={<Icon as={FaMagic} />}
+              aria-label="Create another design"
+            >
+              Create Another Design
+            </Button>
+          )}
+        </VStack>
 
       {designs.length === 0 ? (
         <Box layerStyle="cardBlue" p={10} textAlign="center">
@@ -219,7 +246,19 @@ export default function MyDesigns() {
                 <AspectRatio ratio={1}>
                   <Image
                     src={cardSrc(design)}
-                    alt={design.prompt}
+                    alt={design.prompt || "Custom t-shirt design"}
+                    fallback={
+                      <Box 
+                        bg="gray.200" 
+                        display="flex" 
+                        alignItems="center" 
+                        justifyContent="center"
+                        w="100%"
+                        h="100%"
+                      >
+                        <Text color="gray.500" fontSize="sm">Image unavailable</Text>
+                      </Box>
+                    }
                     fit="cover"
                     w="100%"
                     h="100%"
@@ -239,7 +278,13 @@ export default function MyDesigns() {
 
           <VStack mt={8}>
             {hasMore ? (
-              <Button isLoading={loadingMore} onClick={() => fetchDesigns(page + 1, true)} colorScheme="brandAccentYellow">
+              <Button 
+                isLoading={loadingMore} 
+                onClick={() => fetchDesigns(page + 1, true)} 
+                colorScheme="brandAccentYellow"
+                aria-label="Load more designs"
+                loadingText="Loading more designs..."
+              >
                 Load more
               </Button>
             ) : (
@@ -258,7 +303,13 @@ export default function MyDesigns() {
               <Text>Design Preview</Text>
               <HStack spacing={3}>
                 <Tooltip label="View metadata">
-                  <Button size="sm" leftIcon={<FaInfoCircle/>} variant="outline" onClick={onMetaOpen}>
+                  <Button 
+                    size="sm" 
+                    leftIcon={<FaInfoCircle/>} 
+                    variant="outline" 
+                    onClick={onMetaOpen}
+                    aria-label="View design metadata"
+                  >
                     Metadata
                   </Button>
                 </Tooltip>
@@ -271,18 +322,32 @@ export default function MyDesigns() {
                     onClick={() => {
                       if (selectedDesign.publicUrl) window.open(cld.auto(selectedDesign.publicUrl), '_blank', 'noopener,noreferrer');
                     }}
+                    aria-label="Open full size image in new tab"
                   >
                     Open Full
                   </Button>
                 </Tooltip>
               </HStack>
             </ModalHeader>
-            <ModalCloseButton _hover={{bg:"whiteAlpha.200"}}/>
+            <ModalCloseButton _hover={{bg:"whiteAlpha.200"}} aria-label="Close design preview"/>
             <ModalBody py={4}>
               <VStack spacing={4}>
                 <Image
                   src={modalSrc(selectedDesign)}
-                  alt={selectedDesign.prompt}
+                  alt={selectedDesign.prompt || "Custom t-shirt design"}
+                  fallback={
+                    <Box 
+                      bg="gray.200" 
+                      display="flex" 
+                      alignItems="center" 
+                      justifyContent="center"
+                      maxH="80vh"
+                      minH="400px"
+                      borderRadius="md"
+                    >
+                      <Text color="gray.500">Image not available</Text>
+                    </Box>
+                  }
                   maxH="80vh"
                   maxW="100%"
                   objectFit="contain"
@@ -307,7 +372,13 @@ export default function MyDesigns() {
               </VStack>
             </ModalBody>
             <ModalFooter bg="brand.secondary" borderBottomRadius="md" justifyContent="space-between" gap={3} flexWrap="wrap">
-              <Button colorScheme="red" onClick={() => setDesignToDelete(selectedDesign) || onDeleteAlertOpen()} isLoading={isDeleting} leftIcon={<Icon as={FaTrashAlt} />}>
+              <Button 
+                colorScheme="red" 
+                onClick={() => setDesignToDelete(selectedDesign) || onDeleteAlertOpen()} 
+                isLoading={isDeleting} 
+                leftIcon={<Icon as={FaTrashAlt} />}
+                aria-label="Delete this design"
+              >
                 Delete
               </Button>
               <HStack>
@@ -321,6 +392,7 @@ export default function MyDesigns() {
                     const name = (selectedDesign.prompt?.slice(0, 40) || 'design').replace(/[^\w\-]+/g, '_') + '.png';
                     downloadImage(src, name);
                   }}
+                  aria-label="Download full resolution image"
                 >
                   Download Full
                 </Button>
@@ -328,13 +400,25 @@ export default function MyDesigns() {
                 {/* Contest button logic unchanged */}
                 {!selectedDesign.isSubmittedForContest ||
                 selectedDesign.contestSubmissionMonth !== getCurrentMonthYYYYMM() ? (
-                  <Button colorScheme="green" onClick={() => setDesignToSubmit(selectedDesign) || onContestAlertOpen()} isLoading={isSubmitting}>
+                  <Button 
+                    colorScheme="green" 
+                    onClick={() => setDesignToSubmit(selectedDesign) || onContestAlertOpen()} 
+                    isLoading={isSubmitting}
+                    aria-label="Submit design to monthly contest"
+                  >
                     Submit to Contest
                   </Button>
                 ) : (
                   <Button colorScheme="green" isDisabled>Submitted for {selectedDesign.contestSubmissionMonth}</Button>
                 )}
-                <Button variant="ghost" onClick={onImageModalClose} _hover={{bg:"whiteAlpha.200"}}>Close</Button>
+                <Button 
+                  variant="ghost" 
+                  onClick={onImageModalClose} 
+                  _hover={{bg:"whiteAlpha.200"}}
+                  aria-label="Close design preview modal"
+                >
+                  Close
+                </Button>
               </HStack>
             </ModalFooter>
           </ModalContent>
@@ -342,6 +426,7 @@ export default function MyDesigns() {
       )}
 
       {/* Metadata Drawer + Alerts unchanged (besides any cld.auto() usage above) */}
-    </Box>
+      </Box>
+    </>
   );
 }
