@@ -70,7 +70,31 @@ Theme keywords (used by Admin): `brand.primary`, `brand.paper`, `brand.cardBlue`
 
 ---
 
-## 5) Data shapes (simplified)
+## 5) Initialization & Logging
+
+The application follows a strict startup order to ensure fail-fast behavior on misconfiguration:
+
+1. **Environment variables** loaded via `dotenv/config`
+2. **Configuration validation** via `validateConfig()` (validates all env vars against schema)
+3. **Error monitoring initialization** via `initializeErrorMonitoring()`
+4. **Express app creation** and middleware setup
+5. **Database connection**
+6. **Server listen**
+
+### Request Logger
+- Provides correlated request IDs for better debugging
+- Logs request start/finish with timing information
+- Safe for early import due to lazy initialization
+- Uses redaction for sensitive data protection
+
+### Configuration Guidelines
+- **Avoid top-level `getConfig()` calls** in new modules (will crash if imported before `validateConfig()`)
+- Use `isConfigReady()` for conditional configuration access in early-imported modules
+- Logger is safe for early import and falls back gracefully if config not ready
+
+---
+
+## 6) Data shapes (simplified)
 
 ```ts
 User {
@@ -124,30 +148,36 @@ Session {
   expiresAt: string
   revokedAt?: string
 }
-6) Environment expectations
+```
+
+---
+
+## 7) Environment expectations
 Frontend reads API base from the axios client. Backend must allow:
 
-CORS for your Vercel origin
+- CORS for your Vercel origin
+- Authorization and x-session-id headers
+- JSON Content-Type
 
-Authorization and x-session-id headers
+---
 
-JSON Content-Type
+## 8) Where to tweak print placements
+`/frontend/src/data/mockupsRegistry.js` (or similarly named):
 
-7) Where to tweak print placements
-/frontend/src/data/mockupsRegistry.js (or similarly named):
+- images (mockup URLs)
+- available colors per product
+- getPlacement fractions per slug + view
 
-images (mockup URLs)
+---
 
-available colors per product
-
-getPlacement fractions per slug + view
-
-8) Known styling constraints
+## 9) Known styling constraints
 Admin tables assume a light table body on a darker page background.
 
 Readability fixes: session ID is shown as full, wrapped in a <Code> block; checkboxes use black when checked; “Auto-refresh” uses black text and white text inside the dropdown.
 
-9) Bootstrap assumptions
+---
+
+## 10) Bootstrap assumptions
 If docs are empty, the checkpoint script writes starter content (this file and friends).
 
 context.md is the single file to paste into a new chat when you want the assistant to be “caught up”

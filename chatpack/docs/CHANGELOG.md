@@ -1,6 +1,4 @@
 
-### `chatpack/docs/CHANGELOG.md`
-```md
 # CHANGELOG
 
 Format:
@@ -8,6 +6,14 @@ Format:
   - detail lines…
 
 ---
+
+## 2025-08-25 12:00 PT — Config init ordering & lazy logger
+- Backend: added idempotent `validateConfig()` function for strict environment variable validation
+- Added `isConfigReady()` helper for conditional configuration access in early-imported modules
+- Implemented lazy logger with redaction and request correlation for safe early imports
+- Added `createRequestLogger` middleware for request start/finish logging with correlated IDs
+- Added early import regression test to ensure logger safety before `validateConfig()`
+- Integrated Stripe webhook logging with proper request correlation and error handling
 
 ## 2025-08-23 18:59 PT — Admin polish & docs bootstrap
 - Devices: added **bulk checkboxes** with black checked state; full readable Session ID; “Auto-refresh” control shows **black label** and **white menu items**.

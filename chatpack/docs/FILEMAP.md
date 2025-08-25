@@ -85,6 +85,7 @@ Snapshot of repo files:
 - chatpack/docs/ARCHITECTURE.md
 - chatpack/docs/CHANGELOG.md
 - chatpack/docs/CHAT-CONTRACT.md
+- chatpack/docs/CONFIG_INIT_ORDER.md
 - chatpack/docs/DECISIONS.md
 - chatpack/docs/FILEMAP.md
 - chatpack/docs/HANDOFF.md

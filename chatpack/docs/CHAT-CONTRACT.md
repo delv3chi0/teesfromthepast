@@ -18,6 +18,13 @@
 **When adding backend endpoints**
 - Reflect them in ARCHITECTURE and CHANGELOG.
 - Ensure CORS supports the deployed frontends.
+- Follow config init & logging rules: avoid top-level `getConfig()`; rely on lazy logger; use request correlation.
+
+**Config & Logging Guidelines**
+- Never call `getConfig()` at module top-level (will crash if imported before `validateConfig()`)
+- Use `isConfigReady()` for conditional config access in early-imported modules
+- Logger is safe for early import and provides request correlation
+- Reflect new endpoints and configuration changes in ARCHITECTURE & CHANGELOG
 
 **Handoff etiquette**
 - Before leaving a conversation, run `./scripts/checkpoint.sh` (or ask for it) so the next chat can start by pasting `chatpack/context.md`.

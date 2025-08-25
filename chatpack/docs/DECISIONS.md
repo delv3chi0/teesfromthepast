@@ -19,3 +19,12 @@
 ## ADR-005 — Docs handoff model
 - Human-curated docs live in `chatpack/docs/…`.
 - On each checkpoint we **compose** a single `chatpack/context.md` that includes a compact summary and pointers + an up-to-date FILEMAP and diff.
+
+## ADR-006 — Configuration initialization & lazy logger discipline
+- `validateConfig()` must be called before any module that accesses configuration via `getConfig()`.
+- `validateConfig()` is idempotent (safe to call multiple times) and validates all environment variables against schema.
+- `getConfig()` is strict and throws an error if called before `validateConfig()` to enforce proper initialization order.
+- `isConfigReady()` provides transitional helper for conditional configuration access in early-imported modules.
+- Logger module uses lazy initialization for safe early imports with fallback to `process.env.LOG_LEVEL`.
+- Request logging middleware provides start/finish logging with correlated IDs for better debugging.
+- Avoid top-level `getConfig()` calls in new modules to prevent initialization crashes.
