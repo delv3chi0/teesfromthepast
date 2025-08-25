@@ -1,22 +1,25 @@
 /**
- * Simple in-memory rate limiter for /api/auth/login
- * NOTE: Suitable for a single-instance deployment. Replace with Redis for multi-instance.
+ * Targeted in-memory rate limiter for /api/auth/login
+ * Replace with Redis/Upstash/etc. for multi-instance scaling.
  */
-const WINDOW_MS = 60_000; // 1 minute
+const WINDOW_MS = 60_000;
 const MAX_ATTEMPTS = 10;
 
-const buckets = new Map(); // key -> { count, reset }
+const buckets = new Map(); // ip -> { count, reset }
 
 export function rateLimitLogin(req, res, next) {
-  const ip = req.ip || req.connection?.remoteAddress || "unknown";
+  const ip =
+    req.ip ||
+    req.headers["x-forwarded-for"]?.toString().split(",")[0].trim() ||
+    req.connection?.remoteAddress ||
+    "unknown";
+
   const now = Date.now();
   let entry = buckets.get(ip);
-
-  if (!entry || now > entry.reset) {
+  if (!entry || now >= entry.reset) {
     entry = { count: 0, reset: now + WINDOW_MS };
     buckets.set(ip, entry);
   }
-
   entry.count += 1;
 
   const remaining = Math.max(0, MAX_ATTEMPTS - entry.count);
