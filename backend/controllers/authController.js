@@ -14,7 +14,7 @@ import { verifyHCaptcha } from "../middleware/hcaptcha.js";
 import { markAuthFail, clearAuthFails, getCaptchaPolicy } from "../middleware/rateLimiters.js";
 
 const RefreshToken = mongoose.models.RefreshToken || RefreshTokenModel;
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM = process.env.RESEND_FROM;
 const APP_ORIGIN = process.env.APP_ORIGIN || "http://localhost:5173";
 

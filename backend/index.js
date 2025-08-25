@@ -2,59 +2,84 @@
 import mongoose from "mongoose";
 import "dotenv/config";
 import app from "./app.js";
+import { validateEnv } from "./utils/validateEnv.js";
+import connectDB from "./config/db.js";
+import logger from "./utils/logger.js";
 
 process.on("uncaughtException", (err) => {
-  console.error("[Backend Log] Uncaught Exception:", err?.stack || err);
+  logger.error("process.uncaught_exception", { 
+    error: err?.message || String(err),
+    stack: err?.stack
+  });
   process.exit(1);
 });
 process.on("unhandledRejection", (reason, p) => {
-  console.error("[Backend Log] Unhandled Rejection at:", p, "reason:", reason?.stack || reason);
+  logger.error("process.unhandled_rejection", { 
+    reason: reason?.message || String(reason),
+    stack: reason?.stack,
+    promise: String(p)
+  });
   process.exit(1);
 });
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI;
 
-console.log("[Backend Log] Server starting…");
+// Main startup function
+async function startup() {
+  logger.info("startup.begin", { 
+    port: PORT,
+    nodeEnv: process.env.NODE_ENV || "development"
+  });
 
-// Start HTTP server immediately so Render health check can succeed even if DB is slow.
-const server = app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || "development"} mode`);
-  console.log(`[Backend Log] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
-});
+  // Validate environment variables first
+  if (!validateEnv()) {
+    logger.error("startup.failed", { reason: "Environment validation failed" });
+    process.exit(1);
+  }
 
-// Connect Mongo (non-blocking for health)
-if (!MONGO_URI) {
-  console.error("[Startup] Missing MONGO_URI");
-} else {
-  console.log("[Startup] Using MONGO_URI for Mongo connection");
-  mongoose
-    .connect(MONGO_URI, {
-      // reasonable defaults; no deprecations for modern mongoose
-      serverSelectionTimeoutMS: 12000,
-      maxPoolSize: 10,
-    })
-    .then(() => {
-      console.log("MongoDB connected successfully");
-    })
-    .catch((err) => {
-      console.error("MongoDB connection error:", err?.message || err);
-      // Do NOT exit here — keep serving health checks so Render doesn't kill us.
+  // Connect to database before starting server (fail-fast)
+  try {
+    await connectDB();
+    logger.info("startup.db_connected", { status: "success" });
+  } catch (error) {
+    logger.error("startup.db_failed", { 
+      error: error?.message || String(error),
+      stack: error?.stack
     });
+    process.exit(1);
+  }
+
+  // Start HTTP server only after DB is connected
+  const server = app.listen(PORT, "0.0.0.0", () => {
+    logger.info("startup.listening", { 
+      port: PORT,
+      host: "0.0.0.0",
+      nodeEnv: process.env.NODE_ENV || "development"
+    });
+  });
+
+  return server;
 }
+
+// Start the application
+const server = await startup();
 
 // Graceful shutdown (Render sends SIGTERM on redeploy)
 const shutdown = async () => {
   try {
-    console.log("[Shutdown] Received SIGTERM. Closing server…");
+    logger.info("shutdown.begin", { reason: "SIGTERM received" });
     server.close(() => {
-      console.log("[Shutdown] HTTP server closed");
+      logger.info("shutdown.http_closed", { status: "success" });
     });
     await mongoose.connection.close();
-    console.log("[Shutdown] MongoDB connection closed");
+    logger.info("shutdown.db_closed", { status: "success" });
   } catch (e) {
-    console.error("[Shutdown] Error during shutdown:", e?.stack || e);
+    logger.error("shutdown.error", { 
+      error: e?.message || String(e),
+      stack: e?.stack
+    });
   } finally {
+    logger.info("shutdown.complete", { exitCode: 0 });
     process.exit(0);
   }
 };

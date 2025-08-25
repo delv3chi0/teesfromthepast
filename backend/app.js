@@ -1,6 +1,9 @@
 import express from "express";
 import dotenv from "dotenv";
-import connectDB from "./config/db.js";
+
+// Middleware
+import { requestLogger } from "./middleware/requestLogger.js";
+import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 // Core app routes
 import authRoutes from "./routes/auth.js";
@@ -28,9 +31,9 @@ import rateLimit from "express-rate-limit";
 
 // NEW: Security headers / CSP for hCaptcha, Cloudinary, etc.
 import helmet from "helmet";
+import logger from "./utils/logger.js";
 
 dotenv.config();
-connectDB();
 
 const app = express();
 
@@ -42,6 +45,9 @@ app.set("trust proxy", 1); // <-- CHANGED from true to 1
 
 // --- Health check ---
 app.get("/health", (_req, res) => res.send("OK"));
+
+// Request logging and correlation (early, but after health check)
+app.use(requestLogger);
 
 /**
  * Dependency-free CORS:
@@ -70,6 +76,14 @@ app.use((req, res, next) => {
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
+  } else if (origin) {
+    // Log denied origins
+    const log = req.log || logger;
+    log.warn("cors.origin_denied", { 
+      origin,
+      method: req.method,
+      path: req.path
+    });
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   const requested = req.headers["access-control-request-headers"];
@@ -124,6 +138,22 @@ const contactLimiter = rateLimit({
   limit: 30, // allow 30 POSTs per minute per IP
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    const log = req.log || logger;
+    log.warn("rate_limit.triggered", {
+      ip: req.ip,
+      method: req.method,
+      path: req.path,
+      userAgent: req.headers['user-agent']
+    });
+    res.status(429).json({
+      error: {
+        message: 'Too many requests, please try again later.',
+        status: 429,
+        rid: req.id
+      }
+    });
+  }
 });
 app.use("/api/forms/contact", contactLimiter);
 
@@ -148,5 +178,9 @@ app.use("/api/admin/audit", adminAuditRoutes);
 // --- Public extras ---
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
+
+// Error handling middleware (must be last)
+app.use(notFound);
+app.use(errorHandler);
 
 export default app;

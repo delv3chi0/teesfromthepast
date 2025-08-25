@@ -6,11 +6,15 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Design from "../models/Design.js";
 import WebhookEvent from "../models/WebhookEvent.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
 if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
-  console.error("[Webhook] CRITICAL: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET missing");
+  logger.error("webhook.config_missing", { 
+    hasSecretKey: !!process.env.STRIPE_SECRET_KEY,
+    hasWebhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET
+  });
 }
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -18,33 +22,69 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // MUST be mounted BEFORE global express.json() in app.js
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-  if (!stripe || !webhookSecret) return res.status(500).send("Stripe not configured");
+  const log = req.log || logger;
+  
+  if (!stripe || !webhookSecret) {
+    log.error("webhook.not_configured", {});
+    return res.status(500).send("Stripe not configured");
+  }
 
   const sig = req.headers["stripe-signature"];
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    log.info("webhook.signature_verified", { 
+      eventId: event.id,
+      eventType: event.type
+    });
   } catch (err) {
-    console.error("[Webhook] Signature verification failed:", err.message);
+    log.error("webhook.signature_failed", { 
+      error: err.message,
+      signature: sig?.substring(0, 20) + "..." // Log partial signature for debugging
+    });
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
   // Idempotency ledger
   try {
     const existed = await WebhookEvent.findById(event.id);
-    if (existed) return res.status(200).json({ received: true, dedup: true });
+    if (existed) {
+      log.info("webhook.duplicate_event", { 
+        eventId: event.id,
+        eventType: event.type
+      });
+      return res.status(200).json({ received: true, dedup: true });
+    }
     await WebhookEvent.create({ _id: event.id, type: event.type });
+    log.info("webhook.event_recorded", { 
+      eventId: event.id,
+      eventType: event.type
+    });
   } catch (e) {
-    console.error("[Webhook] Failed to record event id:", e.message);
+    log.error("webhook.idempotency_failed", { 
+      error: e.message,
+      eventId: event.id
+    });
     // do not bail; still try to process once
   }
 
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object;
+    log.info("webhook.payment_succeeded", { 
+      paymentIntentId: pi.id,
+      amount: pi.amount,
+      currency: pi.currency
+    });
 
     try {
       const existingOrder = await Order.findOne({ paymentIntentId: pi.id });
-      if (existingOrder) return res.status(200).json({ received: true, message: "order exists" });
+      if (existingOrder) {
+        log.info("webhook.order_exists", { 
+          paymentIntentId: pi.id,
+          orderId: existingOrder._id
+        });
+        return res.status(200).json({ received: true, message: "order exists" });
+      }
 
       const { userId } = pi.metadata || {};
       let itemsFromMeta = [];
@@ -110,6 +150,13 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         orderStatus: "Processing",
       });
       await newOrder.save();
+      
+      log.info("webhook.order_created", { 
+        orderId: newOrder._id,
+        userId: userId,
+        totalAmount: pi.amount,
+        itemCount: orderItems.length
+      });
 
       // stock decrement (supports both old and new variant shapes)
       for (const item of itemsFromMeta) {
@@ -130,14 +177,29 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         }
         await product.save();
       }
+      
+      log.info("webhook.stock_updated", { 
+        itemsProcessed: itemsFromMeta.length
+      });
     } catch (err) {
-      console.error("[Webhook] Handler error:", err.message, err.stack || "");
+      log.error("webhook.order_creation_failed", { 
+        error: err.message,
+        stack: err.stack,
+        paymentIntentId: pi.id
+      });
       return res.status(500).json({ error: "Failed to process webhook" });
     }
   } else if (event.type === "payment_intent.payment_failed") {
-    console.log(`[Webhook] Payment failed: ${event.data.object.id}`);
+    const pi = event.data.object;
+    log.warn("webhook.payment_failed", { 
+      paymentIntentId: pi.id,
+      lastPaymentError: pi.last_payment_error?.message
+    });
   } else {
-    console.log(`[Webhook] Unhandled: ${event.type}`);
+    log.info("webhook.event_unhandled", { 
+      eventType: event.type,
+      eventId: event.id
+    });
   }
 
   return res.status(200).json({ received: true });
