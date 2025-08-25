@@ -6,28 +6,16 @@ const {
   CLOUDINARY_API_KEY,
   CLOUDINARY_API_SECRET,
   CLOUDINARY_CLOUD_NAME,
-  CLOUDINARY_UPLOAD_PRESET // optional for signed
+  CLOUDINARY_UPLOAD_PRESET
 } = process.env;
 
+/**
+ * Route providing signed parameters for direct browser -> Cloudinary uploads.
+ * POST /api/cloudinary/sign
+ * Body (optional): { folder?: string, publicId?: string, eager?: string, tags?: string, invalidate?: boolean }
+ */
 const router = Router();
 
-/**
- * POST /api/cloudinary/sign
- * Body (optional):
- *   { folder?: string, publicId?: string, eager?: string, tags?: string, invalidate?: boolean }
- * Returns signature payload the client uses with a direct multipart/form-data upload to Cloudinary.
- *
- * Client then does:
- *   const form = new FormData();
- *   form.append('file', fileObj);
- *   form.append('api_key', CLOUDINARY_API_KEY);
- *   form.append('timestamp', timestamp);
- *   form.append('signature', signature);
- *   form.append('folder', folder);          // if provided
- *   form.append('public_id', publicId);     // if provided
- *   form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET); // only if you use a preset
- *   fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: form });
- */
 router.post("/sign", (req, res) => {
   if (!CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET || !CLOUDINARY_CLOUD_NAME) {
     return sendError(
@@ -50,23 +38,14 @@ router.post("/sign", (req, res) => {
 
   const params = {
     timestamp,
-    folder,
-    // Cloudinary param names use underscores
-    public_id: publicId,
-    eager,
-    tags,
-    invalidate
+    folder
   };
 
-  // Remove undefined values
-  Object.keys(params).forEach((k) => {
-    if (params[k] === undefined || params[k] === null || params[k] === "") delete params[k];
-  });
-
-  if (CLOUDINARY_UPLOAD_PRESET) {
-    // Including preset if you want to centralize transformations; signed uploads may omit.
-    params.upload_preset = CLOUDINARY_UPLOAD_PRESET;
-  }
+  if (publicId) params.public_id = publicId;
+  if (eager) params.eager = eager;
+  if (tags) params.tags = tags;
+  if (invalidate) params.invalidate = true;
+  if (CLOUDINARY_UPLOAD_PRESET) params.upload_preset = CLOUDINARY_UPLOAD_PRESET;
 
   const { signature } = generateCloudinarySignature(params, CLOUDINARY_API_SECRET);
 
