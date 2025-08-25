@@ -13,8 +13,10 @@ Snapshot of repo files:
 - backend/controllers/authController.js
 - backend/controllers/designController.bak
 - backend/controllers/designController.js
+- backend/controllers/emailVerificationController.js
 - backend/controllers/formController.js
 - backend/controllers/orderController.js
+- backend/controllers/passwordResetController.js
 - backend/controllers/printfulController.js
 - backend/controllers/storefrontProductController.js
 - backend/controllers/uploadController.js
@@ -30,6 +32,7 @@ Snapshot of repo files:
 - backend/models/Design.bak
 - backend/models/Design.js
 - backend/models/Order.js
+- backend/models/PasswordResetToken.js
 - backend/models/Product.js
 - backend/models/RefreshToken.js
 - backend/models/User.js
@@ -50,6 +53,7 @@ Snapshot of repo files:
 - backend/routes/contest.js
 - backend/routes/designs.bak
 - backend/routes/designs.js
+- backend/routes/emailVerificationRoutes.js
 - backend/routes/formRoutes.js
 - backend/routes/generateImage.bak
 - backend/routes/orderRoutes.js
@@ -71,6 +75,8 @@ Snapshot of repo files:
 - backend/utils/audit.js
 - backend/utils/auditLogger.js
 - backend/utils/cors.js
+- backend/utils/emailTemplates.js
+- backend/utils/mailer.js
 - backend/utils/pickPrintfulImage.js
 - backend/utils/slugify.js
 - .chatgptignore
@@ -81,6 +87,7 @@ Snapshot of repo files:
 - chatpack/docs/CHAT-CONTRACT.md
 - chatpack/docs/DECISIONS.md
 - chatpack/docs/FILEMAP.md
+- chatpack/docs/HANDOFF.md
 - chatpack/files/.chatgptignore
 - chatpack/slices/backend__package.json
 - chatpack/slices/backend__utils__audit.js
@@ -197,6 +204,7 @@ Snapshot of repo files:
 - frontend/src/pages/AdminAuditLogs.jsx
 - frontend/src/pages/AdminDevices.jsx
 - frontend/src/pages/AdminPage.jsx
+- frontend/src/pages/CheckEmail.jsx
 - frontend/src/pages/CheckoutPage.jsx
 - frontend/src/pages/ContactPage.jsx
 - frontend/src/pages/Dashboard.jsx
@@ -219,6 +227,7 @@ Snapshot of repo files:
 - frontend/src/pages/ShopPage.bak
 - frontend/src/pages/ShopPage.jsx
 - frontend/src/pages/TermsOfServicePage.jsx
+- frontend/src/pages/VerifyEmailPage.jsx
 - frontend/src/pages/Vote.jsx
 - frontend/src/pages/VotingPage.jsx
 - frontend/src/pages/Welcome.jsx
@@ -232,6 +241,7 @@ Snapshot of repo files:
 - logo.xcf
 - package.json
 - package-lock.json
+- scripts/checkpoint.sh
 - scripts/gen_filemap.sh
 - scripts/prepare-mockups.js
 - stable-diffusion-webui

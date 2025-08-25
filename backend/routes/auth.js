@@ -1,125 +1,53 @@
+// backend/routes/auth.js
 import express from "express";
 import rateLimit from "express-rate-limit";
-import { body } from "express-validator";
+import { body, query } from "express-validator";
 import { protect } from "../middleware/authMiddleware.js";
 import * as auth from "../controllers/authController.js";
-
-// ✅ FIXED PATH: controllers (not routes)
-import {
-  sendVerification,
-  verifyEmail,
-  resendVerification,
-} from "../controllers/emailVerificationController.js";
+import { requireHCaptcha } from "../middleware/hcaptcha.js";
 
 const router = express.Router();
 
-/* ----------------------------- Validators ---------------------------- */
-const vRegister = [
-  body("username").trim().notEmpty().withMessage("Username is required"),
-  body("email").isEmail().withMessage("Valid email required"),
-  body("password")
-    .isString()
-    .isLength({ min: 8 })
-    .withMessage("Password must be at least 8 characters"),
-];
+// validators (unchanged)
+const vRegister = [ body("username").trim().notEmpty(), body("email").isEmail(), body("password").isString().isLength({ min: 8 }) ];
+const vLogin = [ body("email").isEmail(), body("password").notEmpty() ];
+const vReqReset = [ body("email").isEmail() ];
+const vReset = [ body("token").notEmpty(), body("password").isString().isLength({ min: 8 }) ];
+const vChange = [ body("currentPassword").notEmpty(), body("newPassword").isString().isLength({ min: 8 }) ];
+const vEmailOnly = [ body("email").isEmail() ];
+const vCaptchaContext = [ query("context").optional().isString() ];
 
-const vLogin = [
-  body("email").isEmail().withMessage("Valid email required"),
-  body("password").notEmpty().withMessage("Password is required"),
-];
-
-const vReqReset = [body("email").isEmail().withMessage("Valid email required")];
-
-const vReset = [
-  body("token").notEmpty().withMessage("Reset token required"),
-  body("password")
-    .isString()
-    .isLength({ min: 8 })
-    .withMessage("Password must be at least 8 characters"),
-];
-
-const vChange = [
-  body("currentPassword").notEmpty().withMessage("Current password required"),
-  body("newPassword")
-    .isString()
-    .isLength({ min: 8 })
-    .withMessage("New password must be at least 8 characters"),
-];
-
-const vEmailOnly = [body("email").isEmail().withMessage("Valid email required")];
-const vVerify = [
-  body("email").isEmail().withMessage("Valid email required"),
-  body("token").notEmpty().withMessage("Token required"),
-];
-
-/* ----------------------------- Safe wrapper -------------------------- */
-const safe = (fnName) => {
-  const fn = auth[fnName];
-  if (typeof fn === "function") return fn;
-  return (_req, res) =>
-    res
-      .status(501)
-      .json({ message: `Handler '${fnName}' is not available on authController` });
-};
-
-/* ----------------------------- Rate limits --------------------------- */
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-const verifyLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Password reset — dual limiter
-const resetIpLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// limiters (unchanged-ish)
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
+const verifyLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
+const resetIpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
 const resetEmailLimiter = rateLimit({
-  windowMs: 30 * 60 * 1000,
-  max: 3,
-  standardHeaders: true,
-  legacyHeaders: false,
+  windowMs: 30 * 60 * 1000, max: 3, standardHeaders: true, legacyHeaders: false,
   keyGenerator: (req) => String(req.body?.email || "").trim().toLowerCase(),
 });
 
-/* -------------------------------- Routes ---------------------------- */
+const safe = (name) => (typeof auth[name] === "function" ? auth[name] : (_req, res) => res.status(501).json({ message: `Missing ${name}` }));
+
+// === NEW: adaptive captcha policy probe ===
+router.get("/captcha-check", vCaptchaContext, safe("captchaCheck"));
+
 // Auth
-router.post("/register", registerLimiter, vRegister, safe("registerUser"));
-router.post("/login", loginLimiter, vLogin, safe("loginUser"));
+router.post("/register", registerLimiter, vRegister, safe("registerUser")); // captcha is adaptive in controller
+router.post("/login", loginLimiter, vLogin, safe("loginUser"));             // captcha is adaptive in controller
 router.post("/logout", protect, safe("logoutUser"));
 
-// Email verification (public)
-router.post("/send-verification", verifyLimiter, vEmailOnly, sendVerification);
-router.post("/resend-verification", verifyLimiter, vEmailOnly, resendVerification);
-router.post("/verify-email", verifyLimiter, vVerify, verifyEmail);
+// Email verification (unchanged hooks)
+router.post("/send-verification", verifyLimiter, vEmailOnly, safe("sendVerification"));
+router.post("/resend-verification", verifyLimiter, vEmailOnly, safe("resendVerification"));
+router.post("/verify-email", verifyLimiter, [ body("email").isEmail(), body("token").notEmpty() ], safe("verifyEmail"));
 
 // Profile
 router.get("/profile", protect, safe("getUserProfile"));
 router.put("/profile", protect, safe("updateUserProfile"));
 
 // Password reset/change
-router.post(
-  "/request-password-reset",
-  resetIpLimiter,
-  resetEmailLimiter,
-  vReqReset,
-  safe("requestPasswordReset")
-);
+router.post("/request-password-reset", resetIpLimiter, resetEmailLimiter, vReqReset, safe("requestPasswordReset")); // adaptive captcha in controller
 router.post("/reset-password", vReset, safe("resetPassword"));
 router.put("/change-password", protect, vChange, safe("changePassword"));
 

@@ -1,5 +1,4 @@
-// frontend/src/pages/LoginPage.jsx
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box, Button, FormControl, FormLabel, Input, VStack, Heading, Text, useToast,
   Container, InputGroup, InputRightElement, IconButton, Image, Link as ChakraLink, Flex,
@@ -9,6 +8,9 @@ import { useNavigate, Link as RouterLink, useLocation } from "react-router-dom";
 import Footer from "../components/Footer.jsx";
 import { client } from "../api/client";
 import { useAuth } from "../context/AuthProvider";
+import HCaptcha from "@hcaptcha/react-hcaptcha";
+
+const SITE_KEY = import.meta.env.VITE_HCAPTCHA_SITE_KEY;
 
 function pickToken(payload) {
   if (!payload) return null;
@@ -29,6 +31,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Adaptive hCaptcha
+  const [showCaptcha, setShowCaptcha] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const [captchaKey, setCaptchaKey] = useState(0); // rerender widget when needed
+
   const { setSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,39 +44,46 @@ export default function LoginPage() {
   const redirectParam = new URLSearchParams(location.search).get("redirect");
   const redirectTo = redirectParam || location.state?.from?.pathname || "/";
 
+  useEffect(() => {
+    // Probe policy when email changes
+    const probe = async () => {
+      try {
+        const { data } = await client.get("/auth/captcha-check", {
+          params: { context: "login", email },
+        });
+        setShowCaptcha(!!data?.needCaptcha);
+      } catch {}
+    };
+    if (email) probe();
+  }, [email]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await client.post("/auth/login", { email, password });
+      const res = await client.post("/auth/login", {
+        email,
+        password,
+        hcaptchaToken: showCaptcha ? captchaToken : undefined,
+      });
       const token = pickToken(res.data);
       const jti = res.data?.sessionJti || null;
       if (!token) throw new Error("Login succeeded but no token was returned.");
-
-      // Pass BOTH token and jti so headers are set before hydrateUser runs
       await setSession(token, jti);
-
-      toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-        status: "success",
-        duration: 2500,
-        isClosable: true,
-      });
-
+      toast({ title: "Login Successful", description: "Welcome back!", status: "success", duration: 2000, isClosable: true });
       navigate(redirectTo, { replace: true });
     } catch (error) {
+      const needCaptcha = !!error?.response?.data?.needCaptcha || error?.response?.status === 428;
+      if (needCaptcha) {
+        setShowCaptcha(true);
+        setCaptchaToken(null);
+        setCaptchaKey((k) => k + 1);
+      }
       const msg =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
         "Invalid email or password.";
-      toast({
-        title: "Login Failed",
-        description: msg,
-        status: "error",
-        duration: 5000,
-        isClosable: true,
-      });
+      toast({ title: "Login Failed", description: msg, status: "error", duration: 5000, isClosable: true });
     } finally {
       setLoading(false);
     }
@@ -77,42 +91,19 @@ export default function LoginPage() {
 
   return (
     <Flex direction="column" minH="100vh" bg="brand.primary">
-      <Container
-        maxW="container.sm"
-        centerContent
-        flex="1"
-        display="flex"
-        flexDirection="column"
-        justifyContent="center"
-        py={{ base: 8, md: 12 }}
-      >
+      <Container maxW="container.sm" centerContent flex="1" display="flex" flexDirection="column" justifyContent="center" py={{ base: 8, md: 12 }}>
         <VStack spacing={6} w="100%">
           <RouterLink to="/">
-            <Image
-              src="/logo.png"
-              alt="Tees From The Past Logo"
-              maxH={{ base: "70px", md: "100px" }}
-              mb={2}
-              objectFit="contain"
-            />
+            <Image src="/logo.png" alt="Tees From The Past Logo" maxH={{ base: "70px", md: "100px" }} mb={2} objectFit="contain" />
           </RouterLink>
 
           <Box as="form" onSubmit={handleSubmit} p={{ base: 6, md: 10 }} layerStyle="cardBlue" w="100%">
             <VStack spacing={6} w="100%">
-              <Heading as="h1" size="lg" textAlign="center" fontFamily="heading">
-                Welcome Back
-              </Heading>
+              <Heading as="h1" size="lg" textAlign="center" fontFamily="heading">Welcome Back</Heading>
 
               <FormControl isRequired>
                 <FormLabel>Email Address</FormLabel>
-                <Input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  size="lg"
-                  autoComplete="email"
-                />
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" size="lg" autoComplete="email" />
               </FormControl>
 
               <FormControl isRequired>
@@ -134,19 +125,21 @@ export default function LoginPage() {
                     />
                   </InputRightElement>
                 </InputGroup>
-
                 <Text textAlign="right" mt={2}>
-                  <ChakraLink
-                    as={RouterLink}
-                    to="/forgot-password"
-                    fontSize="sm"
-                    color="brand.accentYellow"
-                    _hover={{ textDecoration: "underline" }}
-                  >
+                  <ChakraLink as={RouterLink} to="/forgot-password" fontSize="sm" color="brand.accentYellow" _hover={{ textDecoration: "underline" }}>
                     Forgot Password?
                   </ChakraLink>
                 </Text>
               </FormControl>
+
+              {showCaptcha && (
+                <HCaptcha
+                  key={captchaKey}
+                  sitekey={SITE_KEY}
+                  onVerify={setCaptchaToken}
+                  onExpire={() => setCaptchaToken(null)}
+                />
+              )}
 
               <Button
                 type="submit"
@@ -156,19 +149,14 @@ export default function LoginPage() {
                 width="full"
                 size="lg"
                 fontSize="md"
+                isDisabled={showCaptcha && !captchaToken}
               >
                 Log In
               </Button>
 
               <Text pt={2} textAlign="center">
                 Don&apos;t have an account?{" "}
-                <ChakraLink
-                  as={RouterLink}
-                  to="/register"
-                  color="brand.accentYellow"
-                  fontWeight="bold"
-                  _hover={{ textDecoration: "underline" }}
-                >
+                <ChakraLink as={RouterLink} to="/register" color="brand.accentYellow" fontWeight="bold" _hover={{ textDecoration: "underline" }}>
                   Sign up now
                 </ChakraLink>
               </Text>

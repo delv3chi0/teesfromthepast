@@ -1,4 +1,3 @@
-// backend/app.js
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
@@ -24,8 +23,11 @@ import emailVerificationRoutes from "./routes/emailVerificationRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 
-// 👇 NEW: add express-rate-limit to gently throttle the contact form
+// Throttling
 import rateLimit from "express-rate-limit";
+
+// NEW: Security headers / CSP for hCaptcha, Cloudinary, etc.
+import helmet from "helmet";
 
 dotenv.config();
 connectDB();
@@ -90,14 +92,36 @@ app.use("/api/stripe", stripeWebhookRoutes);
 app.use(express.json({ limit: "10mb" }));
 
 /**
- * 👇 NEW: Gentle rate-limit ONLY the contact form POST
+ * Security headers + CSP.
+ * - Allows hCaptcha scripts/frames and API
+ * - Allows Cloudinary images
+ * - Keeps connect-src open to your FE origins and hCaptcha API
+ */
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-inline'", "https://js.hcaptcha.com", "https://hcaptcha.com"],
+        "frame-src": ["'self'", "https://hcaptcha.com", "https://*.hcaptcha.com"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "blob:", "https://res.cloudinary.com"],
+        "connect-src": ["'self'", "https://api.hcaptcha.com", ...ALLOWED_ORIGINS],
+      },
+    },
+  })
+);
+
+/**
+ * Gentle rate-limit ONLY the contact form POST
  * - 30 requests per IP per minute (tune as you like)
- * - Standard headers on; legacy headers off
  * - With trust proxy = 1 above, the limiter sees the real client IP
  */
 const contactLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  limit: 30,           // allow 30 POSTs per minute per IP
+  limit: 30, // allow 30 POSTs per minute per IP
   standardHeaders: true,
   legacyHeaders: false,
 });

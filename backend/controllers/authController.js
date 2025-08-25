@@ -13,6 +13,14 @@ import {
 } from "../utils/emailTemplates.js";
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
 
+// NEW: adaptive captcha + throttling helpers
+import { verifyHCaptcha } from "../middleware/hcaptcha.js";
+import {
+  markAuthFail,
+  clearAuthFails,
+  getCaptchaPolicy,
+} from "../middleware/rateLimiters.js";
+
 const RefreshToken = mongoose.models.RefreshToken || RefreshTokenModel;
 
 // Resend client + config (SMTP not used)
@@ -59,12 +67,32 @@ async function revokeAllUserSessions(userId) {
   }
 }
 
+/**
+ * Lightweight probe so FE can decide whether to render hCaptcha up-front.
+ * GET /api/auth/captcha-check?context=login|register|reset&email=<email>
+ */
+export const captchaCheck = asyncHandler(async (req, res) => {
+  const { ip } = clientNet(req);
+  const email = String(req.query.email || "").toLowerCase();
+  const pol = await getCaptchaPolicy({ ip, email: email || undefined });
+  res.json({ context: String(req.query.context || ""), ...pol });
+});
+
 /** POST /api/auth/register */
 export const registerUser = asyncHandler(async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     res.status(400);
     throw new Error(errors.array()[0].msg);
+  }
+
+  // Adaptive captcha: require if policy suggests
+  const { ip } = clientNet(req);
+  const emailLc = String(req.body?.email || "").toLowerCase();
+  const pol = await getCaptchaPolicy({ ip, email: emailLc });
+  if (pol.needCaptcha) {
+    const { ok } = await verifyHCaptcha(req.body?.hcaptchaToken);
+    if (!ok) return res.status(428).json({ message: "Captcha required", needCaptcha: true });
   }
 
   const { username, email, password, firstName = "", lastName = "" } = req.body;
@@ -78,7 +106,7 @@ export const registerUser = asyncHandler(async (req, res) => {
 
   const token = signAccessToken(user._id);
   const jti = crypto.randomUUID();
-  const { ip, userAgent, hints } = clientNet(req);
+  const { userAgent, hints } = clientNet(req);
   await RefreshToken.create({
     jti,
     user: user._id,
@@ -128,15 +156,33 @@ export const loginUser = asyncHandler(async (req, res) => {
   }
 
   const { email, password } = req.body;
+  const { ip } = clientNet(req);
+
+  // Adaptive policy: lock or require captcha
+  const pol = await getCaptchaPolicy({ ip, email });
+  if (pol.locked) {
+    return res
+      .status(429)
+      .json({ message: "Too many attempts. Try later.", needCaptcha: true, lockedUntil: pol.until });
+  }
+  if (pol.needCaptcha) {
+    const { ok } = await verifyHCaptcha(req.body?.hcaptchaToken);
+    if (!ok) return res.status(428).json({ message: "Captcha required", needCaptcha: true });
+  }
+
   const user = await User.findOne({ email }).select("+password");
   if (!user || !(await user.matchPassword(password))) {
+    await markAuthFail({ ip, email });
     res.status(401);
     throw new Error("Invalid email or password");
   }
 
+  // Success → clear counters
+  await clearAuthFails({ ip, email });
+
   const token = signAccessToken(user._id);
   const jti = crypto.randomUUID();
-  const { ip, userAgent, hints } = clientNet(req);
+  const { userAgent, hints } = clientNet(req);
   await RefreshToken.create({
     jti,
     user: user._id,
@@ -234,8 +280,17 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     throw new Error(errors.array()[0].msg);
   }
 
-  const { email } = req.body;
-  const user = await User.findOne({ email }).select(
+  const emailLc = String(req.body?.email || "").toLowerCase();
+  const { ip } = clientNet(req);
+
+  // Adaptive captcha for reset requests after modest abuse
+  const pol = await getCaptchaPolicy({ ip, email: emailLc });
+  if (pol.needCaptcha) {
+    const { ok } = await verifyHCaptcha(req.body?.hcaptchaToken);
+    if (!ok) return res.status(428).json({ message: "Captcha required", needCaptcha: true });
+  }
+
+  const user = await User.findOne({ email: emailLc }).select(
     "+passwordResetToken +passwordResetExpires"
   );
 
