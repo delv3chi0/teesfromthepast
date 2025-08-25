@@ -2,6 +2,8 @@
 import jwt from "jsonwebtoken";
 import asyncHandler from "express-async-handler";
 import User from "../models/User.js";
+import { generateAccessToken, verifyAccessToken } from "../services/tokenService.js";
+import logger from "../utils/logger.js";
 
 /** Read "Bearer <token>" from Authorization header */
 function readBearer(req) {
@@ -15,16 +17,8 @@ function readBearer(req) {
  * Keeps payload small and compatible with existing controllers.
  */
 export function signAccessToken(user, extra = {}) {
-  if (!user?._id) throw new Error("signAccessToken: user missing _id");
-  const payload = {
-    id: user._id.toString(),
-    isAdmin: !!user.isAdmin,
-    ...extra,
-  };
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET not set");
-  const expiresIn = process.env.JWT_EXPIRES_IN || "15m";
-  return jwt.sign(payload, secret, { expiresIn });
+  // Use the new token service
+  return generateAccessToken(user, extra);
 }
 
 /**
@@ -41,8 +35,9 @@ const baseProtect = (requireSession) =>
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = verifyAccessToken(token);
     } catch (err) {
+      logger.debug('Token verification failed', { error: err.message });
       return res.status(401).json({ message: "Not authorized: invalid token" });
     }
 

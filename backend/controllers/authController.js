@@ -6,6 +6,9 @@ import { Resend } from "resend";
 import User from "../models/User.js";
 import RefreshTokenModel from "../models/RefreshToken.js";
 import { signAccessToken } from "../middleware/authMiddleware.js";
+import { generateAccessToken, rotateRefreshToken, hashRefreshToken, isWithinRefreshWindow } from "../services/tokenService.js";
+import { trackFailedAttempt } from "../middleware/abuseLimiter.js";
+import logger from "../utils/logger.js";
 import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 import { passwordResetTemplate, passwordChangedTemplate } from "../utils/emailTemplates.js";
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
@@ -28,10 +31,17 @@ function clientNet(req) {
     deviceMemory: h["x-client-devicememory"] || "", cpuCores: h["x-client-cpucores"] || "",
   }};
 }
-function sessionExpiry(days = 30) { return new Date(Date.now() + days * 86400000); }
+function sessionExpiry(days = 7) { return new Date(Date.now() + days * 86400000); } // Changed to 7 days for rotation window
 async function revokeAllUserSessions(userId) {
-  try { await RefreshToken.updateMany({ user: userId, revokedAt: null }, { $set: { revokedAt: new Date() } }).exec(); }
-  catch (e) { console.error("[sessions] revoke all failed:", e); }
+  try { 
+    await RefreshToken.updateMany(
+      { user: userId, revokedAt: null }, 
+      { $set: { revokedAt: new Date() } }
+    ).exec(); 
+  }
+  catch (e) { 
+    logger.error("Failed to revoke all user sessions", { error: e.message, userId });
+  }
 }
 
 // --- Optional dev bypass: DISABLE_CAPTCHA=1 will skip captcha checks
@@ -100,18 +110,54 @@ export const loginUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email }).select("+password");
   if (!user || !(await user.matchPassword(req.body.password))) {
     await markAuthFail({ ip, email });
+    // Track failed attempt for rate limiting
+    if (req.rateLimitBuckets) {
+      trackFailedAttempt(req);
+    }
     res.status(401);
     throw new Error("Invalid email or password");
   }
 
   await clearAuthFails({ ip, email });
 
-  const token = signAccessToken(user._id);
-  const jti = crypto.randomUUID();
+  // Generate new access token using token service
+  const token = generateAccessToken(user);
+  
+  // Create refresh token with rotation tracking
+  const { jti, hashedToken, rotatedAt } = rotateRefreshToken();
   const { userAgent, hints } = clientNet(req);
-  await RefreshToken.create({ jti, user: user._id, ip, userAgent, client: hints, expiresAt: sessionExpiry(30), lastSeenAt: new Date() });
+  
+  await RefreshToken.create({ 
+    jti, 
+    user: user._id, 
+    ip, 
+    userAgent, 
+    client: hints, 
+    expiresAt: sessionExpiry(7), // 7-day window for refresh token
+    lastSeenAt: new Date(),
+    refreshTokenHash: hashedToken,
+    rotatedAt
+  });
+
+  // Set secure HTTP-only cookies for session management
+  const isSecure = req.secure || req.get('x-forwarded-proto') === 'https';
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: isSecure ? 'strict' : 'lax', // Strict for HTTPS, Lax for HTTP (fallback)
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  };
+
+  res.cookie('sessionId', jti, cookieOptions);
 
   await logAuthLogin(req, user, { email, sessionId: jti });
+
+  logger.info('User logged in successfully', {
+    userId: user._id.toString(),
+    email,
+    sessionId: jti,
+    ip
+  });
 
   res.json({ token, sessionJti: jti, user: {
     _id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName,
@@ -253,13 +299,116 @@ export const changePassword = asyncHandler(async (req, res) => {
 
 /** POST /api/auth/refresh */
 export const refreshSession = asyncHandler(async (req, res) => {
-  const token = signAccessToken(req.user._id);
-
-  const sessionId = req.headers["x-session-id"];
-  if (sessionId) {
-    const rt = await RefreshToken.findOne({ jti: sessionId, user: req.user._id, revokedAt: null }).exec();
-    if (rt) { rt.expiresAt = sessionExpiry(30); rt.lastSeenAt = new Date(); await rt.save(); }
+  const sessionId = req.headers["x-session-id"] || req.cookies?.sessionId;
+  
+  if (!sessionId) {
+    res.status(401);
+    throw new Error("Session ID required for refresh");
   }
 
-  res.json({ token });
+  // Find the current refresh token
+  const currentToken = await RefreshToken.findOne({ 
+    jti: sessionId, 
+    user: req.user._id, 
+    revokedAt: null,
+    compromisedAt: null
+  }).exec();
+
+  if (!currentToken) {
+    logger.warn('Refresh token not found or revoked', {
+      sessionId,
+      userId: req.user._id.toString()
+    });
+    res.status(401);
+    throw new Error("Invalid or expired session");
+  }
+
+  // Check if token is within valid refresh window (7 days)
+  if (!isWithinRefreshWindow(currentToken.createdAt, 7)) {
+    // Revoke expired token
+    currentToken.revokedAt = new Date();
+    await currentToken.save();
+    
+    logger.info('Refresh token expired beyond window', {
+      sessionId,
+      userId: req.user._id.toString(),
+      tokenAge: Date.now() - currentToken.createdAt.getTime()
+    });
+    
+    res.status(401);
+    throw new Error("Session expired, please log in again");
+  }
+
+  // Check for reuse detection (if this token was already rotated)
+  if (currentToken.refreshTokenHash) {
+    const reusedToken = await RefreshToken.findOne({
+      rotatedFrom: sessionId,
+      user: req.user._id
+    }).exec();
+    
+    if (reusedToken) {
+      // Token reuse detected - mark current session as compromised and revoke all user sessions
+      currentToken.compromisedAt = new Date();
+      currentToken.revokedAt = new Date();
+      await currentToken.save();
+      
+      await revokeAllUserSessions(req.user._id);
+      
+      logger.error('Refresh token reuse detected - revoking all sessions', {
+        sessionId,
+        userId: req.user._id.toString(),
+        reuseAttempt: true
+      });
+      
+      res.status(401);
+      throw new Error("Session security violation detected");
+    }
+  }
+
+  // Generate new access token
+  const accessToken = generateAccessToken(req.user);
+  
+  // Rotate the refresh token
+  const { jti: newJti, hashedToken, rotatedAt } = rotateRefreshToken(currentToken);
+  const { ip, userAgent, hints } = clientNet(req);
+
+  // Create new refresh token
+  await RefreshToken.create({
+    jti: newJti,
+    user: req.user._id,
+    ip,
+    userAgent,
+    client: hints,
+    expiresAt: sessionExpiry(7),
+    lastSeenAt: new Date(),
+    refreshTokenHash: hashedToken,
+    rotatedAt,
+    rotatedFrom: sessionId
+  });
+
+  // Revoke the old refresh token
+  currentToken.revokedAt = new Date();
+  await currentToken.save();
+
+  // Set new session cookie
+  const isSecure = req.secure || req.get('x-forwarded-proto') === 'https';
+  const cookieOptions = {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: isSecure ? 'strict' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  };
+
+  res.cookie('sessionId', newJti, cookieOptions);
+
+  logger.info('Session refreshed with token rotation', {
+    userId: req.user._id.toString(),
+    oldSessionId: sessionId,
+    newSessionId: newJti
+  });
+
+  res.json({ 
+    token: accessToken,
+    sessionJti: newJti
+  });
 });

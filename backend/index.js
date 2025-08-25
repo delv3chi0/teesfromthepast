@@ -5,26 +5,33 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import connectDB from "./config/db.js";
+import logger from "./utils/logger.js";
+import { setupGracefulShutdown } from "./utils/gracefulShutdown.js";
 
 // Import default (preferred) but gracefully fall back if only named export exists.
 let appModule;
 try {
   appModule = await import("./app.js");
 } catch (e) {
-  console.error("[Startup] Failed importing ./app.js", e);
+  logger.fatal("Failed importing ./app.js", { error: e.message });
   process.exit(1);
 }
 const app = appModule.default || appModule.app;
 if (!app) {
-  console.error(
-    "[Startup] Could not resolve app export (neither default nor named 'app')."
-  );
+  logger.fatal("Could not resolve app export (neither default nor named 'app').");
   process.exit(1);
 }
 
 await connectDB();
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`[Server] Listening on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info(`Server listening on port ${PORT}`, { 
+    port: PORT,
+    env: process.env.NODE_ENV || "development",
+    pid: process.pid
+  });
 });
+
+// Setup graceful shutdown
+setupGracefulShutdown(server);

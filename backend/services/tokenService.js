@@ -12,8 +12,11 @@ const {
   REQUIRE_JWT_CLAIMS
 } = process.env;
 
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required');
+function getJwtSecret() {
+  if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  return JWT_SECRET;
 }
 
 /**
@@ -43,7 +46,7 @@ export function generateAccessToken(user, extra = {}) {
     if (JWT_AUDIENCE) options.audience = JWT_AUDIENCE;
   }
 
-  return jwt.sign(payload, JWT_SECRET, options);
+  return jwt.sign(payload, getJwtSecret(), options);
 }
 
 /**
@@ -61,7 +64,7 @@ export function verifyAccessToken(token) {
   }
 
   try {
-    return jwt.verify(token, JWT_SECRET, options);
+    return jwt.verify(token, getJwtSecret(), options);
   } catch (error) {
     logger.debug('Token verification failed', { error: error.message });
     throw error;

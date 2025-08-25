@@ -8,11 +8,15 @@
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import compression from "compression";
+import cookieParser from "cookie-parser";
 
 import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import perfHeaders from "./middleware/perfHeaders.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
+import logger from "./utils/logger.js";
 
 // Initialize Cloudinary side-effects early
 import "./config/cloudinary.js";
@@ -44,15 +48,55 @@ import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.
 const app = express();
 app.set("trust proxy", 1);
 
+// Enable ETag for response caching
+app.set('etag', true);
+
 // Startup / CORS config log
-console.log(`[Startup] NODE_ENV=${process.env.NODE_ENV || "development"} MODE.`);
+logger.info(`Server starting in ${process.env.NODE_ENV || "development"} mode`);
 logCorsConfig();
 
 // Apply CORS before any routes
 applyCors(app);
 
-// Health (now receives CORS headers)
-app.get("/health", (_req, res) => res.status(200).send("OK"));
+// Add compression middleware (threshold 1kb, auto-negotiates gzip/brotli)
+app.use(compression({
+  threshold: 1024, // Only compress responses larger than 1kb
+  level: 6 // Balanced compression level
+}));
+
+// Performance headers middleware
+app.use(perfHeaders);
+
+// Health endpoint with detailed status
+app.get("/health", (_req, res) => {
+  const uptime = process.uptime();
+  const version = process.env.npm_package_version || "1.0.0";
+  const gitSha = process.env.GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || "unknown";
+  
+  res.status(200).json({
+    ok: true,
+    uptime: Math.floor(uptime),
+    version,
+    gitSha,
+    time: new Date().toISOString(),
+    env: process.env.NODE_ENV || "development"
+  });
+});
+
+// Enhanced healthz endpoint
+app.get("/healthz", (_req, res) => {
+  const uptime = process.uptime();
+  const version = process.env.npm_package_version || "1.0.0";
+  const gitSha = process.env.GIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || "unknown";
+  
+  res.status(200).json({
+    ok: true,
+    uptime: Math.floor(uptime),
+    version,
+    gitSha,
+    time: new Date().toISOString()
+  });
+});
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -62,6 +106,9 @@ app.use("/api/stripe", stripeWebhookRoutes);
 
 // JSON body parser
 app.use(express.json({ limit: `${JSON_BODY_LIMIT_MB}mb` }));
+
+// Cookie parser for session management
+app.use(cookieParser());
 
 // Security headers
 app.use(
@@ -131,7 +178,13 @@ app.use((err, req, res, next) => {
       });
     }
   }
-  console.error("[Unhandled Error]", err);
+  logger.error("Unhandled error", { 
+    error: err.message, 
+    stack: err.stack,
+    requestId: req.id,
+    method: req.method,
+    path: req.path 
+  });
   if (res.headersSent) return next(err);
   res.status(500).json({
     ok: false,
