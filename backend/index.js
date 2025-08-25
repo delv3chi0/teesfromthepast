@@ -4,6 +4,10 @@
 import dotenv from "dotenv";
 dotenv.config();
 
+// Initialize telemetry first
+import { initTelemetry, shutdownTelemetry } from "./config/telemetry.js";
+initTelemetry();
+
 import connectDB from "./config/db.js";
 
 // Import default (preferred) but gracefully fall back if only named export exists.
@@ -25,6 +29,16 @@ if (!app) {
 await connectDB();
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[Server] Listening on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('[Server] Shutting down gracefully...');
+  server.close(() => {
+    shutdownTelemetry().then(() => {
+      process.exit(0);
+    });
+  });
 });

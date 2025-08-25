@@ -12,7 +12,9 @@ import rateLimit from "express-rate-limit";
 import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import traceCorrelation from "./middleware/traceCorrelation.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
+import metricsRouter, { metricsMiddleware } from "./routes/metrics.js";
 
 // Initialize Cloudinary side-effects early
 import "./config/cloudinary.js";
@@ -80,9 +82,11 @@ const contactLimiter = rateLimit({
 app.use("/api/forms/contact", contactLimiter);
 app.use("/api/auth/login", rateLimitLogin);
 
-// Request metadata / logging
+// Request metadata / logging / observability
 app.use(requestId);
+app.use(traceCorrelation);
 app.use(requestLogger);
+app.use(metricsMiddleware);
 
 // Cloudinary direct upload + config
 app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
@@ -97,6 +101,9 @@ app.use("/api/storefront", storefrontRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
+
+// Observability endpoints
+app.use("/metrics", metricsRouter);
 
 // Admin routes
 app.use("/api/admin/users", adminUserRoutes);
