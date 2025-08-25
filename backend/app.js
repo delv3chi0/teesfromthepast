@@ -1,8 +1,3 @@
-/* 
-  ONLY replace if you can safely merge; otherwise, manually add the marked additions:
-  1) import cloudinaryDirectUploadRoutes
-  2) app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
-*/
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -12,10 +7,13 @@ import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
 
-// Ensure Cloudinary config loads early (side effects)
+// Side-effect: configure Cloudinary early
 import "./config/cloudinary.js";
 
-/* Existing route imports (SHORTENED for brevity - keep yours intact) */
+// CORS (enhanced build) – make sure backend/utils/cors.js has applyCors()
+import { applyCors } from "./utils/cors.js";
+
+/* Route imports */
 import authRoutes from "./routes/auth.js";
 import emailVerificationRoutes from "./routes/emailVerificationRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
@@ -34,21 +32,29 @@ import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 import configRoutes from "./routes/configRoutes.js";
-import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js"; // <-- NEW
+import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
 
 const app = express();
 app.set("trust proxy", 1);
 
+// Health
 app.get("/health", (_req, res) => res.status(200).send("OK"));
 
-/* CORS + other middleware (keep your existing implementation) */
+/* CORS MUST BE FIRST (after app creation) */
+applyCors(app);
 
+/* Stripe webhook BEFORE body parser if it needs raw body
+   (If your stripeWebhookRoutes internally handles raw parsing already, leave as-is)
+*/
 app.use("/api/stripe", stripeWebhookRoutes);
+
+/* JSON body parser */
 app.use(express.json({ limit: `${JSON_BODY_LIMIT_MB}mb` }));
 
+/* Security headers */
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" }
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 
@@ -57,21 +63,20 @@ const contactLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
 });
 app.use("/api/forms/contact", contactLimiter);
 app.use("/api/auth/login", rateLimitLogin);
 
+/* Request meta / logging */
 app.use(requestId);
 app.use(requestLogger);
 
-/* New route for signed direct upload */
+/* New Cloudinary direct upload + config routes */
 app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
-
-/* Config limits route */
 app.use("/api/config", configRoutes);
 
-/* Your existing routes */
+/* Core application routes */
 app.use("/api/auth", authRoutes);
 app.use("/api/auth", emailVerificationRoutes);
 app.use("/api/upload", uploadRoutes);
@@ -81,7 +86,7 @@ app.use("/api/checkout", checkoutRoutes);
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
 
-/* Admin */
+/* Admin routes */
 app.use("/api/admin/users", adminUserRoutes);
 app.use("/api/admin/orders", adminOrderRoutes);
 app.use("/api/admin/designs", adminDesignRoutes);
@@ -93,22 +98,29 @@ app.use("/api/admin/audit", adminAuditRoutes);
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
 
-/* 404 & error handlers (keep your existing) */
+/* 404 handler */
 app.use((req, res) => {
   res.status(404).json({
     ok: false,
     error: { code: "NOT_FOUND", message: "Resource not found." },
-    requestId: req.id
+    requestId: req.id,
   });
 });
+
+/* Error handler */
 app.use((err, req, res, next) => {
+  if (/^CORS: Origin not allowed:/i.test(err?.message || "")) {
+    return res.status(403).json({
+      ok: false,
+      error: { code: "CORS_ORIGIN_DENIED", message: err.message },
+      requestId: req.id,
+    });
+  }
   console.error("[Unhandled Error]", err);
   if (res.headersSent) return next(err);
   res.status(500).json({
     ok: false,
     error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." },
-    requestId: req.id
+    requestId: req.id,
   });
 });
-
-export default app;
