@@ -12,6 +12,7 @@ import { passwordResetTemplate, passwordChangedTemplate } from "../utils/emailTe
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
 import { blacklistRefreshToken, isRefreshTokenBlacklisted, storeRefreshTokenMetadata, removeRefreshTokenMetadata } from "../redis/index.js";
 import { getConfig } from "../config/index.js";
+import { isEnabled } from "../flags/FeatureFlags.js";
 
 import { verifyHCaptcha } from "../middleware/hcaptcha.js";
 import { markAuthFail, clearAuthFails, getCaptchaPolicy } from "../middleware/rateLimiters.js";
@@ -367,9 +368,7 @@ export const refreshSession = asyncHandler(async (req, res) => {
 
 /** POST /api/auth/2fa/setup - 2FA Setup Scaffold (STUB) */
 export const setup2FA = asyncHandler(async (req, res) => {
-  const config = getConfig();
-  
-  if (!config.ENABLE_2FA) {
+  if (!isEnabled('auth.enable_2fa')) {
     return res.status(501).json({
       message: "2FA is not enabled on this server",
       code: "2FA_DISABLED"
@@ -401,9 +400,7 @@ export const setup2FA = asyncHandler(async (req, res) => {
 
 /** POST /api/auth/2fa/verify - 2FA Verification Scaffold (STUB) */
 export const verify2FA = asyncHandler(async (req, res) => {
-  const config = getConfig();
-  
-  if (!config.ENABLE_2FA) {
+  if (!isEnabled('auth.enable_2fa')) {
     return res.status(501).json({
       message: "2FA is not enabled on this server", 
       code: "2FA_DISABLED"
@@ -443,9 +440,7 @@ export const verify2FA = asyncHandler(async (req, res) => {
 
 /** POST /api/auth/2fa/disable - 2FA Disable Scaffold (STUB) */
 export const disable2FA = asyncHandler(async (req, res) => {
-  const config = getConfig();
-  
-  if (!config.ENABLE_2FA) {
+  if (!isEnabled('auth.enable_2fa')) {
     return res.status(501).json({
       message: "2FA is not enabled on this server",
       code: "2FA_DISABLED"

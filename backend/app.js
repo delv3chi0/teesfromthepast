@@ -41,6 +41,8 @@ import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
+import jobsRoutes from "./routes/jobs.js";
+import featureFlagsRoutes from "./routes/featureFlags.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -118,6 +120,8 @@ app.use("/api/admin/audit", adminAuditRoutes);
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
 app.use("/api/metrics", metricsRoutes);
+app.use("/api/jobs", jobsRoutes);
+app.use("/api/flags", featureFlagsRoutes);
 
 // Development error test route (only in non-production)
 if (process.env.NODE_ENV !== 'production') {

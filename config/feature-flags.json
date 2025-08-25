@@ -1,0 +1,27 @@
+{
+  "_comment": "Feature flags configuration - supports hot reload in development",
+  "_last_updated": "2024-01-01T00:00:00Z",
+  
+  "auth.enable_2fa": false,
+  "jobs.enable_testing": false,
+  "ui.show_beta_features": false,
+  "api.rate_limit_strict": false,
+  "payment.enable_test_mode": true,
+  "uploads.max_file_size_mb": 10,
+  "cache.ttl_seconds": 300,
+  "maintenance.mode_enabled": false,
+  
+  "development": {
+    "_comment": "Development-specific flags",
+    "debug.verbose_logging": false,
+    "debug.show_request_ids": false,
+    "debug.mock_external_apis": false
+  },
+  
+  "experimental": {
+    "_comment": "Experimental features - use with caution",
+    "ai.content_generation": false,
+    "search.elasticsearch_enabled": false,
+    "notifications.websocket_enabled": false
+  }
+}
