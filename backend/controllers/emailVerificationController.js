@@ -12,7 +12,7 @@ import { verificationEmailTemplate } from "../utils/emailTemplates.js";
  *  - EMAIL_VERIFY_TOKEN_TTL_MIN (optional, default 30)
  */
 
-const resend = new Resend(process.env.RESEND_API_KEY || "");
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM = process.env.RESEND_FROM;
 const APP_ORIGIN = process.env.APP_ORIGIN || "http://localhost:5173";
 const TTL_MIN = parseInt(process.env.EMAIL_VERIFY_TOKEN_TTL_MIN || "30", 10);

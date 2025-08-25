@@ -17,8 +17,20 @@ const vChange = [ body("currentPassword").notEmpty(), body("newPassword").isStri
 const vEmailOnly = [ body("email").isEmail() ];
 const vCaptchaContext = [ query("context").optional().isString() ];
 
-// limiters (unchanged-ish)
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+// limiters (updated for enhanced security)
+const loginLimiter = rateLimit({ 
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute per IP
+  standardHeaders: true, 
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.setHeader('Retry-After', Math.ceil(60)); // Retry after 60 seconds
+    res.status(429).json({ 
+      error: 'Too many login attempts. Please try again later.',
+      retryAfter: 60 
+    });
+  }
+});
 const registerLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
 const verifyLimiter = rateLimit({ windowMs: 5 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
 const resetIpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });

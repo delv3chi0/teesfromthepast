@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import connectDB from "./config/db.js";
+import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 
 // Core app routes
 import authRoutes from "./routes/auth.js";
@@ -22,6 +23,10 @@ import emailVerificationRoutes from "./routes/emailVerificationRoutes.js";
 // Admin utilities
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
+
+// Middleware
+import { requestId } from "./middleware/requestId.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 
 // Throttling
 import rateLimit from "express-rate-limit";
@@ -89,7 +94,7 @@ app.use((req, res, next) => {
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // JSON body parsing (after Stripe)
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: `${JSON_BODY_LIMIT_MB}mb` }));
 
 /**
  * Security headers + CSP.
@@ -126,6 +131,10 @@ const contactLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api/forms/contact", contactLimiter);
+
+// Request ID and logging middleware (before routes)
+app.use(requestId);
+app.use(requestLogger);
 
 // --- Public & user routes ---
 app.use("/api/auth", authRoutes);
