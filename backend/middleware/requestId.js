@@ -1,18 +1,16 @@
-// backend/middleware/requestId.js
-// Generate unique request ID for tracking
-
-import { nanoid } from 'nanoid';
-import { REQUEST_ID_HEADER } from '../config/constants.js';
-
 /**
- * Middleware to generate and attach request ID
+ * Request ID middleware using nanoid.
+ * Requires dependency: nanoid
  */
-export function requestId(req, res, next) {
-  // Generate short nanoid (10 characters)
-  req.id = nanoid(10);
-  
-  // Set response header
-  res.setHeader(REQUEST_ID_HEADER, req.id);
-  
-  next();
+const { nanoid } = require('nanoid');
+
+function generateId() {
+  return nanoid(10); // 10-char id
 }
+
+module.exports = function requestId(req, res, next) {
+  const id = generateId();
+  req.id = id;
+  res.setHeader('X-Req-Id', id);
+  next();
+};
