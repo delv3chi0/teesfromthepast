@@ -1,22 +1,30 @@
 /**
- * Upload controller with:
- *  - Support for either body.imageData (raw base64) OR body.dataUrl (data: URI)
- *  - Preflight decoded size estimation & 413 structured response if exceeded
- *  - Structured error responses via sendError utility (if present)
- *  - Cloudinary upload + thumbnail URL
- *  - TODO comment for future streaming endpoint
+ * Enhanced upload controller:
+ *  - Dual input: imageData (raw base64) OR dataUrl (data:*;base64,<payload>)
+ *  - Preflight size guard using EFFECTIVE_PRINTFILE_LIMIT_MB
+ *  - Provider (Cloudinary) aware error handling (parses "File size too large" message)
+ *  - MIME type detection (prefers original type; falls back to image/png)
+ *  - Structured error responses via sendError
+ *  - Optimization recommendations
  *
- * NOTE: This version fixes a deployment crash caused by an overly escaped RegExp.
+ * NOTE: For very large assets consider a future direct browser -> Cloudinary signed upload
+ *       or a streaming multipart endpoint to avoid base64 overhead.
  */
 import cloudinary from "cloudinary";
-import { MAX_PRINTFILE_DECODED_MB } from "../config/constants.js";
+import {
+  EFFECTIVE_PRINTFILE_LIMIT_MB,
+  MAX_PRINTFILE_DECODED_MB,
+  CLOUDINARY_MAX_IMAGE_MB
+} from "../config/constants.js";
 import { sendError } from "../utils/sendError.js";
 
+// Folder policy (public_id will nest under this)
 const FOLDER_ROOT = "tees_from_the_past/print_files";
 
+/* ----------------------- Helper Functions ----------------------- */
+
 /**
- * Estimate decoded size (bytes) from a base64 string (no data: prefix).
- * Uses standard 3/4 rule minus padding.
+ * Estimate decoded bytes from a base64 string (no data: prefix).
  */
 function estimateDecodedSizeBytes(base64) {
   const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, "");
@@ -24,55 +32,112 @@ function estimateDecodedSizeBytes(base64) {
   return Math.ceil((cleaned.length * 3) / 4) - padding;
 }
 
-function toMB(bytes) {
+function bytesToMB(bytes) {
   return bytes / (1024 * 1024);
 }
 
 /**
- * Extract pure base64 (no data: prefix) from body.imageData or body.dataUrl.
- * Safer than a single large RegExp that is prone to escaping issues.
- *
- * Accepts:
- *   - imageData: raw base64 (preferred)
- *   - dataUrl: data:image/<subtype>[+suffix];base64,<payload>
+ * Extract base64 payload + MIME if given a data URL; otherwise treat imageData as raw base64.
+ * Returns { base64, mime } or null if missing.
  */
-function extractBase64(body) {
+function extractPayload(body) {
   if (!body) return null;
 
   if (body.imageData && typeof body.imageData === "string") {
-    // Trim whitespace just in case
-    return body.imageData.trim();
+    // Caller may optionally provide mimeType separately
+    const mime = typeof body.mimeType === "string" ? body.mimeType : "image/png";
+    return { base64: body.imageData.trim(), mime };
   }
 
   if (body.dataUrl && typeof body.dataUrl === "string") {
     const dataUrl = body.dataUrl.trim();
-
-    // Fast path: find the first comma separator in a data URL
-    const commaIndex = dataUrl.indexOf(",");
-    if (commaIndex !== -1) {
-      const header = dataUrl.slice(0, commaIndex);
-      const payload = dataUrl.slice(commaIndex + 1);
-
-      // Validate header shape (case-insensitive), e.g. data:image/png;base64
-      // Subtype allows letters, digits, plus, dot, or dash.
-      if (/^data:image\/[a-z0-9.+-]+;base64$/i.test(header)) {
-        return payload;
-      }
+    const commaIdx = dataUrl.indexOf(",");
+    if (commaIdx === -1) {
+      return {
+        base64: dataUrl.replace(/^data:.*;base64,/, ""),
+        mime: "image/png"
+      };
     }
+    const header = dataUrl.slice(0, commaIdx); // e.g. data:image/png;base64
+    const payload = dataUrl.slice(commaIdx + 1);
 
-    // Fallback: if not a well-formed data URL, attempt a generic strip
-    return dataUrl.replace(/^data:.*;base64,/, "");
+    const headerMatch = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64$/i.exec(header);
+    const mime = headerMatch ? headerMatch[1].toLowerCase() : "image/png";
+    return { base64: payload.trim(), mime };
   }
 
   return null;
 }
 
+/**
+ * Build optimization recommendation string based on size and MIME.
+ */
+function buildRecommendation(mime, decodedMB, limitMB) {
+  const tips = [];
+  tips.push(
+    `Current decoded size is ${decodedMB.toFixed(
+      2
+    )} MB; maximum allowed is ${limitMB} MB.`
+  );
+
+  if (mime === "image/png") {
+    tips.push(
+      "If artwork is photographic or continuous tone, convert to JPEG (quality 80-90) or WebP to reduce size."
+    );
+  }
+  tips.push(
+    "Reduce dimensions to the minimum needed for print (e.g., 300 DPI at printed size)."
+  );
+  tips.push("Flatten layers and remove transparency if not required.");
+  tips.push("Run through an optimizer (e.g., squoosh.app, ImageOptim).");
+
+  return tips.join(" ");
+}
+
+/**
+ * Wrap Cloudinary upload call.
+ */
+async function performUpload(base64, mime, productSlug) {
+  const timestamp = Date.now();
+  // Keep extension inference consistent: derive simple extension from mime
+  let ext = "png";
+  if (mime === "image/jpeg" || mime === "image/jpg") ext = "jpg";
+  else if (mime === "image/webp") ext = "webp";
+  else if (mime === "image/svg+xml") ext = "svg";
+  else if (mime === "image/heic") ext = "heic";
+  else if (mime === "image/heif") ext = "heif";
+
+  const publicId = `${FOLDER_ROOT}/${productSlug}/${productSlug}_${timestamp}`;
+
+  const uploadResult = await cloudinary.v2.uploader.upload(
+    `data:${mime};base64,${base64}`,
+    {
+      public_id: publicId,
+      overwrite: false,
+      resource_type: "image",
+      format: ext // hint
+    }
+  );
+
+  const thumbUrl = cloudinary.v2.url(uploadResult.public_id, {
+    width: 400,
+    height: 400,
+    crop: "fit",
+    format: ext === "svg" ? "png" : ext, // ensure raster for thumb if vector
+    secure: true
+  });
+
+  return { uploadResult, thumbUrl, publicId: uploadResult.public_id };
+}
+
+/* ----------------------- Controller ----------------------- */
+
 export async function uploadPrintFile(req, res) {
   try {
     const { productSlug } = req.body || {};
-    const base64 = extractBase64(req.body);
+    const payload = extractPayload(req.body);
 
-    if (!base64) {
+    if (!payload || !payload.base64) {
       return sendError(res, "NO_IMAGE_DATA", 400, "No image data provided.");
     }
     if (!productSlug) {
@@ -84,66 +149,90 @@ export async function uploadPrintFile(req, res) {
       );
     }
 
+    const { base64, mime } = payload;
     const decodedBytes = estimateDecodedSizeBytes(base64);
-    const decodedMB = toMB(decodedBytes);
+    const decodedMB = bytesToMB(decodedBytes);
 
-    if (decodedMB > MAX_PRINTFILE_DECODED_MB) {
-      return sendError(res, "UPLOAD_TOO_LARGE", 413, "Print file exceeds maximum allowed size.", {
-        maxMB: MAX_PRINTFILE_DECODED_MB,
-        estimatedMB: Number(decodedMB.toFixed(2)),
-        recommendation:
-          "Reduce resolution or compress the image (optimize dimensions or use a more efficient format) and try again."
-      });
+    // Preflight size guard (use provider aware effective limit)
+    if (decodedMB > EFFECTIVE_PRINTFILE_LIMIT_MB) {
+      return sendError(
+        res,
+        "UPLOAD_TOO_LARGE",
+        413,
+        "Print file exceeds maximum allowed size.",
+        {
+          maxMB: EFFECTIVE_PRINTFILE_LIMIT_MB,
+          configuredMB: MAX_PRINTFILE_DECODED_MB,
+          providerMB: CLOUDINARY_MAX_IMAGE_MB,
+          estimatedMB: Number(decodedMB.toFixed(2)),
+          recommendation: buildRecommendation(
+            mime,
+            decodedMB,
+            EFFECTIVE_PRINTFILE_LIMIT_MB
+          )
+        }
+      );
     }
 
-    const timestamp = Date.now();
-    const publicId = `${FOLDER_ROOT}/${productSlug}/${productSlug}_${timestamp}`;
-
-    // Assume PNG; if you support multiple formats, detect MIME from header portion before stripping.
-    // Prepend required data URL header for Cloudinary when uploading base64 directly.
-    const uploadResult = await cloudinary.v2.uploader.upload(
-      `data:image/png;base64,${base64}`,
-      {
-        public_id: publicId,
-        overwrite: false,
-        resource_type: "image"
-      }
+    // Upload
+    const { uploadResult, thumbUrl, publicId } = await performUpload(
+      base64,
+      mime,
+      productSlug
     );
-
-    // Generate thumbnail (idempotent transformation)
-    const thumbUrl = cloudinary.v2.url(uploadResult.public_id, {
-      width: 400,
-      height: 400,
-      crop: "fit",
-      format: "png",
-      secure: true
-    });
 
     return res.status(201).json({
       ok: true,
       message: "Print file uploaded successfully.",
       publicUrl: uploadResult.secure_url,
       thumbUrl,
-      publicId: uploadResult.public_id,
+      publicId,
+      mime,
       bytesDecoded: decodedBytes,
-      sizeMB: Number(decodedMB.toFixed(2))
+      sizeMB: Number(decodedMB.toFixed(2)),
+      providerLimits: {
+        effectiveLimitMB: EFFECTIVE_PRINTFILE_LIMIT_MB,
+        configuredLimitMB: MAX_PRINTFILE_DECODED_MB,
+        providerLimitMB: CLOUDINARY_MAX_IMAGE_MB
+      }
     });
   } catch (error) {
-    console.error("Cloudinary Upload Error:", error);
-    return sendError(
-      res,
-      "UPLOAD_FAILED",
-      500,
-      "Failed to upload print file.",
-      { reason: error.message }
+    // Detect Cloudinary size rejection
+    // Example message: "File size too large. Got 17934871. Maximum is 10485760."
+    const sizeMatch = /File size too large\. Got (\d+)\. Maximum is (\d+)/i.exec(
+      error.message || ""
     );
+    if (sizeMatch) {
+      const gotBytes = parseInt(sizeMatch[1], 10);
+      const maxBytes = parseInt(sizeMatch[2], 10);
+      const gotMB = bytesToMB(gotBytes);
+      const maxMB = bytesToMB(maxBytes);
+      return sendError(
+        res,
+        "PROVIDER_LIMIT_EXCEEDED",
+        413,
+        "Cloudinary rejected the upload due to size.",
+        {
+          provider: "cloudinary",
+            providerMaxMB: Number(maxMB.toFixed(2)),
+          estimatedMB: Number(gotMB.toFixed(2)),
+          recommendation: buildRecommendation("image/*", gotMB, maxMB)
+        }
+      );
+    }
+
+    console.error("Cloudinary Upload Error:", error);
+    return sendError(res, "UPLOAD_FAILED", 500, "Failed to upload print file.", {
+      reason: error.message
+    });
   }
 }
 
 /**
  * TODO: Future optimization:
- *  Implement streaming multipart endpoint: POST /api/upload/printfile-stream
- *  to avoid base64 inflation for large files and reduce memory footprint.
+ *  Implement direct signed uploads from client (browser -> Cloudinary) or
+ *  streaming multipart endpoint (POST /api/upload/printfile-stream) to avoid
+ *  base64 expansion & large JSON payload overhead.
  */
 
 export default uploadPrintFile;
