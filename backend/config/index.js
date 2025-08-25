@@ -53,12 +53,15 @@ const configSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
 });
 
-let config;
+let _config;
+let _validated = false;
 
 export function validateConfig() {
+  if (_validated && _config) return _config;
   try {
-    config = configSchema.parse(process.env);
-    return config;
+    _config = configSchema.parse(process.env);
+    _validated = true;
+    return _config;
   } catch (error) {
     console.error('❌ Configuration validation failed:');
     
@@ -79,11 +82,15 @@ export function validateConfig() {
   }
 }
 
-export function getConfig() {
-  if (!config) {
-    throw new Error('Configuration not initialized. Call validateConfig() first.');
-  }
-  return config;
+export function isConfigReady() {
+  return _validated && !!_config;
 }
 
-export default { validateConfig, getConfig };
+export function getConfig() {
+  if (!_config) {
+    throw new Error('Configuration not initialized. Call validateConfig() first.');
+  }
+  return _config;
+}
+
+export default { validateConfig, getConfig, isConfigReady };

@@ -140,10 +140,6 @@ app.use((req, res) => {
 
 // Global error handler (must be last)
 import { sentryErrorHandler } from "./utils/errorMonitoring.js";
-app.use(sentryErrorHandler);
-
-// Global error handler (must be last)
-import { sentryErrorHandler } from "./utils/errorMonitoring.js";
 
 // Custom CORS error handler first
 app.use((err, req, res, next) => {
