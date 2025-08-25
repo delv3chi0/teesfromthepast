@@ -1,0 +1,183 @@
+name: Automated Database Backup
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Days to retain backup (default: 30)'
+        required: false
+        default: '30'
+        type: string
+
+env:
+  BACKUP_RETENTION_DAYS: ${{ github.event.inputs.retention_days || '30' }}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install MongoDB tools
+        run: |
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools
+          
+      - name: Install jq for JSON processing
+        run: sudo apt-get install -y jq
+        
+      - name: Create backup directory
+        run: mkdir -p ./backups
+        
+      - name: Set up environment
+        run: |
+          echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> backend/.env
+          echo "BACKUP_PASSPHRASE=${{ secrets.BACKUP_PASSPHRASE }}" >> backend/.env
+          
+      - name: Make backup script executable
+        run: chmod +x backend/bin/backup-db.sh
+        
+      - name: Run database backup
+        id: backup
+        run: |
+          cd backend
+          ./bin/backup-db.sh 2>&1 | tee ../backup.log
+          
+          # Extract backup information from script output
+          if grep -q "BACKUP_SUCCESS=true" ../backup.log; then
+            echo "backup_success=true" >> $GITHUB_OUTPUT
+            echo "backup_file=$(grep "BACKUP_FILE=" ../backup.log | cut -d'=' -f2)" >> $GITHUB_OUTPUT
+            echo "backup_size=$(grep "BACKUP_SIZE=" ../backup.log | cut -d'=' -f2)" >> $GITHUB_OUTPUT
+            echo "database=$(grep "DATABASE=" ../backup.log | cut -d'=' -f2)" >> $GITHUB_OUTPUT
+            echo "timestamp=$(grep "TIMESTAMP=" ../backup.log | cut -d'=' -f2)" >> $GITHUB_OUTPUT
+          else
+            echo "backup_success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+      - name: Encrypt backup
+        if: steps.backup.outputs.backup_success == 'true'
+        run: |
+          BACKUP_FILE="${{ steps.backup.outputs.backup_file }}"
+          ENCRYPTED_FILE="${BACKUP_FILE}.enc"
+          
+          # Encrypt the backup file using GPG with passphrase
+          echo "${{ secrets.BACKUP_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 --output "$ENCRYPTED_FILE" "$BACKUP_FILE"
+          
+          # Remove unencrypted backup
+          rm "$BACKUP_FILE"
+          
+          echo "encrypted_file=$ENCRYPTED_FILE" >> $GITHUB_OUTPUT
+          echo "encrypted_size=$(du -h "$ENCRYPTED_FILE" | cut -f1)" >> $GITHUB_OUTPUT
+        id: encrypt
+        
+      - name: Upload backup artifact
+        if: steps.backup.outputs.backup_success == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ steps.backup.outputs.timestamp }}
+          path: ${{ steps.encrypt.outputs.encrypted_file }}
+          retention-days: ${{ env.BACKUP_RETENTION_DAYS }}
+          
+      - name: Create backup manifest
+        if: steps.backup.outputs.backup_success == 'true'
+        run: |
+          cat > backup-manifest.json << EOF
+          {
+            "backup_id": "backup-${{ steps.backup.outputs.timestamp }}",
+            "database": "${{ steps.backup.outputs.database }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "workflow_run": "${{ github.run_id }}",
+            "commit_sha": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "backup_size": "${{ steps.backup.outputs.backup_size }}",
+            "encrypted_size": "${{ steps.encrypt.outputs.encrypted_size }}",
+            "retention_days": ${{ env.BACKUP_RETENTION_DAYS }},
+            "artifact_name": "database-backup-${{ steps.backup.outputs.timestamp }}",
+            "encrypted": true,
+            "status": "completed"
+          }
+          EOF
+          
+      - name: Upload manifest
+        if: steps.backup.outputs.backup_success == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-manifest-${{ steps.backup.outputs.timestamp }}
+          path: backup-manifest.json
+          retention-days: ${{ env.BACKUP_RETENTION_DAYS }}
+          
+      - name: Cleanup local files
+        if: always()
+        run: |
+          rm -rf ./backups
+          rm -f backup.log
+          rm -f backup-manifest.json
+          
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Database backup failed. Check the logs for details."
+          
+          # In a real environment, you might want to send notifications
+          # to Slack, email, or other monitoring systems here
+          
+  test-restore:
+    runs-on: ubuntu-latest
+    needs: backup
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install MongoDB tools
+        run: |
+          wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+          echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+          sudo apt-get update
+          sudo apt-get install -y mongodb-database-tools jq
+          
+      - name: Download backup artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: database-backup-${{ needs.backup.outputs.timestamp }}
+          path: ./test-restore/
+          
+      - name: Set up test environment
+        run: |
+          # Use a test database URI (this should be a test/staging environment)
+          echo "MONGO_URI=${{ secrets.TEST_MONGO_URI }}" >> backend/.env
+          echo "BACKUP_PASSPHRASE=${{ secrets.BACKUP_PASSPHRASE }}" >> backend/.env
+          
+      - name: Make restore script executable
+        run: chmod +x backend/bin/restore-db.sh
+        
+      - name: Decrypt and test restore
+        run: |
+          cd test-restore
+          ENCRYPTED_FILE=$(find . -name "*.enc" | head -1)
+          BACKUP_FILE="${ENCRYPTED_FILE%.enc}"
+          
+          # Decrypt the backup
+          echo "${{ secrets.BACKUP_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --decrypt --output "$BACKUP_FILE" "$ENCRYPTED_FILE"
+          
+          # Test restore (dry run)
+          cd ../backend
+          ./bin/restore-db.sh --dry-run "../test-restore/$BACKUP_FILE"
+          
+          echo "::notice::Backup restore test completed successfully"
