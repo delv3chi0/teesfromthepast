@@ -46,6 +46,7 @@ import formRoutes from "./routes/formRoutes.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
 import healthzRoutes from "./routes/healthz.js";
+import queueTestRoutes from "./routes/queueTest.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -106,6 +107,11 @@ app.use("/api/orders", ordersRoutes);
 
 // Observability endpoints
 app.use("/metrics", metricsRouter);
+
+// Queue testing endpoints (development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use("/api/queue", queueTestRoutes);
+}
 
 // Admin routes
 app.use("/api/admin/users", adminUserRoutes);

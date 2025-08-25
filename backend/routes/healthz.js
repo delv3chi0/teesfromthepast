@@ -1,6 +1,7 @@
 // backend/routes/healthz.js
 import express from 'express';
 import { isRedisAvailable } from '../config/redis.js';
+import { areQueuesHealthy } from '../queues/index.js';
 import mongoose from 'mongoose';
 
 const router = express.Router();
@@ -43,6 +44,20 @@ router.get('/detailed', async (req, res) => {
     }
   } catch (error) {
     health.services.redis = { status: 'unhealthy', message: error.message };
+    health.status = 'degraded';
+  }
+
+  // Check Queues
+  try {
+    const queuesHealthy = await areQueuesHealthy();
+    if (queuesHealthy) {
+      health.services.queues = { status: 'healthy' };
+    } else {
+      health.services.queues = { status: 'unhealthy', message: 'Queue connection failed' };
+      health.status = 'degraded';
+    }
+  } catch (error) {
+    health.services.queues = { status: 'unhealthy', message: error.message };
     health.status = 'degraded';
   }
 

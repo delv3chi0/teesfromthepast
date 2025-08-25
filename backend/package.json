@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest --runInBand --detectOpenHandles"
+    "test": "jest --runInBand --detectOpenHandles",
+    "worker": "node scripts/worker.js"
   },
   "jest": {
     "setupFilesAfterEnv": [
@@ -47,6 +48,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
     "bull": "^4.16.5",
+    "bullmq": "^5.58.1",
     "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",

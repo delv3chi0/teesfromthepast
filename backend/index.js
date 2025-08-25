@@ -7,6 +7,7 @@ dotenv.config();
 // Initialize telemetry first
 import { initTelemetry, shutdownTelemetry } from "./config/telemetry.js";
 import { shutdownRedis } from "./config/redis.js";
+import { shutdownQueues } from "./queues/index.js";
 initTelemetry();
 
 import connectDB from "./config/db.js";
@@ -40,6 +41,7 @@ process.on('SIGTERM', async () => {
   server.close(async () => {
     await Promise.all([
       shutdownTelemetry(),
+      shutdownQueues(),
       shutdownRedis()
     ]);
     process.exit(0);
