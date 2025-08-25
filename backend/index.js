@@ -2,6 +2,15 @@
 import mongoose from "mongoose";
 import "dotenv/config";
 import app from "./app.js";
+import { validateEnv } from "./utils/validateEnv.js";
+
+// Validate critical environment configuration BEFORE starting server
+try {
+  validateEnv();
+} catch (e) {
+  console.error(e.message);
+  process.exit(1);
+}
 
 process.on("uncaughtException", (err) => {
   console.error("[Backend Log] Uncaught Exception:", err?.stack || err);

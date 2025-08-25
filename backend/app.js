@@ -28,11 +28,15 @@ import rateLimit from "express-rate-limit";
 
 // NEW: Security headers / CSP for hCaptcha, Cloudinary, etc.
 import helmet from "helmet";
+import requestLogger from "./middleware/requestLogger.js";
 
 dotenv.config();
 connectDB();
 
 const app = express();
+
+// Lightweight per-request logging with IDs
+app.use(requestLogger);
 
 /**
  * Trust the first proxy (Render puts you behind exactly one).
