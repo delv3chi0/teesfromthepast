@@ -1,3 +1,11 @@
+/*
+  backend/app.js
+  - Restores default export (required by index.js).
+  - Applies robust CORS first.
+  - Preserves Cloudinary side-effect import.
+  - Structured CORS origin denial handling.
+*/
+
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -10,8 +18,8 @@ import rateLimitLogin from "./middleware/rateLimitLogin.js";
 // Side-effect: configure Cloudinary early
 import "./config/cloudinary.js";
 
-// CORS (enhanced build) – make sure backend/utils/cors.js has applyCors()
-import { applyCors } from "./utils/cors.js";
+// CORS (must precede routes)
+import { applyCors, logCorsConfig } from "./utils/cors.js";
 
 /* Route imports */
 import authRoutes from "./routes/auth.js";
@@ -37,14 +45,20 @@ import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.
 const app = express();
 app.set("trust proxy", 1);
 
-// Health
+// Log environment + CORS info (no secrets)
+console.log(
+  `[Startup] NODE_ENV=${process.env.NODE_ENV || "development"} MODE.`
+);
+logCorsConfig();
+
+/* Health route (can appear before CORS, but simple GET is fine either way) */
 app.get("/health", (_req, res) => res.status(200).send("OK"));
 
-/* CORS MUST BE FIRST (after app creation) */
+/* CORS FIRST */
 applyCors(app);
 
-/* Stripe webhook BEFORE body parser if it needs raw body
-   (If your stripeWebhookRoutes internally handles raw parsing already, leave as-is)
+/* Stripe webhook BEFORE body parsing if it relies on raw body.
+   Your stripeWebhookRoutes module should internally manage raw parsing if needed.
 */
 app.use("/api/stripe", stripeWebhookRoutes);
 
@@ -68,11 +82,11 @@ const contactLimiter = rateLimit({
 app.use("/api/forms/contact", contactLimiter);
 app.use("/api/auth/login", rateLimitLogin);
 
-/* Request meta / logging */
+/* Request metadata/logging */
 app.use(requestId);
 app.use(requestLogger);
 
-/* New Cloudinary direct upload + config routes */
+/* New Cloudinary direct upload + config */
 app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
 app.use("/api/config", configRoutes);
 
@@ -107,14 +121,17 @@ app.use((req, res) => {
   });
 });
 
-/* Error handler */
+/* Error handler (captures CORS origin errors too) */
 app.use((err, req, res, next) => {
-  if (/^CORS: Origin not allowed:/i.test(err?.message || "")) {
-    return res.status(403).json({
-      ok: false,
-      error: { code: "CORS_ORIGIN_DENIED", message: err.message },
-      requestId: req.id,
-    });
+  const msg = err?.message || "";
+  if (/^CORS: Origin not allowed:/i.test(msg)) {
+    if (!res.headersSent) {
+      return res.status(403).json({
+        ok: false,
+        error: { code: "CORS_ORIGIN_DENIED", message: msg },
+        requestId: req.id,
+      });
+    }
   }
   console.error("[Unhandled Error]", err);
   if (res.headersSent) return next(err);
@@ -124,3 +141,7 @@ app.use((err, req, res, next) => {
     requestId: req.id,
   });
 });
+
+/* Export BOTH default and named to future-proof */
+export { app };
+export default app;
