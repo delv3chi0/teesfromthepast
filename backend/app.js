@@ -3,6 +3,7 @@
   - CORS applied before any routes (including /health)
   - Removed temporary debug preflight logs and /api/_cors-diag route
   - Preserves previous functionality and exports
+  - Enhanced with compression, structured logging, and performance headers
 */
 
 import express from "express";
@@ -11,14 +12,21 @@ import rateLimit from "express-rate-limit";
 
 import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
-import { requestLogger } from "./middleware/requestLogger.js";
+import { createRequestLogger } from "./utils/logger.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
+import { loginRateLimit, registerRateLimit, passwordResetRateLimit, trackFailedLogin, checkLoginLockout } from "./middleware/rateLimiter.js";
+import compressionMiddleware from "./middleware/compression.js";
+import perfHeadersMiddleware from "./middleware/perfHeaders.js";
+import { cachePublicConfig } from "./utils/cache.js";
 
 // Initialize Cloudinary side-effects early
 import "./config/cloudinary.js";
 
 // CORS utilities
 import { applyCors, logCorsConfig } from "./utils/cors.js";
+
+// Structured logging
+import logger from "./utils/logger.js";
 
 /* Route imports */
 import authRoutes from "./routes/auth.js";
@@ -44,15 +52,25 @@ import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.
 const app = express();
 app.set("trust proxy", 1);
 
+// Enable strong ETag for better caching
+app.set('etag', 'strong');
+
 // Startup / CORS config log
-console.log(`[Startup] NODE_ENV=${process.env.NODE_ENV || "development"} MODE.`);
+logger.info(`[Startup] NODE_ENV=${process.env.NODE_ENV || "development"} MODE.`);
 logCorsConfig();
+
+// Apply compression early (before routes)
+app.use(compressionMiddleware);
 
 // Apply CORS before any routes
 applyCors(app);
 
-// Health (now receives CORS headers)
-app.get("/health", (_req, res) => res.status(200).send("OK"));
+// Performance headers middleware
+app.use(perfHeadersMiddleware);
+
+// Health endpoints (now receives CORS headers)
+import healthRoutes from "./routes/health.js";
+app.use(healthRoutes);
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -70,7 +88,7 @@ app.use(
   })
 );
 
-// Rate limits
+// Enhanced rate limits with security tracking
 const contactLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
@@ -78,15 +96,20 @@ const contactLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api/forms/contact", contactLimiter);
-app.use("/api/auth/login", rateLimitLogin);
 
-// Request metadata / logging
+// Enhanced auth rate limiting
+app.use("/api/auth/login", checkLoginLockout, loginRateLimit, trackFailedLogin);
+app.use("/api/auth/register", registerRateLimit);
+app.use("/api/auth/forgot-password", passwordResetRateLimit);
+app.use("/api/auth/reset-password", passwordResetRateLimit);
+
+// Request metadata / logging with structured logging
 app.use(requestId);
-app.use(requestLogger);
+app.use(createRequestLogger());
 
-// Cloudinary direct upload + config
+// Cloudinary direct upload + config (with caching for public config)
 app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
-app.use("/api/config", configRoutes);
+app.use("/api/config", cachePublicConfig, configRoutes);
 
 // Core application routes
 app.use("/api/auth", authRoutes);
@@ -119,10 +142,20 @@ app.use((req, res) => {
   });
 });
 
-// Error handler (captures CORS origin errors too)
+// Global error handler with structured logging
 app.use((err, req, res, next) => {
   const msg = err?.message || "";
+  const context = {
+    reqId: req.id,
+    userId: req.user?.id,
+    method: req.method,
+    path: req.path,
+    ip: req.client?.ip || req.ip,
+    userAgent: req.headers['user-agent']
+  };
+
   if (/^CORS: Origin not allowed:/i.test(msg)) {
+    logger.warn({ ...context, error: msg }, 'CORS origin denied');
     if (!res.headersSent) {
       return res.status(403).json({
         ok: false,
@@ -131,11 +164,31 @@ app.use((err, req, res, next) => {
       });
     }
   }
-  console.error("[Unhandled Error]", err);
+  
+  // Log error with appropriate level and detail
+  const errorData = {
+    ...context,
+    error: {
+      name: err.name,
+      message: err.message,
+      stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+    }
+  };
+
+  if (err.status >= 400 && err.status < 500) {
+    logger.warn(errorData, `Client error: ${err.message}`);
+  } else {
+    logger.error(errorData, `Server error: ${err.message}`);
+  }
+
   if (res.headersSent) return next(err);
-  res.status(500).json({
+  
+  res.status(err.status || 500).json({
     ok: false,
-    error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." },
+    error: { 
+      code: err.code || "INTERNAL_ERROR", 
+      message: process.env.NODE_ENV === 'production' ? "An unexpected error occurred." : err.message
+    },
     requestId: req.id,
   });
 });
