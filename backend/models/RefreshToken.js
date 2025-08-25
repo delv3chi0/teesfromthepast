@@ -22,6 +22,12 @@ const RefreshTokenSchema = new mongoose.Schema(
     expiresAt: { type: Date, index: true },
     revokedAt: { type: Date, default: null },
     lastSeenAt: { type: Date, default: null }, // updated on authenticated requests
+    
+    // NEW: Token rotation and security fields
+    refreshTokenHash: { type: String, index: true }, // SHA-256 hash of the raw refresh token
+    rotatedAt: { type: Date, default: null }, // When this token was rotated/created
+    rotatedFrom: { type: String, default: null }, // JTI of the previous token (rotation chain)
+    compromisedAt: { type: Date, default: null }, // When token was marked as compromised due to reuse
   },
   { timestamps: true }
 );
