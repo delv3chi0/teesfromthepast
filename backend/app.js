@@ -37,6 +37,12 @@ import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.
 const app = express();
 app.set("trust proxy", 1);
 
+// Informational logging
+console.log(`[App] Express app created in ${process.env.NODE_ENV || "development"} mode`);
+const corsOrigins = (process.env.CORS_ORIGINS || "").split(",").filter(Boolean);
+const corsAllowAll = /^true$/i.test(process.env.CORS_ALLOW_ALL || "");
+console.log(`[App] CORS configured - Allow all: ${corsAllowAll}, Extra origins: ${corsOrigins.length}`);
+
 // Health
 app.get("/health", (_req, res) => res.status(200).send("OK"));
 
@@ -124,3 +130,7 @@ app.use((err, req, res, next) => {
     requestId: req.id,
   });
 });
+
+// Export both default and named to prevent future breaking changes
+export default app;
+export { app };
