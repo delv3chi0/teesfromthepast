@@ -10,16 +10,14 @@
     "test": "jest --runInBand --detectOpenHandles"
   },
   "jest": {
+    "preset": "es-modules",
+    "testEnvironment": "node",
     "setupFilesAfterEnv": [
       "./setup.js"
     ],
-    "extensionsToTreatAsEsm": [".js"],
-    "globals": {
-      "__ESM__": true
-    },
-    "transform": {
-      "^.+\\.js$": ["babel-jest", {"useESM": true}]
-    }
+    "transformIgnorePatterns": [
+      "node_modules/(?!(nanoid)/)"
+    ]
   },
   "keywords": [],
   "author": "",
