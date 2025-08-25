@@ -1,7 +1,7 @@
 // backend/utils/adaptiveRateLimit.js
 // Adaptive rate limiting with abuse detection using Redis
 import Redis from 'ioredis';
-import { getConfig } from '../config/index.js';
+import { isConfigReady, getConfig } from '../config/index.js';
 import { logger } from './logger.js';
 
 let redis = null;
@@ -11,15 +11,22 @@ let isRedisConnected = false;
 function initRedis() {
   if (redis) return redis;
   
-  const config = getConfig();
+  let redisUrl;
   
-  if (!config.REDIS_URL) {
+  if (isConfigReady()) {
+    const config = getConfig();
+    redisUrl = config.REDIS_URL;
+  } else {
+    redisUrl = process.env.REDIS_URL;
+  }
+  
+  if (!redisUrl) {
     logger.warn('Redis URL not provided, rate limiting will use in-memory fallback');
     return null;
   }
   
   try {
-    redis = new Redis(config.REDIS_URL, {
+    redis = new Redis(redisUrl, {
       retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
