@@ -1,5 +1,6 @@
 // ESM - uses Node 18+ global fetch
 import crypto from "node:crypto";
+import logger from "../utils/logger.js";
 
 const TOKEN =
   process.env.PRINTFUL_TOKEN ||
@@ -9,7 +10,10 @@ const TOKEN =
 const BASE = "https://api.printful.com";
 
 if (!TOKEN) {
-  console.warn("[printful] Missing PRINTFUL_TOKEN or PRINTFUL_API_KEY in backend/.env");
+  logger.warn("printful.config_missing", { 
+    hasToken: false,
+    reason: "PRINTFUL_TOKEN or PRINTFUL_API_KEY missing from environment"
+  });
 }
 
 const cache = new Map();

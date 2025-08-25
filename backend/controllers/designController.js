@@ -167,17 +167,23 @@ const useCloudinary =
   !!process.env.CLOUDINARY_API_KEY &&
   !!process.env.CLOUDINARY_API_SECRET;
 
-if (useCloudinary) {
-  const { v2 } = await import('cloudinary');
-  v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-  cloudinary = v2;
-}
+// Initialize Cloudinary asynchronously
+let cloudinaryInitialized = false;
+const initCloudinary = async () => {
+  if (useCloudinary && !cloudinaryInitialized) {
+    const { v2 } = await import('cloudinary');
+    v2.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    cloudinary = v2;
+    cloudinaryInitialized = true;
+  }
+};
 
 async function uploadPngToCloudinary(buf, { userId }) {
+  await initCloudinary();
   if (!cloudinary) return { masterUrl: null, previewUrl: null, thumbUrl: null, publicId: null };
   const uploadResult = await new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(

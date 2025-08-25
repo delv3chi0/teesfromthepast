@@ -80,15 +80,20 @@ const useCloudinary =
   !!process.env.CLOUDINARY_API_KEY &&
   !!process.env.CLOUDINARY_API_SECRET;
 
-if (useCloudinary) {
-  const { v2 } = await import('cloudinary');
-  v2.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINDARY_CLOUD_NAME, // keep fallback
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-  cloudinary = v2;
-}
+// Initialize Cloudinary asynchronously
+let cloudinaryInitialized = false;
+const initCloudinary = async () => {
+  if (useCloudinary && !cloudinaryInitialized) {
+    const { v2 } = await import('cloudinary');
+    v2.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINDARY_CLOUD_NAME, // keep fallback
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    cloudinary = v2;
+    cloudinaryInitialized = true;
+  }
+};
 
 function cloudinaryPublicIdFromUrl(url) {
   try {
@@ -121,8 +126,9 @@ router.delete('/:designId', protect, async (req, res) => {
     if (!design) return res.status(404).json({ message: 'Design not found or unauthorized.' });
 
     if (useCloudinary && (design.publicId || design.publicUrl)) {
+      await initCloudinary();
       const pid = design.publicId || cloudinaryPublicIdFromUrl(design.publicUrl);
-      if (pid) {
+      if (pid && cloudinary) {
         try {
           const result = await cloudinary.uploader.destroy(pid, { invalidate: true, resource_type: 'image' });
           console.log('[Delete Design] cloudinary destroy:', pid, result?.result);

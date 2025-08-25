@@ -3,6 +3,7 @@ import express from 'express';
 import Stripe from 'stripe';
 import 'dotenv/config';
 import { protect } from '../middleware/authMiddleware.js';
+import logger from '../utils/logger.js';
 
 import Product from '../models/Product.js';
 import Design from '../models/Design.js';
@@ -10,18 +11,24 @@ import Design from '../models/Design.js';
 const router = express.Router();
 
 if (!process.env.STRIPE_SECRET_KEY) {
-    console.error("[Checkout] CRITICAL STARTUP ERROR: Stripe secret key (STRIPE_SECRET_KEY) is not configured in .env.");
+    logger.error("checkout.stripe_not_configured", { 
+        hasKey: false,
+        reason: "STRIPE_SECRET_KEY missing from environment"
+    });
 }
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
 const MAX_METADATA_FIELD_LENGTH = 490;
 
 router.post('/create-payment-intent', protect, async (req, res) => {
-    console.log('-----------------------------------------------------');
-    console.log('[Checkout] /create-payment-intent route hit by user:', req.user.id);
+    const log = req.log || logger;
+    log.info('checkout.create_payment_intent.start', { userId: req.user.id });
     
     if (!stripe) {
-        console.error("[Checkout] CRITICAL ERROR: Stripe is not initialized. Check STRIPE_SECRET_KEY.");
+        log.error("checkout.stripe_unavailable", { 
+            userId: req.user.id,
+            reason: "Stripe not initialized"
+        });
         return res.status(500).json({ error: 'Payment processing is currently unavailable. Stripe not configured.' });
     }
 
@@ -49,11 +56,23 @@ router.post('/create-payment-intent', protect, async (req, res) => {
         let amountInCents = 0;
         const orderItemsForStripeMetadata = [];
         
-        console.log('[Checkout] Processing items to calculate total and prepare metadata...');
+        log.info('checkout.processing_items', { 
+            userId: req.user.id,
+            itemCount: items.length
+        });
         
         for (const item of items) {
             if (!item || !item.productId || !item.variantSku || !item.designId || !item.quantity) {
-                console.error('[Checkout] ERROR: Invalid item structure.', item);
+                log.error('checkout.invalid_item', { 
+                    userId: req.user.id,
+                    item: item,
+                    missingFields: {
+                        productId: !item?.productId,
+                        variantSku: !item?.variantSku,
+                        designId: !item?.designId,
+                        quantity: !item?.quantity
+                    }
+                });
                 return res.status(400).json({ error: 'Invalid item data received. Ensure all product details are present.' });
             }
 
@@ -107,7 +126,14 @@ router.post('/create-payment-intent', protect, async (req, res) => {
 
             const quantity = parseInt(item.quantity, 10) || 1;
             amountInCents += pricePerItemCents * quantity;
-            console.log(`[Checkout] Item: ${product.name} (${foundVariant.sku}), Price/Item: ${pricePerItemCents}, Qty: ${quantity}, Subtotal: ${pricePerItemCents * quantity}`);
+            log.info('checkout.item_processed', {
+                userId: req.user.id,
+                productName: product.name,
+                sku: foundVariant.sku,
+                pricePerItemCents,
+                quantity,
+                subtotalCents: pricePerItemCents * quantity
+            });
 
             orderItemsForStripeMetadata.push({
                 productId: product._id.toString(),
@@ -123,7 +149,12 @@ router.post('/create-payment-intent', protect, async (req, res) => {
             // ==================== MODIFICATION END ====================
         }
         
-        console.log('[Checkout] Total calculated amount (cents):', amountInCents);
+        log.info('checkout.total_calculated', {
+            userId: req.user.id,
+            totalAmountCents: amountInCents,
+            currency: currency.toUpperCase(),
+            itemCount: items.length
+        });
 
         if (amountInCents < 50) {
             return res.status(400).json({ error: 'Invalid order amount. Total must be at least $0.50.'});
@@ -157,9 +188,17 @@ router.post('/create-payment-intent', protect, async (req, res) => {
             description: `Order from TeesFromThePast for user ${req.user.id}`,
         };
         
-        console.log(`[Checkout] Creating PaymentIntent for user ${req.user.id}. Amount: ${amountInCents} ${currency.toUpperCase()}`);
+        log.info('checkout.payment_intent.creating', {
+            userId: req.user.id,
+            amount: amountInCents,
+            currency: currency.toUpperCase()
+        });
         const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
-        console.log('[Checkout] PaymentIntent created successfully. ID:', paymentIntent.id);
+        log.info('checkout.payment_intent.created', {
+            userId: req.user.id,
+            paymentIntentId: paymentIntent.id,
+            amount: amountInCents
+        });
 
         res.send({
             clientSecret: paymentIntent.client_secret,
@@ -172,14 +211,23 @@ router.post('/create-payment-intent', protect, async (req, res) => {
         if (error.type) {
             errorMessage = `Stripe Error (${error.type}): ${error.message}`;
             if (error.code) errorMessage += ` (Code: ${error.code})`;
-            console.error("[Checkout] Stripe API Error details:", JSON.stringify(error, null, 2));
+            log.error("checkout.stripe_api_error", {
+                userId: req.user.id,
+                errorType: error.type,
+                errorCode: error.code,
+                errorMessage: error.message,
+                errorDetails: JSON.stringify(error, null, 2)
+            });
         } else {
-            console.error("[Checkout] CRITICAL ERROR creating payment intent (Non-Stripe):", error.message, error.stack);
+            log.error("checkout.payment_intent_error", {
+                userId: req.user.id,
+                error: error.message,
+                stack: error.stack
+            });
         }
         res.status(500).send({ error: { message: errorMessage } });
     } finally {
-        console.log('[Checkout] /create-payment-intent request finished for user:', req.user.id);
-        console.log('-----------------------------------------------------');
+        log.info('checkout.create_payment_intent.end', { userId: req.user.id });
     }
 });
 
