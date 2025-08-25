@@ -11,7 +11,7 @@ import rateLimit from "express-rate-limit";
 
 import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
-import { requestLogger } from "./middleware/requestLogger.js";
+import { createRequestLogger } from "./utils/logger.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
 
 // Initialize Cloudinary side-effects early
@@ -38,6 +38,7 @@ import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
+import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
 
@@ -70,19 +71,26 @@ app.use(
   })
 );
 
-// Rate limits
+// Rate limits with adaptive abuse detection
+import { createAdaptiveRateLimit } from "./utils/adaptiveRateLimit.js";
+
 const contactLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Apply adaptive rate limiting to different route groups
 app.use("/api/forms/contact", contactLimiter);
-app.use("/api/auth/login", rateLimitLogin);
+app.use("/api/auth/login", createAdaptiveRateLimit('auth'));
+app.use("/api/auth/register", createAdaptiveRateLimit('auth'));
+app.use("/api/upload", createAdaptiveRateLimit('upload'));
+app.use("/api", createAdaptiveRateLimit('api')); // General API rate limiting
 
 // Request metadata / logging
 app.use(requestId);
-app.use(requestLogger);
+app.use(createRequestLogger);
 
 // Cloudinary direct upload + config
 app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
@@ -109,6 +117,17 @@ app.use("/api/admin/audit", adminAuditRoutes);
 // Public extras
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
+app.use("/api/metrics", metricsRoutes);
+
+// Development error test route (only in non-production)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/dev/boom', (req, res, next) => {
+    const error = new Error('Simulated error for testing');
+    error.statusCode = 500;
+    error.code = 'TEST_ERROR';
+    next(error);
+  });
+}
 
 // 404 handler
 app.use((req, res) => {
@@ -119,7 +138,14 @@ app.use((req, res) => {
   });
 });
 
-// Error handler (captures CORS origin errors too)
+// Global error handler (must be last)
+import { sentryErrorHandler } from "./utils/errorMonitoring.js";
+app.use(sentryErrorHandler);
+
+// Global error handler (must be last)
+import { sentryErrorHandler } from "./utils/errorMonitoring.js";
+
+// Custom CORS error handler first
 app.use((err, req, res, next) => {
   const msg = err?.message || "";
   if (/^CORS: Origin not allowed:/i.test(msg)) {
@@ -131,14 +157,11 @@ app.use((err, req, res, next) => {
       });
     }
   }
-  console.error("[Unhandled Error]", err);
-  if (res.headersSent) return next(err);
-  res.status(500).json({
-    ok: false,
-    error: { code: "INTERNAL_ERROR", message: "An unexpected error occurred." },
-    requestId: req.id,
-  });
+  next(err); // Pass to Sentry error handler
 });
+
+// Sentry error handler (handles all other errors)
+app.use(sentryErrorHandler);
 
 export { app };
 export default app;

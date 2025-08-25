@@ -6,11 +6,16 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import Design from "../models/Design.js";
 import WebhookEvent from "../models/WebhookEvent.js";
+import { logger } from "../utils/logger.js";
+import { 
+  verifyWebhookSignature, 
+  processWebhookSafely 
+} from "../utils/webhookReliability.js";
 
 const router = express.Router();
 
 if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
-  console.error("[Webhook] CRITICAL: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET missing");
+  logger.error("CRITICAL: STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET missing");
 }
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -22,125 +27,208 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
 
   const sig = req.headers["stripe-signature"];
   let event;
+  
   try {
+    // Use enhanced signature verification with tighter tolerance
+    verifyWebhookSignature(req.body, sig, webhookSecret, 300); // 5 minute tolerance
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
-    console.error("[Webhook] Signature verification failed:", err.message);
+    req.log?.error("Webhook signature verification failed", { 
+      error: err.message,
+      hasSignature: !!sig,
+      bodyLength: req.body?.length 
+    });
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Idempotency ledger
   try {
-    const existed = await WebhookEvent.findById(event.id);
-    if (existed) return res.status(200).json({ received: true, dedup: true });
-    await WebhookEvent.create({ _id: event.id, type: event.type });
-  } catch (e) {
-    console.error("[Webhook] Failed to record event id:", e.message);
-    // do not bail; still try to process once
+    const result = await processWebhookSafely(
+      event.id,
+      event.type,
+      async () => await processStripeEvent(event, req)
+    );
+    
+    return res.status(200).json({ 
+      received: true, 
+      dedup: result.deduped,
+      webhookId: event.id
+    });
+    
+  } catch (error) {
+    req.log?.error("Webhook processing error", { 
+      webhookId: event.id,
+      eventType: event.type,
+      error: error.message 
+    });
+    
+    return res.status(500).json({ 
+      error: "Failed to process webhook",
+      webhookId: event.id 
+    });
   }
+});
 
+// Extract webhook processing logic into separate function
+async function processStripeEvent(event, req) {
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object;
+    
+    req.log?.info("Processing payment_intent.succeeded", { 
+      paymentIntentId: pi.id,
+      amount: pi.amount,
+      currency: pi.currency 
+    });
+
+    const existingOrder = await Order.findOne({ paymentIntentId: pi.id });
+    if (existingOrder) {
+      req.log?.info("Order already exists for payment intent", { 
+        paymentIntentId: pi.id,
+        orderId: existingOrder._id 
+      });
+      return;
+    }
+
+    const { userId } = pi.metadata || {};
+    let itemsFromMeta = [];
 
     try {
-      const existingOrder = await Order.findOne({ paymentIntentId: pi.id });
-      if (existingOrder) return res.status(200).json({ received: true, message: "order exists" });
-
-      const { userId } = pi.metadata || {};
-      let itemsFromMeta = [];
-      try {
-        itemsFromMeta = JSON.parse(pi.metadata?.orderDetails || "[]");
-      } catch {
-        throw new Error("orderDetails metadata JSON parse failed");
-      }
-      if (!userId || !Array.isArray(itemsFromMeta) || itemsFromMeta.length === 0) {
-        throw new Error("Missing userId or orderDetails in metadata");
-      }
-
-      const orderItems = [];
-      for (const item of itemsFromMeta) {
-        const designDoc = item.designId ? await Design.findById(item.designId) : null;
-        orderItems.push({
-          productId: item.productId,
-          designId: item.designId,
-          name: item.productName,
-          quantity: item.quantity,
-          price: item.priceAtPurchase, // cents
-          size: item.size,
-          color: item.color,
-          customImageURL: designDoc ? (designDoc.publicUrl || designDoc.imageDataUrl) : undefined,
-        });
-      }
-
-      const ship = pi.shipping;
-      if (!ship?.address?.line1 || !ship?.name) throw new Error("Shipping details incomplete");
-      const shippingAddressForDb = {
-        recipientName: ship.name,
-        street1: ship.address.line1,
-        street2: ship.address.line2 || undefined,
-        city: ship.address.city,
-        state: ship.address.state,
-        zipCode: ship.address.postal_code,
-        country: ship.address.country,
-        phone: ship.phone || undefined,
-      };
-
-      const billingMeta = pi.metadata?.billingAddress
-        ? JSON.parse(pi.metadata.billingAddress)
-        : null;
-      const billingAddressForDb = billingMeta || {
-        recipientName: ship.name,
-        street1: ship.address.line1,
-        street2: ship.address.line2 || undefined,
-        city: ship.address.city,
-        state: ship.address.state,
-        zipCode: ship.address.postal_code,
-        country: ship.address.country,
-        phone: ship.phone || undefined,
-      };
-
-      const newOrder = new Order({
-        user: userId,
-        orderItems,
-        totalAmount: pi.amount, // cents
-        shippingAddress: shippingAddressForDb,
-        billingAddress: billingAddressForDb,
-        paymentIntentId: pi.id,
-        paymentStatus: "Succeeded",
-        orderStatus: "Processing",
+      itemsFromMeta = JSON.parse(pi.metadata?.items || "[]");
+    } catch {
+      req.log?.warn("Failed to parse items from payment intent metadata", { 
+        paymentIntentId: pi.id 
       });
-      await newOrder.save();
-
-      // stock decrement (supports both old and new variant shapes)
-      for (const item of itemsFromMeta) {
-        const product = await Product.findById(item.productId);
-        if (!product) continue;
-
-        const isNew = product.variants?.length > 0 && product.variants[0]?.sizes !== undefined;
-
-        if (isNew) {
-          const colorVariant = product.variants.find(cv => cv.sizes?.some(sv => sv.sku === item.variantSku));
-          if (colorVariant) {
-            const sizeVariant = colorVariant.sizes.find(sv => sv.sku === item.variantSku);
-            if (sizeVariant) sizeVariant.stock = Math.max(0, (sizeVariant.stock || 0) - item.quantity);
-          }
-        } else {
-          const oldVariant = product.variants?.find(v => v.sku === item.variantSku);
-          if (oldVariant) oldVariant.stock = Math.max(0, (oldVariant.stock || 0) - item.quantity);
-        }
-        await product.save();
-      }
-    } catch (err) {
-      console.error("[Webhook] Handler error:", err.message, err.stack || "");
-      return res.status(500).json({ error: "Failed to process webhook" });
+      itemsFromMeta = [];
     }
-  } else if (event.type === "payment_intent.payment_failed") {
-    console.log(`[Webhook] Payment failed: ${event.data.object.id}`);
-  } else {
-    console.log(`[Webhook] Unhandled: ${event.type}`);
-  }
 
-  return res.status(200).json({ received: true });
-});
+    if (!itemsFromMeta.length) {
+      req.log?.warn("No items found in payment intent metadata", { 
+        paymentIntentId: pi.id 
+      });
+      return;
+    }
+
+    // Extract billing and shipping addresses
+    const shippingAddressForDb = pi.shipping?.address
+      ? {
+          name: pi.shipping.name || "",
+          line1: pi.shipping.address.line1 || "",
+          line2: pi.shipping.address.line2 || "",
+          city: pi.shipping.address.city || "",
+          state: pi.shipping.address.state || "",
+          postal_code: pi.shipping.address.postal_code || "",
+          country: pi.shipping.address.country || "",
+        }
+      : null;
+
+    const billingAddressForDb = pi.charges?.data?.[0]?.billing_details?.address
+      ? {
+          name: pi.charges.data[0].billing_details.name || "",
+          line1: pi.charges.data[0].billing_details.address.line1 || "",
+          line2: pi.charges.data[0].billing_details.address.line2 || "",
+          city: pi.charges.data[0].billing_details.address.city || "",
+          state: pi.charges.data[0].billing_details.address.state || "",
+          postal_code: pi.charges.data[0].billing_details.address.postal_code || "",
+          country: pi.charges.data[0].billing_details.address.country || "",
+        }
+      : null;
+
+    // Create new order
+    const newOrder = new Order({
+      user: userId || null,
+      items: itemsFromMeta,
+      totalAmount: pi.amount,
+      currency: pi.currency,
+      shippingAddress: shippingAddressForDb,
+      billingAddress: billingAddressForDb,
+      paymentIntentId: pi.id,
+      paymentStatus: "Succeeded",
+      orderStatus: "Processing",
+    });
+    
+    await newOrder.save();
+    
+    req.log?.info("Order created successfully", { 
+      orderId: newOrder._id,
+      paymentIntentId: pi.id,
+      itemCount: itemsFromMeta.length,
+      totalAmount: pi.amount
+    });
+
+    // Update stock levels with enhanced logging
+    await updateProductStock(itemsFromMeta, req);
+    
+  } else if (event.type === "payment_intent.payment_failed") {
+    const pi = event.data.object;
+    req.log?.warn("Payment failed", { 
+      paymentIntentId: pi.id,
+      lastPaymentError: pi.last_payment_error?.message 
+    });
+  } else {
+    req.log?.debug("Unhandled webhook event", { eventType: event.type });
+  }
+}
+
+// Enhanced stock update function with error handling
+async function updateProductStock(items, req) {
+  for (const item of items) {
+    try {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        req.log?.warn("Product not found for stock update", { 
+          productId: item.productId,
+          variantSku: item.variantSku 
+        });
+        continue;
+      }
+
+      const isNew = product.variants?.length > 0 && product.variants[0]?.sizes !== undefined;
+
+      if (isNew) {
+        const colorVariant = product.variants.find(cv => 
+          cv.sizes?.some(sv => sv.sku === item.variantSku)
+        );
+        if (colorVariant) {
+          const sizeVariant = colorVariant.sizes.find(sv => sv.sku === item.variantSku);
+          if (sizeVariant) {
+            const oldStock = sizeVariant.stock || 0;
+            sizeVariant.stock = Math.max(0, oldStock - item.quantity);
+            
+            req.log?.info("Stock updated (new variant structure)", {
+              productId: item.productId,
+              variantSku: item.variantSku,
+              oldStock,
+              newStock: sizeVariant.stock,
+              quantity: item.quantity
+            });
+          }
+        }
+      } else {
+        const oldVariant = product.variants?.find(v => v.sku === item.variantSku);
+        if (oldVariant) {
+          const oldStock = oldVariant.stock || 0;
+          oldVariant.stock = Math.max(0, oldStock - item.quantity);
+          
+          req.log?.info("Stock updated (old variant structure)", {
+            productId: item.productId,
+            variantSku: item.variantSku,
+            oldStock,
+            newStock: oldVariant.stock,
+            quantity: item.quantity
+          });
+        }
+      }
+      
+      await product.save();
+      
+    } catch (error) {
+      req.log?.error("Failed to update product stock", {
+        productId: item.productId,
+        variantSku: item.variantSku,
+        error: error.message
+      });
+      // Continue processing other items even if one fails
+    }
+  }
+}
 
 export default router;
