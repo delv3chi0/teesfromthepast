@@ -13,6 +13,7 @@ import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./utils/logger.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
+import { createRateLimit } from "./middleware/rateLimit.js";
 
 // Initialize Cloudinary side-effects early
 import "./config/cloudinary.js";
@@ -41,6 +42,7 @@ import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
+import { getVersionInfo } from "./version/index.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -54,6 +56,21 @@ applyCors(app);
 
 // Health (now receives CORS headers)
 app.get("/health", (_req, res) => res.status(200).send("OK"));
+
+// Version endpoint for operational visibility
+app.get("/version", async (_req, res) => {
+  try {
+    const versionInfo = await getVersionInfo();
+    res.json(versionInfo);
+  } catch (error) {
+    res.status(500).json({ 
+      error: { 
+        code: 'VERSION_ERROR', 
+        message: 'Failed to retrieve version information' 
+      } 
+    });
+  }
+});
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -70,6 +87,9 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+
+// Global rate limiting middleware (baseline protection)
+app.use(createRateLimit());
 
 // Rate limits with adaptive abuse detection
 import { createAdaptiveRateLimit } from "./utils/adaptiveRateLimit.js";

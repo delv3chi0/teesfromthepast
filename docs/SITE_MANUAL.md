@@ -80,7 +80,7 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | /jobs/test | POST | Possibly yes + feature flag + ENABLE_JOB_TESTING | Enqueues sample job | Not enabled in prod by default |
 | /jobs/:id/status | GET | Maybe restricted | Returns job state (waiting, active, completed, failed) | Make sure to avoid leaking info |
 | (Sample POST route with idempotency) | POST | Varies | Demonstrates idempotent behavior | Repeat returns same body |
-| /version (Recommended upcoming) | GET | No | Build metadata (commit, timestamp) | NOT yet implemented (future) |
+| /version | GET | No | Build metadata (commit, timestamp, version, env) | Returns JSON with operational info |
 
 ---
 
@@ -164,13 +164,17 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | ENABLE_JOB_TESTING | Allow POST /jobs/test | 0 | No | Temp enable for manual tests |
 | ENABLE_METRICS | Expose /metrics | 1 | No | Protect with network or auth |
 | METRICS_AUTH_TOKEN | Token for /metrics (if enforced) | (secret) | Conditional | Implement if not public |
+| RATE_LIMIT_WINDOW_SEC | Rate limit window duration in seconds | 60 | No | Default 60 seconds |
+| RATE_LIMIT_MAX | Maximum requests per window | 120 | No | Default 120 requests |
+| RATE_LIMIT_EXEMPT_PATHS | Paths exempt from rate limiting | /health,/readiness | No | Comma-separated list |
+| RATE_LIMIT_REDIS_PREFIX | Redis key prefix for rate limiting | rl: | No | Default 'rl:' |
 | ALLOWED_ORIGINS | CORS origins (comma-delimited) | https://app.example.com | Yes (prod) | Fallback to * not recommended |
 | IDEMPOTENCY_TTL | Retention for idempotency records | 120 | No | Seconds |
 | DB_SLOW_QUERY_MS | Warn threshold for DB queries | 300 | No | Adjust after profiling |
 | NODE_ENV | Environment mode | production | Yes | Standard |
 | LOG_LEVEL | Verbosity for logger | info | No | debug in dev |
 | FLAG_<NAME> | Override individual flags | on/off | As needed | e.g., FLAG_NEW_CART=on |
-| (Future) GIT_COMMIT | Version endpoint commit ref | auto-injected | Future | For /version endpoint |
+| (Optional) GIT_COMMIT | Version endpoint commit ref | bbfe2e0 | No | For /version endpoint (auto-detected) |
 
 Add new variables here as features mature. Keep alphabetized for clarity.
 
@@ -265,6 +269,27 @@ Actions:
 - Communicate status updates (internal channel)
 - Post-mortem: root cause, actions, prevention
 
+### 7.10 Version Verification
+- Check deployed version: `curl https://your-domain.com/version`
+- Verify commit matches expected deployment
+- Compare with git: `git rev-parse --short HEAD`
+- Rollback if version mismatch detected
+
+### 7.11 Rate Limit Tuning/Disable
+**Adjust limits:**
+1. Update environment: `RATE_LIMIT_MAX=200` or `RATE_LIMIT_WINDOW_SEC=30`
+2. Restart application (configuration requires restart)
+3. Monitor metrics for impact
+
+**Emergency disable:**
+1. Set `RATE_LIMIT_MAX=999999` (effectively unlimited)
+2. Restart service
+3. Monitor for abuse; implement temporary restrictions
+
+**Per-path exemption:**
+1. Add path to `RATE_LIMIT_EXEMPT_PATHS=/health,/readiness,/api/emergency`
+2. Restart to apply changes
+
 ---
 
 ## 8. Monitoring & Metrics
@@ -341,18 +366,18 @@ Doc Update Principle:
 13. CI quality workflow + Dependabot + security scan script
 14. Documentation updates (README, tasks)
 15. This centralized manual (initial version)
+16. Rate Limiting & Abuse Protection (baseline Redis-backed sliding window)
+17. /version endpoint + commit metadata + tag discipline
 
 ### 11.2 High-Priority Next (Recommended Sequence)
-A. Rate Limiting & Abuse Protection  
-B. /version endpoint + commit metadata + tag discipline  
-C. Expanded validation coverage (all mutating endpoints)  
-D. Runbooks expansion (secrets rotation, incident matrix, queue operations)  
-E. Auth hardening (2FA full TOTP, session/device management)  
-F. Advanced feature flags (remote provider, evaluation metrics)  
-G. Observability enrichment (job metrics, custom dashboards)  
-H. Performance caching enhancements (stale-while-revalidate, selective invalidation)  
-I. Security SAST & Container / SBOM in CI  
-J. Test suite build-out & raise coverage thresholds (>80%)  
+A. Expanded validation coverage (all mutating endpoints)  
+B. Runbooks expansion (secrets rotation, incident matrix, queue operations)  
+C. Auth hardening (2FA full TOTP, session/device management)  
+D. Advanced feature flags (remote provider, evaluation metrics)  
+E. Observability enrichment (job metrics, custom dashboards)  
+F. Performance caching enhancements (stale-while-revalidate, selective invalidation)  
+G. Security SAST & Container / SBOM in CI  
+H. Test suite build-out & raise coverage thresholds (>80%)  
 
 ### 11.3 Deferred / Strategic Future
 - Multi-region readiness (distributed cache, idempotency)
@@ -464,11 +489,13 @@ Consider enforcing a PR checklist item “Updated manual? Y/N”.
 
 ## 18. Immediate Next Recommended Action
 
-Implement Rate Limiting + /version Endpoint bundle (Tasks A + part of C).
-- Add /version
-- Add Redis-based sliding window limiter (configurable thresholds)
-- Document new env vars: RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX, RATE_LIMIT_BURST (if implemented)
-- Update metrics: rate_limited_total
+Validation Coverage & Test Harness (elevated priority after Wave 2 completion).
+- Expand validation middleware to cover all mutating endpoints
+- Build comprehensive test harness for integration scenarios
+- Raise coverage thresholds and implement contract testing
+- Document validation patterns and error response formats
+
+Rate limiting and /version endpoint now complete in Wave 2.
 
 ---
 

@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest --runInBand --detectOpenHandles"
+    "test": "jest --runInBand --detectOpenHandles",
+    "print:version": "node -e \"import('./version/index.js').then(m => m.getVersionInfo().then(v => console.log(JSON.stringify(v, null, 2))))\""
   },
   "jest": {
     "testEnvironment": "node",

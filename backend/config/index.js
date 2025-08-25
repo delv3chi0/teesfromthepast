@@ -28,6 +28,10 @@ const configSchema = z.object({
   
   // Rate limiting
   RATE_LIMIT_WINDOW: z.string().regex(/^\d+$/).transform(Number).default('60000'),
+  RATE_LIMIT_WINDOW_SEC: z.string().regex(/^\d+$/).transform(Number).default('60'),
+  RATE_LIMIT_MAX: z.string().regex(/^\d+$/).transform(Number).default('120'),
+  RATE_LIMIT_EXEMPT_PATHS: z.string().default('/health,/readiness'),
+  RATE_LIMIT_REDIS_PREFIX: z.string().default('rl:'),
   
   // Logging
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),

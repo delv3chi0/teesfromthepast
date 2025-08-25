@@ -1,3 +1,35 @@
+# CHANGELOG
+
+## [v0.2.1] - 2025-08-25 (Wave 2: Platform Safety & Visibility)
+
+### Added
+- **Version Endpoint**: `GET /version` returns operational metadata (commit SHA, build time, version, environment info)
+- **Rate Limiting**: Redis-backed sliding window rate limiting with configurable thresholds
+  - Default: 120 requests per 60-second window  
+  - Configurable via `RATE_LIMIT_WINDOW_SEC`, `RATE_LIMIT_MAX`, `RATE_LIMIT_EXEMPT_PATHS`, `RATE_LIMIT_REDIS_PREFIX`
+  - In-memory fallback when Redis unavailable
+  - Proper 429 responses with retry headers
+  - Abuse tracking and logging for security monitoring
+- **Version Script**: `npm run print:version` for local version checking
+- **Documentation**: Comprehensive README.md with quick start and environment variables
+- **Runbooks**: Version verification and rate limit tuning procedures
+
+### Technical Details
+- Lean implementation philosophy: minimal yet high-impact features only
+- /version endpoint uses git metadata with fallbacks for operational visibility  
+- Rate limiting supports both authenticated users (by user ID) and anonymous (by IP)
+- Exempt paths bypass rate limiting entirely for health checks
+- TODO markers for future enhancements: token bucket algorithm, per-endpoint policies, dynamic reconfiguration
+
+### Documentation Updates
+- SITE_MANUAL.md: Updated endpoint inventory, environment variables, runbooks, and checklist
+- README.md: Created with architecture overview and configuration reference
+- Moved rate limiting and /version from "Next" to "Completed" in roadmap
+
+---
+
+## Previous Informal Log:
+
 CHANGE LOG:
 
 8/13 - Worked on formatting the ProductStuiod
