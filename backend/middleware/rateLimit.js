@@ -77,8 +77,10 @@ function cleanupMemoryStores() {
   }
 }
 
-// Cleanup interval (every 60 seconds)
-setInterval(cleanupMemoryStores, 60000);
+// Cleanup interval (every 60 seconds) - only in non-test environments
+if (process.env.NODE_ENV !== 'test') {
+  setInterval(cleanupMemoryStores, 60000);
+}
 
 /**
  * Get rate limit configuration
