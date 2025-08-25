@@ -38,6 +38,7 @@ import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
+import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
 
@@ -70,15 +71,22 @@ app.use(
   })
 );
 
-// Rate limits
+// Rate limits with adaptive abuse detection
+import { createAdaptiveRateLimit } from "./utils/adaptiveRateLimit.js";
+
 const contactLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Apply adaptive rate limiting to different route groups
 app.use("/api/forms/contact", contactLimiter);
-app.use("/api/auth/login", rateLimitLogin);
+app.use("/api/auth/login", createAdaptiveRateLimit('auth'));
+app.use("/api/auth/register", createAdaptiveRateLimit('auth'));
+app.use("/api/upload", createAdaptiveRateLimit('upload'));
+app.use("/api", createAdaptiveRateLimit('api')); // General API rate limiting
 
 // Request metadata / logging
 app.use(requestId);
@@ -109,6 +117,7 @@ app.use("/api/admin/audit", adminAuditRoutes);
 // Public extras
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
+app.use("/api/metrics", metricsRoutes);
 
 // Development error test route (only in non-production)
 if (process.env.NODE_ENV !== 'production') {

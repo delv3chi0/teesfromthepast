@@ -7,6 +7,7 @@ import User from "../models/User.js";
 import RefreshTokenModel from "../models/RefreshToken.js";
 import { signAccessToken } from "../middleware/authMiddleware.js";
 import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
+import { trackFailedAction } from "../utils/adaptiveRateLimit.js";
 import { passwordResetTemplate, passwordChangedTemplate } from "../utils/emailTemplates.js";
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
 
@@ -100,6 +101,10 @@ export const loginUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email }).select("+password");
   if (!user || !(await user.matchPassword(req.body.password))) {
     await markAuthFail({ ip, email });
+    
+    // Track failed login for abuse detection
+    await trackFailedAction(req, 'login_failure', { email, ip });
+    
     res.status(401);
     throw new Error("Invalid email or password");
   }

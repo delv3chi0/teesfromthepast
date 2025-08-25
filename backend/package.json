@@ -50,6 +50,7 @@
     "pino": "^9.9.0",
     "pino-http": "^10.5.0",
     "react-router-dom": "^7.6.0",
+    "redis": "^5.8.2",
     "resend": "^6.0.1",
     "sharp": "^0.34.3",
     "slugify": "^1.6.6",
