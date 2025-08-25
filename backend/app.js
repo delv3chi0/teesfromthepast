@@ -39,6 +39,7 @@ import adminAuditRoutes from "./routes/adminAuditRoutes.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
+import rumRoutes from "./routes/rum.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
 
@@ -118,6 +119,7 @@ app.use("/api/admin/audit", adminAuditRoutes);
 app.use("/api/contest", contestRoutes);
 app.use("/api/forms", formRoutes);
 app.use("/api/metrics", metricsRoutes);
+app.use("/api/rum", rumRoutes);
 
 // Development error test route (only in non-production)
 if (process.env.NODE_ENV !== 'production') {

@@ -1,0 +1,30 @@
+# Dependency Review Configuration
+# See: https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/configuring-dependency-review
+
+# Licenses to deny (will fail the check)
+deny-licenses:
+  - GPL-2.0
+  - GPL-3.0
+  - AGPL-3.0
+
+# Licenses to allow (these bypass other license checks)
+allow-licenses:
+  - MIT
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - ISC
+  - 0BSD
+
+# Fail on these severity levels
+fail-on-severity:
+  - critical
+  - high
+
+# Advisory IDs to allow (bypass security checks)
+allow-ghsas: []
+
+# Scope of dependency changes to review
+fail-on-scopes:
+  - runtime
+  - development

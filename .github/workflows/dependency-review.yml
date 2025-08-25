@@ -1,0 +1,27 @@
+name: Dependency Review
+on: [pull_request]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 'Checkout Repository'
+        uses: actions/checkout@v4
+        
+      - name: 'Dependency Review'
+        uses: actions/dependency-review-action@v4
+        with:
+          # High severity vulnerabilities will fail the check
+          fail-on-severity: high
+          # Allow these advisories (add GHSA IDs as needed)
+          allow-ghsas: ''
+          # Deny licenses (add license names to block)
+          deny-licenses: 'GPL-2.0, GPL-3.0'
+          # Comment on PR with results
+          comment-summary-in-pr: true
+          # Config file for advanced settings
+          config-file: '.github/dependency-review-config.yml'

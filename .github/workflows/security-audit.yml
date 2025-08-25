@@ -1,0 +1,172 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security audit daily at 3 AM UTC
+    - cron: '0 3 * * *'
+
+jobs:
+  audit-backend:
+    name: Backend Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install audit-ci
+        run: npm install -g audit-ci
+        
+      - name: Backend npm audit
+        working-directory: ./backend
+        run: |
+          # Install dependencies
+          npm ci
+          
+          # Run audit with audit-ci (config from .audit-ci.json)
+          audit-ci --config ../.audit-ci.json
+          
+  audit-frontend:
+    name: Frontend Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install audit-ci
+        run: npm install -g audit-ci
+        
+      - name: Frontend npm audit
+        working-directory: ./frontend
+        run: |
+          # Install dependencies
+          npm ci
+          
+          # Run audit with audit-ci
+          audit-ci --config ../.audit-ci.json
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better secret detection
+          
+      - name: Install gitleaks
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.0/gitleaks_8.18.0_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.0_linux_x64.tar.gz
+          sudo mv gitleaks /usr/local/bin/
+          
+      - name: Run gitleaks
+        run: |
+          gitleaks detect --config .gitleaks.toml --verbose --report-format json --report-path gitleaks-report.json
+          
+      - name: Upload gitleaks report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks-report.json
+          
+  sbom-generation:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+          
+      - name: Install cyclonedx-npm
+        run: npm install -g @cyclonedx/cyclonedx-npm
+        
+      - name: Generate Backend SBOM
+        run: |
+          cd backend
+          cyclonedx-npm --output-file ../sbom-backend.json
+          
+      - name: Generate Frontend SBOM
+        run: |
+          cd frontend  
+          cyclonedx-npm --output-file ../sbom-frontend.json
+          
+      - name: Merge SBOMs
+        run: |
+          # Create combined SBOM metadata
+          cat > sbom-combined.json << EOF
+          {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.4",
+            "serialNumber": "urn:uuid:$(uuidgen)",
+            "version": 1,
+            "metadata": {
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "tools": [
+                {
+                  "vendor": "CycloneDX",
+                  "name": "cyclonedx-npm"
+                }
+              ],
+              "component": {
+                "type": "application", 
+                "name": "teesfromthepast",
+                "version": "$(git describe --tags --always)",
+                "description": "Custom T-shirt design and ordering platform"
+              }
+            },
+            "components": []
+          }
+          EOF
+          
+          # In a real implementation, you'd merge the component arrays
+          # For now, just create separate files
+          
+      - name: Upload SBOMs as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-reports
+          path: |
+            sbom-backend.json
+            sbom-frontend.json
+            sbom-combined.json
+          retention-days: 90
+          
+      - name: Create release with SBOM
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sbom-backend.json
+            sbom-frontend.json
+            sbom-combined.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

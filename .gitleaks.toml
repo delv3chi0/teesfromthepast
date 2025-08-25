@@ -1,0 +1,75 @@
+# Gitleaks configuration file
+# See: https://github.com/gitleaks/gitleaks
+
+title = "Gitleaks config for Tees From The Past"
+
+[extend]
+# Use default rules as base
+useDefault = true
+
+[[rules]]
+id = "stripe-secret-key"
+description = "Stripe Secret Key"
+regex = '''sk_(test|live)_[0-9a-zA-Z]{24}'''
+tags = ["key", "stripe"]
+
+[[rules]]
+id = "stripe-webhook-secret"
+description = "Stripe Webhook Secret"
+regex = '''whsec_[0-9a-zA-Z]{32}'''
+tags = ["key", "stripe"]
+
+[[rules]]
+id = "mongodb-connection-string"
+description = "MongoDB Connection String"
+regex = '''mongodb(\+srv)?://[^\s]+'''
+tags = ["database", "mongodb"]
+
+[[rules]]
+id = "jwt-secret"
+description = "JWT Secret (generic)"
+regex = '''(?i)(jwt[_-]?secret|secret[_-]?key).{0,20}["\']?[0-9a-zA-Z]{32,}["\']?'''
+tags = ["jwt", "secret"]
+
+[[rules]]
+id = "cloudinary-api-secret"
+description = "Cloudinary API Secret"
+regex = '''(?i)(cloudinary[_-]?api[_-]?secret).{0,20}["\']?[0-9a-zA-Z_-]{27}["\']?'''
+tags = ["cloudinary", "api"]
+
+[[rules]]
+id = "resend-api-key"
+description = "Resend API Key"
+regex = '''re_[0-9a-zA-Z]{32}'''
+tags = ["resend", "api"]
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey).{0,20}["\']?[0-9a-zA-Z]{32,}["\']?'''
+tags = ["api", "key"]
+
+[allowlist]
+description = "Allowlist for false positives"
+paths = [
+  ".env.example",
+  "docs/",
+  "*.md",
+  ".gitleaks.toml"
+]
+
+regexes = [
+  '''(example|sample|demo|test)[_-]?(key|secret|token)''',
+  '''(your|my)[_-]?(key|secret|token)''',
+  '''placeholder''',
+  '''\*{3,}''',
+  '''xxx+''',
+  '''sk_test_example''',
+  '''whsec_example''',
+  '''mongodb://localhost''',
+  '''test-[a-z]+-here'''
+]
+
+commits = [
+  # Add specific commit SHAs to allowlist if needed
+]
