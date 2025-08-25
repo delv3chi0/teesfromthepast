@@ -88,7 +88,84 @@ describe('Auth API - /api/auth', () => {
 
   });
 
-  // We can add tests for Login, Profile, etc. here in the future
+  // ---- Test hCaptcha Error Handling ----
+  describe('hCaptcha Error Response Format', () => {
+    
+    beforeEach(async () => {
+      // Create a test user for login attempts
+      await User.create({
+        username: 'captchatest',
+        email: 'captcha@example.com',
+        password: 'password123',
+        firstName: 'Captcha',
+        lastName: 'Test'
+      });
+    });
+
+    it('should return captchaFailed flag when captcha verification fails', async () => {
+      // Set environment to enable captcha (disable bypass)
+      const originalDisableCaptcha = process.env.DISABLE_CAPTCHA;
+      delete process.env.DISABLE_CAPTCHA;
+
+      try {
+        // First, trigger multiple failed login attempts to require captcha
+        for (let i = 0; i < 3; i++) {
+          await request(app)
+            .post('/api/auth/login')
+            .send({
+              email: 'captcha@example.com',
+              password: 'wrongpassword'
+            });
+        }
+
+        // Now attempt login with invalid captcha token
+        const res = await request(app)
+          .post('/api/auth/login')
+          .send({
+            email: 'captcha@example.com',
+            password: 'password123',
+            hcaptchaToken: 'invalid_token'
+          })
+          .expect('Content-Type', /json/)
+          .expect(428);
+
+        // Check that the response includes the captchaFailed flag
+        expect(res.body).toHaveProperty('needCaptcha', true);
+        expect(res.body).toHaveProperty('captchaFailed', true);
+        expect(res.body).toHaveProperty('reason');
+        expect(res.body.message).toBe('Captcha required');
+      } finally {
+        // Restore original environment
+        if (originalDisableCaptcha) {
+          process.env.DISABLE_CAPTCHA = originalDisableCaptcha;
+        }
+      }
+    });
+
+    it('should not include captchaFailed flag for credential errors when captcha disabled', async () => {
+      // Enable captcha bypass
+      process.env.DISABLE_CAPTCHA = '1';
+
+      try {
+        // Attempt login with wrong credentials
+        const res = await request(app)
+          .post('/api/auth/login')
+          .send({
+            email: 'captcha@example.com',
+            password: 'wrongpassword'
+          })
+          .expect('Content-Type', /json/)
+          .expect(401);
+
+        // Should not have captcha-related properties
+        expect(res.body).not.toHaveProperty('captchaFailed');
+        expect(res.body).not.toHaveProperty('needCaptcha');
+      } finally {
+        delete process.env.DISABLE_CAPTCHA;
+      }
+    });
+
+  });
 
 });
 
