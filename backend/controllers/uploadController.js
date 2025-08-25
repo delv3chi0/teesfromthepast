@@ -1,131 +1,122 @@
-import cloudinary from 'cloudinary';
-import dotenv from 'dotenv';
-import { MAX_PRINTFILE_DECODED_MB } from '../config/constants.js';
-import { sendError } from '../utils/sendError.js';
+/**
+ * Enhanced upload controller with:
+ *  - Support for either body.imageData (raw base64) OR body.dataUrl (data: URI)
+ *  - Preflight decoded size estimation & 413 response if exceeded
+ *  - Structured error responses via sendError utility
+ *  - Thumbnail generation
+ *  - TODO marker for future streaming endpoint
+ */
+import cloudinary from "cloudinary";
+import { MAX_PRINTFILE_DECODED_MB } from "../config/constants.js";
+import { sendError } from "../utils/sendError.js";
 
-dotenv.config();
+// Ensure Cloudinary is configured elsewhere (e.g., at startup) via cloudinary.v2.config({...})
+const FOLDER_ROOT = "tees_from_the_past/print_files";
 
-// Configure Cloudinary
-cloudinary.v2.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+// Estimate decoded size (bytes) from a base64 string (no data: prefix)
+function estimateDecodedSizeBytes(base64) {
+  // Remove any non-base64 safe characters (just in case)
+  const cleaned = base64.replace(/[^A-Za-z0-9+/=]/g, "");
+  const padding = (cleaned.match(/=+$/) || [""])[0].length;
+  return Math.ceil((cleaned.length * 3) / 4) - padding;
+}
 
-// Helper function to extract base64 from data URL or return as-is
-function extractBase64(input) {
-  if (!input) return null;
-  
-  // If it's a data URL, extract the base64 part
-  if (input.startsWith('data:')) {
-    const parts = input.split(',');
-    return parts.length > 1 ? parts[1] : null;
+function formatMB(bytes) {
+  return bytes / (1024 * 1024);
+}
+
+// Extract base64 (strip data URL prefix if needed)
+function extractBase64({ imageData, dataUrl }) {
+  if (imageData && typeof imageData === "string") {
+    return imageData;
   }
-  
-  // Otherwise, assume it's already base64
-  return input;
+  if (dataUrl && typeof dataUrl === "string") {
+    const match = dataUrl.match(/^data:(?:image\\/[a-zA-Z+.-]+);base64,(.+)$/);
+    if (match) return match[1];
+    // Fallback: if it doesn't match expected pattern, assume entire string is base64
+    return dataUrl;
+  }
+  return null;
 }
 
-// Helper function to estimate decoded size
-function estimateDecodedSize(base64String) {
-  if (!base64String) return 0;
-  
-  // Calculate padding characters
-  const padding = (base64String.match(/=/g) || []).length;
-  
-  // Estimated decoded size in bytes
-  const decodedSizeBytes = Math.ceil((base64String.length * 3) / 4) - padding;
-  
-  // Convert to MB
-  return decodedSizeBytes / (1024 * 1024);
-}
-
-// @desc Upload print-ready image + thumbnail to Cloudinary
-// @route POST /api/upload/printfile
-// @access Private
-const uploadPrintFile = async (req, res) => {
+export async function uploadPrintFile(req, res) {
   try {
-    const { imageData, dataUrl, productSlug, side, designName } = req.body;
+    const { productSlug } = req.body || {};
+    const base64 = extractBase64(req.body || {});
 
-    // Accept either imageData (raw base64) or dataUrl (full data: URI)
-    let finalImageData;
-    if (imageData) {
-      finalImageData = extractBase64(imageData);
-    } else if (dataUrl) {
-      finalImageData = extractBase64(dataUrl);
-    } else {
-      return res.status(400).json({ message: 'No image data provided.' });
+    if (!base64) {
+      return sendError(res, "NO_IMAGE_DATA", 400, "No image data provided.");
     }
-
-    if (!finalImageData) {
-      return res.status(400).json({ message: 'Invalid image data format.' });
-    }
-
-    // Preflight decoded size estimation
-    const estimatedMB = estimateDecodedSize(finalImageData);
-    if (estimatedMB > MAX_PRINTFILE_DECODED_MB) {
-      const recommendation = estimatedMB > MAX_PRINTFILE_DECODED_MB * 2 
-        ? 'Consider reducing image resolution or using a more compressed format'
-        : 'Try reducing image quality or resolution slightly';
-        
+    if (!productSlug) {
       return sendError(
         res,
-        'UPLOAD_TOO_LARGE',
-        413,
-        `Print file exceeds max of ${MAX_PRINTFILE_DECODED_MB} MB`,
-        {
-          maxMB: MAX_PRINTFILE_DECODED_MB,
-          estimatedMB: Math.round(estimatedMB * 10) / 10,
-          recommendation
-        }
+        "MISSING_PRODUCT_SLUG",
+        400,
+        "productSlug is required for organizing uploads."
       );
     }
 
-    // Prepare imageData for Cloudinary (ensure it has data URL format)
-    const cloudinaryImageData = finalImageData.startsWith('data:') 
-      ? finalImageData 
-      : `data:image/png;base64,${finalImageData}`;
+    const decodedBytes = estimateDecodedSizeBytes(base64);
+    const decodedMB = formatMB(decodedBytes);
 
-    // 1. Upload full-size print file
-    const uploadResult = await cloudinary.v2.uploader.upload(cloudinaryImageData, {
-      folder: `tees_from_the_past/print_files/${productSlug || 'general'}`,
-      public_id: `${designName || 'print'}-${side || 'front'}-${Date.now()}`,
-      resource_type: 'image',
-      format: 'png', // Keep transparency
-      quality: 'auto:best',
-      overwrite: false,
-      tags: [
-        'printify-dtg',
-        'custom-design',
-        `user-${req.user?._id || 'anon'}`,
-        productSlug || '',
-        side || ''
-      ],
-    });
+    if (decodedMB > MAX_PRINTFILE_DECODED_MB) {
+      return sendError(res, "UPLOAD_TOO_LARGE", 413, "Print file exceeds maximum allowed size.", {
+        maxMB: MAX_PRINTFILE_DECODED_MB,
+        estimatedMB: Number(decodedMB.toFixed(2)),
+        recommendation:
+          "Reduce resolution or compress the image (e.g., lower dimensions, use optimized PNG or high-quality JPEG) and try again."
+      });
+    }
 
-    // 2. Generate thumbnail URL (Cloudinary transformation)
+    // Perform upload
+    const timestamp = Date.now();
+    const publicId = `${FOLDER_ROOT}/${productSlug}/${productSlug}_${timestamp}`;
+
+    const uploadResult = await cloudinary.v2.uploader.upload(
+      `data:image/png;base64,${base64}`,
+      {
+        public_id: publicId,
+        overwrite: false,
+        resource_type: "image",
+        folder: undefined // public_id already includes folder path
+      }
+    );
+
+    // Generate a 400x400 thumbnail URL (adjust cropping as needed)
     const thumbUrl = cloudinary.v2.url(uploadResult.public_id, {
       width: 400,
       height: 400,
-      crop: 'fit',
-      format: 'png',
+      crop: "fit",
+      format: "png",
       secure: true
     });
 
-    // 3. Send both URLs to frontend
-    res.status(200).json({
-      message: 'Image uploaded successfully!',
-      publicUrl: uploadResult.secure_url, // Full-size for Printify
-      thumbUrl, // Lightweight for UI
-      publicId: uploadResult.public_id
+    return res.status(201).json({
+      ok: true,
+      message: "Print file uploaded successfully.",
+      publicUrl: uploadResult.secure_url,
+      thumbUrl,
+      publicId: uploadResult.public_id,
+      bytesDecoded: decodedBytes,
+      sizeMB: Number(decodedMB.toFixed(2))
     });
-
   } catch (error) {
-    console.error('Cloudinary Upload Error:', error);
-    res.status(500).json({ message: 'Failed to upload print file', error: error.message });
+    console.error("Cloudinary Upload Error:", error);
+    return sendError(
+      res,
+      "UPLOAD_FAILED",
+      500,
+      "Failed to upload print file.",
+      { reason: error.message }
+    );
   }
-};
+}
 
-// TODO: Future optimization - add /api/upload/printfile-stream endpoint for multipart/streaming uploads
+/**
+ * TODO: Consider adding a streaming / multipart endpoint:
+ *   POST /api/upload/printfile-stream
+ * that accepts multipart/form-data and streams directly to Cloudinary
+ * to eliminate large base64 JSON overhead for very large files.
+ */
 
-export { uploadPrintFile };
+export default uploadPrintFile;
