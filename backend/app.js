@@ -1,9 +1,9 @@
 /*
   backend/app.js
-  - Restores default export (required by index.js).
-  - Applies robust CORS first.
-  - Preserves Cloudinary side-effect import.
-  - Structured CORS origin denial handling.
+  - Ensures CORS is applied before ANY route (including /health).
+  - Adds temporary debug logging for OPTIONS requests to verify Origin header flow.
+  - Provides optional diagnostic endpoint /api/_cors-diag (remove after validation).
+  - Preserves prior functionality and exports.
 */
 
 import express from "express";
@@ -18,7 +18,7 @@ import rateLimitLogin from "./middleware/rateLimitLogin.js";
 // Side-effect: configure Cloudinary early
 import "./config/cloudinary.js";
 
-// CORS (must precede routes)
+// CORS utilities
 import { applyCors, logCorsConfig } from "./utils/cors.js";
 
 /* Route imports */
@@ -45,21 +45,42 @@ import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.
 const app = express();
 app.set("trust proxy", 1);
 
-// Log environment + CORS info (no secrets)
+// Startup logging
 console.log(
   `[Startup] NODE_ENV=${process.env.NODE_ENV || "development"} MODE.`
 );
 logCorsConfig();
 
-/* Health route (can appear before CORS, but simple GET is fine either way) */
-app.get("/health", (_req, res) => res.status(200).send("OK"));
+/* ------------------------------------------------------------------
+   TEMP DEBUG MIDDLEWARE (remove after confirming CORS in production)
+------------------------------------------------------------------- */
+app.use((req, _res, next) => {
+  if (req.method === "OPTIONS") {
+    // Minimal log to confirm origin and path before CORS handling
+    console.log(
+      `[DEBUG CORS] Preflight -> Path: ${req.path}, Origin: ${req.headers.origin || "(none)"}`
+    );
+  }
+  next();
+});
 
-/* CORS FIRST */
+/* Apply CORS BEFORE ANY ROUTES (including /health) */
 applyCors(app);
 
-/* Stripe webhook BEFORE body parsing if it relies on raw body.
-   Your stripeWebhookRoutes module should internally manage raw parsing if needed.
-*/
+// Optional diagnostic route (remove after testing)
+app.get("/api/_cors-diag", (req, res) => {
+  res.json({
+    ok: true,
+    note: "Temporary CORS diagnostic endpoint",
+    receivedOrigin: req.headers.origin || null,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/* Health route (now also gains CORS headers) */
+app.get("/health", (_req, res) => res.status(200).send("OK"));
+
+/* Stripe webhook BEFORE general body parsing if it expects raw body internally */
 app.use("/api/stripe", stripeWebhookRoutes);
 
 /* JSON body parser */
@@ -142,6 +163,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-/* Export BOTH default and named to future-proof */
+/* Export BOTH default and named */
 export { app };
 export default app;
