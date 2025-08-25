@@ -134,15 +134,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
 app.use("/api/storefront", storefrontRoutes); // /products, /shop-data, /product/:slug
 
-// --- Checkout with root alias ---
-// Wrap checkout routes to handle POST /api/checkout (root) -> /create-payment-intent
-app.use("/api/checkout", (req, res, next) => {
-  // If it's a POST to the root of /api/checkout, rewrite to /create-payment-intent
-  if (req.method === 'POST' && req.path === '/') {
-    req.url = '/create-payment-intent';
-  }
-  next();
-}, checkoutRoutes);
+app.use("/api/checkout", checkoutRoutes);
 
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);

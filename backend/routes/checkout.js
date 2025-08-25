@@ -16,7 +16,8 @@ const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SEC
 
 const MAX_METADATA_FIELD_LENGTH = 490;
 
-router.post('/create-payment-intent', protect, async (req, res) => {
+// Extract the payment intent creation logic into a reusable function
+const createPaymentIntentHandler = async (req, res) => {
     console.log('-----------------------------------------------------');
     console.log('[Checkout] /create-payment-intent route hit by user:', req.user.id);
     
@@ -181,6 +182,10 @@ router.post('/create-payment-intent', protect, async (req, res) => {
         console.log('[Checkout] /create-payment-intent request finished for user:', req.user.id);
         console.log('-----------------------------------------------------');
     }
-});
+};
+
+// Add both routes using the same handler
+router.post('/', protect, createPaymentIntentHandler);
+router.post('/create-payment-intent', protect, createPaymentIntentHandler);
 
 export default router;
