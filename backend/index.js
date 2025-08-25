@@ -1,45 +1,72 @@
-// backend/index.js
-// Entry point: starts the server, connects DB, and supports both default & named app export forms.
+// backend/config/index.js
+// Central configuration validation with fail-fast startup
+import { z } from 'zod';
 
-import dotenv from "dotenv";
-dotenv.config();
+const configSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.string().regex(/^\d+$/).transform(Number).default('5000'),
 
-// Validate configuration first (fail-fast)
-import { validateConfig, getConfig } from "./config/index.js";
-const config = validateConfig();
+  MONGO_URI: z.string().url(),
 
-// Initialize error monitoring early
-import { initializeErrorMonitoring } from "./utils/errorMonitoring.js";
-initializeErrorMonitoring();
+  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 
-// Initialize structured logging
-import { logger } from "./utils/logger.js";
+  STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith('whsec_'),
 
-import connectDB from "./config/db.js";
+  REDIS_URL: z.string().url().optional(),
 
-logger.info('🚀 Starting Tees From The Past backend', { 
-  nodeEnv: config.NODE_ENV,
-  port: config.PORT,
-  logLevel: config.LOG_LEVEL 
+  CLOUDINARY_CLOUD_NAME: z.string().min(1),
+  CLOUDINARY_API_KEY: z.string().min(1),
+  CLOUDINARY_API_SECRET: z.string().min(1),
+
+  RATE_LIMIT_WINDOW: z.string().regex(/^\d+$/).transform(Number).default('60000'),
+
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  FEATURE_FLAG_FILE: z.string().optional(),
+
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  SENTRY_DSN: z.string().url().optional(),
+
+  JSON_LIMIT_MB: z.string().regex(/^\d+$/).transform(Number).default('25'),
+  PRINTFILE_MAX_MB: z.string().regex(/^\d+$/).transform(Number).default('22'),
+  CLOUDINARY_IMAGE_MAX_MB: z.string().regex(/^\d+$/).transform(Number).default('10'),
+
+  DB_SLOW_MS: z.string().regex(/^\d+$/).transform(Number).default('1000'),
+
+  RESEND_API_KEY: z.string().optional(),
 });
 
-// Import default (preferred) but gracefully fall back if only named export exists.
-let appModule;
-try {
-  appModule = await import("./app.js");
-} catch (e) {
-  logger.error("Failed importing ./app.js", { error: e.message, stack: e.stack });
-  process.exit(1);
-}
-const app = appModule.default || appModule.app;
-if (!app) {
-  logger.error("Could not resolve app export (neither default nor named 'app')");
-  process.exit(1);
+let _config;
+let _validated = false;
+
+export function validateConfig() {
+  if (_validated && _config) return _config;
+  try {
+    _config = configSchema.parse(process.env);
+    _validated = true;
+    return _config;
+  } catch (error) {
+    console.error('❌ Configuration validation failed:');
+    if (error instanceof z.ZodError) {
+      const errors = error.errors.map(e => `${e.path.join('.') || '(root)'}: ${e.message}`);
+      errors.forEach(line => console.error('  ' + line));
+    } else {
+      console.error(error);
+    }
+    process.exit(1);
+  }
 }
 
-await connectDB();
+export function isConfigReady() {
+  return _validated && !!_config;
+}
 
-const PORT = config.PORT;
-app.listen(PORT, () => {
-  logger.info(`✅ Server listening on port ${PORT}`, { port: PORT, env: config.NODE_ENV });
-});
+export function getConfig() {
+  if (!_config) {
+    throw new Error('Configuration not initialized. Call validateConfig() first.');
+  }
+  return _config;
+}
+
+export default { validateConfig, getConfig, isConfigReady };
