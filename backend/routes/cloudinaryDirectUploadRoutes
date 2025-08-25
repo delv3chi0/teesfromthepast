@@ -1,0 +1,89 @@
+import { Router } from "express";
+import { generateCloudinarySignature } from "../utils/cloudinarySignature.js";
+import { sendError } from "../utils/sendError.js";
+
+const {
+  CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET,
+  CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_UPLOAD_PRESET // optional for signed
+} = process.env;
+
+const router = Router();
+
+/**
+ * POST /api/cloudinary/sign
+ * Body (optional):
+ *   { folder?: string, publicId?: string, eager?: string, tags?: string, invalidate?: boolean }
+ * Returns signature payload the client uses with a direct multipart/form-data upload to Cloudinary.
+ *
+ * Client then does:
+ *   const form = new FormData();
+ *   form.append('file', fileObj);
+ *   form.append('api_key', CLOUDINARY_API_KEY);
+ *   form.append('timestamp', timestamp);
+ *   form.append('signature', signature);
+ *   form.append('folder', folder);          // if provided
+ *   form.append('public_id', publicId);     // if provided
+ *   form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET); // only if you use a preset
+ *   fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, { method: 'POST', body: form });
+ */
+router.post("/sign", (req, res) => {
+  if (!CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET || !CLOUDINARY_CLOUD_NAME) {
+    return sendError(
+      res,
+      "CLOUDINARY_NOT_CONFIGURED",
+      500,
+      "Cloudinary environment variables are not fully configured."
+    );
+  }
+
+  const {
+    folder = "tees_from_the_past/print_files",
+    publicId,
+    eager,
+    tags,
+    invalidate
+  } = req.body || {};
+
+  const timestamp = Math.floor(Date.now() / 1000);
+
+  const params = {
+    timestamp,
+    folder,
+    // Cloudinary param names use underscores
+    public_id: publicId,
+    eager,
+    tags,
+    invalidate
+  };
+
+  // Remove undefined values
+  Object.keys(params).forEach((k) => {
+    if (params[k] === undefined || params[k] === null || params[k] === "") delete params[k];
+  });
+
+  if (CLOUDINARY_UPLOAD_PRESET) {
+    // Including preset if you want to centralize transformations; signed uploads may omit.
+    params.upload_preset = CLOUDINARY_UPLOAD_PRESET;
+  }
+
+  const { signature } = generateCloudinarySignature(params, CLOUDINARY_API_SECRET);
+
+  return res.json({
+    ok: true,
+    data: {
+      cloudName: CLOUDINARY_CLOUD_NAME,
+      apiKey: CLOUDINARY_API_KEY,
+      signature,
+      timestamp,
+      folder,
+      publicId: publicId || null,
+      preset: CLOUDINARY_UPLOAD_PRESET || null,
+      rawParams: params
+    },
+    requestId: req.id
+  });
+});
+
+export default router;
