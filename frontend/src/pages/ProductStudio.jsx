@@ -619,7 +619,7 @@ export default function ProductStudio() {
     toast({ title: "Uploading print file…", status: "info", duration: 2000 });
     try {
       const upload = await client.post("/upload/printfile", {
-        dataUrl: png,
+        imageData: png, // Changed from dataUrl to imageData
         productSlug: product?.slug || slugParam,
         side: view,
         designName: `${product?.name || "Custom"} ${view}`,
@@ -649,7 +649,26 @@ export default function ProductStudio() {
       navigate("/checkout");
     } catch (e) {
       console.error(e);
-      toast({ title: "Upload failed", status: "error" });
+      
+      // Handle 413 error specifically
+      if (e.response?.status === 413) {
+        const serverMessage = e.response?.data?.message;
+        const maxMB = e.response?.data?.maxMB;
+        toast({ 
+          title: "File too large", 
+          description: serverMessage || `Image is too large. Maximum size is ${maxMB || 22}MB.`,
+          status: "error",
+          duration: 5000
+        });
+      } else {
+        // Surface server message if available, otherwise generic error
+        const serverMessage = e.response?.data?.message;
+        toast({ 
+          title: "Upload failed", 
+          description: serverMessage || "Please try again.",
+          status: "error" 
+        });
+      }
     } finally {
       setUploading(false);
     }

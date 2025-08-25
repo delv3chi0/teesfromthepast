@@ -89,7 +89,7 @@ app.use((req, res, next) => {
 app.use("/api/stripe", stripeWebhookRoutes);
 
 // JSON body parsing (after Stripe)
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "25mb" }));
 
 /**
  * Security headers + CSP.
@@ -133,7 +133,17 @@ app.use("/api/auth", emailVerificationRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/mydesigns", designsRoutes);
 app.use("/api/storefront", storefrontRoutes); // /products, /shop-data, /product/:slug
-app.use("/api/checkout", checkoutRoutes);
+
+// --- Checkout with root alias ---
+// Wrap checkout routes to handle POST /api/checkout (root) -> /create-payment-intent
+app.use("/api/checkout", (req, res, next) => {
+  // If it's a POST to the root of /api/checkout, rewrite to /create-payment-intent
+  if (req.method === 'POST' && req.path === '/') {
+    req.url = '/create-payment-intent';
+  }
+  next();
+}, checkoutRoutes);
+
 app.use("/api/printful", printfulRoutes);
 app.use("/api/orders", ordersRoutes);
 
