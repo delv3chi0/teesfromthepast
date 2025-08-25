@@ -3,6 +3,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import logger from '../utils/logger.js';
 
 const router = express.Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -14,7 +15,7 @@ try {
   const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
   packageVersion = packageJson.version;
 } catch (error) {
-  console.warn('Failed to read package.json version:', error.message);
+  logger.warn({ error: error.message }, 'Failed to read package.json version');
 }
 
 // Track server start time for uptime calculation

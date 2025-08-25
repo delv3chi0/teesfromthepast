@@ -9,6 +9,7 @@
  *   (optional) CLOUDINARY_UPLOAD_PRESET
  */
 import cloudinary from "cloudinary";
+import logger from "../utils/logger.js";
 
 const {
   CLOUDINARY_CLOUD_NAME,
@@ -17,9 +18,7 @@ const {
 } = process.env;
 
 if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
-  console.error(
-    "[Cloudinary Config] Missing one or more required environment variables: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET"
-  );
+  logger.warn("[Cloudinary Config] Missing one or more required environment variables: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET");
 } else {
   cloudinary.v2.config({
     cloud_name: CLOUDINARY_CLOUD_NAME,
@@ -28,7 +27,7 @@ if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
     secure: true
   });
   // Minimal confirmation (avoid logging secrets)
-  console.log("[Cloudinary Config] Cloudinary initialized (secure mode).");
+  logger.info("[Cloudinary Config] Cloudinary initialized (secure mode).");
 }
 
 export default cloudinary;

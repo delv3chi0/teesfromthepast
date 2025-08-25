@@ -1,5 +1,6 @@
 // backend/utils/cors.js
 import cors from "cors";
+import logger from './logger.js';
 
 /**
  * Default always-allowed origins.
@@ -86,9 +87,9 @@ export function applyCors(app) {
 export function logCorsConfig() {
   const { origins, allowAll } = buildOriginChecker();
   if (allowAll) {
-    console.log("[CORS] ALL origins temporarily allowed (CORS_ALLOW_ALL=true).");
+    logger.info("[CORS] ALL origins temporarily allowed (CORS_ALLOW_ALL=true).");
   } else {
-    console.log("[CORS] Allowed origins:", origins.join(", ") || "(none)");
+    logger.info({ origins }, "[CORS] Allowed origins configured");
   }
 }
 

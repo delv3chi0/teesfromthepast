@@ -9,6 +9,7 @@ import { signAccessToken } from "../middleware/authMiddleware.js";
 import { logAuthLogin, logAuthLogout, logAudit } from "../utils/audit.js";
 import { passwordResetTemplate, passwordChangedTemplate } from "../utils/emailTemplates.js";
 import { queueSendVerificationEmail } from "./emailVerificationController.js";
+import logger from "../utils/logger.js";
 
 import { verifyHCaptcha } from "../middleware/hcaptcha.js";
 import { markAuthFail, clearAuthFails, getCaptchaPolicy } from "../middleware/rateLimiters.js";
@@ -30,8 +31,11 @@ function clientNet(req) {
 }
 function sessionExpiry(days = 30) { return new Date(Date.now() + days * 86400000); }
 async function revokeAllUserSessions(userId) {
-  try { await RefreshToken.updateMany({ user: userId, revokedAt: null }, { $set: { revokedAt: new Date() } }).exec(); }
-  catch (e) { console.error("[sessions] revoke all failed:", e); }
+  try { 
+    await RefreshToken.updateMany({ user: userId, revokedAt: null }, { $set: { revokedAt: new Date() } }).exec(); 
+  } catch (e) { 
+    logger.error({ error: e, userId }, "[sessions] revoke all failed"); 
+  }
 }
 
 // --- Optional dev bypass: DISABLE_CAPTCHA=1 will skip captcha checks
@@ -74,7 +78,11 @@ export const registerUser = asyncHandler(async (req, res) => {
   await logAudit(req, { action: "REGISTER", targetType: "User", targetId: String(user._id), meta: { email: user.email, sessionId: jti }, actor: user._id });
   await logAuthLogin(req, user, { via: "register", sessionId: jti });
 
-  try { await queueSendVerificationEmail(user.email); } catch (e) { console.warn("[register] send verification email failed:", e?.message || e); }
+  try { 
+    await queueSendVerificationEmail(user.email); 
+  } catch (e) { 
+    logger.warn({ error: e?.message || e, email: user.email }, "[register] send verification email failed"); 
+  }
 
   res.status(201).json({ token, sessionJti: jti, user: {
     _id: user._id, username: user.username, email: user.email, firstName: user.firstName, lastName: user.lastName,
@@ -190,7 +198,9 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     const { subject, text, html } = passwordResetTemplate({ resetUrl, ttlMin: 60 });
     const { error } = await resend.emails.send({ from: `Tees From The Past <${FROM}>`, to: user.email, subject, text, html });
     if (error) throw error;
-  } catch (e) { console.error("[password-reset] email send failed:", e); }
+  } catch (e) { 
+    logger.error({ error: e, email: user.email }, "[password-reset] email send failed"); 
+  }
 
   res.json(generic);
 });
@@ -221,7 +231,9 @@ export const resetPassword = asyncHandler(async (req, res) => {
     const { subject, text, html } = passwordChangedTemplate();
     const { error } = await resend.emails.send({ from: `Tees From The Past <${FROM}>`, to: user.email, subject, text, html });
     if (error) throw error;
-  } catch (e) { console.error("[password-reset] confirmation email failed:", e); }
+  } catch (e) { 
+    logger.error({ error: e, email: user.email }, "[password-reset] confirmation email failed"); 
+  }
 
   res.json({ message: "Password updated" });
 });
@@ -246,7 +258,9 @@ export const changePassword = asyncHandler(async (req, res) => {
     const { subject, text, html } = passwordChangedTemplate();
     const { error } = await resend.emails.send({ from: `Tees From The Past <${FROM}>`, to: user.email, subject, text, html });
     if (error) throw error;
-  } catch (e) { console.error("[change-password] confirmation email failed:", e); }
+  } catch (e) { 
+    logger.error({ error: e, email: user.email }, "[change-password] confirmation email failed"); 
+  }
 
   res.json({ message: "Password changed" });
 });
