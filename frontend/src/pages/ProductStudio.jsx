@@ -2,10 +2,11 @@
 import React, {
   useEffect, useMemo, useRef, useState, useCallback,
 } from "react";
+import { Helmet } from "react-helmet-async";
 import {
   Box, Flex, VStack, HStack, Heading, Text, Button, IconButton, Tooltip,
   Tabs, TabList, TabPanels, Tab, TabPanel, Slider, SliderTrack, SliderFilledTrack, SliderThumb,
-  AspectRatio, Image, SimpleGrid, Badge, Input, Divider, useToast,
+  AspectRatio, Image, SimpleGrid, Badge, Input, Divider, useToast, Skeleton, SkeletonText,
 } from "@chakra-ui/react";
 import {
   FaTshirt, FaHatCowboy, FaHockeyPuck, FaTrash, FaArrowsAltH, FaCompressAlt,
@@ -710,9 +711,26 @@ export default function ProductStudio() {
   }, [product, color]);
   const canProceed = product && (!registryColors.length || color) && (!sizes.length || size) && hasObjects && !uploading;
 
+  // SEO meta data
+  const productName = product?.name || "Custom Product";
+  const pageTitle = `${productName} Designer - Tees From The Past`;
+  const pageDescription = `Design custom ${productName.toLowerCase()} with our easy-to-use design studio. Upload images, add text, and create unique apparel.`;
+
   // ---------- UI ----------
   return (
-    <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
+    <>
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={pageDescription} />
+      </Helmet>
+      
+      <Flex direction={{ base: "column", xl: "row" }} minH="100vh" bg="brand.primary">
       {/* LEFT PANEL */}
       <Box w={{ base: "100%", xl: "320px" }} p={4} borderRightWidth={{ xl: "1px" }} borderColor="whiteAlpha.200" bg="brand.paper">
         <VStack align="stretch" spacing={4}>
@@ -829,9 +847,9 @@ export default function ProductStudio() {
                   <Text fontSize="xs" color="whiteAlpha.700">We export a true print file sized to the selected placement.</Text>
 
                   <HStack pt={2} spacing={2}>
-                    <Tooltip label="Undo"><IconButton size="sm" onClick={undo} icon={<FaUndo />} /></Tooltip>
-                    <Tooltip label="Redo"><IconButton size="sm" onClick={redo} icon={<FaRedo />} /></Tooltip>
-                    <Tooltip label="Delete selected"><IconButton size="sm" onClick={del} colorScheme="red" variant="outline" icon={<FaTrash />} /></Tooltip>
+                    <Tooltip label="Undo"><IconButton aria-label="undo" size="sm" onClick={undo} icon={<FaUndo />} /></Tooltip>
+                    <Tooltip label="Redo"><IconButton aria-label="redo" size="sm" onClick={redo} icon={<FaRedo />} /></Tooltip>
+                    <Tooltip label="Delete selected"><IconButton aria-label="delete selected" size="sm" onClick={del} colorScheme="red" variant="outline" icon={<FaTrash />} /></Tooltip>
                   </HStack>
                 </VStack>
               </TabPanel>
@@ -921,6 +939,7 @@ export default function ProductStudio() {
         </VStack>
       </Box>
     </Flex>
+    </>
   );
 }
 
@@ -942,7 +961,18 @@ function SavedDesigns({ addDesignFromUrl }) {
     })();
     return () => { cancel = true; };
   }, []);
-  if (loading) return <Text color="whiteAlpha.800">Loading designs…</Text>;
+  if (loading) {
+    // Skeleton loader for designs grid
+    return (
+      <SimpleGrid columns={{ base: 3 }} spacing={2}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <AspectRatio key={i} ratio={1}>
+            <Skeleton borderRadius="md" />
+          </AspectRatio>
+        ))}
+      </SimpleGrid>
+    );
+  }
   if (!designs.length) return <Text color="whiteAlpha.800" fontSize="sm">No saved designs yet. Upload above or create in “Generate”.</Text>;
   return (
     <SimpleGrid columns={{ base: 3 }} spacing={2}>
@@ -963,7 +993,11 @@ function SavedDesigns({ addDesignFromUrl }) {
               onClick={() => addDesignFromUrl(insertSrc)}
             >
               <AspectRatio ratio={1}>
-                <Image src={tileSrc} alt={d.prompt} objectFit="cover" />
+                <Image 
+                  src={tileSrc} 
+                  alt={d.prompt || `Design ${d._id.slice(-6)}`} 
+                  objectFit="cover" 
+                />
               </AspectRatio>
             </Box>
           </Tooltip>

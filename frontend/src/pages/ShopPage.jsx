@@ -1,5 +1,6 @@
 // frontend/src/pages/ShopPage.jsx
 import { useEffect, useMemo, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import {
   Box,
   Heading,
@@ -77,7 +78,19 @@ export default function ShopPage() {
   }
 
   return (
-    <Box>
+    <>
+      <Helmet>
+        <title>Shop Custom Apparel - Tees From The Past</title>
+        <meta name="description" content="Browse our collection of custom t-shirts, hoodies, and apparel. Design your own unique clothing with high-quality printing." />
+        <meta property="og:title" content="Shop Custom Apparel - Tees From The Past" />
+        <meta property="og:description" content="Browse our collection of custom t-shirts, hoodies, and apparel. Design your own unique clothing with high-quality printing." />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Shop Custom Apparel - Tees From The Past" />
+        <meta name="twitter:description" content="Browse our collection of custom t-shirts, hoodies, and apparel." />
+      </Helmet>
+      
+      <Box>
       <Heading as="h1" size="2xl" color="brand.textLight" mb={8}>
         Our Awesome Collection
       </Heading>
@@ -95,5 +108,6 @@ export default function ShopPage() {
         </SimpleGrid>
       )}
     </Box>
+    </>
   );
 }

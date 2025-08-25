@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
 import './index.css';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   VStack,
   Heading,
@@ -16,6 +16,8 @@ import {
 import { useNavigate, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 import theme from './theme';
+import { initAxe } from './utils/axeAccessibility';
+import { HelmetProvider } from 'react-helmet-async';
 
 import { AuthProvider, useAuth } from './context/AuthProvider';
 import LoginPage from './pages/LoginPage';
@@ -208,11 +210,18 @@ const AppContent = () => {
 };
 
 export default function App() {
+  // Initialize axe-core for accessibility checking in development
+  useEffect(() => {
+    initAxe();
+  }, []);
+
   return (
-    <ChakraProvider theme={theme}>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </ChakraProvider>
+    <HelmetProvider>
+      <ChakraProvider theme={theme}>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ChakraProvider>
+    </HelmetProvider>
   );
 }

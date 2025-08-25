@@ -4,12 +4,13 @@ import mongoose from 'mongoose';
 import { protect } from '../middleware/authMiddleware.js';
 import Design from '../models/Design.js';
 import { createDesign } from '../controllers/designController.js';
+import { cacheNoStore } from '../middleware/cacheHeaders.js';
 import 'dotenv/config';
 
 const router = express.Router();
 
-// Generate (T2I / I2I)
-router.post('/create', protect, createDesign);
+// Generate (T2I / I2I) - no caching for personalized content
+router.post('/create', protect, cacheNoStore, createDesign);
 
 // Save a design (manual save from UI)
 router.post('/', protect, async (req, res) => {
