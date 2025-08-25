@@ -52,8 +52,37 @@ logCorsConfig();
 // Apply CORS before any routes
 applyCors(app);
 
-// Health (now receives CORS headers)
-app.get("/health", (_req, res) => res.status(200).send("OK"));
+// Import version helper
+import { getVersionInfo } from "./version/index.js";
+
+// Operational endpoints (before any middleware)
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'Backend is healthy!'
+  });
+});
+
+app.get("/readiness", (_req, res) => {
+  res.status(200).json({
+    status: 'ready',
+    message: 'Backend is ready to serve requests'
+  });
+});
+
+app.get("/version", async (_req, res) => {
+  try {
+    const versionInfo = await getVersionInfo();
+    res.status(200).json(versionInfo);
+  } catch (error) {
+    res.status(500).json({
+      error: {
+        code: 'VERSION_ERROR',
+        message: 'Could not retrieve version information'
+      }
+    });
+  }
+});
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -73,6 +102,7 @@ app.use(
 
 // Rate limits with adaptive abuse detection
 import { createAdaptiveRateLimit } from "./utils/adaptiveRateLimit.js";
+import { createRateLimit } from "./middleware/rateLimit.js";
 
 const contactLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -81,7 +111,10 @@ const contactLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Apply adaptive rate limiting to different route groups
+// Apply baseline global rate limiting first
+app.use(createRateLimit());
+
+// Apply adaptive rate limiting to different route groups  
 app.use("/api/forms/contact", contactLimiter);
 app.use("/api/auth/login", createAdaptiveRateLimit('auth'));
 app.use("/api/auth/register", createAdaptiveRateLimit('auth'));

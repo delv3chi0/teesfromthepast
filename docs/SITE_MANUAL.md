@@ -80,7 +80,7 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | /jobs/test | POST | Possibly yes + feature flag + ENABLE_JOB_TESTING | Enqueues sample job | Not enabled in prod by default |
 | /jobs/:id/status | GET | Maybe restricted | Returns job state (waiting, active, completed, failed) | Make sure to avoid leaking info |
 | (Sample POST route with idempotency) | POST | Varies | Demonstrates idempotent behavior | Repeat returns same body |
-| /version (Recommended upcoming) | GET | No | Build metadata (commit, timestamp) | NOT yet implemented (future) |
+| /version | GET | No | Build metadata (commit, buildTime, version, env) | **NOW IMPLEMENTED** - Returns JSON with commit SHA, build time, package version, and environment info |
 
 ---
 
@@ -157,7 +157,11 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | JWT_SECRET | Sign/verify JWTs | (random 32+ chars) | Yes | Rotate carefully; triggers logout-like effect |
 | JWT_ACCESS_TTL | Access token lifetime (e.g. “5m”) | 5m | Yes | Short lived |
 | JWT_REFRESH_TTL | Refresh token lifetime (e.g. “30d”) | 30d | Yes | Longer duration |
-| REDIS_URL | Redis connection string | rediss://... | Yes | Used by tokens, cache, jobs, idempotency |
+| REDIS_URL | Redis connection string | rediss://... | Yes | Used by tokens, cache, jobs, idempotency, rate limiting |
+| RATE_LIMIT_WINDOW | Rate limit window in milliseconds | 60000 | No | Default: 60000 (1 minute) |
+| RATE_LIMIT_MAX | Maximum requests per window | 120 | No | Default: 120 requests |
+| RATE_LIMIT_EXEMPT_PATHS | Paths exempt from rate limiting | /health,/readiness | No | Comma-separated list |
+| RATE_LIMIT_REDIS_PREFIX | Redis key prefix for rate limiting | rl: | No | Default: "rl:" |
 | ENABLE_2FA | Enable 2FA flow (stub) | 0 | No | Future full implementation |
 | FLAG_ADMIN_TOKEN | Auth token for /flags/reload | (secret) | Recommended | Keep distinct from JWT secret |
 | ENABLE_FLAG_WATCH | Dev hot reload via fs.watch | 1 (dev) | No | Don’t enable in prod |
@@ -170,7 +174,8 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | NODE_ENV | Environment mode | production | Yes | Standard |
 | LOG_LEVEL | Verbosity for logger | info | No | debug in dev |
 | FLAG_<NAME> | Override individual flags | on/off | As needed | e.g., FLAG_NEW_CART=on |
-| (Future) GIT_COMMIT | Version endpoint commit ref | auto-injected | Future | For /version endpoint |
+| GIT_COMMIT | Version endpoint commit ref | 6f3609b | No | **NOW SUPPORTED** - Auto-detected via git if not set |
+| BUILD_TIME | Version endpoint build timestamp | 2025-08-25T23:50:58.883Z | No | **NOW SUPPORTED** - Auto-generated if not set |
 
 Add new variables here as features mature. Keep alphabetized for clarity.
 
@@ -343,8 +348,8 @@ Doc Update Principle:
 15. This centralized manual (initial version)
 
 ### 11.2 High-Priority Next (Recommended Sequence)
-A. Rate Limiting & Abuse Protection  
-B. /version endpoint + commit metadata + tag discipline  
+A. ✅ **COMPLETED** - Rate Limiting & Abuse Protection  
+B. ✅ **COMPLETED** - /version endpoint + commit metadata + tag discipline  
 C. Expanded validation coverage (all mutating endpoints)  
 D. Runbooks expansion (secrets rotation, incident matrix, queue operations)  
 E. Auth hardening (2FA full TOTP, session/device management)  
@@ -464,11 +469,13 @@ Consider enforcing a PR checklist item “Updated manual? Y/N”.
 
 ## 18. Immediate Next Recommended Action
 
-Implement Rate Limiting + /version Endpoint bundle (Tasks A + part of C).
-- Add /version
-- Add Redis-based sliding window limiter (configurable thresholds)
-- Document new env vars: RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX, RATE_LIMIT_BURST (if implemented)
-- Update metrics: rate_limited_total
+~~Implement Rate Limiting + /version Endpoint bundle (Tasks A + part of C).~~ **COMPLETED IN WAVE 2**
+- ✅ Add /version endpoint with build metadata
+- ✅ Add Redis-based fixed window rate limiter (configurable thresholds)
+- ✅ Document new env vars: RATE_LIMIT_MAX, RATE_LIMIT_EXEMPT_PATHS, RATE_LIMIT_REDIS_PREFIX
+- ⏳ Update metrics: rate_limited_total (future enhancement)
+
+**Next Priority**: Expanded validation coverage (all mutating endpoints)
 
 ---
 
