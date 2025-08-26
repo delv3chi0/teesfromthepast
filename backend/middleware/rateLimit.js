@@ -2,6 +2,7 @@
 // Redis-backed global rate limiting middleware with multiple algorithms
 import Redis from 'ioredis';
 import { isConfigReady, getConfig } from '../config/index.js';
+import { getRateLimitConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 import { incrementRateLimited, incrementRedisErrors } from './metrics.js';
 
@@ -249,22 +250,20 @@ export function createRateLimit() {
       let pathOverrides;
       let roleOverrides;
       
-      // Get configuration
+      // Get configuration with dynamic overrides applied
+      const dynamicConfig = getRateLimitConfig();
+      rateLimitMax = dynamicConfig.globalMax;
+      rateLimitWindow = dynamicConfig.windowMs;
+      algorithm = dynamicConfig.algorithm;
+      pathOverrides = parseRateLimitOverrides(dynamicConfig.overrides);
+      roleOverrides = parseRoleRateLimitOverrides(dynamicConfig.roleOverrides);
+      
+      // Get exempt paths from static config (not overrideable for security)
       if (isConfigReady()) {
         const config = getConfig();
-        rateLimitMax = config.RATE_LIMIT_MAX;
-        rateLimitWindow = config.RATE_LIMIT_WINDOW;
         exemptPaths = config.RATE_LIMIT_EXEMPT_PATHS;
-        algorithm = config.RATE_LIMIT_ALGORITHM;
-        pathOverrides = parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
       } else {
-        rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
-        rateLimitWindow = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
         exemptPaths = process.env.RATE_LIMIT_EXEMPT_PATHS || '/health,/readiness';
-        algorithm = process.env.RATE_LIMIT_ALGORITHM || 'fixed';
-        pathOverrides = parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
       }
       
       // Check if path is exempt
