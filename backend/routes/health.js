@@ -2,6 +2,7 @@
 // Health and readiness endpoints with detailed system information
 import express from 'express';
 import { isConfigReady, getConfig } from '../config/index.js';
+import { getRateLimitConfig, getMetricsConfig } from '../config/dynamicConfig.js';
 import { getVersionInfo } from '../version/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -47,19 +48,36 @@ router.get('/health', async (req, res) => {
     const versionInfo = getVersionInfo();
     const redisStatus = await checkRedisConnection();
     
-    // Get rate limiter configuration
+    // Get rate limiter configuration from dynamic config
     let rateLimiterInfo;
-    if (isConfigReady()) {
-      const config = getConfig();
+    let metricsEnabled;
+    try {
+      const rateLimitConfig = getRateLimitConfig();
+      const metricsConfig = getMetricsConfig();
       rateLimiterInfo = {
-        algorithm: config.RATE_LIMIT_ALGORITHM || 'fixed',
-        enabled: !!config.REDIS_URL
+        algorithm: rateLimitConfig.algorithm,
+        enabled: !!process.env.REDIS_URL || !!getConfig()?.REDIS_URL
       };
-    } else {
-      rateLimiterInfo = {
-        algorithm: process.env.RATE_LIMIT_ALGORITHM || 'fixed',
-        enabled: !!process.env.REDIS_URL
-      };
+      metricsEnabled = metricsConfig.enabled;
+    } catch {
+      // Fallback to static configuration
+      if (isConfigReady()) {
+        const config = getConfig();
+        rateLimiterInfo = {
+          algorithm: config.RATE_LIMIT_ALGORITHM || 'fixed',
+          enabled: !!config.REDIS_URL
+        };
+        metricsEnabled = config.ENABLE_METRICS !== false;
+      } else {
+        rateLimiterInfo = {
+          algorithm: process.env.RATE_LIMIT_ALGORITHM || 'fixed',
+          enabled: !!process.env.REDIS_URL
+        };
+        const nodeEnv = process.env.NODE_ENV || 'development';
+        metricsEnabled = nodeEnv === 'production' 
+          ? process.env.ENABLE_METRICS === 'true'
+          : process.env.ENABLE_METRICS !== 'false';
+      }
     }
     
     const healthData = {
@@ -71,7 +89,11 @@ router.get('/health', async (req, res) => {
       version: versionInfo.version,
       environment: versionInfo.environment,
       redis: redisStatus,
-      rateLimiter: rateLimiterInfo
+      rateLimiter: rateLimiterInfo,
+      runtime: {
+        rateLimitAlgorithm: rateLimiterInfo.algorithm,
+        metricsEnabled
+      }
     };
     
     res.status(200).json(healthData);
@@ -110,13 +132,31 @@ router.get('/readiness', async (req, res) => {
       statusCode = 503;
     }
     
+    // Get runtime information for readiness
+    let runtime = {};
+    try {
+      const rateLimitConfig = getRateLimitConfig();
+      const metricsConfig = getMetricsConfig();
+      runtime = {
+        rateLimitAlgorithm: rateLimitConfig.algorithm,
+        metricsEnabled: metricsConfig.enabled
+      };
+    } catch {
+      // Use defaults if dynamic config fails
+      runtime = {
+        rateLimitAlgorithm: 'fixed',
+        metricsEnabled: true
+      };
+    }
+    
     const readinessData = {
       ready,
       timestamp: new Date().toISOString(),
       checks,
       requirements: {
         redisRequired: redisRequiredForReadiness
-      }
+      },
+      runtime
     };
     
     res.status(statusCode).json(readinessData);

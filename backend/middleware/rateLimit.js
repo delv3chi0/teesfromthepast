@@ -2,6 +2,7 @@
 // Redis-backed global rate limiting middleware with multiple algorithms
 import Redis from 'ioredis';
 import { isConfigReady, getConfig } from '../config/index.js';
+import { getRateLimitConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 import { incrementRateLimited, incrementRedisErrors } from './metrics.js';
 
@@ -235,6 +236,8 @@ async function fixedWindowRateLimit(redisClient, key, max, windowMs) {
  * Redis-backed global rate limiting middleware with multiple algorithms
  * Supports fixed window (default), sliding window, and token bucket algorithms
  * Includes per-route and per-role override capabilities
+ * 
+ * Now consults dynamic configuration for runtime settings.
  */
 export function createRateLimit() {
   // Initialize Redis connection
@@ -249,22 +252,38 @@ export function createRateLimit() {
       let pathOverrides;
       let roleOverrides;
       
-      // Get configuration
+      // Get configuration - check dynamic config first, then static config
+      try {
+        const dynamicConfig = getRateLimitConfig();
+        rateLimitMax = dynamicConfig.globalMax;
+        rateLimitWindow = dynamicConfig.windowMs;
+        algorithm = dynamicConfig.algorithm;
+        pathOverrides = dynamicConfig.overrides || [];
+        roleOverrides = dynamicConfig.roleOverrides || [];
+      } catch {
+        // Fallback to static configuration
+        if (isConfigReady()) {
+          const config = getConfig();
+          rateLimitMax = config.RATE_LIMIT_MAX;
+          rateLimitWindow = config.RATE_LIMIT_WINDOW;
+          algorithm = config.RATE_LIMIT_ALGORITHM;
+          pathOverrides = parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
+          roleOverrides = parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
+        } else {
+          rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
+          rateLimitWindow = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
+          algorithm = process.env.RATE_LIMIT_ALGORITHM || 'fixed';
+          pathOverrides = parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
+          roleOverrides = parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
+        }
+      }
+      
+      // Always get exempt paths from static config (security consideration)
       if (isConfigReady()) {
         const config = getConfig();
-        rateLimitMax = config.RATE_LIMIT_MAX;
-        rateLimitWindow = config.RATE_LIMIT_WINDOW;
         exemptPaths = config.RATE_LIMIT_EXEMPT_PATHS;
-        algorithm = config.RATE_LIMIT_ALGORITHM;
-        pathOverrides = parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
       } else {
-        rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
-        rateLimitWindow = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
         exemptPaths = process.env.RATE_LIMIT_EXEMPT_PATHS || '/health,/readiness';
-        algorithm = process.env.RATE_LIMIT_ALGORITHM || 'fixed';
-        pathOverrides = parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
       }
       
       // Check if path is exempt
@@ -278,7 +297,7 @@ export function createRateLimit() {
         return next();
       }
       
-      // Find applicable override
+      // Find applicable override with new precedence: role > path > global
       const override = findRateLimitOverride(req, pathOverrides, roleOverrides);
       const effectiveMax = override?.max || rateLimitMax;
       const effectiveAlgorithm = override?.algorithm || algorithm;
@@ -306,11 +325,14 @@ export function createRateLimit() {
         throw redisError;
       }
       
-      // Set rate limit headers
+      // Set rate limit headers with effective values
       res.setHeader('X-RateLimit-Limit', effectiveMax);
       res.setHeader('X-RateLimit-Remaining', result.remaining);
       res.setHeader('X-RateLimit-Reset', Math.floor(result.resetTime / 1000));
       res.setHeader('X-RateLimit-Algorithm', effectiveAlgorithm);
+      if (override?.source) {
+        res.setHeader('X-RateLimit-Override-Source', override.source);
+      }
       
       // Check if limit exceeded
       if (result.isLimited) {
