@@ -21,6 +21,7 @@ describe('Version functionality', () => {
     // Build time should be a valid ISO string
     expect(typeof versionInfo.buildTime).toBe('string');
     expect(() => new Date(versionInfo.buildTime)).not.toThrow();
+    expect(!isNaN(new Date(versionInfo.buildTime).getTime())).toBe(true);
     
     // Version should be a string
     expect(typeof versionInfo.version).toBe('string');
@@ -38,4 +39,27 @@ describe('Version functionality', () => {
     // Should return exact same object (cached)
     expect(first).toBe(second);
   });
+
+  test('respects environment variables when provided', () => {
+    // Clear cache first by resetting module
+    jest.resetModules();
+    
+    // Set environment variables
+    process.env.GIT_COMMIT = 'abc1234';
+    process.env.BUILD_TIME = '2025-01-01T00:00:00.000Z';
+    
+    // Re-import to get fresh instance
+    return import('../version/index.js').then(({ getVersionInfo }) => {
+      const versionInfo = getVersionInfo();
+      
+      expect(versionInfo.commit).toBe('abc1234');
+      expect(versionInfo.buildTime).toBe('2025-01-01T00:00:00.000Z');
+      
+      // Clean up
+      delete process.env.GIT_COMMIT;
+      delete process.env.BUILD_TIME;
+    });
+  });
 });
+
+// TODO: Add integration test for GET /version endpoint when test infrastructure supports it
