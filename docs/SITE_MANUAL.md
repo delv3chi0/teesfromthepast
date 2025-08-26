@@ -160,8 +160,17 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | REDIS_URL | Redis connection string | rediss://... | Yes | Used by tokens, cache, jobs, idempotency, rate limiting |
 | RATE_LIMIT_MAX | Max requests per window | 120 | No | Global rate limit (default: 120) |
 | RATE_LIMIT_WINDOW | Window size in milliseconds | 60000 | No | Rate limit window (default: 60000ms) |
+| RATE_LIMIT_ALGORITHM | Rate limiting algorithm | fixed | No | fixed\|sliding\|token_bucket (default: fixed) |
+| RATE_LIMIT_OVERRIDES | Per-route rate limit overrides | /api/upload:30:token_bucket | No | Format: pathPrefix:max[:algo] separated by ; |
+| RATE_LIMIT_ROLE_OVERRIDES | Per-role rate limit overrides | admin\|/api/admin:500 | No | Format: role\|pathPrefix:max[:algo] separated by ; |
 | RATE_LIMIT_EXEMPT_PATHS | Comma-separated exempt paths | /health,/readiness | No | Paths that bypass rate limiting |
 | RATE_LIMIT_REDIS_PREFIX | Redis key prefix for rate limiting | rl: | No | Rate limit key prefix (default: "rl:") |
+| ENABLE_METRICS | Enable Prometheus metrics | true | No | Default true unless NODE_ENV=production |
+| REQUEST_ID_HEADER | Custom request ID header name | X-Request-Id | No | Header for request ID propagation |
+| GRACEFUL_SHUTDOWN_TIMEOUT | Shutdown timeout in milliseconds | 15000 | No | Time to wait for in-flight requests |
+| REDIS_REQUIRED_FOR_READINESS | Require Redis for readiness | false | No | Return 503 if Redis down and true |
+| CSP_REPORT_ONLY | Use CSP report-only mode | true | No | Content Security Policy enforcement mode |
+| ENABLE_COEP | Enable Cross-Origin-Embedder-Policy | false | No | Cross-origin isolation header |
 | GIT_COMMIT | Git commit hash | 4d5de25 | No | Auto-detected if not provided |
 | BUILD_TIME | Build timestamp ISO string | 2025-01-15T10:30:00Z | No | Auto-detected if not provided |
 | ENABLE_2FA | Enable 2FA flow (stub) | 0 | No | Future full implementation |
@@ -289,7 +298,8 @@ Actions:
 ## 8. Monitoring & Metrics
 
 Core (current):
-- HTTP request counters & latency histograms (inferred)
+- HTTP request counters & latency histograms
+- Rate limiting metrics (rate_limited_total, redis_errors_total)
 - cache_hits_total / cache_misses_total
 - Potential queue metrics (expand soon)
 - Health / readiness signals
@@ -297,9 +307,119 @@ Core (current):
 Recommended Additions:
 - job_processed_total{status=...}
 - refresh_token_rotation_total{result=success|failure}
-- rate_limited_total (after rate limiting)
 - flag_evaluations_total{flag, result}
 - idempotency_replay_total
+
+### 8.1 Alert Thresholds & Prometheus Rules
+
+#### High-Priority Alerts
+
+**P95 Latency Alert**
+```yaml
+- alert: HighP95Latency
+  expr: histogram_quantile(0.95, http_request_duration_seconds_bucket) > 2.0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High P95 latency detected"
+    description: "P95 response time is {{ $value }}s for 5+ minutes"
+```
+
+**Error Rate Alert**
+```yaml
+- alert: HighErrorRate
+  expr: |
+    (
+      rate(http_requests_total{status_code=~"5.."}[5m]) /
+      rate(http_requests_total[5m])
+    ) > 0.05
+  for: 3m
+  labels:
+    severity: critical
+  annotations:
+    summary: "High error rate detected"
+    description: "Error rate is {{ $value | humanizePercentage }} for 3+ minutes"
+```
+
+**Rate Limiting Spike Alert**
+```yaml
+- alert: RateLimitSpike
+  expr: rate(rate_limited_total[5m]) > 10
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Sustained rate limiting spike"
+    description: "Rate limiting {{ $value }} requests/second for 5+ minutes"
+```
+
+**Redis Connection Issues**
+```yaml
+- alert: RedisErrors
+  expr: rate(redis_errors_total[5m]) > 1
+  for: 2m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Redis errors detected"
+    description: "Redis error rate: {{ $value }} errors/second"
+```
+
+**Service Unavailable**
+```yaml
+- alert: ServiceDown
+  expr: up == 0
+  for: 1m
+  labels:
+    severity: critical
+  annotations:
+    summary: "Service is down"
+    description: "Service has been down for 1+ minutes"
+```
+
+#### Recommended Thresholds
+
+| Metric | Warning | Critical | Notes |
+|--------|---------|----------|-------|
+| P95 Latency | > 2s for 5min | > 5s for 2min | Adjust based on SLA |
+| Error Rate | > 5% for 3min | > 10% for 1min | 5xx errors only |
+| Rate Limited | > 10/sec for 5min | > 50/sec for 2min | Sustained abuse |
+| Redis Errors | > 1/sec for 2min | > 5/sec for 1min | Connection issues |
+| Memory Usage | > 80% for 10min | > 95% for 2min | Container limits |
+| CPU Usage | > 80% for 10min | > 95% for 2min | Sustained load |
+
+#### Dashboard Metrics
+
+**Golden Signals Dashboard**
+- Request rate (requests/second)
+- Error rate (percentage)
+- Duration (P50, P95, P99 latencies)
+- Saturation (rate limiting, queue depth)
+
+**Operational Dashboard**
+- Active rate limiting algorithm breakdown
+- Redis connection status and latency
+- In-flight request count (for graceful shutdown)
+- Request ID propagation coverage
+
+Sample Grafana queries:
+```promql
+# Request rate by route
+rate(http_requests_total[5m])
+
+# Error percentage by route
+rate(http_requests_total{status_code=~"5.."}[5m]) / 
+rate(http_requests_total[5m]) * 100
+
+# Rate limiting by algorithm
+rate(rate_limited_total[5m]) by (algorithm)
+
+# P95 latency by route
+histogram_quantile(0.95, 
+  rate(http_request_duration_seconds_bucket[5m])
+) by (route)
+```
 
 Alert Ideas (future):
 - High 5xx rate over 5 min
