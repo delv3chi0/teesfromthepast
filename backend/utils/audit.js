@@ -1,5 +1,6 @@
 // backend/utils/audit.js
 import mongoose from "mongoose";
+import { pushAuditLog } from "../config/dynamicConfig.js";
 
 let AuditLog;
 try {
@@ -36,7 +37,8 @@ export async function logAudit(
     const mergedMeta = { ...meta };
     if (sid && !mergedMeta.sessionId) mergedMeta.sessionId = String(sid);
 
-    await AuditLog.create({
+    // Create audit log entry
+    const auditEntry = {
       action,
       actor: actorId,
       targetType,
@@ -44,6 +46,22 @@ export async function logAudit(
       ip,
       userAgent,
       meta: mergedMeta,
+    };
+
+    // Store in database (original behavior)
+    await AuditLog.create(auditEntry);
+
+    // Also push to ring buffer for dynamic admin console
+    pushAuditLog({
+      category: targetType || 'general',
+      message: `${action} ${targetType} ${targetId}`.trim(),
+      meta: mergedMeta,
+      user: actorId,
+      ip,
+      userAgent,
+      action,
+      targetType,
+      targetId
     });
   } catch (err) {
     console.warn("[audit] failed:", err?.message);

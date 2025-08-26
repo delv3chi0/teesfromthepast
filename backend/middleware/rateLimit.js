@@ -1,7 +1,9 @@
 // backend/middleware/rateLimit.js
 // Redis-backed global rate limiting middleware with multiple algorithms
+// Enhanced with dynamic configuration support
 import Redis from 'ioredis';
 import { isConfigReady, getConfig } from '../config/index.js';
+import { getRateLimitConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 import { incrementRateLimited, incrementRedisErrors } from './metrics.js';
 
@@ -249,22 +251,26 @@ export function createRateLimit() {
       let pathOverrides;
       let roleOverrides;
       
-      // Get configuration
+      // Get configuration with dynamic overrides taking precedence
+      const dynamicConfig = getRateLimitConfig();
+      
       if (isConfigReady()) {
         const config = getConfig();
-        rateLimitMax = config.RATE_LIMIT_MAX;
-        rateLimitWindow = config.RATE_LIMIT_WINDOW;
+        rateLimitMax = dynamicConfig.globalMax || config.RATE_LIMIT_MAX;
+        rateLimitWindow = dynamicConfig.windowMs || config.RATE_LIMIT_WINDOW;
         exemptPaths = config.RATE_LIMIT_EXEMPT_PATHS;
-        algorithm = config.RATE_LIMIT_ALGORITHM;
-        pathOverrides = parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
+        algorithm = dynamicConfig.algorithm || config.RATE_LIMIT_ALGORITHM;
+        // Merge dynamic overrides with static ones (dynamic takes precedence)
+        pathOverrides = dynamicConfig.overrides.length > 0 ? dynamicConfig.overrides : parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
+        roleOverrides = dynamicConfig.roleOverrides.length > 0 ? dynamicConfig.roleOverrides : parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
       } else {
-        rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
-        rateLimitWindow = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
+        rateLimitMax = dynamicConfig.globalMax || parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
+        rateLimitWindow = dynamicConfig.windowMs || parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
         exemptPaths = process.env.RATE_LIMIT_EXEMPT_PATHS || '/health,/readiness';
-        algorithm = process.env.RATE_LIMIT_ALGORITHM || 'fixed';
-        pathOverrides = parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
+        algorithm = dynamicConfig.algorithm || process.env.RATE_LIMIT_ALGORITHM || 'fixed';
+        // Merge dynamic overrides with static ones (dynamic takes precedence)
+        pathOverrides = dynamicConfig.overrides.length > 0 ? dynamicConfig.overrides : parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
+        roleOverrides = dynamicConfig.roleOverrides.length > 0 ? dynamicConfig.roleOverrides : parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
       }
       
       // Check if path is exempt

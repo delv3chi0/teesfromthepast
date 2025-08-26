@@ -1,8 +1,10 @@
 // backend/routes/health.js
 // Health and readiness endpoints with detailed system information
+// Enhanced with dynamic runtime configuration info
 import express from 'express';
 import { isConfigReady, getConfig } from '../config/index.js';
 import { getVersionInfo } from '../version/index.js';
+import { getRateLimitConfig, getMetricsConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -47,17 +49,21 @@ router.get('/health', async (req, res) => {
     const versionInfo = getVersionInfo();
     const redisStatus = await checkRedisConnection();
     
-    // Get rate limiter configuration
+    // Get runtime configuration info
+    const dynamicRateLimit = getRateLimitConfig();
+    const dynamicMetrics = getMetricsConfig();
+    
+    // Get rate limiter configuration (include dynamic info)
     let rateLimiterInfo;
     if (isConfigReady()) {
       const config = getConfig();
       rateLimiterInfo = {
-        algorithm: config.RATE_LIMIT_ALGORITHM || 'fixed',
+        algorithm: dynamicRateLimit.algorithm || config.RATE_LIMIT_ALGORITHM || 'fixed',
         enabled: !!config.REDIS_URL
       };
     } else {
       rateLimiterInfo = {
-        algorithm: process.env.RATE_LIMIT_ALGORITHM || 'fixed',
+        algorithm: dynamicRateLimit.algorithm || process.env.RATE_LIMIT_ALGORITHM || 'fixed',
         enabled: !!process.env.REDIS_URL
       };
     }
@@ -71,7 +77,12 @@ router.get('/health', async (req, res) => {
       version: versionInfo.version,
       environment: versionInfo.environment,
       redis: redisStatus,
-      rateLimiter: rateLimiterInfo
+      rateLimiter: rateLimiterInfo,
+      // Include runtime info for admin console
+      runtime: {
+        rateLimitAlgorithm: rateLimiterInfo.algorithm,
+        metricsEnabled: dynamicMetrics.enabled
+      }
     };
     
     res.status(200).json(healthData);
