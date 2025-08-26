@@ -3,7 +3,8 @@
 // Provides runtime configuration and operational monitoring endpoints
 
 import express from "express";
-import { protect, admin as adminOnly } from "../middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
+import { admin } from "../middleware/adminMiddleware.js";
 import {
   getRuntimeConfigSnapshot,
   updateRateLimit,
@@ -21,7 +22,7 @@ const router = express.Router();
  * GET /api/admin/runtime/config
  * Get complete runtime configuration snapshot
  */
-router.get("/runtime/config", protect, adminOnly, async (req, res) => {
+router.get("/runtime/config", protect, admin, async (req, res) => {
   try {
     const config = getRuntimeConfigSnapshot();
     
@@ -56,7 +57,7 @@ router.get("/runtime/config", protect, adminOnly, async (req, res) => {
  * PUT /api/admin/runtime/rate-limit
  * Update rate limiting configuration
  */
-router.put("/runtime/rate-limit", protect, adminOnly, async (req, res) => {
+router.put("/runtime/rate-limit", protect, admin, async (req, res) => {
   try {
     const before = getRateLimitConfig();
     const updated = updateRateLimit(req.body);
