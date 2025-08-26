@@ -4,6 +4,7 @@ import Redis from 'ioredis';
 import { isConfigReady, getConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { incrementRateLimited, incrementRedisErrors } from './metrics.js';
+import { getRateLimitOverride } from '../config/dynamicConfig.js';
 
 let redis = null;
 let isConnected = false;
@@ -278,9 +279,14 @@ export function createRateLimit() {
         return next();
       }
       
-      // Find applicable override
-      const override = findRateLimitOverride(req, pathOverrides, roleOverrides);
+      // Find applicable override - check dynamic config first
+      const dynamicOverride = getRateLimitOverride(req);
+      const staticOverride = findRateLimitOverride(req, pathOverrides, roleOverrides);
+      
+      // Dynamic config takes precedence over static config
+      const override = dynamicOverride || staticOverride;
       const effectiveMax = override?.max || rateLimitMax;
+      const effectiveWindow = override?.windowMs || rateLimitWindow;
       const effectiveAlgorithm = override?.algorithm || algorithm;
       
       const userIdentifier = getUserIdentifier(req);
@@ -291,14 +297,14 @@ export function createRateLimit() {
       try {
         switch (effectiveAlgorithm) {
           case 'sliding':
-            result = await slidingWindowRateLimit(redisClient, key, effectiveMax, rateLimitWindow);
+            result = await slidingWindowRateLimit(redisClient, key, effectiveMax, effectiveWindow);
             break;
           case 'token_bucket':
-            result = await tokenBucketRateLimit(redisClient, key, effectiveMax, rateLimitWindow);
+            result = await tokenBucketRateLimit(redisClient, key, effectiveMax, effectiveWindow);
             break;
           case 'fixed':
           default:
-            result = await fixedWindowRateLimit(redisClient, key, effectiveMax, rateLimitWindow);
+            result = await fixedWindowRateLimit(redisClient, key, effectiveMax, effectiveWindow);
             break;
         }
       } catch (redisError) {

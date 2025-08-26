@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { isConfigReady, getConfig } from "../config/index.js";
+import { pushRecentRequestId } from "../config/dynamicConfig.js";
 
 export function requestId(req, res, next) {
   // Get header name from config or environment
@@ -20,6 +21,9 @@ export function requestId(req, res, next) {
   
   req.id = id;
   res.setHeader(headerName, id);
+  
+  // Push request ID to dynamic config ring buffer
+  pushRecentRequestId(id);
   
   // Add request ID to logger context for this request
   if (req.log) {

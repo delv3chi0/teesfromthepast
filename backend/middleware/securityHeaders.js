@@ -2,6 +2,7 @@
 // Security headers middleware with configurable CSP and COEP
 import { isConfigReady, getConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { getSecurityOverrides } from '../config/dynamicConfig.js';
 
 // Build Content Security Policy
 function buildCSP(reportOnly = true) {
@@ -24,14 +25,25 @@ export function securityHeaders(req, res, next) {
   let cspReportOnly;
   let enableCoep;
   
-  // Get configuration
+  // Check dynamic config overrides first
+  const dynamicOverrides = getSecurityOverrides();
+  
+  // Get configuration - dynamic overrides take precedence
   if (isConfigReady()) {
     const config = getConfig();
-    cspReportOnly = config.CSP_REPORT_ONLY !== false;
-    enableCoep = config.ENABLE_COEP === true;
+    cspReportOnly = dynamicOverrides.cspReportOnly !== null ? 
+      dynamicOverrides.cspReportOnly : 
+      (config.CSP_REPORT_ONLY !== false);
+    enableCoep = dynamicOverrides.enableCOEP !== null ? 
+      dynamicOverrides.enableCOEP : 
+      (config.ENABLE_COEP === true);
   } else {
-    cspReportOnly = process.env.CSP_REPORT_ONLY !== 'false';
-    enableCoep = process.env.ENABLE_COEP === 'true';
+    cspReportOnly = dynamicOverrides.cspReportOnly !== null ? 
+      dynamicOverrides.cspReportOnly : 
+      (process.env.CSP_REPORT_ONLY !== 'false');
+    enableCoep = dynamicOverrides.enableCOEP !== null ? 
+      dynamicOverrides.enableCOEP : 
+      (process.env.ENABLE_COEP === 'true');
   }
   
   // Content Security Policy
