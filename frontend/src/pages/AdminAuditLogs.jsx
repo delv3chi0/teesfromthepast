@@ -1,13 +1,14 @@
 // frontend/src/pages/AdminAuditLogs.jsx
 import { useEffect, useMemo, useState } from "react";
 import { client } from "../api/client";
+import { getAuditCategories, getAuditLogs } from "../api/adminRuntime.js";
 import {
   Box, Heading, HStack, Input, Button, Table, Thead, Tbody, Tr, Th, Td,
   Text, Code, useToast, IconButton, Tooltip, Tag, TableContainer,
   Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
-  VStack, Flex, Select
+  VStack, Flex, Select, Badge, Alert, AlertIcon, Tabs, TabList, TabPanels, Tab, TabPanel
 } from "@chakra-ui/react";
-import { FaSync, FaInfoCircle, FaCopy } from "react-icons/fa";
+import { FaSync, FaInfoCircle, FaCopy, FaFilter, FaSearch } from "react-icons/fa";
 
 const isObjId = (s) => typeof s === "string" && /^[a-f0-9]{24}$/i.test(s);
 const shortId = (id = "", chunk = 4) => {
@@ -23,6 +24,10 @@ export default function AdminAuditLogs() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [useNewAPI, setUseNewAPI] = useState(false);
   const toast = useToast();
 
   // Filters
@@ -55,6 +60,43 @@ export default function AdminAuditLogs() {
     return params;
   }, [actorOrQ, action, targetType, page, limit, dateFrom, dateTo]);
 
+  // Load categories for enhanced filtering
+  const loadCategories = async () => {
+    try {
+      const result = await getAuditCategories();
+      setCategories(result.categories || []);
+      setUseNewAPI(true);
+    } catch (error) {
+      console.warn('New audit API not available, using legacy API');
+      setUseNewAPI(false);
+    }
+  };
+
+  // Enhanced load function using new API
+  const loadEnhanced = async (p = 1, append = false) => {
+    setLoading(true);
+    try {
+      const params = {
+        limit,
+        ...(selectedCategory && { category: selectedCategory }),
+        ...(searchQuery && { q: searchQuery })
+      };
+      
+      const result = await getAuditLogs(params);
+      const next = result.logs || [];
+      setHasMore(next.length === limit); // Simple pagination check
+      setItems((prev) => (append ? [...prev, ...next] : next));
+    } catch (error) {
+      toast({
+        title: "Failed to load audit logs",
+        description: error.message,
+        status: "error"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const load = async (p = 1, append = false) => {
     setLoading(true);
     try {
@@ -77,19 +119,83 @@ export default function AdminAuditLogs() {
   };
 
   useEffect(() => {
-    // initial load
+    // Load categories and initial data
+    loadCategories();
     load(1, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const apply = () => load(1, false);
+  const onApply = () => load(1, false);
+  const onShowMore = () => load(page + 1, true);
   const showMore = () => load(page + 1, true);
 
   return (
     <Box layerStyle="cardBlue" w="100%" p={{ base: 2, md: 4 }}>
       <HStack justify="space-between" mb={4} flexWrap="wrap" gap={2}>
         <Heading size="md">Admin Audit Logs</Heading>
-        <HStack gap={2} flexWrap="wrap">
+        <Button size="sm" onClick={() => load(1, false)} variant="outline" leftIcon={<FaSync />}>
+          Refresh
+        </Button>
+      </HStack>
+
+      {/* Enhanced Filtering with Tabs */}
+      {useNewAPI && categories.length > 0 && (
+        <Box mb={4}>
+          <Alert status="info" size="sm" mb={3}>
+            <AlertIcon />
+            <Text fontSize="sm">
+              Enhanced filtering is available with category and search support.
+            </Text>
+          </Alert>
+          
+          <Tabs variant="soft-rounded" size="sm" colorScheme="blue">
+            <TabList flexWrap="wrap">
+              <Tab onClick={() => { setSelectedCategory(''); loadEnhanced(1, false); }}>
+                All Categories
+              </Tab>
+              {categories.slice(0, 8).map(category => (
+                <Tab 
+                  key={category} 
+                  onClick={() => { setSelectedCategory(category); loadEnhanced(1, false); }}
+                >
+                  {category}
+                </Tab>
+              ))}
+            </TabList>
+          </Tabs>
+          
+          <HStack mt={3} spacing={3} flexWrap="wrap">
+            <Input
+              placeholder="Search logs (action, IP, user agent, etc.)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              size="sm"
+              w="300px"
+              leftIcon={<FaSearch />}
+            />
+            <Button 
+              size="sm" 
+              colorScheme="blue" 
+              onClick={() => loadEnhanced(1, false)}
+              leftIcon={<FaFilter />}
+            >
+              Apply Search
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline" 
+              onClick={() => { setSearchQuery(''); setSelectedCategory(''); loadEnhanced(1, false); }}
+            >
+              Clear Filters
+            </Button>
+          </HStack>
+        </Box>
+      )}
+
+      {/* Legacy Filtering */}
+      {!useNewAPI && (
+        <HStack gap={2} flexWrap="wrap" mb={4}>
           <Input
             placeholder="User ID / username / email / session id"
             value={actorOrQ}
@@ -145,7 +251,7 @@ export default function AdminAuditLogs() {
             Apply
           </Button>
         </HStack>
-      </HStack>
+      )}
 
       <TableContainer
         w="100%"

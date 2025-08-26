@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Admin Console Enhancements**
+  - Dynamic configuration layer with memory-only runtime overrides
+  - New admin tabs for operational and security management:
+    - Metrics tab with live Prometheus metrics parsing and display
+    - Rate Limiting tab with real-time configuration adjustments
+    - Security tab for CSP and COEP header management
+    - Health & Readiness tab with auto-refresh monitoring
+    - Config Inspector with JSON export and override status
+    - Request Tracing tab with ID generation documentation
+    - Enhanced Audit Logs with category filtering and search
+  - Reusable UI components for consistent admin interface
+  - Comprehensive API endpoints for runtime configuration management
+  - Graceful fallbacks when enhanced features are unavailable
+
+- **Backend Infrastructure**
+  - Dynamic configuration system (`backend/config/dynamicConfig.js`)
+  - Enhanced rate limiting middleware with dynamic override support
+  - Audit logger ring buffer for real-time UI access
+  - New admin runtime endpoints (`/api/admin/runtime/*`)
+  - Enhanced audit endpoints with filtering and search
+  - Memory-only configuration overrides (no persistence)
+  - Server-side validation and sanitization for all dynamic changes
+
 - **Metrics Instrumentation Foundation**
   - Prometheus metrics collection with prom-client
   - HTTP request counters and duration histograms
