@@ -1,6 +1,7 @@
 // backend/middleware/securityHeaders.js
 // Security headers middleware with configurable CSP and COEP
 import { isConfigReady, getConfig } from '../config/index.js';
+import { getSecurityConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 
 // Build Content Security Policy
@@ -24,14 +25,21 @@ export function securityHeaders(req, res, next) {
   let cspReportOnly;
   let enableCoep;
   
-  // Get configuration
-  if (isConfigReady()) {
-    const config = getConfig();
-    cspReportOnly = config.CSP_REPORT_ONLY !== false;
-    enableCoep = config.ENABLE_COEP === true;
-  } else {
-    cspReportOnly = process.env.CSP_REPORT_ONLY !== 'false';
-    enableCoep = process.env.ENABLE_COEP === 'true';
+  // Get configuration - first check dynamic config, then fallback to static config
+  try {
+    const dynamicConfig = getSecurityConfig();
+    cspReportOnly = dynamicConfig.cspReportOnly;
+    enableCoep = dynamicConfig.enableCOEP;
+  } catch {
+    // Fallback to static config if dynamic config fails
+    if (isConfigReady()) {
+      const config = getConfig();
+      cspReportOnly = config.CSP_REPORT_ONLY !== false;
+      enableCoep = config.ENABLE_COEP === true;
+    } else {
+      cspReportOnly = process.env.CSP_REPORT_ONLY !== 'false';
+      enableCoep = process.env.ENABLE_COEP === 'true';
+    }
   }
   
   // Content Security Policy
