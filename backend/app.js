@@ -52,8 +52,21 @@ logCorsConfig();
 // Apply CORS before any routes
 applyCors(app);
 
-// Health (now receives CORS headers)
+// Operational endpoints (now receive CORS headers)
 app.get("/health", (_req, res) => res.status(200).send("OK"));
+
+// Version endpoint
+import { getVersionInfo } from "./version/index.js";
+app.get("/version", (_req, res) => {
+  try {
+    const versionInfo = getVersionInfo();
+    res.status(200).json(versionInfo);
+  } catch (error) {
+    res.status(500).json({
+      error: { code: 'VERSION_ERROR', message: 'Unable to retrieve version information' }
+    });
+  }
+});
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -70,6 +83,10 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+
+// Global Redis-backed rate limiting
+import { createRateLimit } from "./middleware/rateLimit.js";
+app.use(createRateLimit());
 
 // Rate limits with adaptive abuse detection
 import { createAdaptiveRateLimit } from "./utils/adaptiveRateLimit.js";
