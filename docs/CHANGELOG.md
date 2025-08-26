@@ -1,7 +1,46 @@
-CHANGE LOG:
+# CHANGELOG
 
-8/13 - Worked on formatting the ProductStuiod
-8/14 - Updated AI generator to high quality images. 1024 -> 2048, made a big differece.
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- Version endpoint (GET /version) with commit, build time, version, and environment info
+- Auto-detection of git commit and build time at startup
+- Redis-backed global rate limiting middleware with configurable limits
+- Support for rate limit exempt paths (startsWith matching)
+- Rate limiting headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+- Graceful fallback when Redis unavailable (X-RateLimit-Disabled header)
+- HTTP 429 responses with Retry-After header when rate limits exceeded
+- Environment variable validation for rate limiting configuration
+- Version information caching for performance
+- Print version script (npm run print:version)
+- Comprehensive documentation updates (README.md, SITE_MANUAL.md)
+- Version verification and rate limit tuning runbooks
+
+### Environment Variables Added
+- RATE_LIMIT_MAX (default: 120) - Maximum requests per window
+- RATE_LIMIT_EXEMPT_PATHS (default: "/health,/readiness") - Comma-separated exempt paths
+- RATE_LIMIT_REDIS_PREFIX (default: "rl:") - Redis key prefix for rate limiting
+- GIT_COMMIT (optional) - Git commit hash, auto-detected if not provided
+- BUILD_TIME (optional) - Build timestamp, auto-detected if not provided
+
+### Technical Implementation
+- Fixed-window rate limiting using Redis INCR with expiry
+- User-based rate limiting (by user ID if authenticated, otherwise by IP)
+- Fail-safe rate limiting that disables on Redis errors
+- Cached version information to prevent repeated git command execution
+- TODO placeholders for future enhancements (sliding window, per-route limits, metrics)
+
+---
+
+## Previous Changes (Historical)
+
+8/13 - Worked on formatting the ProductStudio
+8/14 - Updated AI generator to high quality images. 1024 -> 2048, made a big difference.
 8/15 - Removed all mockups and starting from scratch, building products to carry.
   Updated the image generator look and feel - added image to image processing
 8/16 - Continued designing the image generator

@@ -1,5 +1,8 @@
 {
   "type": "module",
+  "scripts": {
+    "print:version": "node scripts/printVersion.js"
+  },
   "devDependencies": {
     "cloudinary": "^2.7.0"
   }

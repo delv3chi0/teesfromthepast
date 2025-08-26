@@ -70,6 +70,7 @@ Use this as a single “source of truth” to onboard contributors and operate t
 |-------|--------|---------------|-------------|-------|
 | /health | GET | No | Liveness probe | Fast, internal state only |
 | /readiness | GET | No | Readiness probe (checks dependencies) | May degrade vs fail |
+| /version | GET | No | Build metadata (commit, timestamp, version) | Returns version info object |
 | /metrics | GET | Possibly (token) | Prometheus metrics | Protect if exposed publicly |
 | /flags | GET | Optional (internal) | Returns all flag values + metadata | For admin dashboards |
 | /flags/reload | POST | Yes (FLAG_ADMIN_TOKEN) | Forces reload from file/env sources | 401 if token invalid |
@@ -80,7 +81,6 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | /jobs/test | POST | Possibly yes + feature flag + ENABLE_JOB_TESTING | Enqueues sample job | Not enabled in prod by default |
 | /jobs/:id/status | GET | Maybe restricted | Returns job state (waiting, active, completed, failed) | Make sure to avoid leaking info |
 | (Sample POST route with idempotency) | POST | Varies | Demonstrates idempotent behavior | Repeat returns same body |
-| /version (Recommended upcoming) | GET | No | Build metadata (commit, timestamp) | NOT yet implemented (future) |
 
 ---
 
@@ -157,7 +157,13 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | JWT_SECRET | Sign/verify JWTs | (random 32+ chars) | Yes | Rotate carefully; triggers logout-like effect |
 | JWT_ACCESS_TTL | Access token lifetime (e.g. “5m”) | 5m | Yes | Short lived |
 | JWT_REFRESH_TTL | Refresh token lifetime (e.g. “30d”) | 30d | Yes | Longer duration |
-| REDIS_URL | Redis connection string | rediss://... | Yes | Used by tokens, cache, jobs, idempotency |
+| REDIS_URL | Redis connection string | rediss://... | Yes | Used by tokens, cache, jobs, idempotency, rate limiting |
+| RATE_LIMIT_MAX | Max requests per window | 120 | No | Global rate limit (default: 120) |
+| RATE_LIMIT_WINDOW | Window size in milliseconds | 60000 | No | Rate limit window (default: 60000ms) |
+| RATE_LIMIT_EXEMPT_PATHS | Comma-separated exempt paths | /health,/readiness | No | Paths that bypass rate limiting |
+| RATE_LIMIT_REDIS_PREFIX | Redis key prefix for rate limiting | rl: | No | Rate limit key prefix (default: "rl:") |
+| GIT_COMMIT | Git commit hash | 4d5de25 | No | Auto-detected if not provided |
+| BUILD_TIME | Build timestamp ISO string | 2025-01-15T10:30:00Z | No | Auto-detected if not provided |
 | ENABLE_2FA | Enable 2FA flow (stub) | 0 | No | Future full implementation |
 | FLAG_ADMIN_TOKEN | Auth token for /flags/reload | (secret) | Recommended | Keep distinct from JWT secret |
 | ENABLE_FLAG_WATCH | Dev hot reload via fs.watch | 1 (dev) | No | Don’t enable in prod |
@@ -170,7 +176,6 @@ Use this as a single “source of truth” to onboard contributors and operate t
 | NODE_ENV | Environment mode | production | Yes | Standard |
 | LOG_LEVEL | Verbosity for logger | info | No | debug in dev |
 | FLAG_<NAME> | Override individual flags | on/off | As needed | e.g., FLAG_NEW_CART=on |
-| (Future) GIT_COMMIT | Version endpoint commit ref | auto-injected | Future | For /version endpoint |
 
 Add new variables here as features mature. Keep alphabetized for clarity.
 
@@ -256,7 +261,21 @@ Actions:
 3. Add index / restructure query.
 4. Adjust DB_SLOW_QUERY_MS if noise too high (but prefer query tuning first).
 
-### 7.9 Incident Triage Checklist
+### 7.9 Version Verification
+1. Check deployed version: curl /version
+2. Verify commit matches expected deployment
+3. Compare with git log for expected changes
+4. If mismatch: investigate deployment pipeline or rollback
+
+### 7.10 Rate Limit Tuning
+1. Monitor rate_limited_total metric for frequency
+2. Check 429 response patterns in logs
+3. Adjust RATE_LIMIT_MAX if too restrictive (false positives)
+4. Adjust RATE_LIMIT_WINDOW for different time scales
+5. Add specific IPs/users to exempt paths if needed
+6. Consider per-route limits for high-traffic endpoints (future)
+
+### 7.11 Incident Triage Checklist
 - What’s the symptom (availability, latency, errors)?
 - Scope (all users, subset, just one endpoint)?
 - Recent deploy? (Check commit timeline)
