@@ -11,7 +11,8 @@ import {
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
   FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy, FaChevronDown,
-  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge, FaSearch, FaSort
+  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge, FaSearch, FaSort, FaChartBar, 
+  FaHeartbeat, FaRoute, FaCog, FaSpinner
 } from "react-icons/fa";
 
 import { client, setAuthHeader } from "../api/client";
@@ -19,6 +20,14 @@ import { useAuth } from "../context/AuthProvider";
 import InventoryPanel from "../components/admin/InventoryPanel.jsx";
 import AdminDashboard from "./admin/AdminDashboard.jsx";
 import AdminAuditLogs from "./AdminAuditLogs.jsx";
+import AdminMetrics from "./admin/AdminMetrics.jsx";
+import AdminRateLimiting from "./admin/AdminRateLimiting.jsx";
+import AdminSecurity from "./admin/AdminSecurity.jsx";
+import AdminHealth from "./admin/AdminHealth.jsx";
+import AdminTracing from "./admin/AdminTracing.jsx";
+import AdminConfig from "./admin/AdminConfig.jsx";
+import AuditLogPanel from "../components/admin/Audit/AuditLogPanel.jsx";
+import { checkBackendAvailability } from "../api/adminRuntime.js";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
 const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—");
@@ -35,6 +44,22 @@ export default function AdminPage() {
   const toast = useToast();
   const { token } = useAuth();
   useEffect(() => { setAuthHeader(token); }, [token]);
+
+  // Check backend availability for new dynamic admin features
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const result = await checkBackendAvailability();
+        setBackendAvailable(result.available);
+      } catch (error) {
+        setBackendAvailable(false);
+      }
+    };
+    
+    if (token) {
+      checkBackend();
+    }
+  }, [token]);
 
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -83,6 +108,9 @@ export default function AdminPage() {
 
   // Audit logs
   const [auditsLoaded, setAuditsLoaded] = useState(false);
+
+  // Backend availability for new features
+  const [backendAvailable, setBackendAvailable] = useState(true);
 
   // Modals
   const { isOpen: isViewUserModalOpen, onOpen: onViewUserModalOpen, onClose: onViewUserModalClose } = useDisclosure();
@@ -1031,6 +1059,12 @@ export default function AdminPage() {
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaPalette} mr={2} /> Designs</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaKey} mr={2} /> Devices</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaChartBar} mr={2} /> Metrics</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaSpinner} mr={2} /> Rate Limiting</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaShieldAlt} mr={2} /> Security</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaHeartbeat} mr={2} /> Health</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaRoute} mr={2} /> Tracing</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaCog} mr={2} /> Config</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Audit Logs</Tab>
             </TabList>
 
@@ -1041,7 +1075,103 @@ export default function AdminPage() {
               <TabPanel px={0} py={2}><DesignsPanel /></TabPanel>
               <TabPanel px={0} py={2}><InventoryPanel /></TabPanel>
               <TabPanel px={0} py={2}><DevicesPanel /></TabPanel>
-              <TabPanel px={0} py={2}><AdminAuditLogs token={token} /></TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AdminMetrics />
+                ) : (
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={2}>
+                      <Text>Enhanced admin features require backend updates.</Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Please ensure the dynamic admin console backend features are deployed.
+                      </Text>
+                    </VStack>
+                  </Alert>
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AdminRateLimiting />
+                ) : (
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={2}>
+                      <Text>Enhanced admin features require backend updates.</Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Please ensure the dynamic admin console backend features are deployed.
+                      </Text>
+                    </VStack>
+                  </Alert>
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AdminSecurity />
+                ) : (
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={2}>
+                      <Text>Enhanced admin features require backend updates.</Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Please ensure the dynamic admin console backend features are deployed.
+                      </Text>
+                    </VStack>
+                  </Alert>
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AdminHealth />
+                ) : (
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={2}>
+                      <Text>Enhanced admin features require backend updates.</Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Please ensure the dynamic admin console backend features are deployed.
+                      </Text>
+                    </VStack>
+                  </Alert>
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AdminTracing />
+                ) : (
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={2}>
+                      <Text>Enhanced admin features require backend updates.</Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Please ensure the dynamic admin console backend features are deployed.
+                      </Text>
+                    </VStack>
+                  </Alert>
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AdminConfig />
+                ) : (
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={2}>
+                      <Text>Enhanced admin features require backend updates.</Text>
+                      <Text fontSize="sm" color="gray.600">
+                        Please ensure the dynamic admin console backend features are deployed.
+                      </Text>
+                    </VStack>
+                  </Alert>
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {backendAvailable ? (
+                  <AuditLogPanel />
+                ) : (
+                  <AdminAuditLogs token={token} />
+                )}
+              </TabPanel>
             </TabPanels>
           </Tabs>
         </Box>

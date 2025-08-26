@@ -8,6 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Admin Console: Dynamic Runtime Configuration Layer**
+  - In-memory dynamic configuration system for real-time operational changes
+  - Runtime API endpoints for rate limiting, security, tracing, and audit log management
+  - Enhanced middleware integration with dynamic overrides (ephemeral, lost on restart)
+  - New operational tabs: Metrics, Rate Limiting, Security, Health, Tracing, Config, Enhanced Audit Logs
+  - Tab order: Dashboard | Users | Orders | Designs | Inventory | Devices | Metrics | Rate Limiting | Security | Health | Tracing | Config | Audit Logs
+
+- **Enhanced Audit Logging**
+  - Ring buffer for real-time audit log access (configurable size, default 500 entries)
+  - Server-side filtering by category and case-insensitive text search
+  - Enhanced audit log panel with tail mode (auto-refresh every 5s)
+  - Expandable row details with metadata JSON preview
+
+- **Dynamic Rate Limiting Enhancements**
+  - Real-time rate limit configuration without server restart
+  - Dynamic path and role-based overrides management
+  - Precedence: Role overrides > Path overrides > Global settings
+  - Immediate application to new requests
+
+- **Dynamic Security Headers**
+  - Real-time CSP report-only mode toggle
+  - Dynamic Cross-Origin Embedder Policy (COEP) enable/disable
+  - Immediate application to subsequent requests
+
+- **Request Tracing System**
+  - Request ID tracking with configurable header name
+  - Recent request IDs ring buffer (last 100 requests)
+  - Request correlation for distributed debugging
+
+- **Comprehensive Admin UI Components**
+  - Reusable SectionCard, KeyValueGrid, JSONPreview components
+  - EditableNumberRow for inline number editing with validation
+  - ToggleRow for boolean settings with immediate feedback
+  - Graceful fallback when backend features unavailable
+
 - **Metrics Instrumentation Foundation**
   - Prometheus metrics collection with prom-client
   - HTTP request counters and duration histograms
