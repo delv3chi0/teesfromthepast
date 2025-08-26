@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Admin Console: Dynamic Runtime Configuration Layer and Operational Monitoring**
+  - Complete dynamic runtime configuration system with in-memory state management
+  - New operational admin tabs: Metrics, Rate Limiting, Security, Health, Tracing, Config, Enhanced Audit Logs
+  - Real-time configuration changes without server restart (ephemeral, non-persistent)
+  - Enhanced audit logging with ring buffer and advanced filtering capabilities
+  - Dynamic rate limiting with algorithm switching and rule overrides at runtime
+  - Runtime security header configuration (CSP report-only mode, COEP enablement)
+  - Request ID tracing with ring buffer for debugging and monitoring
+  - Health and readiness endpoints with runtime configuration status
+  - Complete configuration snapshot export with JSON download functionality
+  - Fallback support for deployments without dynamic backend features
+
 - **Metrics Instrumentation Foundation**
   - Prometheus metrics collection with prom-client
   - HTTP request counters and duration histograms

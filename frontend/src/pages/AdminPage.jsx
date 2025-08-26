@@ -20,6 +20,16 @@ import InventoryPanel from "../components/admin/InventoryPanel.jsx";
 import AdminDashboard from "./admin/AdminDashboard.jsx";
 import AdminAuditLogs from "./AdminAuditLogs.jsx";
 
+// Import new admin operational pages
+import AdminMetrics from "./admin/AdminMetrics.jsx";
+import AdminRateLimiting from "./admin/AdminRateLimiting.jsx";
+import AdminSecurity from "./admin/AdminSecurity.jsx";
+import AdminHealth from "./admin/AdminHealth.jsx";
+import AdminTracing from "./admin/AdminTracing.jsx";
+import AdminConfig from "./admin/AdminConfig.jsx";
+import AdminEnhancedAuditLogs from "./admin/AdminEnhancedAuditLogs.jsx";
+import { isRuntimeDynamicAvailable } from "../api/adminRuntime.js";
+
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
 const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—");
 const monthName = (yyyymm) => {
@@ -1031,7 +1041,15 @@ export default function AdminPage() {
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaPalette} mr={2} /> Designs</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaKey} mr={2} /> Devices</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Audit Logs</Tab>
+              {/* Operational Tabs - Dynamic Admin Console */}
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaTachometerAlt} mr={2} /> Metrics</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaSync} mr={2} /> Rate Limiting</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaShieldAlt} mr={2} /> Security</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaPaperPlane} mr={2} /> Health</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaSearch} mr={2} /> Tracing</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaEdit} mr={2} /> Config</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Enhanced Audit Logs</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaIdBadge} mr={2} /> Audit Logs</Tab>
             </TabList>
 
             <TabPanels>
@@ -1041,6 +1059,86 @@ export default function AdminPage() {
               <TabPanel px={0} py={2}><DesignsPanel /></TabPanel>
               <TabPanel px={0} py={2}><InventoryPanel /></TabPanel>
               <TabPanel px={0} py={2}><DevicesPanel /></TabPanel>
+              {/* Operational Panels - Dynamic Admin Console */}
+              <TabPanel px={0} py={2}>
+                {!isRuntimeDynamicAvailable() ? (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Text>
+                      Dynamic admin console features are not available. 
+                      The backend does not support runtime configuration endpoints.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <AdminMetrics />
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {!isRuntimeDynamicAvailable() ? (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Text>
+                      Dynamic rate limiting configuration is not available. 
+                      Using static configuration from environment variables.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <AdminRateLimiting />
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {!isRuntimeDynamicAvailable() ? (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Text>
+                      Dynamic security configuration is not available. 
+                      Using static configuration from environment variables.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <AdminSecurity />
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}><AdminHealth /></TabPanel>
+              <TabPanel px={0} py={2}>
+                {!isRuntimeDynamicAvailable() ? (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Text>
+                      Dynamic tracing features are not available. 
+                      Request IDs are still generated but not tracked in memory.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <AdminTracing />
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {!isRuntimeDynamicAvailable() ? (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Text>
+                      Runtime configuration snapshot is not available. 
+                      Dynamic console features require backend support.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <AdminConfig />
+                )}
+              </TabPanel>
+              <TabPanel px={0} py={2}>
+                {!isRuntimeDynamicAvailable() ? (
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <Text>
+                      Enhanced audit logs are not available. 
+                      Using basic audit functionality only.
+                    </Text>
+                  </Alert>
+                ) : (
+                  <AdminEnhancedAuditLogs />
+                )}
+              </TabPanel>
               <TabPanel px={0} py={2}><AdminAuditLogs token={token} /></TabPanel>
             </TabPanels>
           </Tabs>
