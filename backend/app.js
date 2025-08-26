@@ -39,6 +39,7 @@ import adminDesignRoutes from "./routes/adminDesignRoutes.js";
 import adminProductRoutes from "./routes/adminProductRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
+import adminDynamicRoutes from "./routes/adminDynamic.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
@@ -146,6 +147,7 @@ app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/admin/sessions", adminSessionRoutes);
 app.use("/api/admin/audit", adminAuditRoutes);
+app.use("/api/admin", adminDynamicRoutes); // Dynamic runtime configuration
 
 // Public extras
 app.use("/api/contest", contestRoutes);
