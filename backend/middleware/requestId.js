@@ -1,14 +1,21 @@
 import { nanoid } from "nanoid";
 import { isConfigReady, getConfig } from "../config/index.js";
+import { getTracingConfig, pushRecentRequestId } from "../config/dynamicConfig.js";
 
 export function requestId(req, res, next) {
-  // Get header name from config or environment
+  // Get header name from dynamic config first, then static config
   let headerName;
-  if (isConfigReady()) {
-    const config = getConfig();
-    headerName = config.REQUEST_ID_HEADER || 'X-Request-Id';
-  } else {
-    headerName = process.env.REQUEST_ID_HEADER || 'X-Request-Id';
+  try {
+    const dynamicConfig = getTracingConfig();
+    headerName = dynamicConfig.requestIdHeader;
+  } catch (err) {
+    // Fall back to static configuration
+    if (isConfigReady()) {
+      const config = getConfig();
+      headerName = config.REQUEST_ID_HEADER || 'X-Request-Id';
+    } else {
+      headerName = process.env.REQUEST_ID_HEADER || 'X-Request-Id';
+    }
   }
   
   // Use existing request ID from header if present, otherwise generate new one
@@ -20,6 +27,9 @@ export function requestId(req, res, next) {
   
   req.id = id;
   res.setHeader(headerName, id);
+  
+  // Push to ring buffer for tracing
+  pushRecentRequestId(id);
   
   // Add request ID to logger context for this request
   if (req.log) {

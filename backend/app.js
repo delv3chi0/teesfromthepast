@@ -39,6 +39,7 @@ import adminDesignRoutes from "./routes/adminDesignRoutes.js";
 import adminProductRoutes from "./routes/adminProductRoutes.js";
 import adminSessionRoutes from "./routes/adminSessionRoutes.js";
 import adminAuditRoutes from "./routes/adminAuditRoutes.js";
+import adminDynamicRoutes from "./routes/adminDynamic.js";
 import contestRoutes from "./routes/contest.js";
 import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
@@ -64,6 +65,22 @@ app.use(healthRoutes);
 
 // Version endpoint
 import { getVersionInfo } from "./version/index.js";
+import { setVersionInfo } from "./config/dynamicConfig.js";
+
+// Initialize dynamic config with version information on startup
+try {
+  const versionInfo = getVersionInfo();
+  setVersionInfo({
+    commit: versionInfo.commit,
+    buildTime: versionInfo.buildTime,
+    version: versionInfo.version,
+    environment: versionInfo.env
+  });
+  console.log(`[Startup] Version initialized in dynamic config: ${versionInfo.version} (${versionInfo.commit})`);
+} catch (error) {
+  console.warn(`[Startup] Failed to initialize version info in dynamic config:`, error.message);
+}
+
 app.get("/version", (_req, res) => {
   try {
     const versionInfo = getVersionInfo();
@@ -146,6 +163,7 @@ app.use("/api/admin/designs", adminDesignRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/admin/sessions", adminSessionRoutes);
 app.use("/api/admin/audit", adminAuditRoutes);
+app.use("/api/admin", adminDynamicRoutes);
 
 // Public extras
 app.use("/api/contest", contestRoutes);

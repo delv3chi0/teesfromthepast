@@ -3,6 +3,7 @@
 import express from 'express';
 import { isConfigReady, getConfig } from '../config/index.js';
 import { getVersionInfo } from '../version/index.js';
+import { getRateLimitConfig, getMetricsConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -47,19 +48,37 @@ router.get('/health', async (req, res) => {
     const versionInfo = getVersionInfo();
     const redisStatus = await checkRedisConnection();
     
-    // Get rate limiter configuration
+    // Get rate limiter configuration - check dynamic config first
     let rateLimiterInfo;
-    if (isConfigReady()) {
-      const config = getConfig();
+    try {
+      const dynamicRateConfig = getRateLimitConfig();
       rateLimiterInfo = {
-        algorithm: config.RATE_LIMIT_ALGORITHM || 'fixed',
-        enabled: !!config.REDIS_URL
+        algorithm: dynamicRateConfig.algorithm,
+        enabled: !!redisStatus.connected
       };
-    } else {
-      rateLimiterInfo = {
-        algorithm: process.env.RATE_LIMIT_ALGORITHM || 'fixed',
-        enabled: !!process.env.REDIS_URL
-      };
+    } catch (err) {
+      // Fall back to static configuration
+      if (isConfigReady()) {
+        const config = getConfig();
+        rateLimiterInfo = {
+          algorithm: config.RATE_LIMIT_ALGORITHM || 'fixed',
+          enabled: !!config.REDIS_URL
+        };
+      } else {
+        rateLimiterInfo = {
+          algorithm: process.env.RATE_LIMIT_ALGORITHM || 'fixed',
+          enabled: !!process.env.REDIS_URL
+        };
+      }
+    }
+    
+    // Get metrics configuration
+    let metricsEnabled;
+    try {
+      const dynamicMetricsConfig = getMetricsConfig();
+      metricsEnabled = dynamicMetricsConfig.enabled;
+    } catch (err) {
+      metricsEnabled = process.env.ENABLE_METRICS === 'true';
     }
     
     const healthData = {
@@ -71,7 +90,11 @@ router.get('/health', async (req, res) => {
       version: versionInfo.version,
       environment: versionInfo.environment,
       redis: redisStatus,
-      rateLimiter: rateLimiterInfo
+      rateLimiter: rateLimiterInfo,
+      runtime: {
+        rateLimitAlgorithm: rateLimiterInfo.algorithm,
+        metricsEnabled
+      }
     };
     
     res.status(200).json(healthData);

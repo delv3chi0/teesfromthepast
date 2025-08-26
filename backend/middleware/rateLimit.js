@@ -2,6 +2,7 @@
 // Redis-backed global rate limiting middleware with multiple algorithms
 import Redis from 'ioredis';
 import { isConfigReady, getConfig } from '../config/index.js';
+import { getRateLimitConfig } from '../config/dynamicConfig.js';
 import { logger } from '../utils/logger.js';
 import { incrementRateLimited, incrementRedisErrors } from './metrics.js';
 
@@ -125,13 +126,14 @@ function parseRoleRateLimitOverrides(overrideString) {
 /**
  * Find the best matching override for a request
  * Priority: role override > path override > global
+ * Works with both environment-parsed overrides and dynamic config overrides
  */
 function findRateLimitOverride(req, pathOverrides, roleOverrides) {
   const userRole = req.user?.role;
   const path = req.path;
   
   // Check role-based overrides first (highest priority)
-  if (userRole && roleOverrides.length > 0) {
+  if (userRole && roleOverrides && roleOverrides.length > 0) {
     for (const override of roleOverrides) {
       if (override.role === userRole && path.startsWith(override.pathPrefix)) {
         return { max: override.max, algorithm: override.algorithm, source: 'role' };
@@ -140,7 +142,7 @@ function findRateLimitOverride(req, pathOverrides, roleOverrides) {
   }
   
   // Check path-based overrides
-  if (pathOverrides.length > 0) {
+  if (pathOverrides && pathOverrides.length > 0) {
     for (const override of pathOverrides) {
       if (path.startsWith(override.pathPrefix)) {
         return { max: override.max, algorithm: override.algorithm, source: 'path' };
@@ -249,22 +251,42 @@ export function createRateLimit() {
       let pathOverrides;
       let roleOverrides;
       
-      // Get configuration
+      // Get configuration - check dynamic config first, then environment
+      let rateLimitMax;
+      let rateLimitWindow;
+      let exemptPaths;
+      let algorithm;
+      let pathOverrides;
+      let roleOverrides;
+      
+      // Check dynamic config first for overrides
+      try {
+        const dynamicConfig = getRateLimitConfig();
+        rateLimitMax = dynamicConfig.globalMax;
+        rateLimitWindow = dynamicConfig.windowMs;
+        algorithm = dynamicConfig.algorithm;
+        pathOverrides = dynamicConfig.overrides;
+        roleOverrides = dynamicConfig.roleOverrides;
+      } catch (err) {
+        logger.warn('Failed to get dynamic rate limit config, falling back to environment', { error: err.message });
+      }
+      
+      // Fall back to static configuration for values not in dynamic config
       if (isConfigReady()) {
         const config = getConfig();
-        rateLimitMax = config.RATE_LIMIT_MAX;
-        rateLimitWindow = config.RATE_LIMIT_WINDOW;
+        rateLimitMax = rateLimitMax || config.RATE_LIMIT_MAX;
+        rateLimitWindow = rateLimitWindow || config.RATE_LIMIT_WINDOW;
         exemptPaths = config.RATE_LIMIT_EXEMPT_PATHS;
-        algorithm = config.RATE_LIMIT_ALGORITHM;
-        pathOverrides = parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
+        algorithm = algorithm || config.RATE_LIMIT_ALGORITHM;
+        pathOverrides = pathOverrides || parseRateLimitOverrides(config.RATE_LIMIT_OVERRIDES);
+        roleOverrides = roleOverrides || parseRoleRateLimitOverrides(config.RATE_LIMIT_ROLE_OVERRIDES);
       } else {
-        rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
-        rateLimitWindow = parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
+        rateLimitMax = rateLimitMax || parseInt(process.env.RATE_LIMIT_MAX || '120', 10);
+        rateLimitWindow = rateLimitWindow || parseInt(process.env.RATE_LIMIT_WINDOW || '60000', 10);
         exemptPaths = process.env.RATE_LIMIT_EXEMPT_PATHS || '/health,/readiness';
-        algorithm = process.env.RATE_LIMIT_ALGORITHM || 'fixed';
-        pathOverrides = parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
-        roleOverrides = parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
+        algorithm = algorithm || process.env.RATE_LIMIT_ALGORITHM || 'fixed';
+        pathOverrides = pathOverrides || parseRateLimitOverrides(process.env.RATE_LIMIT_OVERRIDES);
+        roleOverrides = roleOverrides || parseRoleRateLimitOverrides(process.env.RATE_LIMIT_ROLE_OVERRIDES);
       }
       
       // Check if path is exempt
