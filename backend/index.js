@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { validateConfig } from './config/index.js';
 import { initializeErrorMonitoring } from './utils/errorMonitoring.js';
 import { logger } from './utils/logger.js';
+import { setupGracefulShutdown, registerServer } from './utils/gracefulShutdown.js';
 import mongoose from 'mongoose';
 import app from './app.js';
 
@@ -11,6 +12,9 @@ const config = validateConfig();
 
 // Initialize error monitoring early
 initializeErrorMonitoring();
+
+// Setup graceful shutdown handlers
+setupGracefulShutdown();
 
 process.on('uncaughtException', (err) => {
   logger.error('[Backend] Uncaught Exception:', err.stack);
@@ -30,10 +34,13 @@ mongoose.connect(config.MONGO_URI)
   .then(() => {
     logger.info('MongoDB connected successfully');
     // Start listening for requests only after the DB connection is successful
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT} in ${config.NODE_ENV} mode`);
       logger.info(`[Backend] Server successfully bound and listening on http://0.0.0.0:${PORT}`);
     });
+    
+    // Register server for graceful shutdown
+    registerServer(server);
   })
   .catch(err => {
     logger.error('MongoDB connection error:', err);

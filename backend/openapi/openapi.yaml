@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: TeesFromThePast Backend API
+  description: Backend API for TeesFromThePast platform with operational and business endpoints
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: ISC
+    url: https://opensource.org/licenses/ISC
+
+servers:
+  - url: https://api.teesfromthepast.com
+    description: Production server
+
+# Default security for all operations (can be overridden per operation)
+security: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns detailed health information including system status, version, and dependencies
+      operationId: getHealth
+      tags:
+        - Operations
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Process uptime in seconds
+                  commit:
+                    type: string
+                    description: Git commit hash
+                  buildTime:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+                  environment:
+                    type: string
+                  redis:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                      error:
+                        type: string
+                  rateLimiter:
+                    type: object
+                    properties:
+                      algorithm:
+                        type: string
+                        enum: [fixed, sliding, token_bucket]
+                      enabled:
+                        type: boolean
+        '500':
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /readiness:
+    get:
+      summary: Readiness check endpoint
+      description: Returns readiness status indicating if the service is ready to handle requests
+      operationId: getReadiness
+      tags:
+        - Operations
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ready:
+                    type: boolean
+                  timestamp:
+                    type: string
+                    format: date-time
+                  checks:
+                    type: object
+                    properties:
+                      redis:
+                        type: object
+                        properties:
+                          connected:
+                            type: boolean
+                          error:
+                            type: string
+                  requirements:
+                    type: object
+                    properties:
+                      redisRequired:
+                        type: boolean
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /version:
+    get:
+      summary: Version information
+      description: Returns version, build time, commit hash, and environment information
+      operationId: getVersion
+      tags:
+        - Operations
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionResponse'
+        '500':
+          description: Error retrieving version information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics (placeholder)
+      description: Returns Prometheus-formatted metrics when enabled
+      operationId: getMetrics
+      tags:
+        - Operations
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+        '404':
+          description: Metrics disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/protected-example:
+    get:
+      summary: Example protected endpoint
+      description: Example of a protected endpoint requiring authentication
+      operationId: getProtectedExample
+      tags:
+        - Example
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Protected data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: object
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: object
+              description: Additional error details
+        requestId:
+          type: string
+          description: Request identifier for tracing
+
+    VersionResponse:
+      type: object
+      required:
+        - version
+        - environment
+      properties:
+        version:
+          type: string
+          description: Application version from package.json
+        commit:
+          type: string
+          description: Git commit hash
+        buildTime:
+          type: string
+          format: date-time
+          description: Build timestamp
+        environment:
+          type: string
+          description: Runtime environment (development, production, etc.)
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/ErrorResponse'
+              - type: object
+                properties:
+                  retryAfterSeconds:
+                    type: integer
+                  algorithm:
+                    type: string
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Request limit per window
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Remaining requests in current window
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Window reset time (Unix timestamp)
+        X-RateLimit-Algorithm:
+          schema:
+            type: string
+          description: Rate limiting algorithm used
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+
+tags:
+  - name: Operations
+    description: Operational endpoints for monitoring and system information
+  - name: Example
+    description: Example endpoints for API documentation

@@ -13,6 +13,9 @@ import { JSON_BODY_LIMIT_MB } from "./config/constants.js";
 import { requestId } from "./middleware/requestId.js";
 import { createRequestLogger } from "./utils/logger.js";
 import rateLimitLogin from "./middleware/rateLimitLogin.js";
+import { metricsMiddleware, getMetricsHandler } from "./middleware/metrics.js";
+import inFlightTracker from "./middleware/inFlightTracker.js";
+import { createSecurityHeaders } from "./middleware/securityHeaders.js";
 
 // Initialize Cloudinary side-effects early
 import "./config/cloudinary.js";
@@ -41,6 +44,7 @@ import formRoutes from "./routes/formRoutes.js";
 import metricsRoutes from "./routes/metrics.js";
 import configRoutes from "./routes/configRoutes.js";
 import cloudinaryDirectUploadRoutes from "./routes/cloudinaryDirectUploadRoutes.js";
+import healthRoutes from "./routes/health.js";
 
 const app = express();
 app.set("trust proxy", 1);
@@ -52,8 +56,11 @@ logCorsConfig();
 // Apply CORS before any routes
 applyCors(app);
 
-// Operational endpoints (now receive CORS headers)
-app.get("/health", (_req, res) => res.status(200).send("OK"));
+// In-flight request tracking for graceful shutdown
+app.use(inFlightTracker);
+
+// Operational endpoints (health, readiness, version, metrics)
+app.use(healthRoutes);
 
 // Version endpoint
 import { getVersionInfo } from "./version/index.js";
@@ -67,6 +74,9 @@ app.get("/version", (_req, res) => {
     });
   }
 });
+
+// Metrics endpoint
+app.get("/metrics", getMetricsHandler);
 
 /*
   Stripe webhook BEFORE json parser if the webhook route needs raw body.
@@ -83,6 +93,11 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+
+// Additional security headers middleware
+app.use(createSecurityHeaders({
+  skipPaths: ['/api/stripe'] // Skip CSP for webhook endpoints that might need raw body
+}));
 
 // Global Redis-backed rate limiting
 import { createRateLimit } from "./middleware/rateLimit.js";
@@ -105,9 +120,10 @@ app.use("/api/auth/register", createAdaptiveRateLimit('auth'));
 app.use("/api/upload", createAdaptiveRateLimit('upload'));
 app.use("/api", createAdaptiveRateLimit('api')); // General API rate limiting
 
-// Request metadata / logging
+// Request metadata / logging / metrics
 app.use(requestId);
 app.use(createRequestLogger);
+app.use(metricsMiddleware);
 
 // Cloudinary direct upload + config
 app.use("/api/cloudinary", cloudinaryDirectUploadRoutes);
