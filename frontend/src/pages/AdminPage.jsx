@@ -11,7 +11,8 @@ import {
 import {
   FaUsersCog, FaBoxOpen, FaPalette, FaEdit, FaTrashAlt, FaEye,
   FaWarehouse, FaTachometerAlt, FaInfoCircle, FaSync, FaUserSlash, FaKey, FaCopy, FaChevronDown,
-  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge, FaSearch, FaSort
+  FaShieldAlt, FaTimesCircle, FaPaperPlane, FaIdBadge, FaSearch, FaSort, FaChartBar, FaRocket,
+  FaLock, FaHeartbeat, FaCog, FaRoute, FaClipboardList
 } from "react-icons/fa";
 
 import { client, setAuthHeader } from "../api/client";
@@ -19,6 +20,13 @@ import { useAuth } from "../context/AuthProvider";
 import InventoryPanel from "../components/admin/InventoryPanel.jsx";
 import AdminDashboard from "./admin/AdminDashboard.jsx";
 import AdminAuditLogs from "./AdminAuditLogs.jsx";
+import AdminMetrics from "./admin/AdminMetrics.jsx";
+import AdminRateLimiting from "./admin/AdminRateLimiting.jsx";
+import AdminSecurity from "./admin/AdminSecurity.jsx";
+import AdminHealth from "./admin/AdminHealth.jsx";
+import AdminConfig from "./admin/AdminConfig.jsx";
+import AdminTracing from "./admin/AdminTracing.jsx";
+import AuditLogPanel from "../components/admin/Audit/AuditLogPanel.jsx";
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleString() : "—");
 const money = (c) => (typeof c === "number" ? `$${(c / 100).toFixed(2)}` : "—");
@@ -168,13 +176,20 @@ export default function AdminPage() {
 
   // Tab -> loader
   const dataFetchers = {
-    0: null,
-    1: fetchUsers,
-    2: fetchOrders,
-    3: fetchDesigns,
-    4: null,          // Inventory loads internally
-    5: fetchSessions, // Devices
-    6: () => setAuditsLoaded(true),
+    0: null,             // Dashboard loads internally
+    1: fetchUsers,       // Users
+    2: fetchOrders,      // Orders
+    3: fetchDesigns,     // Designs
+    4: null,             // Inventory loads internally
+    5: fetchSessions,    // Devices
+    6: () => setAuditsLoaded(true), // Database Audit Logs
+    7: null,             // Metrics tab loads internally
+    8: null,             // Rate Limiting tab loads internally
+    9: null,             // Security tab loads internally
+    10: null,            // Health tab loads internally
+    11: null,            // Config tab loads internally
+    12: null,            // Tracing tab loads internally
+    13: null,            // Ring Buffer Audit Logs tab loads internally
   };
   const handleTabsChange = (index) => {
     setTabIndex(index);
@@ -1031,7 +1046,14 @@ export default function AdminPage() {
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaPalette} mr={2} /> Designs</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaWarehouse} mr={2} /> Inventory</Tab>
               <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaKey} mr={2} /> Devices</Tab>
-              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Audit Logs</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaClipboardList} mr={2} /> DB Audit Logs</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaChartBar} mr={2} /> Metrics</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaRocket} mr={2} /> Rate Limiting</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaLock} mr={2} /> Security</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaHeartbeat} mr={2} /> Health</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaCog} mr={2} /> Config</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaRoute} mr={2} /> Tracing</Tab>
+              <Tab _selected={{ color: "white", bg: "brand.primary" }}><Icon as={FaInfoCircle} mr={2} /> Live Audit</Tab>
             </TabList>
 
             <TabPanels>
@@ -1042,6 +1064,13 @@ export default function AdminPage() {
               <TabPanel px={0} py={2}><InventoryPanel /></TabPanel>
               <TabPanel px={0} py={2}><DevicesPanel /></TabPanel>
               <TabPanel px={0} py={2}><AdminAuditLogs token={token} /></TabPanel>
+              <TabPanel px={0} py={2}><AdminMetrics /></TabPanel>
+              <TabPanel px={0} py={2}><AdminRateLimiting /></TabPanel>
+              <TabPanel px={0} py={2}><AdminSecurity /></TabPanel>
+              <TabPanel px={0} py={2}><AdminHealth /></TabPanel>
+              <TabPanel px={0} py={2}><AdminConfig /></TabPanel>
+              <TabPanel px={0} py={2}><AdminTracing /></TabPanel>
+              <TabPanel px={0} py={2}><AuditLogPanel /></TabPanel>
             </TabPanels>
           </Tabs>
         </Box>

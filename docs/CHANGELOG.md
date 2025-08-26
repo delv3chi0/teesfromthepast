@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Admin Console: Dynamic Runtime Config & Ops Tabs**
+  - Dynamic runtime configuration layer with in-memory overrides for rate limiting, security, tracing, metrics, versions, and audit
+  - New admin endpoints: `/api/admin/runtime/config`, `/api/admin/runtime/rate-limit`, `/api/admin/runtime/security`, `/api/admin/audit/*`
+  - Rate limiter middleware now consults dynamic config with proper precedence (dynamic > static > defaults)
+  - Request ID middleware pushes to ring buffer for tracing
+  - Security headers middleware reads dynamic toggles for live CSP/COEP changes
+  - Audit logger enhanced with ring buffer for admin console access
+  - New admin console tabs: Metrics, Rate Limiting, Security, Health, Config, Tracing, Live Audit
+  - Enhanced audit log panel with filtering, search, and tail mode
+  - All dynamic changes are ephemeral and reset on server restart
+
 - **Metrics Instrumentation Foundation**
   - Prometheus metrics collection with prom-client
   - HTTP request counters and duration histograms
