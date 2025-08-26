@@ -244,13 +244,6 @@ export function createRateLimit() {
   
   return async (req, res, next) => {
     try {
-      let rateLimitMax;
-      let rateLimitWindow;
-      let exemptPaths;
-      let algorithm;
-      let pathOverrides;
-      let roleOverrides;
-      
       // Get configuration - check dynamic config first, then environment
       let rateLimitMax;
       let rateLimitWindow;
