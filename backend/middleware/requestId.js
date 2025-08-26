@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
 import { isConfigReady, getConfig } from "../config/index.js";
+import { pushTracingRequestId } from "../config/dynamicConfig.js";
 
 export function requestId(req, res, next) {
   // Get header name from config or environment
@@ -19,7 +20,11 @@ export function requestId(req, res, next) {
   }
   
   req.id = id;
+  req.requestId = id; // Also add as requestId for compatibility
   res.setHeader(headerName, id);
+  
+  // Push to dynamic tracing buffer
+  pushTracingRequestId(id);
   
   // Add request ID to logger context for this request
   if (req.log) {
